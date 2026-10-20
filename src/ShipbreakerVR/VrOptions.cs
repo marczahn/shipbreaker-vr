@@ -119,19 +119,46 @@ namespace ShipbreakerVR
             GrowContent(parent as RectTransform, addedHeight, added);
         }
 
-        // Logs the list's layout once per options screen, to see why rows might be hidden.
-        public static IEnumerator LogLayout(OptionsScreenController screen)
+        // The rows use explicit keyboard/gamepad navigation from the prefab: the last game row leads nowhere and our
+        // clones still point at rows of the tab they were copied from. Chain our rows up/down in list order.
+        // Runs every time the screen opens, because rows can be shown or hidden in between.
+        public static IEnumerator LinkNavigation(OptionsScreenController screen, bool log)
         {
-            yield return new WaitForEndOfFrame();
-            yield return new WaitForEndOfFrame();
+            yield return null;
             var first = Rows.Keys.FirstOrDefault(e => e != null && e.transform.IsChildOf(screen.transform.parent != null ? screen.transform.parent : screen.transform));
             if (first == null) yield break;
-            var content = (RectTransform)first.transform.parent;
-            var scroll = content.GetComponentInParent<ScrollRect>();
-            Plugin.Log.LogInfo($"Options layout: content '{content.name}' height {content.rect.height:0} pos {content.anchoredPosition}, " +
-                (scroll != null ? $"scroll '{scroll.name}' enabled {scroll.enabled}, content is ours {scroll.content == content}, viewport {(scroll.viewport != null ? scroll.viewport.rect.height.ToString("0") : "-")}" : "no ScrollRect"));
-            foreach (RectTransform child in content)
-                Plugin.Log.LogInfo($"  '{child.name}' active {child.gameObject.activeInHierarchy}, y {child.anchoredPosition.y:0}, height {child.rect.height:0}, width {child.rect.width:0}");
+            var rows = new List<Selectable>();
+            foreach (Transform child in first.transform.parent)
+            {
+                var entry = child.GetComponent<OptionEntry>();
+                if (entry == null || !child.gameObject.activeInHierarchy) continue;
+                var button = Traverse.Create(entry).Field("m_BackgroundButton").GetValue<Component>();
+                var selectable = button != null ? button.GetComponent<Selectable>() : null;
+                if (selectable != null) rows.Add(selectable);
+            }
+            var firstOurs = rows.FindIndex(r => Rows.ContainsKey(r.GetComponentInParent<OptionEntry>()));
+            if (firstOurs < 0) yield break;
+            // The game's rows stay as they are, except that the last one now leads down into ours.
+            if (firstOurs > 0 && rows[firstOurs - 1].navigation.mode == Navigation.Mode.Explicit)
+            {
+                var nav = rows[firstOurs - 1].navigation;
+                nav.selectOnDown = rows[firstOurs];
+                rows[firstOurs - 1].navigation = nav;
+            }
+            for (var i = firstOurs; i < rows.Count; i++)
+            {
+                var entry = rows[i].GetComponentInParent<OptionEntry>();
+                var nav = rows[i].navigation;
+                // Automatic navigation finds its neighbours on its own.
+                if (nav.mode != Navigation.Mode.Explicit) continue;
+                // Left/right may lead to the row's own arrows or slider; anything outside the row belongs to the template's tab.
+                if (nav.selectOnLeft != null && !nav.selectOnLeft.transform.IsChildOf(entry.transform)) nav.selectOnLeft = null;
+                if (nav.selectOnRight != null && !nav.selectOnRight.transform.IsChildOf(entry.transform)) nav.selectOnRight = null;
+                nav.selectOnUp = i > 0 ? rows[i - 1] : null;
+                nav.selectOnDown = i < rows.Count - 1 ? rows[i + 1] : null;
+                rows[i].navigation = nav;
+            }
+            if (log) Plugin.Log.LogInfo($"Options navigation: {rows.Count} rows, ours from {firstOurs}, last game row {(firstOurs > 0 ? rows[firstOurs - 1].navigation.mode.ToString() : "-")}, ours {rows[firstOurs].navigation.mode}");
         }
 
         // The scroll content has a fixed height in the game's prefab, so the extra rows would hang outside the
@@ -242,7 +269,7 @@ namespace ShipbreakerVR
 
         private static void Postfix(VideoOptionsScreenController __instance)
         {
-            if (Logged.Add(__instance)) __instance.StartCoroutine(VrOptions.LogLayout(__instance));
+            __instance.StartCoroutine(VrOptions.LinkNavigation(__instance, Logged.Add(__instance)));
         }
     }
 
