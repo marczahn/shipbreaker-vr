@@ -89,6 +89,8 @@ namespace ShipbreakerVR
             Plugin.Log.LogInfo($"Options '{Path(screen.transform)}': {entries.Length} rows, templates from '{root.name}': toggle {Describe(boolTemplate)}, slider {Describe(sliderTemplate)}, list {Describe(listTemplate)}");
 
             var parent = entries.Last().transform.parent;
+            var addedHeight = 0f;
+            var added = 0;
             foreach (var row in CreateRows())
             {
                 OptionEntry template = row switch
@@ -108,7 +110,29 @@ namespace ShipbreakerVR
                 Rows[entry] = row;
                 SetText(Traverse.Create(entry).Field("m_OptionNameText").GetValue<TextMeshProUGUI>(), row.Label);
                 clone.SetActive(true);
+                addedHeight += ((RectTransform)template.transform).rect.height;
+                added++;
             }
+            GrowContent(parent as RectTransform, addedHeight, added);
+        }
+
+        // The scroll content has a fixed height in the game's prefab, so the extra rows would hang outside the
+        // viewport, invisible and not clickable. Grow it by the height of the added rows.
+        private static void GrowContent(RectTransform content, float rowsHeight, int rowCount)
+        {
+            if (content == null || rowsHeight <= 0f) return;
+            if (content.GetComponent<ContentSizeFitter>() != null)
+            {
+                Plugin.Log.LogInfo($"Options content '{content.name}' sizes itself, height {content.rect.height:0}");
+                return;
+            }
+            var layout = content.GetComponent<VerticalLayoutGroup>();
+            var extra = rowsHeight + (layout != null ? layout.spacing * rowCount : 0f);
+            var before = content.rect.height;
+            // With the usual top pivot the content grows downwards; the position keeps the top edge in place.
+            content.sizeDelta += new Vector2(0f, extra);
+            LayoutRebuilder.ForceRebuildLayoutImmediate(content);
+            Plugin.Log.LogInfo($"Options content '{content.name}' grown from {before:0} to {content.rect.height:0} (pivot {content.pivot}, layout {(layout != null ? "vertical" : "none")})");
         }
 
         // A row usable in-game (not title-screen only, no restart required).

@@ -199,8 +199,11 @@ namespace ShipbreakerVR
                         first = eye;
                         continue;
                     }
+                    // Before the first tracked frame both eyes sit at the same spot; wait for real poses.
+                    var separation = Vector3.Distance(first.Value, eye);
+                    if (separation < 0.001f) return;
                     loggedScale = scale;
-                    Plugin.Log.LogInfo($"World scale {scale:0.00}: eye separation in the world {Vector3.Distance(first.Value, eye) * 1000f:0} mm");
+                    Plugin.Log.LogInfo($"World scale {scale:0.00}: eye separation in the world {separation * 1000f:0} mm");
                     return;
                 }
             }
