@@ -48,6 +48,12 @@ namespace ShipbreakerVR
 
         private float loggedScale = -1f;
 
+        // Above this the per-eye targets (e.g. 2688x2880 on Virtual Desktop) no longer fit into video memory.
+        public const float MaxResolutionScale = 1.5f;
+
+        private float pendingResolution = -1f;
+        private float resolutionChangedAt;
+
         // Switches to another game camera (main menu -> game): remove the old rig, re-enable the camera.
         public void Detach()
         {
@@ -166,7 +172,15 @@ namespace ShipbreakerVR
                 vrHd.antialiasing = mode;
                 Plugin.Log.LogInfo($"VR camera anti-aliasing: {mode} (game: {gameAntialiasing})");
             }
-            var scale = Mathf.Clamp(Plugin.ResolutionScale.Value, 0.5f, 2f);
+            // Each change reallocates every render target. Wait until the slider has rested, otherwise dragging it
+            // through all steps fragments video memory until allocations fail and the image smears.
+            var scale = Mathf.Clamp(Plugin.ResolutionScale.Value, 0.5f, MaxResolutionScale);
+            if (!Mathf.Approximately(scale, pendingResolution))
+            {
+                pendingResolution = scale;
+                resolutionChangedAt = Time.unscaledTime;
+            }
+            if (Time.unscaledTime - resolutionChangedAt < 1f) return;
             if (!Mathf.Approximately(UnityEngine.XR.XRSettings.eyeTextureResolutionScale, scale))
             {
                 UnityEngine.XR.XRSettings.eyeTextureResolutionScale = scale;
