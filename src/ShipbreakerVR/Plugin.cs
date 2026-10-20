@@ -54,7 +54,7 @@ namespace ShipbreakerVR
             AntiAliasing = Config.Bind("Bild", "Kantenglaettung", VrCamera.AntiAliasing.SMAA,
                 "SMAA: smooths edges, stays sharp. TAA: looks blurry in VR and makes objects jitter. FXAA: cheap and soft. Keine: none. Spiel: use the game's setting.");
             ResolutionScale = Config.Bind("Bild", "Aufloesung", 1.0f,
-                "Render resolution per eye relative to the headset's default (0.5 to 1.5). Above 1 smooths further but costs significant performance and video memory. Applied one second after the last change.");
+                "Render resolution per eye relative to the headset's default (0.5 to 2). Above 1 smooths further but costs significant performance and video memory; it is limited to what should fit into the graphics card's memory. Applied one second after the last change.");
             WorldScale = Config.Bind("Bild", "Weltmassstab", 1.0f,
                 "Size of the player relative to the world (0.5 to 3). Above 1 widens eye distance and head movement: distant objects keep more depth and their size is easier to judge, but the world looks smaller. Below 1 the opposite.");
             Log.LogInfo($"{Name} {Version} loaded. Unity {Application.unityVersion}, game {Application.version}");

@@ -65,7 +65,7 @@ namespace ShipbreakerVR
             {
                 new BoolRow { Label = "VR: Body follows head", Entry = Plugin.BodyFollowsHead },
                 EnumRow("VR: Anti-aliasing", Plugin.AntiAliasing, new[] { "TAA", "SMAA", "FXAA", "None", "Game default" }),
-                new SliderRow { Label = "VR: Render resolution", Entry = Plugin.ResolutionScale, Min = 0.5f, Max = VrCamera.MaxResolutionScale, Format = "0.00" },
+                new SliderRow { Label = "VR: Render resolution", Entry = Plugin.ResolutionScale, Min = 0.5f, Max = VrCamera.ResolutionSliderMax, Format = "0.00" },
                 new SliderRow { Label = "VR: World scale", Entry = Plugin.WorldScale, Min = 0.5f, Max = 3f, Format = "0.00" },
                 EnumRow("VR: Helmet", Plugin.Helmet, new[] { "Follows head", "Hidden", "Game default" }),
                 new BoolRow { Label = "VR: HUD and menus in world", Entry = Plugin.UiInVr },
@@ -222,6 +222,13 @@ namespace ShipbreakerVR
                     break;
             }
             return true;
+        }
+
+        // Shows a value that was changed from outside the menu (e.g. clamped) in all rows bound to it.
+        public static void Refresh(ConfigEntry<float> config)
+        {
+            foreach (var pair in Rows)
+                if (pair.Key != null && pair.Value is SliderRow s && s.Entry == config) TryRefresh(pair.Key);
         }
 
         public static bool TryToggle(OptionEntry entry)

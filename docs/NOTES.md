@@ -67,6 +67,13 @@ objects keep more stereo depth (hyperstereo) and sizes are easier to judge, but 
 menu canvas and helmet are scaled along so they keep their felt size. The log line "eye separation in the world"
 shows whether the scale actually reaches the stereo rendering (about 63 mm times the scale is expected).
 
+## Render resolution and video memory
+`XRSettings.eyeTextureResolutionScale` reallocates every HDRP render target. At 2.0 (5376x5760 per eye) a 12 GB
+RTX 4070 Ti ran out of memory (D3D11 error 0x8007000e in Player.log); after that even 1.0 failed and the image
+smeared until the game was restarted. The plugin now estimates the limit from `SystemInfo.graphicsMemorySize`
+(about 160 bytes per pixel and eye, half of the video memory as budget), clamps the setting to it and applies a
+change only after the slider has rested for a second.
+
 ## Roadmap
 1. Inventory – done
 2. Foundation (BepInEx, plugin, camera hook) – done

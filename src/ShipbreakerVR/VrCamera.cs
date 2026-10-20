@@ -48,8 +48,14 @@ namespace ShipbreakerVR
 
         private float loggedScale = -1f;
 
-        // Above this the per-eye targets (e.g. 2688x2880 on Virtual Desktop) no longer fit into video memory.
-        public const float MaxResolutionScale = 1.5f;
+        // Rough estimate: HDRP needs about 160 bytes of render targets per pixel and eye (G-buffer, depth, color,
+        // history, post effects). Half of the video memory stays free for the game's own textures and meshes.
+        // Calibrated on an RTX 4070 Ti (12 GB, 2688x2880 per eye): 2.0 ran out of memory, the estimate gives about 1.55.
+        private const float BytesPerPixelAndEye = 160f;
+        private const float VideoMemoryShare = 0.5f;
+        public const float ResolutionSliderMax = 2f;
+
+        private static float maxResolutionScale = -1f;
 
         private float pendingResolution = -1f;
         private float resolutionChangedAt;
@@ -174,7 +180,13 @@ namespace ShipbreakerVR
             }
             // Each change reallocates every render target. Wait until the slider has rested, otherwise dragging it
             // through all steps fragments video memory until allocations fail and the image smears.
-            var scale = Mathf.Clamp(Plugin.ResolutionScale.Value, 0.5f, MaxResolutionScale);
+            var max = MaxResolutionScale();
+            if (max > 0f && Plugin.ResolutionScale.Value > max)
+            {
+                Plugin.ResolutionScale.Value = max;
+                VrOptions.Refresh(Plugin.ResolutionScale);
+            }
+            var scale = Mathf.Clamp(Plugin.ResolutionScale.Value, 0.5f, max > 0f ? max : 1f);
             if (!Mathf.Approximately(scale, pendingResolution))
             {
                 pendingResolution = scale;
@@ -189,6 +201,22 @@ namespace ShipbreakerVR
         }
 
         private static readonly List<XRDisplaySubsystem> Displays = new List<XRDisplaySubsystem>();
+
+        // Highest render resolution that should fit into video memory, rounded down to 0.05; -1 until the headset's
+        // native eye size is known.
+        private static float MaxResolutionScale()
+        {
+            if (maxResolutionScale > 0f) return maxResolutionScale;
+            var current = UnityEngine.XR.XRSettings.eyeTextureResolutionScale;
+            var width = UnityEngine.XR.XRSettings.eyeTextureWidth / current;
+            var height = UnityEngine.XR.XRSettings.eyeTextureHeight / current;
+            if (width <= 0f || height <= 0f || SystemInfo.graphicsMemorySize <= 0) return -1f;
+            var budget = SystemInfo.graphicsMemorySize * 1024f * 1024f * VideoMemoryShare;
+            var fit = Mathf.Sqrt(budget / (width * height * 2f * BytesPerPixelAndEye));
+            maxResolutionScale = Mathf.Clamp(Mathf.Floor(fit * 20f) / 20f, 0.5f, ResolutionSliderMax);
+            Plugin.Log.LogInfo($"{SystemInfo.graphicsDeviceName}, {SystemInfo.graphicsMemorySize} MB video memory, {width:0}x{height:0} per eye: render resolution limited to {maxResolutionScale:0.00}x");
+            return maxResolutionScale;
+        }
 
         // Logs once per scale how far apart the eyes are in the world, to confirm the scale reaches the stereo rendering.
         // Reads the view matrices HDRP renders with; they only exist once the display has render passes, so retry each frame.
