@@ -1,0 +1,17 @@
+# .NET
+bin/
+obj/
+*.user
+
+# Unity
+unity/ShipbreakerVRUnity/[Ll]ibrary/
+unity/ShipbreakerVRUnity/[Tt]emp/
+unity/ShipbreakerVRUnity/[Oo]bj/
+unity/ShipbreakerVRUnity/[Bb]uild/
+unity/ShipbreakerVRUnity/[Bb]uilds/
+unity/ShipbreakerVRUnity/[Ll]ogs/
+unity/ShipbreakerVRUnity/[Uu]ser[Ss]ettings/
+unity/ShipbreakerVRUnity/Output/
+
+# Pakete
+*.zip

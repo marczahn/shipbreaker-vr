@@ -1,0 +1,30 @@
+ShipbreakerVR 0.4.1 - VR-Mod für Hardspace: Shipbreaker (Testversion)
+=====================================================================
+
+Voraussetzungen
+- Hardspace: Shipbreaker (Steam, Version 1.3.x), Windows
+- VR-Headset mit OpenXR-Runtime: Quest über Virtual Desktop, Quest Link/Air Link, SteamVR o. ä.
+  Die gewünschte Runtime muss als aktive OpenXR-Runtime eingestellt sein.
+
+Installation
+1. In Steam: Rechtsklick auf Hardspace: Shipbreaker > Verwalten > Lokale Dateien durchsuchen.
+2. Den gesamten Inhalt dieses ZIPs in diesen Ordner entpacken (dort, wo Shipbreaker.exe liegt).
+   Ordner zusammenführen, Dateien überschreiben, wenn Windows fragt.
+3. Spiel starten. Beim ersten Start legt BepInEx seine Ordner an; das dauert etwas länger.
+
+Benutzung
+- Headset verbinden, Spiel starten, dann F3: VR an/aus.
+- F4: Blick neu zentrieren (auch die Menü-Leinwand).
+- Einstellungen: BepInEx\config\de.marczahn.shipbreakervr.cfg (wird beim ersten Start angelegt).
+
+Deinstallation
+- winhttp.dll im Spielordner löschen (schaltet alle BepInEx-Mods ab),
+  oder zusätzlich BepInEx\, doorstop_config.ini, .doorstop_version,
+  Shipbreaker_Data\Plugins\x86_64\UnityOpenXR.dll, openxr_loader.dll und
+  Shipbreaker_Data\UnitySubsystems\UnityOpenXR\ entfernen.
+- Alternativ in Steam "Dateien auf Fehler überprüfen".
+
+Bei Problemen bitte BepInEx\LogOutput.log mitschicken.
+
+Enthalten: BepInEx 5.4.23.3 (LGPL-2.1), Unity OpenXR / XR Management / Input System (Unity Companion License),
+XR-Einstellungen nach ShipbreakerVR (siehe BepInEx\plugins\ShipbreakerVR\LICENSE-ShipbreakerVr.txt).

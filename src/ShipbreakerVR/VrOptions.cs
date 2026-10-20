@@ -1,0 +1,231 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using BBI.Unity.Game;
+using BepInEx.Configuration;
+using HarmonyLib;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace ShipbreakerVR
+{
+    // Hängt die VR-Einstellungen als eigene Zeilen an die Spiel-Optionen ("Spiel"-Reiter) an.
+    // Die Zeilen sind Kopien echter Optionszeilen des Spiels, damit Aussehen, Auswahl und Mausbedienung stimmen.
+    // Die Spiellogik der Kopien (feste Enums für Spieloptionen) fangen wir per Harmony ab und lesen/schreiben
+    // stattdessen die BepInEx-Konfiguration. Werte wirken sofort und werden sofort gespeichert.
+    internal static class VrOptions
+    {
+        private abstract class Row
+        {
+            public string Label;
+            public abstract string ValueText { get; }
+        }
+
+        private class BoolRow : Row
+        {
+            public ConfigEntry<bool> Entry;
+            public override string ValueText => Entry.Value ? "An" : "Aus";
+        }
+
+        private class SliderRow : Row
+        {
+            public ConfigEntry<float> Entry;
+            public float Min, Max;
+            public string Format;
+            public override string ValueText => Entry.Value.ToString(Format, System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        private class ListRow : Row
+        {
+            public Func<int> Get;
+            public Action<int> Set;
+            public string[] Names;
+            public override string ValueText => Names[Mathf.Clamp(Get(), 0, Names.Length - 1)];
+        }
+
+        private static readonly Dictionary<OptionEntry, Row> Rows = new Dictionary<OptionEntry, Row>();
+
+        private static Row[] CreateRows()
+        {
+            ListRow EnumRow<T>(string label, ConfigEntry<T> entry, string[] names) where T : Enum
+            {
+                var values = (T[])Enum.GetValues(typeof(T));
+                return new ListRow
+                {
+                    Label = label,
+                    Names = names,
+                    Get = () => Array.IndexOf(values, entry.Value),
+                    Set = i => entry.Value = values[(i % values.Length + values.Length) % values.Length],
+                };
+            }
+
+            return new Row[]
+            {
+                new BoolRow { Label = "VR: Figur folgt dem Kopf", Entry = Plugin.BodyFollowsHead },
+                EnumRow("VR: Kantenglättung", Plugin.AntiAliasing, new[] { "TAA", "SMAA", "FXAA", "Keine", "Wie im Spiel" }),
+                new SliderRow { Label = "VR: Renderauflösung", Entry = Plugin.ResolutionScale, Min = 0.5f, Max = 2f, Format = "0.00" },
+                EnumRow("VR: Helm", Plugin.Helmet, new[] { "Folgt dem Kopf", "Ausgeblendet", "Wie im Spiel" }),
+                new BoolRow { Label = "VR: HUD und Menüs im Raum", Entry = Plugin.UiInVr },
+                new SliderRow { Label = "VR: Visier-Größe", Entry = Plugin.HudScale, Min = 0.3f, Max = 1f, Format = "0.00" },
+                new SliderRow { Label = "VR: Visier-Abstand (m)", Entry = Plugin.HudDistance, Min = 0.5f, Max = 3f, Format = "0.0" },
+                new SliderRow { Label = "VR: Menü-Abstand (m)", Entry = Plugin.MenuDistance, Min = 1f, Max = 4f, Format = "0.0" },
+                new SliderRow { Label = "VR: Menü-Breite (m)", Entry = Plugin.MenuWidth, Min = 1f, Max = 4f, Format = "0.0" },
+                new BoolRow { Label = "VR: UI-Fläche einfärben", Entry = Plugin.ShowUiFrame },
+            };
+        }
+
+        public static void Inject(OptionsScreenController screen)
+        {
+            var entries = screen.GetComponentsInChildren<OptionEntry>(true);
+            if (entries.Length == 0) return;
+            // Der Spiel-Reiter hat keinen Regler; Vorlagen deshalb aus allen Reitern des Optionsmenüs nehmen.
+            var root = screen.transform.parent != null ? screen.transform.parent : screen.transform;
+            var all = root.GetComponentsInChildren<OptionEntry>(true);
+            var boolTemplate = PickTemplate<OptionEntryBool>(all);
+            var sliderTemplate = PickTemplate<OptionEntrySlider>(all);
+            var listTemplate = PickTemplate<OptionEntryList>(all);
+            Plugin.Log.LogInfo($"Optionen '{Path(screen.transform)}': {entries.Length} Zeilen, Vorlagen aus '{root.name}': Schalter {Describe(boolTemplate)}, Regler {Describe(sliderTemplate)}, Liste {Describe(listTemplate)}");
+
+            var parent = entries.Last().transform.parent;
+            foreach (var row in CreateRows())
+            {
+                OptionEntry template = row switch
+                {
+                    BoolRow _ => boolTemplate,
+                    SliderRow _ => sliderTemplate,
+                    _ => listTemplate,
+                };
+                if (template == null) continue;
+                // Erst deaktiviert kopieren, damit Awake/OnEnable der Kopie schon unsere Zeile finden.
+                var wasActive = template.gameObject.activeSelf;
+                template.gameObject.SetActive(false);
+                var clone = UnityEngine.Object.Instantiate(template.gameObject, parent, false);
+                template.gameObject.SetActive(wasActive);
+                clone.name = "ShipbreakerVR " + row.Label;
+                var entry = clone.GetComponent<OptionEntry>();
+                Rows[entry] = row;
+                SetText(Traverse.Create(entry).Field("m_OptionNameText").GetValue<TextMeshProUGUI>(), row.Label);
+                clone.SetActive(true);
+            }
+        }
+
+        // Eine Zeile, die im Spiel bedienbar ist (nicht nur im Titelmenü, kein Neustart nötig).
+        private static T PickTemplate<T>(IEnumerable<OptionEntry> entries) where T : OptionEntry
+        {
+            return entries.OfType<T>().FirstOrDefault(e =>
+                !Traverse.Create(e).Field("m_TitleScreenOnly").GetValue<bool>() &&
+                !Traverse.Create(e).Field("m_RequiresRestart").GetValue<bool>() &&
+                !e.name.StartsWith("ShipbreakerVR"));
+        }
+
+        private static void SetText(TextMeshProUGUI text, string value)
+        {
+            if (text == null) return;
+            // Lokalisierte Texte würden unseren Text sonst beim Aktivieren wieder überschreiben.
+            var localized = text.GetComponent<LocalizedTextMeshProUGUI>();
+            if (localized != null) localized.ClearLocalizedID(value);
+            text.text = value;
+        }
+
+        public static bool TryRefresh(OptionEntry entry)
+        {
+            if (!Rows.TryGetValue(entry, out var row)) return false;
+            var t = Traverse.Create(entry);
+            switch (row)
+            {
+                case BoolRow b:
+                    SetText(t.Field("m_EnabledDisabledText").GetValue<TextMeshProUGUI>(), row.ValueText);
+                    var fill = t.Field("m_ToggleFill").GetValue<Image>();
+                    if (fill != null) fill.gameObject.SetActive(b.Entry.Value);
+                    break;
+                case SliderRow s:
+                    var slider = t.Field("m_Slider").GetValue<Slider>();
+                    slider.SetValueWithoutNotify(Mathf.Clamp(s.Entry.Value, s.Min, s.Max));
+                    slider.minValue = s.Min;
+                    slider.maxValue = s.Max;
+                    slider.SetValueWithoutNotify(Mathf.Clamp(s.Entry.Value, s.Min, s.Max));
+                    SetText(t.Field("m_ValueText").GetValue<TextMeshProUGUI>(), row.ValueText);
+                    break;
+                case ListRow _:
+                    SetText(t.Field("m_ListText").GetValue<TextMeshProUGUI>(), row.ValueText);
+                    break;
+            }
+            return true;
+        }
+
+        public static bool TryToggle(OptionEntry entry)
+        {
+            if (!Rows.TryGetValue(entry, out var row) || !(row is BoolRow b)) return false;
+            b.Entry.Value = !b.Entry.Value;
+            TryRefresh(entry);
+            return true;
+        }
+
+        public static bool TrySlide(OptionEntry entry, float value)
+        {
+            if (!Rows.TryGetValue(entry, out var row) || !(row is SliderRow s)) return false;
+            s.Entry.Value = Mathf.Round(value * 100f) / 100f;
+            SetText(Traverse.Create(entry).Field("m_ValueText").GetValue<TextMeshProUGUI>(), row.ValueText);
+            return true;
+        }
+
+        public static bool TryStep(OptionEntry entry, int step)
+        {
+            if (!Rows.TryGetValue(entry, out var row) || !(row is ListRow l)) return false;
+            l.Set(l.Get() + step);
+            TryRefresh(entry);
+            return true;
+        }
+
+        private static string Describe(OptionEntry e) => e == null ? "keine" : $"'{e.name}'";
+
+        private static string Path(Transform t) => t.parent == null ? t.name : Path(t.parent) + "/" + t.name;
+    }
+
+    [HarmonyPatch(typeof(OptionsScreenController), "Awake")]
+    internal static class OptionsScreenAwakePatch
+    {
+        private static void Postfix(OptionsScreenController __instance)
+        {
+            if (__instance is GameOptionsScreenController) VrOptions.Inject(__instance);
+        }
+    }
+
+    [HarmonyPatch]
+    internal static class OptionRefreshPatch
+    {
+        private static IEnumerable<System.Reflection.MethodBase> TargetMethods()
+        {
+            yield return AccessTools.Method(typeof(OptionEntryBool), nameof(OptionEntry.RefreshOptionData));
+            yield return AccessTools.Method(typeof(OptionEntrySlider), nameof(OptionEntry.RefreshOptionData));
+            yield return AccessTools.Method(typeof(OptionEntryList), nameof(OptionEntry.RefreshOptionData));
+        }
+
+        private static bool Prefix(OptionEntry __instance) => !VrOptions.TryRefresh(__instance);
+    }
+
+    [HarmonyPatch(typeof(OptionEntryBool), "ToggleOption")]
+    internal static class OptionToggledPatch
+    {
+        private static bool Prefix(OptionEntry __instance) => !VrOptions.TryToggle(__instance);
+    }
+
+    [HarmonyPatch(typeof(OptionEntrySlider), "SliderValueChanged")]
+    internal static class OptionSlidPatch
+    {
+        private static bool Prefix(OptionEntry __instance, float newValue) => !VrOptions.TrySlide(__instance, newValue);
+    }
+
+    [HarmonyPatch(typeof(OptionEntryList), "LeftButtonClicked")]
+    internal static class OptionLeftPatch
+    {
+        private static bool Prefix(OptionEntry __instance) => !VrOptions.TryStep(__instance, -1);
+    }
+
+    [HarmonyPatch(typeof(OptionEntryList), "RightButtonClicked")]
+    internal static class OptionRightPatch
+    {
+        private static bool Prefix(OptionEntry __instance) => !VrOptions.TryStep(__instance, 1);
+    }
+}
