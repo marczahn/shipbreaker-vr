@@ -1,7 +1,9 @@
+using System.Collections.Generic;
 using BBI.Unity.Game;
 using UnityEngine;
 using UnityEngine.Rendering.HighDefinition;
 using UnityEngine.SpatialTracking;
+using UnityEngine.XR;
 
 namespace ShipbreakerVR
 {
@@ -172,16 +174,36 @@ namespace ShipbreakerVR
             }
         }
 
+        private static readonly List<XRDisplaySubsystem> Displays = new List<XRDisplaySubsystem>();
+
         // Logs once per scale how far apart the eyes are in the world, to confirm the scale reaches the stereo rendering.
+        // Reads the view matrices HDRP renders with; they only exist once the display has render passes, so retry each frame.
         private void LogEyeSeparation()
         {
             var scale = WorldScale;
-            if (Mathf.Approximately(scale, loggedScale)) return;
-            loggedScale = scale;
             vrCamera.nearClipPlane = 0.05f * scale;
-            var left = vrCamera.GetStereoViewMatrix(Camera.StereoscopicEye.Left).inverse.GetColumn(3);
-            var right = vrCamera.GetStereoViewMatrix(Camera.StereoscopicEye.Right).inverse.GetColumn(3);
-            Plugin.Log.LogInfo($"World scale {scale:0.00}: eye separation in the world {Vector3.Distance(left, right) * 1000f:0} mm");
+            if (Mathf.Approximately(scale, loggedScale)) return;
+            SubsystemManager.GetSubsystems(Displays);
+            if (Displays.Count == 0) return;
+            var display = Displays[0];
+            Vector3? first = null;
+            for (var p = 0; p < display.GetRenderPassCount(); p++)
+            {
+                display.GetRenderPass(p, out var pass);
+                for (var i = 0; i < pass.GetRenderParameterCount(); i++)
+                {
+                    pass.GetRenderParameter(vrCamera, i, out var param);
+                    Vector3 eye = param.view.inverse.GetColumn(3);
+                    if (first == null)
+                    {
+                        first = eye;
+                        continue;
+                    }
+                    loggedScale = scale;
+                    Plugin.Log.LogInfo($"World scale {scale:0.00}: eye separation in the world {Vector3.Distance(first.Value, eye) * 1000f:0} mm");
+                    return;
+                }
+            }
         }
 
         // Once more right before rendering, because Cinemachine sets the game camera late in the frame.
