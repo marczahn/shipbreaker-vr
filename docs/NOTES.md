@@ -63,6 +63,6 @@ templates are taken from all tabs of the options screen.
 1. Inventory – done
 2. Foundation (BepInEx, plugin, camera hook) – done
 3. Seeing VR (stereo, head tracking) – working
-4. Playing VR: controllers, tools in hand, bindings
+4. Playing VR: controllers, tools in hand, bindings – concept in [CONTROLLERS.md](CONTROLLERS.md)
 5. Using VR: HUD as visor, menus with a pointer – in progress
 6. Comfort and performance
