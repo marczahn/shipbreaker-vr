@@ -145,7 +145,9 @@ namespace ShipbreakerVR
         {
             var head = vr.transform;
             var aspect = (float)texture.width / texture.height;
-            var gameplay = GameSession.CurrentGameState == GameSession.GameState.Gameplay && LynxCameraController.MainCamera != null;
+            // The load screen is a menu too, even if the game already switched to gameplay behind it.
+            var loadScreen = SceneLoader.Instance != null && SceneLoader.Instance.LoadScreenVisible;
+            var gameplay = GameSession.CurrentGameState == GameSession.GameState.Gameplay && LynxCameraController.MainCamera != null && !loadScreen;
             if (menuMode == gameplay) menuPlaced = false;
             menuMode = !gameplay;
 
@@ -222,7 +224,7 @@ namespace ShipbreakerVR
             culling.cullingOptions = CullingOptions.None;
 
             cmd.SetRenderTarget(texture.colorBuffer, texture.depthBuffer);
-            cmd.ClearRenderTarget(true, true, Plugin.ShowUiFrame.Value ? new Color(0f, 0.4f, 1f, 0.15f) : Color.clear);
+            cmd.ClearRenderTarget(true, true, Color.clear);
             renderContext.ExecuteCommandBuffer(cmd);
             cmd.Clear();
             renderContext.SetupCameraProperties(uiCamera);

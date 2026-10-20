@@ -63,56 +63,97 @@ namespace ShipbreakerVR
         private float resolutionChangedAt;
         private float shrinkAt = -1f;
 
-        // Switches to another game camera (main menu -> game): remove the old rig, re-enable the camera.
-        public void Detach()
-        {
-            if (gameCamera != null) gameCamera.enabled = true;
-            if (Instance == this) Instance = null;
-            Destroy(rig.gameObject);
-        }
-
         public bool BodyFollowsHead => VrXr.IsRunning && Plugin.BodyFollowsHead.Value;
 
+        // True while loading (no game camera, or the game's load screen covers the image): only the UI canvas on black.
+        private bool worldHidden;
+
+        // Creates the rig on first use, afterwards switches it to another game camera (main menu -> game).
+        // gameCamera may be null (loading screen, intro without a camera yet).
         public static void Attach(Camera gameCamera)
         {
+            if (Instance != null)
+            {
+                Instance.Retarget(gameCamera);
+                return;
+            }
+
             // The rig is deliberately not a child of the game camera: when the body follows the head, rotation would otherwise apply twice.
+            // It survives scene changes, because while the game loads there is no camera and the headset still needs an image.
             var rig = new GameObject("ShipbreakerVR Rig").transform;
-            rig.SetPositionAndRotation(gameCamera.transform.position, gameCamera.transform.rotation);
+            DontDestroyOnLoad(rig.gameObject);
 
             var head = new GameObject("ShipbreakerVR Head");
             head.transform.SetParent(rig, false);
             var vr = head.AddComponent<VrCamera>();
-            vr.gameCamera = gameCamera;
             vr.rig = rig;
-            // Only the heading: a tilted menu camera would otherwise tilt the whole room in VR.
-            vr.Playspace = Quaternion.Euler(0f, gameCamera.transform.eulerAngles.y, 0f);
             Instance = vr;
 
             vr.vrCamera = head.AddComponent<Camera>();
-            vr.vrCamera.CopyFrom(gameCamera);
-            vr.vrCamera.ResetProjectionMatrix();
-            vr.vrCamera.ResetWorldToCameraMatrix();
-            vr.vrCamera.nearClipPlane = 0.05f;
-            vr.vrCamera.stereoTargetEye = StereoTargetEyeMask.Both;
             vr.vrCamera.enabled = false;
-
-            // Copy the game camera's HDRP settings (volumes, exposure, frame settings).
-            var gameHd = gameCamera.GetComponent<HDAdditionalCameraData>();
-            var vrHd = head.AddComponent<HDAdditionalCameraData>();
-            if (gameHd != null) gameHd.CopyTo(vrHd);
-            vrHd.xrRendering = true;
-            vr.vrHd = vrHd;
-            vr.gameAntialiasing = vrHd.antialiasing;
+            vr.vrHd = head.AddComponent<HDAdditionalCameraData>();
 
             var pose = head.AddComponent<TrackedPoseDriver>();
             pose.SetPoseSource(TrackedPoseDriver.DeviceType.GenericXRDevice, TrackedPoseDriver.TrackedPose.Center);
             pose.trackingType = TrackedPoseDriver.TrackingType.RotationAndPosition;
             pose.updateType = TrackedPoseDriver.UpdateType.UpdateAndBeforeRender;
 
+            vr.Retarget(gameCamera);
             VrUi.Attach(vr);
             VrHelmet.Attach(vr);
+        }
 
-            Plugin.Log.LogInfo($"VR camera created, following the game camera (HDRP data copied: {gameHd != null})");
+        private void Retarget(Camera camera)
+        {
+            // Hand the screen back to the previous camera if it still exists.
+            if (gameCamera != null && gameCamera != camera) gameCamera.enabled = true;
+            gameCamera = camera;
+            if (camera == null)
+            {
+                HideWorld();
+                return;
+            }
+            worldHidden = false;
+
+            rig.SetPositionAndRotation(camera.transform.position, camera.transform.rotation);
+            // Only the heading: a tilted menu camera would otherwise tilt the whole room in VR.
+            Playspace = Quaternion.Euler(0f, camera.transform.eulerAngles.y, 0f);
+
+            vrCamera.CopyFrom(camera);
+            vrCamera.ResetProjectionMatrix();
+            vrCamera.ResetWorldToCameraMatrix();
+            vrCamera.nearClipPlane = 0.05f;
+            vrCamera.stereoTargetEye = StereoTargetEyeMask.Both;
+            vrCamera.targetTexture = null;
+
+            // Copy the game camera's HDRP settings (volumes, exposure, frame settings).
+            var gameHd = camera.GetComponent<HDAdditionalCameraData>();
+            if (gameHd != null) gameHd.CopyTo(vrHd);
+            else vrHd.clearColorMode = HDAdditionalCameraData.ClearColorMode.Sky;
+            vrHd.xrRendering = true;
+            gameAntialiasing = vrHd.antialiasing;
+
+            // Like starting VR: recenter on the new camera and let the body sync again.
+            if (VrXr.IsRunning)
+            {
+                recenterAt = Time.unscaledTime + RecenterDelay;
+                VrBody.Resync();
+            }
+
+            Plugin.Log.LogInfo($"VR camera follows '{camera.name}' (HDRP data copied: {gameHd != null})");
+        }
+
+        // Nothing of the (half-loaded) world, only black behind the UI canvas. Retarget restores the camera settings.
+        private void HideWorld()
+        {
+            worldHidden = true;
+            vrCamera.cullingMask = 0;
+            vrCamera.clearFlags = CameraClearFlags.SolidColor;
+            vrCamera.backgroundColor = Color.black;
+            vrHd.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
+            vrHd.backgroundColorHDR = Color.black;
+            vrHd.xrRendering = true;
+            Plugin.Log.LogInfo(gameCamera == null ? "No game camera (loading): VR shows only the UI" : "Load screen: VR shows only the UI");
         }
 
         private void OnEnable() => Application.onBeforeRender += FollowGameCamera;
@@ -131,11 +172,13 @@ namespace ShipbreakerVR
 
         private void LateUpdate()
         {
-            // The game camera belongs to the scene; when it goes, the rig goes too.
-            if (gameCamera == null)
+            // The game camera belongs to a scene and goes with it; the rig stays until the next camera.
+            // In between, and while the game's load screen covers the image, only the UI shows.
+            var hideWorld = gameCamera == null || (SceneLoader.Instance != null && SceneLoader.Instance.LoadScreenVisible);
+            if (hideWorld != worldHidden)
             {
-                Destroy(rig.gameObject);
-                return;
+                if (hideWorld) HideWorld();
+                else Retarget(gameCamera);
             }
 
             var running = VrXr.IsRunning;
@@ -149,7 +192,8 @@ namespace ShipbreakerVR
             // Don't blindly re-enable on stop: in the Hab the game disabled its camera itself.
             if (!running && wasRunning)
             {
-                gameCamera.enabled = gameCamera != LynxCameraController.MainCamera || GameSession.CurrentGameState != GameSession.GameState.Hab;
+                if (gameCamera != null)
+                    gameCamera.enabled = gameCamera != LynxCameraController.MainCamera || GameSession.CurrentGameState != GameSession.GameState.Hab;
                 shrinkAt = Time.unscaledTime + 2f;
             }
             wasRunning = running;
@@ -161,7 +205,7 @@ namespace ShipbreakerVR
                 LogEyeSeparation();
             }
             vrCamera.enabled = running;
-            if (running) gameCamera.enabled = false;
+            if (running && gameCamera != null) gameCamera.enabled = false;
 
             if (recenterAt > 0 && Time.unscaledTime >= recenterAt)
             {
@@ -248,10 +292,15 @@ namespace ShipbreakerVR
                 width = UnityEngine.XR.XRSettings.eyeTextureWidth;
                 height = UnityEngine.XR.XRSettings.eyeTextureHeight;
             }
-            else
+            else if (gameCamera != null)
             {
                 width = gameCamera.pixelWidth;
                 height = gameCamera.pixelHeight;
+            }
+            else
+            {
+                width = Screen.width;
+                height = Screen.height;
             }
             int maxWidth = RTHandles.maxWidth, maxHeight = RTHandles.maxHeight;
             // Compare with what they grow to once this size renders, and skip resets that would free next to nothing.

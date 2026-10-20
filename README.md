@@ -18,6 +18,7 @@ Tested with Meta Quest via Virtual Desktop.
 Notes on how the game works and why the mod does what it does: [docs/NOTES.md](docs/NOTES.md).
 
 ## Usage
+- VR starts with the game (config `VrBeimStart`), so intro and loading screens already show in the headset
 - **F3** toggles VR, **F4** recenters the view
 - Settings: in-game options or `BepInEx\config\de.marczahn.shipbreakervr.cfg`
 

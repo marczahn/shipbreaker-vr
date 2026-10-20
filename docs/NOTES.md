@@ -54,6 +54,13 @@ Idea for controllers: an aiming camera on the hand that receives these calls.
 `HelmetController.m_HelmetContainer` (under `Main Camera/Helmet_Rig`) follows the VR head, keeping its offset to the
 game camera. It can also be hidden.
 
+## Intro and loading screens
+The VR rig lives in `DontDestroyOnLoad` and outlives scene changes. When the game camera is destroyed (scene teardown)
+or `SceneLoader.LoadScreenVisible` is set, the VR camera culls everything and clears to black, so only the UI canvas
+shows (menu placement). The next camera (`LynxCameraController.Start` or the highest enabled camera) takes over the
+existing rig. `VrCanvases` restores and re-attaches the canvases when the UI camera changes. VR starts on the first
+frame (`[Rendering] VrBeimStart`), so the launch intro video (`LynxVideoPlayer`, a RawImage on a canvas) is visible too.
+
 ## Settings menu
 The VR rows are clones of real option rows (bool, slider, list) appended to the Video tab. The game's logic for
 those clones is intercepted via Harmony and redirected to the BepInEx config. Templates are taken from all tabs of

@@ -12,7 +12,7 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
 3. Start the game. The first start takes a bit longer while BepInEx sets itself up.
 
 ## Use
-- Connect the headset, start the game, press **F3** to toggle VR.
+- Connect the headset and start the game; VR starts right away. **F3** toggles VR.
 - **F4** recenters the view (and the menu canvas).
 - Settings: in the game's options (Video tab, rows starting with "VR:" at the bottom) or in
   `BepInEx\config\de.marczahn.shipbreakervr.cfg`.
