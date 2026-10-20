@@ -24,7 +24,7 @@ Installing a release: [docs/INSTALL.md](docs/INSTALL.md).
 - `src/ShipbreakerVR/` – the BepInEx plugin (C#, net48)
 - `unity/ShipbreakerVRUnity/` – helper project (Unity 2020.3.35f1). Builds the `xrmanager` AssetBundle with the
   XR/OpenXR settings and collects the OpenXR DLLs (menu *ShipbreakerVR → Build for the game*).
-  The XR settings are derived from [ShipbreakerVR by Raicuparta](unity/ShipbreakerVRUnity/LICENSE-ShipbreakerVr.txt) (MIT).
+  The XR settings are derived from [ShipbreakerVR by Raicuparta](licenses/ShipbreakerVr-Raicuparta-MIT.txt) (MIT).
 
 ## Building
 ```
@@ -34,5 +34,5 @@ Expects BepInEx and the Unity XR DLLs in the game folder (`BepInEx\core`, `BepIn
 Copy the resulting `ShipbreakerVR.dll` to `BepInEx\plugins\ShipbreakerVR\`.
 
 ## License
-MIT, see [LICENSE](LICENSE). Third-party components keep their own licenses (see [docs/INSTALL.md](docs/INSTALL.md)).
+MIT, see [LICENSE](LICENSE). Third-party components keep their own licenses, see [licenses/](licenses) and [docs/INSTALL.md](docs/INSTALL.md).
 Use at your own risk, see the [disclaimer](DISCLAIMER.md).
