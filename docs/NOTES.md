@@ -55,9 +55,10 @@ Idea for controllers: an aiming camera on the hand that receives these calls.
 game camera. It can also be hidden.
 
 ## Settings menu
-The VR rows are clones of real option rows (bool, slider, list) appended to the Gameplay tab. The game's logic for
-those clones is intercepted via Harmony and redirected to the BepInEx config. The Gameplay tab has no slider, so
-templates are taken from all tabs of the options screen.
+The VR rows are clones of real option rows (bool, slider, list) appended to the Video tab. The game's logic for
+those clones is intercepted via Harmony and redirected to the BepInEx config. Templates are taken from all tabs of
+the options screen. The Gameplay tab was tried first, but its list does not scroll past its own rows, so the VR rows
+hung invisible below it. The scroll content is grown by the added rows' height in case it has no ContentSizeFitter.
 
 ## World scale
 Config `Bild/Weltmassstab` (also in the options menu) scales the VR rig. Unity derives the eye positions from the

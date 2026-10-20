@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using BBI.Unity.Game;
@@ -10,7 +11,7 @@ using UnityEngine.UI;
 
 namespace ShipbreakerVR
 {
-    // Appends the VR settings as extra rows to the game options ("Game" tab).
+    // Appends the VR settings as extra rows to the video options (that list already scrolls; the Gameplay one does not).
     // The rows are copies of real game option rows so that look, selection and mouse handling are right.
     // We intercept the copies' game logic (fixed enums for game options) via Harmony and read/write
     // the BepInEx config instead. Values take effect and are saved immediately.
@@ -80,7 +81,7 @@ namespace ShipbreakerVR
         {
             var entries = screen.GetComponentsInChildren<OptionEntry>(true);
             if (entries.Length == 0) return;
-            // The Game tab has no slider, so take templates from all tabs of the options menu.
+            // Take templates from all tabs of the options menu, so every row type is available.
             var root = screen.transform.parent != null ? screen.transform.parent : screen.transform;
             var all = root.GetComponentsInChildren<OptionEntry>(true);
             var boolTemplate = PickTemplate<OptionEntryBool>(all);
@@ -107,6 +108,8 @@ namespace ShipbreakerVR
                 template.gameObject.SetActive(wasActive);
                 clone.name = "ShipbreakerVR " + row.Label;
                 var entry = clone.GetComponent<OptionEntry>();
+                // Only the list's first row resets the scroll position when selected.
+                Traverse.Create(entry).Field("m_IsTopItem").SetValue(false);
                 Rows[entry] = row;
                 SetText(Traverse.Create(entry).Field("m_OptionNameText").GetValue<TextMeshProUGUI>(), row.Label);
                 clone.SetActive(true);
@@ -114,6 +117,21 @@ namespace ShipbreakerVR
                 added++;
             }
             GrowContent(parent as RectTransform, addedHeight, added);
+        }
+
+        // Logs the list's layout once per options screen, to see why rows might be hidden.
+        public static IEnumerator LogLayout(OptionsScreenController screen)
+        {
+            yield return new WaitForEndOfFrame();
+            yield return new WaitForEndOfFrame();
+            var first = Rows.Keys.FirstOrDefault(e => e != null && e.transform.IsChildOf(screen.transform.parent != null ? screen.transform.parent : screen.transform));
+            if (first == null) yield break;
+            var content = (RectTransform)first.transform.parent;
+            var scroll = content.GetComponentInParent<ScrollRect>();
+            Plugin.Log.LogInfo($"Options layout: content '{content.name}' height {content.rect.height:0} pos {content.anchoredPosition}, " +
+                (scroll != null ? $"scroll '{scroll.name}' enabled {scroll.enabled}, content is ours {scroll.content == content}, viewport {(scroll.viewport != null ? scroll.viewport.rect.height.ToString("0") : "-")}" : "no ScrollRect"));
+            foreach (RectTransform child in content)
+                Plugin.Log.LogInfo($"  '{child.name}' active {child.gameObject.activeInHierarchy}, y {child.anchoredPosition.y:0}, height {child.rect.height:0}, width {child.rect.width:0}");
         }
 
         // The scroll content has a fixed height in the game's prefab, so the extra rows would hang outside the
@@ -213,7 +231,18 @@ namespace ShipbreakerVR
     {
         private static void Postfix(OptionsScreenController __instance)
         {
-            if (__instance is GameOptionsScreenController) VrOptions.Inject(__instance);
+            if (__instance is VideoOptionsScreenController) VrOptions.Inject(__instance);
+        }
+    }
+
+    [HarmonyPatch(typeof(VideoOptionsScreenController), "OnEnable")]
+    internal static class OptionsScreenEnablePatch
+    {
+        private static readonly HashSet<VideoOptionsScreenController> Logged = new HashSet<VideoOptionsScreenController>();
+
+        private static void Postfix(VideoOptionsScreenController __instance)
+        {
+            if (Logged.Add(__instance)) __instance.StartCoroutine(VrOptions.LogLayout(__instance));
         }
     }
 
