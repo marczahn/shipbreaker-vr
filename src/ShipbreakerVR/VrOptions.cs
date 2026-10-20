@@ -65,6 +65,7 @@ namespace ShipbreakerVR
                 new BoolRow { Label = "VR: Body follows head", Entry = Plugin.BodyFollowsHead },
                 EnumRow("VR: Anti-aliasing", Plugin.AntiAliasing, new[] { "TAA", "SMAA", "FXAA", "None", "Game default" }),
                 new SliderRow { Label = "VR: Render resolution", Entry = Plugin.ResolutionScale, Min = 0.5f, Max = 2f, Format = "0.00" },
+                new SliderRow { Label = "VR: World scale", Entry = Plugin.WorldScale, Min = 0.5f, Max = 3f, Format = "0.00" },
                 EnumRow("VR: Helmet", Plugin.Helmet, new[] { "Follows head", "Hidden", "Game default" }),
                 new BoolRow { Label = "VR: HUD and menus in world", Entry = Plugin.UiInVr },
                 new SliderRow { Label = "VR: Visor size", Entry = Plugin.HudScale, Min = 0.3f, Max = 1f, Format = "0.00" },

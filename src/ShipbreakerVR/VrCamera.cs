@@ -41,6 +41,11 @@ namespace ShipbreakerVR
 
         public Camera GameCamera => gameCamera;
 
+        // Player size relative to the world. Scaling the rig also scales eye distance and tracked head movement.
+        public static float WorldScale => Mathf.Clamp(Plugin.WorldScale.Value, 0.5f, 3f);
+
+        private float loggedScale = -1f;
+
         // Switches to another game camera (main menu -> game): remove the old rig, re-enable the camera.
         public void Detach()
         {
@@ -127,7 +132,11 @@ namespace ShipbreakerVR
                 gameCamera.enabled = gameCamera != LynxCameraController.MainCamera || GameSession.CurrentGameState != GameSession.GameState.Hab;
             wasRunning = running;
 
-            if (running) ApplyQuality();
+            if (running)
+            {
+                ApplyQuality();
+                LogEyeSeparation();
+            }
             vrCamera.enabled = running;
             if (running) gameCamera.enabled = false;
 
@@ -163,14 +172,28 @@ namespace ShipbreakerVR
             }
         }
 
+        // Logs once per scale how far apart the eyes are in the world, to confirm the scale reaches the stereo rendering.
+        private void LogEyeSeparation()
+        {
+            var scale = WorldScale;
+            if (Mathf.Approximately(scale, loggedScale)) return;
+            loggedScale = scale;
+            vrCamera.nearClipPlane = 0.05f * scale;
+            var left = vrCamera.GetStereoViewMatrix(Camera.StereoscopicEye.Left).inverse.GetColumn(3);
+            var right = vrCamera.GetStereoViewMatrix(Camera.StereoscopicEye.Right).inverse.GetColumn(3);
+            Plugin.Log.LogInfo($"World scale {scale:0.00}: eye separation in the world {Vector3.Distance(left, right) * 1000f:0} mm");
+        }
+
         // Once more right before rendering, because Cinemachine sets the game camera late in the frame.
         private void FollowGameCamera()
         {
             if (gameCamera == null || rig == null) return;
             var cam = gameCamera.transform;
             if (!BodyFollowsHead) Playspace = cam.rotation * recenterRotation;
+            var scale = WorldScale;
+            rig.localScale = new Vector3(scale, scale, scale);
             rig.rotation = Playspace;
-            rig.position = cam.position - Playspace * recenterPosition;
+            rig.position = cam.position - Playspace * (recenterPosition * scale);
         }
 
         // Puts the current head position on the game camera; without body-follows-head also the view direction (yaw only).

@@ -152,7 +152,8 @@ namespace ShipbreakerVR
             if (!menuMode)
             {
                 // Visor: in front of the head, as large as the game camera's field of view.
-                var distance = Plugin.HudDistance.Value;
+                // In world units, so the visor keeps its felt distance at any world scale.
+                var distance = Plugin.HudDistance.Value * VrCamera.WorldScale;
                 var fov = LynxCameraController.MainCamera != null ? LynxCameraController.MainCamera.fieldOfView : 60f;
                 var h = 2f * distance * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad) * Plugin.HudScale.Value;
                 screenMatrix = Matrix4x4.TRS(head.position + head.rotation * new Vector3(0, 0, distance), head.rotation, new Vector3(h * aspect, h, 1f));
@@ -171,7 +172,8 @@ namespace ShipbreakerVR
                 menuRotation = Quaternion.LookRotation(forward, Vector3.up);
                 menuPosition = head.localPosition + forward * Plugin.MenuDistance.Value;
             }
-            var w = Plugin.MenuWidth.Value;
+            // menuPosition is in rig space and already scales with the rig; the width is in world units.
+            var w = Plugin.MenuWidth.Value * VrCamera.WorldScale;
             screenMatrix = Matrix4x4.TRS(rig.TransformPoint(menuPosition), rig.rotation * menuRotation, new Vector3(w, w / aspect, 1f));
         }
 

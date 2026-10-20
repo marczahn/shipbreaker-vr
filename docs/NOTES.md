@@ -59,6 +59,13 @@ The VR rows are clones of real option rows (bool, slider, list) appended to the 
 those clones is intercepted via Harmony and redirected to the BepInEx config. The Gameplay tab has no slider, so
 templates are taken from all tabs of the options screen.
 
+## World scale
+Config `Bild/Weltmassstab` (also in the options menu) scales the VR rig. Unity derives the eye positions from the
+camera's world transform, so the rig scale also scales eye separation and tracked head movement: above 1 distant
+objects keep more stereo depth (hyperstereo) and sizes are easier to judge, but the world looks smaller. Visor,
+menu canvas and helmet are scaled along so they keep their felt size. The log line "eye separation in the world"
+shows whether the scale actually reaches the stereo rendering (about 63 mm times the scale is expected).
+
 ## Roadmap
 1. Inventory – done
 2. Foundation (BepInEx, plugin, camera hook) – done
