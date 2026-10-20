@@ -4,13 +4,13 @@ using UnityEditor;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
 
-// Baut alles, was der Mod aus Unity braucht, und legt es unter Output/ in der Ordnerstruktur des Spiels ab:
-//   Output/BepInEx/plugins/ShipbreakerVR/            AssetBundle mit den XR-Einstellungen + Unity.XR.*.dll, Unity.InputSystem.dll
+// Builds everything the mod needs from Unity and lays it out under Output/ in the game's folder structure:
+//   Output/BepInEx/plugins/ShipbreakerVR/            AssetBundle with the XR settings + Unity.XR.*.dll, Unity.InputSystem.dll
 //   Output/Shipbreaker_Data/Plugins/x86_64/          UnityOpenXR.dll, openxr_loader.dll
 //   Output/Shipbreaker_Data/UnitySubsystems/         UnitySubsystemsManifest.json
 public static class ShipbreakerVRBuild
 {
-    [MenuItem("ShipbreakerVR/Build für das Spiel")]
+    [MenuItem("ShipbreakerVR/Build for the game")]
     public static void BuildAll()
     {
         var root = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
@@ -19,7 +19,7 @@ public static class ShipbreakerVRBuild
         if (Directory.Exists(outDir)) Directory.Delete(outDir, true);
 
         var pluginDir = Path.Combine(outDir, "BepInEx", "plugins", "ShipbreakerVR");
-        // Zusätzlich flach unter Output/AssetBundles, damit Claude die Datei vom PC lesen kann (maximale Ordnertiefe).
+        // Also flat under Output/AssetBundles so the files stay within tooling folder-depth limits.
         var flatBundleDir = Path.Combine(outDir, "AssetBundles");
         Directory.CreateDirectory(flatBundleDir);
         BuildPipeline.BuildAssetBundles(flatBundleDir, BuildAssetBundleOptions.None, BuildTarget.StandaloneWindows64);
@@ -34,7 +34,7 @@ public static class ShipbreakerVRBuild
         });
         if (report.summary.result != BuildResult.Succeeded)
         {
-            Debug.LogError("[ShipbreakerVR] Player-Build fehlgeschlagen: " + report.summary.result);
+            Debug.LogError("[ShipbreakerVR] Player build failed: " + report.summary.result);
             return;
         }
 
@@ -48,17 +48,17 @@ public static class ShipbreakerVRBuild
         foreach (var name in new[] { "UnityOpenXR.dll", "openxr_loader.dll" })
         {
             var found = Directory.GetFiles(Path.Combine(dataDir, "Plugins"), name, SearchOption.AllDirectories).FirstOrDefault();
-            if (found == null) Debug.LogError("[ShipbreakerVR] Nicht gefunden: " + name);
+            if (found == null) Debug.LogError("[ShipbreakerVR] Not found: " + name);
             else CopyFile(found, nativeOut);
         }
 
         var subsystems = Path.Combine(dataDir, "UnitySubsystems");
         if (Directory.Exists(subsystems)) CopyDirectory(subsystems, Path.Combine(outDir, "Shipbreaker_Data", "UnitySubsystems"));
-        else Debug.LogError("[ShipbreakerVR] Ordner UnitySubsystems fehlt im Player-Build");
+        else Debug.LogError("[ShipbreakerVR] UnitySubsystems folder missing from the player build");
 
         File.WriteAllText(Path.Combine(outDir, "files.txt"),
             string.Join("\n", Directory.GetFiles(outDir, "*", SearchOption.AllDirectories).Select(f => f.Substring(outDir.Length + 1))));
-        Debug.Log("[ShipbreakerVR] Fertig: " + outDir);
+        Debug.Log("[ShipbreakerVR] Done: " + outDir);
         EditorUtility.RevealInFinder(outDir);
     }
 

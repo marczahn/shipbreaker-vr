@@ -1,31 +1,32 @@
 # ShipbreakerVR
 
-VR-Mod für **Hardspace: Shipbreaker** (Unity 2020.3, HDRP) auf Basis von BepInEx 5 und OpenXR.
-Getestet mit Meta Quest über Virtual Desktop. Frühe Testversion.
+A VR mod for **Hardspace: Shipbreaker** (Unity 2020.3, HDRP), built on BepInEx 5 and OpenXR.
+Tested with Meta Quest via Virtual Desktop. Early test build.
 
-## Stand
-- Stereo-Rendering (MultiPass), Kopf-Tracking, Figur und Werkzeuge folgen dem Kopf
-- HUD und Overlays auf einer Leinwand im Raum, Helm folgt dem Kopf
-- VR-Einstellungen im Spielmenü (Reiter „Spiel“, Zeilen mit „VR:“)
-- Offen: Menüs fest im Raum, Pausenmenü in VR, Controller, Zeiger
+## Status
+- Stereo rendering (MultiPass) and head tracking
+- Body and tools follow the head; mouse/stick turning is added on top
+- HUD as a visor in front of the eyes, menus on a canvas in the room, helmet follows the head
+- VR settings inside the game's options (Gameplay tab, rows starting with "VR:")
+- Not yet: motion controllers, laser pointer for menus, comfort options
 
-Details und Erkenntnisse zum Spielcode: [docs/NOTES.md](docs/NOTES.md).
+Notes on how the game works and why the mod does what it does: [docs/NOTES.md](docs/NOTES.md).
 
-## Benutzung
-- F3: VR an/aus, F4: Blick zentrieren
-- Einstellungen: `BepInEx\config\de.marczahn.shipbreakervr.cfg` oder im Spielmenü
+## Usage
+- **F3** toggles VR, **F4** recenters the view
+- Settings: in-game options or `BepInEx\config\de.marczahn.shipbreakervr.cfg`
 
-Installation des fertigen Pakets: [docs/LIESMICH.txt](docs/LIESMICH.txt).
+Installing a release: [docs/INSTALL.md](docs/INSTALL.md).
 
-## Aufbau
-- `src/ShipbreakerVR/` – das BepInEx-Plugin (C#, net48)
-- `unity/ShipbreakerVRUnity/` – Hilfsprojekt (Unity 2020.3.35f1), baut das AssetBundle `xrmanager` mit den
-  XR-/OpenXR-Einstellungen und liefert die OpenXR-DLLs (Menü *ShipbreakerVR → Build für das Spiel*).
-  Die XR-Einstellungen stammen aus [ShipbreakerVR von Raicuparta](unity/ShipbreakerVRUnity/LICENSE-ShipbreakerVr.txt), MIT-Lizenz.
+## Layout
+- `src/ShipbreakerVR/` – the BepInEx plugin (C#, net48)
+- `unity/ShipbreakerVRUnity/` – helper project (Unity 2020.3.35f1). Builds the `xrmanager` AssetBundle with the
+  XR/OpenXR settings and collects the OpenXR DLLs (menu *ShipbreakerVR → Build for the game*).
+  The XR settings are derived from [ShipbreakerVR by Raicuparta](unity/ShipbreakerVRUnity/LICENSE-ShipbreakerVr.txt) (MIT).
 
-## Bauen
+## Building
 ```
-dotnet build src/ShipbreakerVR -c Release -p:GameDir="F:\SteamLibrary\steamapps\common\Hardspace Shipbreaker"
+dotnet build src/ShipbreakerVR -c Release -p:GameDir="C:\path\to\Hardspace Shipbreaker"
 ```
-Erwartet BepInEx und die Unity-XR-DLLs im Spielordner (`BepInEx\core`, `BepInEx\plugins\ShipbreakerVR`).
-Das Ergebnis `ShipbreakerVR.dll` kommt nach `BepInEx\plugins\ShipbreakerVR\`.
+Expects BepInEx and the Unity XR DLLs in the game folder (`BepInEx\core`, `BepInEx\plugins\ShipbreakerVR`).
+Copy the resulting `ShipbreakerVR.dll` to `BepInEx\plugins\ShipbreakerVR\`.

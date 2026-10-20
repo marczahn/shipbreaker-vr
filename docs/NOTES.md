@@ -1,55 +1,68 @@
-# Shipbreaker VR: Arbeitsstand
+# Development notes
 
-## Spiel (Stand 19.10.2026)
-- Installiert: `F:\SteamLibrary\steamapps\common\Hardspace Shipbreaker`
-- Spielversion 1.3.0.1263554, Unity 2020.3.35f1, Mono, HDRP, Build `JocularReactor` (27.01.2026)
-- PC: RTX 4070 Ti (12 GB), Monitor 3840x2160
-- Spiellogik: `BBI.Unity.Game.dll` (Assembly-CSharp ist fast leer)
-- Eingabe: InControl (`GameplayActions`, `LynxControls`)
-- Kamera: `LynxCameraController` (statisch `MainCamera`, `ScreenCenter`), gesteuert über Cinemachine (`MainBrain`, `VirtualCamera`)
-- Headset: Quest über Virtual Desktop (OpenXR über VDXR, Ausweichweg SteamVR)
+Findings about the game and decisions made while building the mod. Newest sections at the bottom.
 
-## Zielen der Werkzeuge
-Alle Werkzeuge zielen mit normalen `Physics.Raycast` über `LynxCameraController.MainCamera.ScreenPointToRay(...)`:
-- `CuttingController.cs` (595, 602, 621), `CuttingFXController.cs`
-- `TetherController.cs` (991)
-- `Scanner.cs` (237)
-Idee für Phase 4: eine eigene Ziel-Kamera an der Hand, die diese Aufrufe bekommt.
+## Game
+- Hardspace: Shipbreaker 1.3.0.1263554, Unity 2020.3.35f1, Mono, HDRP 10.x
+- Game logic lives in `BBI.Unity.Game.dll` (`Assembly-CSharp` is nearly empty)
+- Input: InControl (`GameplayActions`, `LynxControls`)
+- Camera: `LynxCameraController` (static `MainCamera`, `ScreenCenter`, `ScreenWidth/Height`), driven by Cinemachine
+- Decompile: `ilspycmd -p -o out -r <Managed> <Managed>/BBI.Unity.Game.dll` (needs `DOTNET_ROLL_FORWARD=Major` on .NET 8)
+- Test setup: Meta Quest via Virtual Desktop (VDXR OpenXR runtime)
 
-## Plan
-1. Bestandsaufnahme: erledigt (ShipbreakerVR-Test übersprungen, wir bauen selbst)
-2. Fundament: erledigt. BepInEx 5.4.23.3 und Plugin laden, Spielkamera `Main Camera` (FOV 72) gefunden. Beim Beenden wirft das Spiel selbst eine NullReferenceException in `Player.OnDestroy` (nicht von uns).
-3. VR sehen: läuft (Plugin 0.2.1, 20.10.2026). F3 = VR an/aus, F4 = Kopf zentrieren.
-   - OpenXR 1.2.8 aus dem Unity-Hilfsprojekt, Multi-Pass (Single Pass Instanced zeigte nur links ein verzerrtes Bild: dem Spiel fehlen die Shader-Varianten)
-   - Offen: Maus dreht die Sicht weiter mit; Entfernungen wirken ab einigen Metern gestaucht (Weltmaßstab prüfen, Config-Wert zum Ausprobieren)
-4. VR spielen: Controller, Werkzeuge an die Hand, Tasten
-5. VR bedienen: HUD als Visier, Menüs mit Pointer
-6. VR aushalten: Komfort, Performance
+## XR bootstrapping
+- The game ships without XR. OpenXR 1.2.8 + XR Management 4.2.1 are loaded at runtime: the XR settings come from an
+  AssetBundle (`xrmanager`) built by the Unity helper project, the managed DLLs sit next to the plugin, and the native
+  `UnityOpenXR.dll`/`openxr_loader.dll` plus `UnitySubsystemsManifest.json` go into `Shipbreaker_Data`.
+- Single Pass Instanced shows only a distorted left eye (the game's shaders lack the stereo variants), so
+  `OpenXRSettings.renderMode` is forced to MultiPass before the loader initializes.
+- Patching an HDRP type by name with `[HarmonyPatch("Type", "Method")]` threw a `TypeLoadException` that aborted
+  `PatchAll`; patches now use `TargetMethod()` + `AccessTools.TypeByName` and are applied class by class in a try/catch.
 
-## Bauen
-`src/ShipbreakerVR`: `dotnet build -c Release` (Pfade über `GameDir` bzw. `ManagedDir`/`BepInExDir`).
-Dekompilieren: `ilspycmd -p -o out -r <Managed> <Managed>/BBI.Unity.Game.dll`
+## Tool aiming
+All tools raycast through `LynxCameraController.MainCamera.ScreenPointToRay(...)`:
+`CuttingController` (595, 602, 621), `TetherController` (991), `Scanner` (237).
+With XR enabled, `LynxCameraController.UpdateScreenDimensions` takes the eye texture size (e.g. 2688x2880) as
+`ScreenWidth/ScreenCenter`, while the rays go through the flat camera (e.g. 2560x1440), so the cutter fired upwards.
+`ScreenSizePatch` always uses the flat camera's pixel size.
+Idea for controllers: an aiming camera on the hand that receives these calls.
 
-## 0.3.0: Figur folgt dem Kopf (zu testen)
-- VR-Rig ist jetzt eigenständig (kein Kind der Spielkamera), folgt nur deren Position; Rig-Drehung = "Spielraum" P.
-- Transpiler auf OrientationController.HandleAxisRotation leitet Rigidbody.MoveRotation auf VrBody.MoveRotation um:
-  Mausdrehung m dreht P, Figur = P * Kopf (* inverse Kamera-Offset). Fremde Drehung (Tod, Respawn) => Abgleich.
-- HandleReorient in VR übersprungen; "Aufrichten" richtet P auf.
-- Config [Steuerung] KoerperFolgtKopf (Standard an). Aus = altes Verhalten (Kopf frei).
-- Offen: Kamera sitzt evtl. nicht im Drehpunkt der Figur -> Kopfnicken verschiebt den Blickpunkt leicht.
+## Body follows head
+- The body rotates in `OrientationController.HandleAxisRotation` via `Rigidbody.MoveRotation(rotation * mouseDelta)`.
+- A transpiler redirects that call to `VrBody.MoveRotation`: the mouse delta rotates the "playspace" P, and the body
+  is set to P * head. Rotations from elsewhere (death spin, respawn) are detected and P is resynced.
+- The VR rig is not a child of the game camera (that would double the rotation); it only follows its position.
+- `HandleReorient` is skipped in VR; the reorient key levels P instead.
 
-## 0.4.0: UI im Raum, Helm am Kopf (zu testen)
-- Spiel-UI: Kamera mit Tag "UI_Camera", gerendert in Custom Passes HUDCustomPass / DrawUICameraCustomPass (bildschirmfüllend).
-  VrUi fängt beide Pässe für die VR-Kamera ab: UI-Kamera -> eigene RenderTexture (Bildschirmgröße), pro Auge auf ein Quad
-  gezeichnet (UI/Default, ZTest Always, Matrizen per Reflection aus HDCamera.xr GetViewMatrix/GetProjMatrix).
-  Gameplay: Visier vor dem Kopf, Blickwinkel = FOV der Spielkamera. Sonst: feste Leinwand im Rig, F4 setzt sie neu.
-- Helm: HelmetController.m_HelmetContainer folgt dem VR-Kopf (Lage relativ zur Spielkamera beibehalten). Config Helm=Kopf/Aus/Spiel.
-- Glitch-Effekte des HUD-Compositings fallen in VR weg. Mauszeiger in Menüs fehlt noch (Phase 5).
+## UI
+- The game renders its UI with a camera tagged `UI_Camera` inside HDRP custom passes (`HUDCustomPass`,
+  `DrawUICameraCustomPass`) as a full-screen overlay. `CustomPass.Execute` is overloaded, so patches must name the
+  `CustomPassContext` parameter type.
+- Many menus and hints are Screen Space Overlay canvases; in VR Unity draws them into the left eye only.
+  `VrCanvases` re-parents them to the UI camera while VR runs.
+- `VrUi` renders the UI camera into its own RenderTexture once per frame and draws it per eye on a quad
+  (`UI/Default`, ZTest Always, eye matrices via reflection from `HDCamera.xr`). In gameplay the quad is a visor in
+  front of the head; elsewhere it is a fixed canvas in the playspace (F4 re-places it).
+- The game switches its custom pass volumes off outside gameplay (e.g. pause), so the mod uses its own
+  `CustomPassVolume` (AfterPostProcess) and only disables the game's UI passes for the VR camera.
+- The main menu has no `LynxCameraController` and no UI camera: the VR camera attaches to the active menu camera and
+  `VrUi` creates its own UI camera.
+- TAA on the VR camera (MultiPass) looks washed out and makes objects jitter; SMAA is the default. The game itself
+  uses no anti-aliasing.
 
-## 0.4.1 / 0.4.2
-- 0.4.0-UI-Patches scheiterten: Execute mehrdeutig (CustomPass hat alte Überladung) -> Parametertyp CustomPassContext angeben.
-- Cutter zielte nach oben: LynxCameraController.UpdateScreenDimensions nimmt mit XR die Augentextur (2688x2880) als
-  ScreenWidth/Center, Werkzeuge zielen aber über die flache Kamera (2560x1440). ScreenSizePatch nimmt MainCamera.pixelWidth/Height.
-- TAA in VR (MultiPass): verwaschen, Objekte zittern -> Standard jetzt SMAA ([Bild] Kantenglaettung). Spiel selbst: None.
-- 0.4.2: Overlay-Canvases (ScreenSpaceOverlay) landen in VR im linken Auge -> VrCanvases hängt sie an die UI-Kamera.
-  UiFlaecheZeigen (blau getönte Leinwand) als Diagnose, Standard an.
+## Helmet
+`HelmetController.m_HelmetContainer` (under `Main Camera/Helmet_Rig`) follows the VR head, keeping its offset to the
+game camera. It can also be hidden.
+
+## Settings menu
+The VR rows are clones of real option rows (bool, slider, list) appended to the Gameplay tab. The game's logic for
+those clones is intercepted via Harmony and redirected to the BepInEx config. The Gameplay tab has no slider, so
+templates are taken from all tabs of the options screen.
+
+## Roadmap
+1. Inventory – done
+2. Foundation (BepInEx, plugin, camera hook) – done
+3. Seeing VR (stereo, head tracking) – working
+4. Playing VR: controllers, tools in hand, bindings
+5. Using VR: HUD as visor, menus with a pointer – in progress
+6. Comfort and performance
