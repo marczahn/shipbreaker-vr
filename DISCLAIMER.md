@@ -45,7 +45,10 @@ anderen genannten Unternehmen und wird von diesen weder unterstützt noch geprü
 gehören ihren jeweiligen Inhabern. Zur Nutzung wird eine rechtmäßig erworbene Kopie von Hardspace: Shipbreaker
 benötigt.
 
-### 6. Drittkomponenten
+### 6. Lizenz und Drittkomponenten
+Der Quellcode dieses Projekts steht unter der MIT-Lizenz (siehe `LICENSE`); dieser Haftungsausschluss gilt
+ergänzend und geht dem Gewährleistungs- und Haftungsausschluss der MIT-Lizenz vor, soweit dieser nach
+deutschem Recht unwirksam wäre.
 Mitgelieferte Drittkomponenten (BepInEx, Unity OpenXR/XR Management/Input System, Teile von ShipbreakerVR von
 Raicuparta) unterliegen ihren eigenen Lizenzen und den dort enthaltenen Haftungsregelungen.
 
@@ -93,7 +96,10 @@ This project is not affiliated with, endorsed or reviewed by Blackbird Interacti
 Meta or any other company mentioned. All trademarks and product names belong to their respective owners. A
 legitimately purchased copy of Hardspace: Shipbreaker is required.
 
-### 6. Third-party components
+### 6. License and third-party components
+The project's source code is licensed under the MIT License (see `LICENSE`); this disclaimer applies in
+addition and takes precedence over the MIT License's warranty and liability exclusion where that would be
+invalid under German law.
 Included third-party components (BepInEx, Unity OpenXR/XR Management/Input System, parts of ShipbreakerVR by
 Raicuparta) are subject to their own licenses and the liability terms contained therein.
 

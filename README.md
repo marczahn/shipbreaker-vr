@@ -32,3 +32,7 @@ dotnet build src/ShipbreakerVR -c Release -p:GameDir="C:\path\to\Hardspace Shipb
 ```
 Expects BepInEx and the Unity XR DLLs in the game folder (`BepInEx\core`, `BepInEx\plugins\ShipbreakerVR`).
 Copy the resulting `ShipbreakerVR.dll` to `BepInEx\plugins\ShipbreakerVR\`.
+
+## License
+MIT, see [LICENSE](LICENSE). Third-party components keep their own licenses (see [docs/INSTALL.md](docs/INSTALL.md)).
+Use at your own risk, see the [disclaimer](DISCLAIMER.md).
