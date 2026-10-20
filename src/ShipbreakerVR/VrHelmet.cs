@@ -6,7 +6,8 @@ using UnityEngine.Rendering;
 namespace ShipbreakerVR
 {
     // The game's helmet is attached to the body. In VR the head moves inside it and looks out of it.
-    // Mode "Kopf" (head): the helmet follows the VR head, with the same pose relative to the head as to the game camera in-game.
+    // Mode "Kopf" (head): the helmet follows the VR head, with the same pose relative to the head as to the game camera in-game
+// (scaled with VrCamera.EyeScale).
     // Mode "Aus" (off): the helmet model is hidden (light and warning lamp remain). Mode "Spiel" (game): change nothing.
     internal class VrHelmet : MonoBehaviour
     {
@@ -22,6 +23,7 @@ namespace ShipbreakerVR
         private Quaternion relativeRotation;
         private Vector3 originalLocalPosition;
         private Quaternion originalLocalRotation;
+        private Vector3 originalLocalScale;
         private bool moved;
         private float nextSearch;
         private bool hidden;
@@ -46,6 +48,7 @@ namespace ShipbreakerVR
                 container = go.transform;
                 originalLocalPosition = container.localPosition;
                 originalLocalRotation = container.localRotation;
+                originalLocalScale = container.localScale;
                 moved = false;
                 var cam = LynxCameraController.MainCameraTransform;
                 if (cam == null) return;
@@ -63,6 +66,7 @@ namespace ShipbreakerVR
                 moved = false;
                 container.localPosition = originalLocalPosition;
                 container.localRotation = originalLocalRotation;
+                container.localScale = originalLocalScale;
             }
         }
 
@@ -77,7 +81,10 @@ namespace ShipbreakerVR
             if (container == null) return;
             var head = vr.transform;
             moved = true;
-            container.SetPositionAndRotation(head.TransformPoint(relativePosition), head.rotation * relativeRotation);
+            // Scaled with the eye distance so the helmet keeps its apparent size around the head.
+            var scale = VrCamera.EyeScale;
+            container.SetPositionAndRotation(head.position + head.rotation * (relativePosition * scale), head.rotation * relativeRotation);
+            container.localScale = originalLocalScale * scale;
         }
 
         private void SetHidden(bool hide)

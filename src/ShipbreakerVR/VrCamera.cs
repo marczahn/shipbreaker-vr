@@ -51,6 +51,13 @@ namespace ShipbreakerVR
 
         public bool BodyFollowsHead => VrXr.IsRunning && Plugin.BodyFollowsHead.Value;
 
+        // Size of the player relative to the world: the rig scales head movement (and VrStereo the eye distance) with it.
+        public static float WorldScale => Mathf.Clamp(Plugin.WorldScale.Value, 0.25f, 5f);
+
+        // Factor on the eye distance: world scale times stereo depth. Things close to the head (visor, menus, helmet)
+        // are scaled by it so they keep their apparent distance and size.
+        public static float EyeScale => WorldScale * Mathf.Clamp(Plugin.StereoDepth.Value, 0.25f, 5f);
+
         public static void Attach(Camera gameCamera)
         {
             // The rig is deliberately not a child of the game camera: when the body follows the head, rotation would otherwise apply twice.
@@ -169,8 +176,10 @@ namespace ShipbreakerVR
             if (gameCamera == null || rig == null) return;
             var cam = gameCamera.transform;
             if (!BodyFollowsHead) Playspace = cam.rotation * recenterRotation;
+            var scale = WorldScale;
+            rig.localScale = new Vector3(scale, scale, scale);
             rig.rotation = Playspace;
-            rig.position = cam.position - Playspace * recenterPosition;
+            rig.position = cam.position - Playspace * (recenterPosition * scale);
         }
 
         // Puts the current head position on the game camera; without body-follows-head also the view direction (yaw only).

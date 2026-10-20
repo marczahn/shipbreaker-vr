@@ -12,7 +12,7 @@ namespace ShipbreakerVR
     {
         public const string Guid = "de.marczahn.shipbreakervr";
         public const string Name = "ShipbreakerVR";
-        public const string Version = "0.6.1";
+        public const string Version = "0.7.0";
 
         internal static ManualLogSource Log;
         internal static ConfigEntry<bool> MultiPass;
@@ -28,6 +28,8 @@ namespace ShipbreakerVR
         internal static ConfigEntry<VrHelmet.Mode> Helmet;
         internal static ConfigEntry<VrCamera.AntiAliasing> AntiAliasing;
         internal static ConfigEntry<float> ResolutionScale;
+        internal static ConfigEntry<float> WorldScale;
+        internal static ConfigEntry<float> StereoDepth;
 
         private void Awake()
         {
@@ -54,6 +56,10 @@ namespace ShipbreakerVR
                 "SMAA: smooths edges, stays sharp. TAA: looks blurry in VR and makes objects jitter. FXAA: cheap and soft. Keine: none. Spiel: use the game's setting.");
             ResolutionScale = Config.Bind("Bild", "Aufloesung", 1.0f,
                 "Render resolution per eye relative to the headset's default. Above 1 smooths further but costs significant performance.");
+            WorldScale = Config.Bind("Bild", "Weltmassstab", 1.0f,
+                "How large you are relative to the world. Scales head movement and eye distance together. Above 1 the world looks smaller and depth reaches further; below 1 it looks larger.");
+            StereoDepth = Config.Bind("Bild", "Stereotiefe", 1.0f,
+                "Factor on the eye distance only (on top of the world scale). Above 1 gives depth and size cues for distant objects, but close objects become harder to focus and the world looks smaller.");
             Log.LogInfo($"{Name} {Version} loaded. Unity {Application.unityVersion}, game {Application.version}");
             // Apply each patch separately so one failing patch doesn't take down all the others (and F3).
             var harmony = new Harmony(Guid);

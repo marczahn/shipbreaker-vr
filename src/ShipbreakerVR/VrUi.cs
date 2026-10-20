@@ -34,7 +34,7 @@ namespace ShipbreakerVR
 
         private bool menuMode;
         private bool menuPlaced;
-        private Vector3 menuPosition;
+        private Vector3 menuHead;
         private Quaternion menuRotation;
 
         // Pose and size of the quad in the world for the current frame.
@@ -152,7 +152,7 @@ namespace ShipbreakerVR
             if (!menuMode)
             {
                 // Visor: in front of the head, as large as the game camera's field of view.
-                var distance = Plugin.HudDistance.Value;
+                var distance = Plugin.HudDistance.Value * VrCamera.EyeScale;
                 var fov = LynxCameraController.MainCamera != null ? LynxCameraController.MainCamera.fieldOfView : 60f;
                 var h = 2f * distance * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad) * Plugin.HudScale.Value;
                 screenMatrix = Matrix4x4.TRS(head.position + head.rotation * new Vector3(0, 0, distance), head.rotation, new Vector3(h * aspect, h, 1f));
@@ -169,10 +169,14 @@ namespace ShipbreakerVR
                 forward.y = 0f;
                 forward = forward.sqrMagnitude > 1e-4f ? forward.normalized : Vector3.forward;
                 menuRotation = Quaternion.LookRotation(forward, Vector3.up);
-                menuPosition = head.localPosition + forward * Plugin.MenuDistance.Value;
+                menuHead = head.localPosition;
             }
-            var w = Plugin.MenuWidth.Value;
-            screenMatrix = Matrix4x4.TRS(rig.TransformPoint(menuPosition), rig.rotation * menuRotation, new Vector3(w, w / aspect, 1f));
+            // Distance and width in meters as perceived, so they scale with the eye distance.
+            var scale = VrCamera.EyeScale;
+            var rotation = rig.rotation * menuRotation;
+            var position = rig.TransformPoint(menuHead) + rotation * new Vector3(0f, 0f, Plugin.MenuDistance.Value * scale);
+            var w = Plugin.MenuWidth.Value * scale;
+            screenMatrix = Matrix4x4.TRS(position, rotation, new Vector3(w, w / aspect, 1f));
         }
 
         // Called from our own pass: draws the UI for the VR camera.

@@ -7,6 +7,7 @@ Tested with Meta Quest via Virtual Desktop. Early test build.
 - Stereo rendering (MultiPass) and head tracking
 - Body and tools follow the head; mouse/stick turning is added on top
 - HUD as a visor in front of the eyes, menus on a canvas in the room, helmet follows the head
+- Adjustable world scale and stereo depth (eye distance) for a better sense of size at a distance
 - VR settings inside the game's options (Gameplay tab, rows starting with "VR:")
 - Not yet: motion controllers, laser pointer for menus, comfort options
 

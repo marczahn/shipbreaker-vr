@@ -59,6 +59,17 @@ The VR rows are clones of real option rows (bool, slider, list) appended to the 
 those clones is intercepted via Harmony and redirected to the BepInEx config. The Gameplay tab has no slider, so
 templates are taken from all tabs of the options screen.
 
+## Depth and scale
+- With the real eye distance (~63 mm) stereo depth fades after a few meters; in space there are hardly any other
+  cues (no ground, no haze), so the size of distant ships is hard to judge.
+- "VR: Stereo depth" scales only the eye distance. `VrStereo` patches HDRP's `XRPass.AddView` and moves each eye's
+  view matrix along its offset from the head center. The culling frustum stays the headset's.
+- "VR: World scale" scales the rig, i.e. head movement, and the eye distance together (the player gets bigger, the
+  world looks smaller). Unity may or may not apply the rig scale to the eye offsets itself, so `VrStereo` relates the
+  rendered offset to the headset's eye positions (`CommonUsages.left/rightEyePosition`) and logs both once per eye.
+- Visor, menu canvas and helmet are scaled with the resulting eye factor so their apparent distance and size stay
+  as configured.
+
 ## Roadmap
 1. Inventory – done
 2. Foundation (BepInEx, plugin, camera hook) – done
