@@ -5,9 +5,9 @@ using UnityEngine.Rendering;
 
 namespace ShipbreakerVR
 {
-    // Der Helm des Spiels hängt an der Figur. In VR bewegt sich der Kopf darin und schaut aus ihm heraus.
-    // Modus "Kopf": Der Helm folgt dem VR-Kopf, mit derselben Lage relativ zum Kopf wie im Spiel zur Spielkamera.
-    // Modus "Aus": Das Helm-Modell wird ausgeblendet (Licht und Warnlampe bleiben). Modus "Spiel": nichts ändern.
+    // The game's helmet is attached to the body. In VR the head moves inside it and looks out of it.
+    // Mode "Kopf" (head): the helmet follows the VR head, with the same pose relative to the head as to the game camera in-game.
+    // Mode "Aus" (off): the helmet model is hidden (light and warning lamp remain). Mode "Spiel" (game): change nothing.
     internal class VrHelmet : MonoBehaviour
     {
         public enum Mode { Kopf, Aus, Spiel }
@@ -49,10 +49,10 @@ namespace ShipbreakerVR
                 moved = false;
                 var cam = LynxCameraController.MainCameraTransform;
                 if (cam == null) return;
-                // Lage des Helms relativ zur Spielkamera merken, solange das Spiel ihn noch selbst setzt.
+                // Remember the helmet pose relative to the game camera while the game still positions it itself.
                 relativePosition = cam.InverseTransformPoint(container.position);
                 relativeRotation = Quaternion.Inverse(cam.rotation) * container.rotation;
-                Plugin.Log.LogInfo($"Helm gefunden: '{Path(container)}', relativ zur Kamera {relativePosition} / {relativeRotation.eulerAngles}");
+                Plugin.Log.LogInfo($"Helmet found: '{Path(container)}', relative to camera {relativePosition} / {relativeRotation.eulerAngles}");
             }
 
             var mode = VrXr.IsRunning ? Plugin.Helmet.Value : Mode.Spiel;
@@ -66,7 +66,7 @@ namespace ShipbreakerVR
             }
         }
 
-        // Kurz vor dem Rendern der VR-Kamera noch einmal, damit der Helm die neueste Kopfhaltung hat.
+        // Once more right before the VR camera renders, so the helmet has the latest head pose.
         private void OnBeginCamera(ScriptableRenderContext context, Camera camera)
         {
             if (vr != null && camera == vr.Camera && VrXr.IsRunning && Plugin.Helmet.Value == Mode.Kopf) Follow();

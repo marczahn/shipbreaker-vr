@@ -7,12 +7,13 @@ using UnityEngine.Rendering.HighDefinition;
 
 namespace ShipbreakerVR
 {
-    // Zeigt die Spiel-UI in VR auf einer Leinwand im Raum.
-    // Das Spiel rendert seine UI mit einer eigenen Kamera (Tag "UI_Camera") in einem Custom Pass (HUDCustomPass bzw.
-    // DrawUICameraCustomPass) bildschirmfüllend über das Bild. In VR passt das nicht zu den Augen, also fangen wir die
-    // Pässe für die VR-Kamera ab: Die UI-Kamera rendert einmal pro Frame in eine eigene Textur, und die Textur wird
-    // für jedes Auge auf ein Rechteck im Raum gezeichnet. Im Spiel hängt es vor dem Kopf wie ein Visier-Display
-    // (gleicher Blickwinkel wie die Spielkamera, damit Markierungen auf Objekten passen); sonst steht es fest im Raum.
+    // Shows the game UI in VR on a canvas in the world.
+    // The game renders its UI with its own camera (tag "UI_Camera") in a custom pass (HUDCustomPass or
+    // DrawUICameraCustomPass) full-screen over the image. In VR that doesn't match the eyes, so we disable
+    // these passes for the VR camera and draw in our own pass (own CustomPassVolume, because the game
+    // disables its volumes e.g. when paused): the UI camera renders once per frame into its own texture, and
+    // the texture is drawn for each eye onto a quad in the world. In gameplay it hangs in front of the head like a
+    // visor display; in menus and pause it stays fixed in the world. If there is no UI camera (main menu), we use our own.
     internal class VrUi : MonoBehaviour
     {
         private static readonly PropertyInfo XrProperty = AccessTools.Property(typeof(HDCamera), "xr");
@@ -28,8 +29,6 @@ namespace ShipbreakerVR
         private Material material;
         private Mesh quad;
         private int renderedFrame = -1;
-        private int drawnFrame = -1;
-        private int drawnEyes;
         private int loggedEyes;
         private readonly VrCanvases canvases = new VrCanvases();
 
@@ -38,15 +37,30 @@ namespace ShipbreakerVR
         private Vector3 menuPosition;
         private Quaternion menuRotation;
 
-        // Lage und Größe des Rechtecks in der Welt für den aktuellen Frame.
+        // Pose and size of the quad in the world for the current frame.
         private Matrix4x4 screenMatrix;
+
+        private Camera ownUiCamera;
 
         public static void Attach(VrCamera vr)
         {
             var ui = vr.gameObject.AddComponent<VrUi>();
             ui.vr = vr;
             Instance = ui;
+
+            // Our pass runs after post-processing so the UI doesn't go through tonemapping and exposure.
+            var go = new GameObject("ShipbreakerVR UI Pass");
+            go.SetActive(false);
+            go.transform.SetParent(vr.transform.parent, false);
+            var volume = go.AddComponent<CustomPassVolume>();
+            volume.isGlobal = true;
+            volume.injectionPoint = CustomPassInjectionPoint.AfterPostProcess;
+            volume.AddPassOfType<VrUiPass>();
+            go.SetActive(true);
         }
+
+        // For the VR camera our own pass takes over; the game's UI passes draw nothing there.
+        public bool OwnsCamera(Camera camera) => Active && vr != null && camera == vr.Camera;
 
         private void OnDestroy()
         {
@@ -56,7 +70,7 @@ namespace ShipbreakerVR
 
         public bool Active => VrXr.IsRunning && Plugin.UiInVr.Value && vr != null;
 
-        // Für F4: Menüleinwand neu vor den Kopf setzen.
+        // For F4: place the menu canvas in front of the head again.
         public void Recenter() => menuPlaced = false;
 
         private void LateUpdate()
@@ -67,12 +81,21 @@ namespace ShipbreakerVR
                 return;
             }
 
-            if (uiCamera == null)
+            if (uiCamera == null || uiCamera == ownUiCamera)
             {
                 var go = GameObject.FindGameObjectWithTag("UI_Camera");
-                if (go != null) uiCamera = go.GetComponent<Camera>();
-                if (uiCamera == null) return;
-                Plugin.Log.LogInfo($"UI-Kamera gefunden: '{uiCamera.name}', Ebenen {uiCamera.cullingMask}");
+                var found = go != null ? go.GetComponent<Camera>() : null;
+                if (found != null)
+                {
+                    if (uiCamera != null) canvases.Restore();
+                    uiCamera = found;
+                    Plugin.Log.LogInfo($"UI camera found: '{uiCamera.name}', layers {uiCamera.cullingMask}");
+                }
+                else if (uiCamera == null)
+                {
+                    uiCamera = OwnUiCamera();
+                    Plugin.Log.LogInfo("No UI camera in game, using our own");
+                }
             }
 
             var width = Mathf.Max(Screen.width, 640);
@@ -85,15 +108,15 @@ namespace ShipbreakerVR
                 if (material == null)
                 {
                     material = new Material(Shader.Find("UI/Default"));
-                    // Immer über der Welt zeichnen, wie ein Display im Helm.
+                    // Always draw on top of the world, like a display in the helmet.
                     material.SetInt("unity_GUIZTestMode", (int)CompareFunction.Always);
                 }
                 material.mainTexture = texture;
                 if (quad == null) quad = CreateQuad();
-                Plugin.Log.LogInfo($"UI-Textur {width}x{height} angelegt");
+                Plugin.Log.LogInfo($"UI texture {width}x{height} created");
             }
 
-            // Die Canvas-Größe richtet sich nach der UI-Kamera; früh im Frame setzen, damit das Layout passt.
+            // Canvas size follows the UI camera; set it early in the frame so the layout fits.
             uiCamera.SetTargetBuffers(texture.colorBuffer, texture.depthBuffer);
             uiCamera.pixelRect = new Rect(0, 0, width, height);
             uiCamera.aspect = (float)width / height;
@@ -101,17 +124,34 @@ namespace ShipbreakerVR
             canvases.Update(uiCamera);
         }
 
+        // Own UI camera for scenes without the game's; renders only the UI layer and never on its own.
+        private Camera OwnUiCamera()
+        {
+            if (ownUiCamera != null) return ownUiCamera;
+            var go = new GameObject("ShipbreakerVR UI Camera");
+            go.transform.SetParent(transform.parent, false);
+            go.transform.position = new Vector3(0f, -10000f, 0f);
+            ownUiCamera = go.AddComponent<Camera>();
+            ownUiCamera.enabled = false;
+            ownUiCamera.cullingMask = 1 << 5;
+            ownUiCamera.nearClipPlane = 0.01f;
+            ownUiCamera.farClipPlane = 100f;
+            ownUiCamera.clearFlags = CameraClearFlags.SolidColor;
+            ownUiCamera.backgroundColor = Color.clear;
+            return ownUiCamera;
+        }
+
         private void UpdatePlacement()
         {
             var head = vr.transform;
             var aspect = (float)texture.width / texture.height;
-            var gameplay = GameSession.CurrentGameState == GameSession.GameState.Gameplay;
+            var gameplay = GameSession.CurrentGameState == GameSession.GameState.Gameplay && LynxCameraController.MainCamera != null;
             if (menuMode == gameplay) menuPlaced = false;
             menuMode = !gameplay;
 
             if (!menuMode)
             {
-                // Visier: vor dem Kopf, so groß wie das Sichtfeld der Spielkamera.
+                // Visor: in front of the head, as large as the game camera's field of view.
                 var distance = Plugin.HudDistance.Value;
                 var fov = LynxCameraController.MainCamera != null ? LynxCameraController.MainCamera.fieldOfView : 60f;
                 var h = 2f * distance * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad) * Plugin.HudScale.Value;
@@ -119,7 +159,7 @@ namespace ShipbreakerVR
                 return;
             }
 
-            // Menü: einmal vor den Kopf setzen (ohne Neigung zur Seite), dann fest im Spielraum stehen lassen.
+            // Menu: place once in front of the head (without roll), then keep it fixed in the playspace.
             var rig = head.parent;
             if (!menuPlaced)
             {
@@ -132,11 +172,10 @@ namespace ShipbreakerVR
             screenMatrix = Matrix4x4.TRS(rig.TransformPoint(menuPosition), rig.rotation * menuRotation, new Vector3(w, w / aspect, 1f));
         }
 
-        // Ersetzt den UI-Pass des Spiels für die VR-Kamera. Liefert false, wenn die Kamera nicht unsere ist.
-        public bool TryExecute(CustomPassContext context)
+        // Called from our own pass: draws the UI for the VR camera.
+        public void Draw(CustomPassContext context)
         {
-            if (!Active || context.hdCamera.camera != vr.Camera) return false;
-            if (uiCamera == null || texture == null) return true;
+            if (!OwnsCamera(context.hdCamera.camera) || uiCamera == null || texture == null) return;
 
             var cmd = context.cmd;
             var renderContext = context.renderContext;
@@ -144,16 +183,12 @@ namespace ShipbreakerVR
             if (renderedFrame != Time.frameCount)
             {
                 renderedFrame = Time.frameCount;
-                // Erst hier, nach der letzten Kopfabfrage vor dem Rendern, damit das Display nicht nachzieht.
+                // Only here, after the last head pose update before rendering, so the display doesn't lag.
                 UpdatePlacement();
                 RenderUi(context);
             }
 
-            // Beide UI-Pässe des Spiels können laufen; pro Auge nur einmal zeichnen.
             var eye = GetEye(context.hdCamera, out var view, out var proj);
-            if (drawnFrame != Time.frameCount) { drawnFrame = Time.frameCount; drawnEyes = 0; }
-            if ((drawnEyes & (1 << eye)) != 0) return true;
-            drawnEyes |= 1 << eye;
 
             cmd.SetRenderTarget(context.cameraColorBuffer, 0, CubemapFace.Unknown, -1);
             cmd.SetViewport(new Rect(0, 0, context.hdCamera.actualWidth, context.hdCamera.actualHeight));
@@ -166,12 +201,11 @@ namespace ShipbreakerVR
             if ((loggedEyes & (1 << eye)) == 0)
             {
                 loggedEyes |= 1 << eye;
-                Plugin.Log.LogInfo($"UI wird in VR gezeichnet (Auge {eye}, {context.hdCamera.actualWidth}x{context.hdCamera.actualHeight})");
+                Plugin.Log.LogInfo($"UI drawn in VR (eye {eye}, {context.hdCamera.actualWidth}x{context.hdCamera.actualHeight})");
             }
-            return true;
         }
 
-        // Wie im HUDCustomPass des Spiels, nur in unsere Textur und mit festem Seitenverhältnis.
+        // Like the game's HUDCustomPass, but into our texture and with a fixed aspect ratio.
         private void RenderUi(CustomPassContext context)
         {
             var cmd = context.cmd;
@@ -196,7 +230,7 @@ namespace ShipbreakerVR
             renderContext.SetupCameraProperties(context.hdCamera.camera, true);
         }
 
-        // Matrizen des Auges, das HDRP gerade rendert (MultiPass: ein Durchgang pro Auge).
+        // Matrices of the eye HDRP is currently rendering (MultiPass: one pass per eye).
         private static int GetEye(HDCamera hdCamera, out Matrix4x4 view, out Matrix4x4 proj)
         {
             var xr = XrProperty.GetValue(hdCamera);
@@ -232,7 +266,7 @@ namespace ShipbreakerVR
     {
         private static MethodBase TargetMethod() => AccessTools.Method(AccessTools.TypeByName("HUDCustomPass"), "Execute", new[] { typeof(CustomPassContext) });
 
-        private static bool Prefix(CustomPassContext context) => VrUi.Instance == null || !VrUi.Instance.TryExecute(context);
+        private static bool Prefix(CustomPassContext context) => VrUi.Instance == null || !VrUi.Instance.OwnsCamera(context.hdCamera.camera);
     }
 
     [HarmonyPatch]
@@ -240,6 +274,14 @@ namespace ShipbreakerVR
     {
         private static MethodBase TargetMethod() => AccessTools.Method(AccessTools.TypeByName("DrawUICameraCustomPass"), "Execute", new[] { typeof(CustomPassContext) });
 
-        private static bool Prefix(CustomPassContext context) => VrUi.Instance == null || !VrUi.Instance.TryExecute(context);
+        private static bool Prefix(CustomPassContext context) => VrUi.Instance == null || !VrUi.Instance.OwnsCamera(context.hdCamera.camera);
+    }
+
+    internal class VrUiPass : CustomPass
+    {
+        protected override void Execute(CustomPassContext ctx)
+        {
+            if (VrUi.Instance != null) VrUi.Instance.Draw(ctx);
+        }
     }
 }

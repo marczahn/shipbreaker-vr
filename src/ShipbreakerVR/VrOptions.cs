@@ -10,10 +10,10 @@ using UnityEngine.UI;
 
 namespace ShipbreakerVR
 {
-    // Hängt die VR-Einstellungen als eigene Zeilen an die Spiel-Optionen ("Spiel"-Reiter) an.
-    // Die Zeilen sind Kopien echter Optionszeilen des Spiels, damit Aussehen, Auswahl und Mausbedienung stimmen.
-    // Die Spiellogik der Kopien (feste Enums für Spieloptionen) fangen wir per Harmony ab und lesen/schreiben
-    // stattdessen die BepInEx-Konfiguration. Werte wirken sofort und werden sofort gespeichert.
+    // Appends the VR settings as extra rows to the game options ("Game" tab).
+    // The rows are copies of real game option rows so that look, selection and mouse handling are right.
+    // We intercept the copies' game logic (fixed enums for game options) via Harmony and read/write
+    // the BepInEx config instead. Values take effect and are saved immediately.
     internal static class VrOptions
     {
         private abstract class Row
@@ -25,7 +25,7 @@ namespace ShipbreakerVR
         private class BoolRow : Row
         {
             public ConfigEntry<bool> Entry;
-            public override string ValueText => Entry.Value ? "An" : "Aus";
+            public override string ValueText => Entry.Value ? "On" : "Off";
         }
 
         private class SliderRow : Row
@@ -62,16 +62,16 @@ namespace ShipbreakerVR
 
             return new Row[]
             {
-                new BoolRow { Label = "VR: Figur folgt dem Kopf", Entry = Plugin.BodyFollowsHead },
-                EnumRow("VR: Kantenglättung", Plugin.AntiAliasing, new[] { "TAA", "SMAA", "FXAA", "Keine", "Wie im Spiel" }),
-                new SliderRow { Label = "VR: Renderauflösung", Entry = Plugin.ResolutionScale, Min = 0.5f, Max = 2f, Format = "0.00" },
-                EnumRow("VR: Helm", Plugin.Helmet, new[] { "Folgt dem Kopf", "Ausgeblendet", "Wie im Spiel" }),
-                new BoolRow { Label = "VR: HUD und Menüs im Raum", Entry = Plugin.UiInVr },
-                new SliderRow { Label = "VR: Visier-Größe", Entry = Plugin.HudScale, Min = 0.3f, Max = 1f, Format = "0.00" },
-                new SliderRow { Label = "VR: Visier-Abstand (m)", Entry = Plugin.HudDistance, Min = 0.5f, Max = 3f, Format = "0.0" },
-                new SliderRow { Label = "VR: Menü-Abstand (m)", Entry = Plugin.MenuDistance, Min = 1f, Max = 4f, Format = "0.0" },
-                new SliderRow { Label = "VR: Menü-Breite (m)", Entry = Plugin.MenuWidth, Min = 1f, Max = 4f, Format = "0.0" },
-                new BoolRow { Label = "VR: UI-Fläche einfärben", Entry = Plugin.ShowUiFrame },
+                new BoolRow { Label = "VR: Body follows head", Entry = Plugin.BodyFollowsHead },
+                EnumRow("VR: Anti-aliasing", Plugin.AntiAliasing, new[] { "TAA", "SMAA", "FXAA", "None", "Game default" }),
+                new SliderRow { Label = "VR: Render resolution", Entry = Plugin.ResolutionScale, Min = 0.5f, Max = 2f, Format = "0.00" },
+                EnumRow("VR: Helmet", Plugin.Helmet, new[] { "Follows head", "Hidden", "Game default" }),
+                new BoolRow { Label = "VR: HUD and menus in world", Entry = Plugin.UiInVr },
+                new SliderRow { Label = "VR: Visor size", Entry = Plugin.HudScale, Min = 0.3f, Max = 1f, Format = "0.00" },
+                new SliderRow { Label = "VR: Visor distance (m)", Entry = Plugin.HudDistance, Min = 0.5f, Max = 3f, Format = "0.0" },
+                new SliderRow { Label = "VR: Menu distance (m)", Entry = Plugin.MenuDistance, Min = 1f, Max = 4f, Format = "0.0" },
+                new SliderRow { Label = "VR: Menu width (m)", Entry = Plugin.MenuWidth, Min = 1f, Max = 4f, Format = "0.0" },
+                new BoolRow { Label = "VR: Tint UI surface", Entry = Plugin.ShowUiFrame },
             };
         }
 
@@ -79,13 +79,13 @@ namespace ShipbreakerVR
         {
             var entries = screen.GetComponentsInChildren<OptionEntry>(true);
             if (entries.Length == 0) return;
-            // Der Spiel-Reiter hat keinen Regler; Vorlagen deshalb aus allen Reitern des Optionsmenüs nehmen.
+            // The Game tab has no slider, so take templates from all tabs of the options menu.
             var root = screen.transform.parent != null ? screen.transform.parent : screen.transform;
             var all = root.GetComponentsInChildren<OptionEntry>(true);
             var boolTemplate = PickTemplate<OptionEntryBool>(all);
             var sliderTemplate = PickTemplate<OptionEntrySlider>(all);
             var listTemplate = PickTemplate<OptionEntryList>(all);
-            Plugin.Log.LogInfo($"Optionen '{Path(screen.transform)}': {entries.Length} Zeilen, Vorlagen aus '{root.name}': Schalter {Describe(boolTemplate)}, Regler {Describe(sliderTemplate)}, Liste {Describe(listTemplate)}");
+            Plugin.Log.LogInfo($"Options '{Path(screen.transform)}': {entries.Length} rows, templates from '{root.name}': toggle {Describe(boolTemplate)}, slider {Describe(sliderTemplate)}, list {Describe(listTemplate)}");
 
             var parent = entries.Last().transform.parent;
             foreach (var row in CreateRows())
@@ -97,7 +97,7 @@ namespace ShipbreakerVR
                     _ => listTemplate,
                 };
                 if (template == null) continue;
-                // Erst deaktiviert kopieren, damit Awake/OnEnable der Kopie schon unsere Zeile finden.
+                // Copy while deactivated so the clone's Awake/OnEnable already find our row.
                 var wasActive = template.gameObject.activeSelf;
                 template.gameObject.SetActive(false);
                 var clone = UnityEngine.Object.Instantiate(template.gameObject, parent, false);
@@ -110,7 +110,7 @@ namespace ShipbreakerVR
             }
         }
 
-        // Eine Zeile, die im Spiel bedienbar ist (nicht nur im Titelmenü, kein Neustart nötig).
+        // A row usable in-game (not title-screen only, no restart required).
         private static T PickTemplate<T>(IEnumerable<OptionEntry> entries) where T : OptionEntry
         {
             return entries.OfType<T>().FirstOrDefault(e =>
@@ -122,7 +122,7 @@ namespace ShipbreakerVR
         private static void SetText(TextMeshProUGUI text, string value)
         {
             if (text == null) return;
-            // Lokalisierte Texte würden unseren Text sonst beim Aktivieren wieder überschreiben.
+            // Otherwise localized text would overwrite ours again on activation.
             var localized = text.GetComponent<LocalizedTextMeshProUGUI>();
             if (localized != null) localized.ClearLocalizedID(value);
             text.text = value;
@@ -178,7 +178,7 @@ namespace ShipbreakerVR
             return true;
         }
 
-        private static string Describe(OptionEntry e) => e == null ? "keine" : $"'{e.name}'";
+        private static string Describe(OptionEntry e) => e == null ? "none" : $"'{e.name}'";
 
         private static string Path(Transform t) => t.parent == null ? t.name : Path(t.parent) + "/" + t.name;
     }

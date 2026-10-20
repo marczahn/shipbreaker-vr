@@ -7,8 +7,8 @@ using UnityEngine.XR.OpenXR;
 
 namespace ShipbreakerVR
 {
-    // Startet und stoppt OpenXR zur Laufzeit. Die XR-Einstellungen kommen aus dem AssetBundle,
-    // das im Unity-Hilfsprojekt gebaut wird (unity/ShipbreakerVRUnity, Menü "ShipbreakerVR").
+    // Starts and stops OpenXR at runtime. The XR settings come from the AssetBundle
+    // built in the Unity helper project (unity/ShipbreakerVRUnity, menu "ShipbreakerVR").
     internal static class VrXr
     {
         private static bool settingsLoaded;
@@ -29,13 +29,13 @@ namespace ShipbreakerVR
             if (manager.activeLoader == null) manager.InitializeLoaderSync();
             if (manager.activeLoader == null)
             {
-                Plugin.Log.LogError("OpenXR ließ sich nicht starten. Läuft Virtual Desktop bzw. SteamVR?");
+                Plugin.Log.LogError("OpenXR failed to start. Is Virtual Desktop or SteamVR running?");
                 return;
             }
 
             manager.StartSubsystems();
             IsRunning = true;
-            Plugin.Log.LogInfo($"VR gestartet mit {manager.activeLoader.name}");
+            Plugin.Log.LogInfo($"VR started with {manager.activeLoader.name}");
         }
 
         private static void Stop()
@@ -44,20 +44,20 @@ namespace ShipbreakerVR
             manager.StopSubsystems();
             manager.DeinitializeLoader();
             IsRunning = false;
-            Plugin.Log.LogInfo("VR beendet");
+            Plugin.Log.LogInfo("VR stopped");
         }
 
         private static void LoadSettings()
         {
             var path = Path.Combine(Path.Combine(Paths.PluginPath, "ShipbreakerVR"), Path.Combine("AssetBundles", "xrmanager"));
             var bundle = AssetBundle.LoadFromFile(path);
-            if (bundle == null) throw new Exception("AssetBundle nicht gefunden: " + path);
+            if (bundle == null) throw new Exception("AssetBundle not found: " + path);
             bundle.LoadAllAssets();
 
-            if (XRGeneralSettings.Instance == null) throw new Exception("XRGeneralSettings fehlt im AssetBundle");
+            if (XRGeneralSettings.Instance == null) throw new Exception("XRGeneralSettings missing from AssetBundle");
             var openXr = OpenXRSettings.Instance;
             if (openXr != null && Plugin.MultiPass.Value) openXr.renderMode = OpenXRSettings.RenderMode.MultiPass;
-            Plugin.Log.LogInfo($"XR-Einstellungen geladen, OpenXR-Rendermodus: {openXr?.renderMode}");
+            Plugin.Log.LogInfo($"XR settings loaded, OpenXR render mode: {openXr?.renderMode}");
             settingsLoaded = true;
         }
     }

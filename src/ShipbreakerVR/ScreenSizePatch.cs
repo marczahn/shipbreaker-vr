@@ -2,9 +2,9 @@ using HarmonyLib;
 
 namespace ShipbreakerVR
 {
-    // Mit aktivem XR setzt das Spiel ScreenWidth/ScreenHeight auf die Größe der Augentextur. Die Werkzeuge zielen aber über
-    // die flache Spielkamera (MainCamera.ScreenPointToRay) mit ScreenCenter; deren Bildschirmmitte liegt woanders, und der
-    // Cutter schießt dann nach oben. Wir nehmen deshalb immer die Pixelgröße der Spielkamera.
+    // With XR active the game sets ScreenWidth/ScreenHeight to the eye texture size. But the tools aim through
+    // the flat game camera (MainCamera.ScreenPointToRay) using ScreenCenter; its screen center is elsewhere, and the
+    // cutter then fires upward. So we always use the game camera's pixel size.
     [HarmonyPatch(typeof(LynxCameraController), "UpdateScreenDimensions")]
     internal static class ScreenSizePatch
     {
@@ -21,7 +21,7 @@ namespace ShipbreakerVR
             SetWidth.Invoke(null, new object[] { width });
             SetHeight.Invoke(null, new object[] { height });
             SetCenter.Invoke(null, new object[] { new UnityEngine.Vector2(width * 0.5f, height * 0.5f) });
-            Plugin.Log.LogInfo($"Bildschirmgröße für Werkzeuge: {width}x{height}");
+            Plugin.Log.LogInfo($"Screen size for tools: {width}x{height}");
         }
     }
 }

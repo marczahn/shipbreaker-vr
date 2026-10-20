@@ -3,9 +3,9 @@ using UnityEngine;
 
 namespace ShipbreakerVR
 {
-    // Viele Menüs und Hinweise des Spiels sind "Screen Space - Overlay"-Canvases. Die zeichnet Unity am Ende des Frames
-    // direkt ins Ausgabebild, in VR landen sie dadurch halb in einem Auge. Solange VR läuft, hängen wir sie an die
-    // UI-Kamera des Spiels; dann landen sie mit dem HUD in unserer UI-Textur und auf der Leinwand im Raum.
+    // Many of the game's menus and prompts are "Screen Space - Overlay" canvases. Unity draws them at the end of the frame
+    // straight into the output image, so in VR they end up half in one eye. While VR is running we attach them to the
+    // game's UI camera; they then end up with the HUD in our UI texture and on the canvas in the world.
     internal class VrCanvases
     {
         private struct Original
@@ -26,24 +26,27 @@ namespace ShipbreakerVR
             nextScan = Time.unscaledTime + 0.5f;
 
             var layer = LowestLayer(uiCamera.cullingMask);
-            // Vor alle Canvases, die schon an der UI-Kamera hängen, aber noch innerhalb ihres Sichtbereichs.
+            // In front of all canvases already on the UI camera, but still within its view range.
             var distance = Mathf.Max(uiCamera.nearClipPlane * 1.5f, 0.02f);
             var added = 0;
             foreach (var canvas in Object.FindObjectsOfType<Canvas>())
             {
-                if (!canvas.isRootCanvas || canvas.renderMode != RenderMode.ScreenSpaceOverlay || converted.ContainsKey(canvas)) continue;
+                if (!canvas.isRootCanvas || converted.ContainsKey(canvas)) continue;
+                // Overlay canvases and those attached to another camera (e.g. in the main menu).
+                var foreign = canvas.renderMode == RenderMode.ScreenSpaceCamera && canvas.worldCamera != uiCamera;
+                if (canvas.renderMode != RenderMode.ScreenSpaceOverlay && !foreign) continue;
                 converted[canvas] = new Original { Mode = canvas.renderMode, Camera = canvas.worldCamera, PlaneDistance = canvas.planeDistance, Layer = canvas.gameObject.layer };
                 SetLayer(canvas.transform, layer);
                 canvas.renderMode = RenderMode.ScreenSpaceCamera;
                 canvas.worldCamera = uiCamera;
                 canvas.planeDistance = distance;
                 added++;
-                if (!logged) Plugin.Log.LogInfo($"Overlay-Canvas an die UI-Kamera gehängt: '{canvas.name}' (Reihenfolge {canvas.sortingOrder})");
+                if (!logged) Plugin.Log.LogInfo($"Canvas attached to UI camera: '{canvas.name}' ({converted[canvas].Mode}, camera {(converted[canvas].Camera != null ? converted[canvas].Camera.name : "-")}, order {canvas.sortingOrder})");
             }
             if (added > 0 && !logged)
             {
                 logged = true;
-                Plugin.Log.LogInfo($"{converted.Count} Overlay-Canvases auf Ebene {layer}, Abstand {distance:0.000}");
+                Plugin.Log.LogInfo($"{converted.Count} overlay canvases on layer {layer}, distance {distance:0.000}");
             }
         }
 

@@ -1,13 +1,14 @@
+using BBI.Unity.Game;
 using UnityEngine;
 using UnityEngine.Rendering.HighDefinition;
 using UnityEngine.SpatialTracking;
 
 namespace ShipbreakerVR
 {
-    // Eine Stereo-Kamera hängt an einem eigenen Rig, das der Position der Spielkamera folgt und Kopfdrehung und Kopfposition übernimmt.
-    // Die Drehung des Rigs ist der "Spielraum": Mit KoerperFolgtKopf setzt VrBody die Figur jedes Frame auf Spielraum * Kopf,
-    // sonst dreht sich der Spielraum einfach mit der Spielkamera (Kopf schaut frei, Maus dreht die Figur).
-    // Die Spielkamera bleibt die Ziel-Kamera der Werkzeuge, rendert aber nicht, solange VR läuft.
+    // A stereo camera sits on its own rig that follows the game camera's position and applies head rotation and head position.
+    // The rig's rotation is the "playspace": with body-follows-head, VrBody sets the body to playspace * head every frame,
+    // otherwise the playspace simply turns with the game camera (head looks freely, mouse turns the body).
+    // The game camera stays the tools' aiming camera, but does not render while VR is running.
     internal class VrCamera : MonoBehaviour
     {
         private const float RecenterDelay = 0.5f;
@@ -25,24 +26,34 @@ namespace ShipbreakerVR
         private float recenterAt = -1f;
         private bool wasRunning;
 
-        // Kopfposition im Tracking, die auf der Spielkamera liegen soll (F4).
+        // Tracked head position that should coincide with the game camera (F4).
         private Vector3 recenterPosition;
 
-        // Gierung, die ohne KoerperFolgtKopf den Kopf auf die Blickrichtung der Spielkamera dreht (F4).
+        // Yaw that, without body-follows-head, turns the head to the game camera's view direction (F4).
         private Quaternion recenterRotation = Quaternion.identity;
 
-        // Drehung des Spielraums in der Welt; der Kopf blickt in Playspace * HeadRotation.
+        // Rotation of the playspace in the world; the head looks along Playspace * HeadRotation.
         public Quaternion Playspace { get; set; } = Quaternion.identity;
 
         public Quaternion HeadRotation => transform.localRotation;
 
         public Camera Camera => vrCamera;
 
+        public Camera GameCamera => gameCamera;
+
+        // Switches to another game camera (main menu -> game): remove the old rig, re-enable the camera.
+        public void Detach()
+        {
+            if (gameCamera != null) gameCamera.enabled = true;
+            if (Instance == this) Instance = null;
+            Destroy(rig.gameObject);
+        }
+
         public bool BodyFollowsHead => VrXr.IsRunning && Plugin.BodyFollowsHead.Value;
 
         public static void Attach(Camera gameCamera)
         {
-            // Das Rig ist bewusst kein Kind der Spielkamera: Folgt die Figur dem Kopf, würde sich die Drehung sonst doppelt auswirken.
+            // The rig is deliberately not a child of the game camera: when the body follows the head, rotation would otherwise apply twice.
             var rig = new GameObject("ShipbreakerVR Rig").transform;
             rig.SetPositionAndRotation(gameCamera.transform.position, gameCamera.transform.rotation);
 
@@ -62,7 +73,7 @@ namespace ShipbreakerVR
             vr.vrCamera.stereoTargetEye = StereoTargetEyeMask.Both;
             vr.vrCamera.enabled = false;
 
-            // HDRP-Einstellungen der Spielkamera übernehmen (Volumes, Belichtung, Frame Settings).
+            // Copy the game camera's HDRP settings (volumes, exposure, frame settings).
             var gameHd = gameCamera.GetComponent<HDAdditionalCameraData>();
             var vrHd = head.AddComponent<HDAdditionalCameraData>();
             if (gameHd != null) gameHd.CopyTo(vrHd);
@@ -78,7 +89,7 @@ namespace ShipbreakerVR
             VrUi.Attach(vr);
             VrHelmet.Attach(vr);
 
-            Plugin.Log.LogInfo($"VR-Kamera angelegt, folgt der Spielkamera (HDRP-Daten übernommen: {gameHd != null})");
+            Plugin.Log.LogInfo($"VR camera created, following the game camera (HDRP data copied: {gameHd != null})");
         }
 
         private void OnEnable() => Application.onBeforeRender += FollowGameCamera;
@@ -97,7 +108,7 @@ namespace ShipbreakerVR
 
         private void LateUpdate()
         {
-            // Die Spielkamera gehört zur Szene; geht sie, geht das Rig mit.
+            // The game camera belongs to the scene; when it goes, the rig goes too.
             if (gameCamera == null)
             {
                 Destroy(rig.gameObject);
@@ -110,11 +121,14 @@ namespace ShipbreakerVR
                 recenterAt = Time.unscaledTime + RecenterDelay;
                 VrBody.Resync();
             }
+            // Don't blindly re-enable on stop: in the Hab the game disabled its camera itself.
+            if (!running && wasRunning)
+                gameCamera.enabled = gameCamera != LynxCameraController.MainCamera || GameSession.CurrentGameState != GameSession.GameState.Hab;
             wasRunning = running;
 
             if (running) ApplyQuality();
             vrCamera.enabled = running;
-            gameCamera.enabled = !running;
+            if (running) gameCamera.enabled = false;
 
             if (recenterAt > 0 && Time.unscaledTime >= recenterAt)
             {
@@ -138,17 +152,17 @@ namespace ShipbreakerVR
             if (vrHd.antialiasing != mode)
             {
                 vrHd.antialiasing = mode;
-                Plugin.Log.LogInfo($"Kantenglättung der VR-Kamera: {mode} (Spiel: {gameAntialiasing})");
+                Plugin.Log.LogInfo($"VR camera anti-aliasing: {mode} (game: {gameAntialiasing})");
             }
             var scale = Mathf.Clamp(Plugin.ResolutionScale.Value, 0.5f, 2f);
             if (!Mathf.Approximately(UnityEngine.XR.XRSettings.eyeTextureResolutionScale, scale))
             {
                 UnityEngine.XR.XRSettings.eyeTextureResolutionScale = scale;
-                Plugin.Log.LogInfo($"Renderauflösung pro Auge: {scale:0.00}x");
+                Plugin.Log.LogInfo($"Render resolution per eye: {scale:0.00}x");
             }
         }
 
-        // Kurz vor dem Rendern noch einmal, weil Cinemachine die Spielkamera erst spät im Frame setzt.
+        // Once more right before rendering, because Cinemachine sets the game camera late in the frame.
         private void FollowGameCamera()
         {
             if (gameCamera == null || rig == null) return;
@@ -158,14 +172,14 @@ namespace ShipbreakerVR
             rig.position = cam.position - Playspace * recenterPosition;
         }
 
-        // Legt die aktuelle Kopfposition auf die Spielkamera; ohne KoerperFolgtKopf auch die Blickrichtung (nur Gierung).
+        // Puts the current head position on the game camera; without body-follows-head also the view direction (yaw only).
         private void Recenter()
         {
             var head = transform;
             recenterPosition = head.localPosition;
             recenterRotation = Quaternion.Inverse(Quaternion.Euler(0f, head.localEulerAngles.y, 0f));
             if (VrUi.Instance != null) VrUi.Instance.Recenter();
-            Plugin.Log.LogInfo($"Kopf zentriert (Kopfposition im Tracking {head.localPosition})");
+            Plugin.Log.LogInfo($"Head recentered (tracked head position {head.localPosition})");
         }
     }
 }

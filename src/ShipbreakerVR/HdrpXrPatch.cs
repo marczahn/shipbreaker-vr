@@ -6,13 +6,13 @@ using UnityEngine.XR;
 
 namespace ShipbreakerVR
 {
-    // HDRP stellt das XR-Display bei jedem Frame auf Texture2DArray (ein Bild mit zwei Ebenen, eine pro Auge).
-    // Optional (Config SeparateEyeTextures) stellen wir stattdessen getrennte Texturen pro Auge ein.
-    // Protokolliert außerdem einmal, wie das Display tatsächlich rendert.
+    // Every frame HDRP sets the XR display to Texture2DArray (one image with two slices, one per eye).
+    // Optionally (config SeparateEyeTextures) we switch to separate textures per eye instead.
+    // Also logs once how the display actually renders.
     [HarmonyPatch]
     internal static class HdrpXrPatch
     {
-        // XRSystem ist internal, deshalb per Name suchen.
+        // XRSystem is internal, so look it up by name.
         private static MethodBase TargetMethod() =>
             AccessTools.Method(AccessTools.TypeByName("UnityEngine.Rendering.HighDefinition.XRSystem"), "RefreshXrSdk");
 
@@ -29,7 +29,7 @@ namespace ShipbreakerVR
 
             if (logged || !display.running) return;
             logged = true;
-            Plugin.Log.LogInfo($"XR-Display: unterstützte Layouts {display.supportedTextureLayouts}, gesetzt {display.textureLayout}, Durchgänge {display.GetRenderPassCount()}");
+            Plugin.Log.LogInfo($"XR display: supported layouts {display.supportedTextureLayouts}, set {display.textureLayout}, passes {display.GetRenderPassCount()}");
         }
     }
 }

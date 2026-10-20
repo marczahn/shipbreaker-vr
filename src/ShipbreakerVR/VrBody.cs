@@ -7,20 +7,20 @@ using UnityEngine;
 
 namespace ShipbreakerVR
 {
-    // Lässt die Figur dem Kopf folgen. Das Spiel dreht die Figur in OrientationController.HandleAxisRotation per
-    // Rigidbody.MoveRotation(Drehung * Mausdrehung). Wir fangen diesen Aufruf ab: Die Mausdrehung dreht den Spielraum,
-    // die Figur wird auf Spielraum * Kopf gesetzt. Dreht etwas anderes die Figur (Tod, Respawn), übernehmen wir deren Lage.
+    // Makes the body follow the head. The game rotates the body in OrientationController.HandleAxisRotation via
+    // Rigidbody.MoveRotation(rotation * mouse rotation). We intercept that call: the mouse rotation turns the playspace,
+    // and the body is set to playspace * head. If something else rotates the body (death, respawn), we adopt its orientation.
     internal static class VrBody
     {
         private const float ReorientSpeed = 2f;
         private const int RecentCount = 8;
 
-        // Drehung der Spielkamera relativ zur Figur, gemessen beim Abgleich.
+        // Rotation of the game camera relative to the body, measured at sync.
         private static Quaternion cameraOffset = Quaternion.identity;
         private static bool synced;
         private static bool offsetLogged;
 
-        // Zuletzt gesetzte Ziele; MoveRotation wirkt erst im nächsten Physikschritt, die Figur steht also auf einem davon.
+        // Recently set targets; MoveRotation only applies on the next physics step, so the body is at one of these.
         private static readonly Quaternion[] recent = new Quaternion[RecentCount];
         private static int recentNext;
 
@@ -47,20 +47,20 @@ namespace ShipbreakerVR
                 if (!offsetLogged)
                 {
                     offsetLogged = true;
-                    Plugin.Log.LogInfo($"Figur folgt dem Kopf. Kamera relativ zur Figur: {cameraOffset.eulerAngles}");
+                    Plugin.Log.LogInfo($"Body follows head. Camera relative to body: {cameraOffset.eulerAngles}");
                 }
-                // Spielraum so legen, dass der Blick genau dort bleibt, wo die Spielkamera hinschaut.
+                // Place the playspace so the view stays exactly where the game camera is looking.
                 vr.Playspace = current * cameraOffset * Quaternion.Inverse(head);
                 System.Array.Clear(recent, 0, RecentCount);
                 Remember(current);
                 synced = true;
             }
 
-            // Kopf als Drehung der Figur ausgedrückt; die Mausdrehung wirkt um die Achsen der Figur.
+            // Head expressed as a body rotation; the mouse rotation acts around the body's axes.
             var headAsBody = head * Quaternion.Inverse(cameraOffset);
             var playspace = vr.Playspace * headAsBody * mouse * Quaternion.Inverse(headAsBody);
 
-            // "Aufrichten" richtet in VR den Spielraum auf statt der Figur.
+            // In VR, "Reorient" levels the playspace instead of the body.
             if (LynxControls.Instance != null && LynxControls.Instance.GetInputIsPressed(GameplayActions.GameplayActionSet.Reorient))
             {
                 var forward = playspace * Vector3.forward;
@@ -107,11 +107,11 @@ namespace ShipbreakerVR
                 }
                 yield return instruction;
             }
-            Plugin.Log.LogInfo($"OrientationController: {replaced} Drehaufruf(e) umgeleitet");
+            Plugin.Log.LogInfo($"OrientationController: {replaced} rotation call(s) redirected");
         }
     }
 
-    // Das Spiel richtet beim "Aufrichten" die Figur direkt aus; in VR übernimmt das VrBody über den Spielraum.
+    // On "Reorient" the game aligns the body directly; in VR, VrBody handles it via the playspace.
     [HarmonyPatch(typeof(OrientationController), "HandleReorient")]
     internal static class OrientationControllerReorientPatch
     {
