@@ -5,6 +5,8 @@
 - A PC VR headset with an active OpenXR runtime (Meta Quest via Virtual Desktop, Quest Link/Air Link, SteamVR, …)
 
 ## Install
+By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save games first.
+
 1. In Steam: right-click Hardspace: Shipbreaker → Manage → Browse local files.
 2. Extract the whole release ZIP into that folder (where `Shipbreaker.exe` is). Merge folders, overwrite files.
 3. Start the game. The first start takes a bit longer while BepInEx sets itself up.
@@ -24,5 +26,16 @@ or let Steam verify the game files.
 When reporting problems, please attach `BepInEx\LogOutput.log`.
 
 ## Included third-party components
-BepInEx 5.4.23.3 (LGPL-2.1), Unity OpenXR / XR Management / Input System (Unity Companion License),
-XR settings derived from ShipbreakerVR by Raicuparta (MIT, see `LICENSE-ShipbreakerVr.txt`).
+All license texts are in `BepInEx\plugins\ShipbreakerVR\licenses\`.
+
+| Component | Files | License |
+|---|---|---|
+| BepInEx 5.4.23.3 | `BepInEx\core\BepInEx*.dll` | MIT |
+| HarmonyX, MonoMod, Mono.Cecil (shipped with BepInEx) | `BepInEx\core\0Harmony*.dll`, `MonoMod.*.dll`, `Mono.Cecil*.dll` | MIT |
+| Unity Doorstop 4.4.0 (BepInEx loader) | `winhttp.dll` | LGPL-2.1 |
+| Unity OpenXR 1.2.8, XR Management 4.2.1, Input System 1.0.2 | `Unity.XR.*.dll`, `Unity.InputSystem.dll`, `UnityOpenXR.dll` | Unity Companion License |
+| Khronos OpenXR loader | `openxr_loader.dll` | Apache-2.0 |
+| XR settings derived from ShipbreakerVR by Raicuparta | AssetBundle | MIT |
+
+The LGPL-licensed `winhttp.dll` is shipped unmodified; its source code is available at
+https://github.com/NeighTools/UnityDoorstop (tag v4.4.0).

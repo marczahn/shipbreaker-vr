@@ -8,6 +8,7 @@ using UnityEngine;
 //   Output/BepInEx/plugins/ShipbreakerVR/            AssetBundle with the XR settings + Unity.XR.*.dll, Unity.InputSystem.dll
 //   Output/Shipbreaker_Data/Plugins/x86_64/          UnityOpenXR.dll, openxr_loader.dll
 //   Output/Shipbreaker_Data/UnitySubsystems/         UnitySubsystemsManifest.json
+//   Output/BepInEx/plugins/ShipbreakerVR/licenses/   LICENSE, DISCLAIMER.md, third-party licenses (repo + Unity packages)
 public static class ShipbreakerVRBuild
 {
     [MenuItem("ShipbreakerVR/Build for the game")]
@@ -56,10 +57,40 @@ public static class ShipbreakerVRBuild
         if (Directory.Exists(subsystems)) CopyDirectory(subsystems, Path.Combine(outDir, "Shipbreaker_Data", "UnitySubsystems"));
         else Debug.LogError("[ShipbreakerVR] UnitySubsystems folder missing from the player build");
 
+        CopyLicenses(Path.Combine(pluginDir, "licenses"));
+
         File.WriteAllText(Path.Combine(outDir, "files.txt"),
             string.Join("\n", Directory.GetFiles(outDir, "*", SearchOption.AllDirectories).Select(f => f.Substring(outDir.Length + 1))));
         Debug.Log("[ShipbreakerVR] Done: " + outDir);
         EditorUtility.RevealInFinder(outDir);
+    }
+
+    // The shipped Unity DLLs come from these packages; their license files live in the package cache.
+    private static readonly string[] ShippedPackages = { "com.unity.xr.openxr", "com.unity.xr.management", "com.unity.inputsystem" };
+
+    private static void CopyLicenses(string licenseDir)
+    {
+        var repoRoot = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "..", ".."));
+        foreach (var name in new[] { "LICENSE", "DISCLAIMER.md" })
+            CopyFile(Path.Combine(repoRoot, name), licenseDir);
+        foreach (var file in Directory.GetFiles(Path.Combine(repoRoot, "licenses")))
+            CopyFile(file, licenseDir);
+
+        foreach (var package in ShippedPackages)
+        {
+            var info = UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/" + package);
+            if (info == null)
+            {
+                Debug.LogError("[ShipbreakerVR] Package not found: " + package);
+                continue;
+            }
+            foreach (var name in new[] { "LICENSE.md", "Third Party Notices.md" })
+            {
+                var file = Path.Combine(info.resolvedPath, name);
+                if (File.Exists(file)) File.Copy(file, Path.Combine(licenseDir, package + " - " + name), true);
+                else if (name == "LICENSE.md") Debug.LogError("[ShipbreakerVR] License missing: " + file);
+            }
+        }
     }
 
     private static void CopyFile(string file, string targetDir)
