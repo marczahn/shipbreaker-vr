@@ -26,10 +26,17 @@ namespace ShipbreakerVR
             nextScan = Time.unscaledTime + 0.5f;
 
             var layer = LowestLayer(uiCamera.cullingMask);
-            // In front of all canvases already on the UI camera, but still within its view range.
-            var distance = Mathf.Max(uiCamera.nearClipPlane * 1.5f, 0.02f);
+            var canvases = Object.FindObjectsOfType<Canvas>();
+            // Slightly in front of the canvases already on the UI camera. Not too close: TextMeshPro text turns into
+            // solid blocks when a canvas ends up extremely small (planeDistance of a few centimetres).
+            var nearest = float.MaxValue;
+            foreach (var canvas in canvases)
+                if (canvas.isRootCanvas && canvas.renderMode == RenderMode.ScreenSpaceCamera && canvas.worldCamera == uiCamera && !converted.ContainsKey(canvas))
+                    nearest = Mathf.Min(nearest, canvas.planeDistance);
+            var distance = nearest < float.MaxValue ? nearest * 0.9f : 1f;
+            distance = Mathf.Clamp(distance, Mathf.Max(uiCamera.nearClipPlane * 1.5f, 0.3f), uiCamera.farClipPlane * 0.5f);
             var added = 0;
-            foreach (var canvas in Object.FindObjectsOfType<Canvas>())
+            foreach (var canvas in canvases)
             {
                 if (!canvas.isRootCanvas || converted.ContainsKey(canvas)) continue;
                 // Overlay canvases and those attached to another camera (e.g. in the main menu).
@@ -41,7 +48,7 @@ namespace ShipbreakerVR
                 canvas.worldCamera = uiCamera;
                 canvas.planeDistance = distance;
                 added++;
-                if (!logged) Plugin.Log.LogInfo($"Canvas attached to UI camera: '{canvas.name}' ({converted[canvas].Mode}, camera {(converted[canvas].Camera != null ? converted[canvas].Camera.name : "-")}, order {canvas.sortingOrder})");
+                if (!logged) Plugin.Log.LogInfo($"Canvas attached to UI camera: '{canvas.name}' ({converted[canvas].Mode}, camera {(converted[canvas].Camera != null ? converted[canvas].Camera.name : "-")}, distance {converted[canvas].PlaneDistance:0.###}, order {canvas.sortingOrder}, shaders {Shaders(canvas)})");
             }
             if (added > 0 && !logged)
             {
@@ -63,6 +70,14 @@ namespace ShipbreakerVR
                 SetLayer(canvas.transform, entry.Value.Layer);
             }
             converted.Clear();
+        }
+
+        private static string Shaders(Canvas canvas)
+        {
+            var names = new HashSet<string>();
+            foreach (var graphic in canvas.GetComponentsInChildren<UnityEngine.UI.Graphic>(true))
+                if (graphic.material != null && graphic.material.shader != null) names.Add(graphic.material.shader.name);
+            return string.Join(", ", names);
         }
 
         private static int LowestLayer(int mask)

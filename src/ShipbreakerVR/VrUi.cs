@@ -134,8 +134,8 @@ namespace ShipbreakerVR
             ownUiCamera = go.AddComponent<Camera>();
             ownUiCamera.enabled = false;
             ownUiCamera.cullingMask = 1 << 5;
-            ownUiCamera.nearClipPlane = 0.01f;
-            ownUiCamera.farClipPlane = 100f;
+            ownUiCamera.nearClipPlane = 0.1f;
+            ownUiCamera.farClipPlane = 1000f;
             ownUiCamera.clearFlags = CameraClearFlags.SolidColor;
             ownUiCamera.backgroundColor = Color.clear;
             return ownUiCamera;
@@ -164,7 +164,10 @@ namespace ShipbreakerVR
             if (!menuPlaced)
             {
                 menuPlaced = true;
+                // Upright and at eye height, only turned towards where the head looks.
                 var forward = head.localRotation * Vector3.forward;
+                forward.y = 0f;
+                forward = forward.sqrMagnitude > 1e-4f ? forward.normalized : Vector3.forward;
                 menuRotation = Quaternion.LookRotation(forward, Vector3.up);
                 menuPosition = head.localPosition + forward * Plugin.MenuDistance.Value;
             }

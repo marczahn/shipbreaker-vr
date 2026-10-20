@@ -62,7 +62,8 @@ namespace ShipbreakerVR
             var vr = head.AddComponent<VrCamera>();
             vr.gameCamera = gameCamera;
             vr.rig = rig;
-            vr.Playspace = gameCamera.transform.rotation;
+            // Only the heading: a tilted menu camera would otherwise tilt the whole room in VR.
+            vr.Playspace = Quaternion.Euler(0f, gameCamera.transform.eulerAngles.y, 0f);
             Instance = vr;
 
             vr.vrCamera = head.AddComponent<Camera>();
