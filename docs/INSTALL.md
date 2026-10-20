@@ -5,6 +5,8 @@
 - A PC VR headset with an active OpenXR runtime (Meta Quest via Virtual Desktop, Quest Link/Air Link, SteamVR, …)
 
 ## Install
+By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save games first.
+
 1. In Steam: right-click Hardspace: Shipbreaker → Manage → Browse local files.
 2. Extract the whole release ZIP into that folder (where `Shipbreaker.exe` is). Merge folders, overwrite files.
 3. Start the game. The first start takes a bit longer while BepInEx sets itself up.

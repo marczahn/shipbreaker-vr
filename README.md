@@ -3,6 +3,8 @@
 A VR mod for **Hardspace: Shipbreaker** (Unity 2020.3, HDRP), built on BepInEx 5 and OpenXR.
 Tested with Meta Quest via Virtual Desktop. Early test build.
 
+> Unofficial fan project, use at your own risk. See the [disclaimer](DISCLAIMER.md) (liability, VR health notes).
+
 ## Status
 - Stereo rendering (MultiPass) and head tracking
 - Body and tools follow the head; mouse/stick turning is added on top
