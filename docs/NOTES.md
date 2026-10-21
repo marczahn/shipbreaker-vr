@@ -73,6 +73,11 @@ screen closed. While VR runs, `VrCamera` switches off UI-only cameras (their can
 `FindMenuCamera` never picks them. Our UI pass volume sits on layer 29 (unused by the game), which the VR camera
 always adds to its volume mask; while the world is hidden the mask holds only that layer.
 
+At 1.25x per eye (RTX 4070 Ti, 12 GB, 2688x2880 native) the level start ran out of video memory
+(`Failed to create RenderTexture ... 0x8007000e` right after "Initializing Session 1", then a native crash). While the
+world is hidden the eye resolution drops to 1.0x (native, still sharp; 0.5x made the load screen blurry) and the
+shared HDRP targets shrink; afterwards `ApplyQuality` raises it again through the memory probe.
+
 ## Settings menu
 The VR rows are clones of real option rows (bool, slider, list) appended to the Video tab. The game's logic for
 those clones is intercepted via Harmony and redirected to the BepInEx config. Templates are taken from all tabs of

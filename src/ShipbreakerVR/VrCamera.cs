@@ -63,6 +63,10 @@ namespace ShipbreakerVR
         private float resolutionChangedAt;
         private float shrinkAt = -1f;
 
+        // Render resolution while only the loading UI shows: the headset's native one, so the load screen stays sharp
+        // while the level being loaded gets the video memory (at 1.25x the level start ran out of it and crashed).
+        private const float LoadingResolution = 1f;
+
         public bool BodyFollowsHead => VrXr.IsRunning && Plugin.BodyFollowsHead.Value;
 
         // True while loading (no game camera, or the game's load screen covers the image): only the UI canvas on black.
@@ -167,6 +171,14 @@ namespace ShipbreakerVR
             vrHd.volumeLayerMask = 1 << VrUi.PassLayer;
             vrHd.xrRendering = true;
             Plugin.Log.LogInfo(gameCamera == null ? "No game camera (loading): VR shows only the UI" : "Load screen: VR shows only the UI");
+
+            var current = UnityEngine.XR.XRSettings.eyeTextureResolutionScale;
+            if (VrXr.IsRunning && current > LoadingResolution + 0.01f)
+            {
+                UnityEngine.XR.XRSettings.eyeTextureResolutionScale = LoadingResolution;
+                shrinkAt = Time.unscaledTime + 0.5f;
+                Plugin.Log.LogInfo($"Render resolution per eye while loading: {LoadingResolution:0.00}x (was {current:0.00}x)");
+            }
         }
 
         private void OnEnable() => Application.onBeforeRender += FollowGameCamera;
@@ -275,6 +287,9 @@ namespace ShipbreakerVR
                 vrHd.antialiasing = mode;
                 Plugin.Log.LogInfo($"VR camera anti-aliasing: {mode} (game: {gameAntialiasing})");
             }
+            // While loading the resolution stays at LoadingResolution (HideWorld); once the world shows again it goes
+            // back to the configured one, through the memory probe below.
+            if (worldHidden) return;
             // Each change reallocates every render target. Wait until the slider has rested, otherwise dragging it
             // through all steps fragments video memory until allocations fail and the image smears.
             var max = MaxResolutionScale();
