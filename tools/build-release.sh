@@ -2,7 +2,7 @@
 # Builds the release ZIP: BepInEx + OpenXR runtime files + the plugin + licenses, laid out like the game folder.
 #
 # Usage: tools/build-release.sh <version> <out-dir>
-# Inputs (override with environment variables):
+# Inputs (required environment variables):
 #   MANAGED_DIR  game's Shipbreaker_Data/Managed (reference assemblies for the build)
 #   BEPINEX_DIR  unpacked BepInEx 5.4.23.3 (winhttp.dll, doorstop_config.ini, .doorstop_version, BepInEx/core)
 #   DEPLOY_DIR   output of the Unity helper project: plugin/, native/, subsys/, bundles/
@@ -12,8 +12,8 @@ VERSION="${1:?version, e.g. 0.7.0}"
 OUT="${2:?output directory}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MANAGED_DIR="${MANAGED_DIR:?path to Shipbreaker_Data/Managed}"
-BEPINEX_DIR="${BEPINEX_DIR:-/mnt/project-files/bepinex-5.4.23.3}"
-DEPLOY_DIR="${DEPLOY_DIR:-/mnt/project-files/ShipbreakerVR/deploy}"
+BEPINEX_DIR="${BEPINEX_DIR:?path to the unpacked BepInEx 5.4.23.3}"
+DEPLOY_DIR="${DEPLOY_DIR:?path to the Unity helper project output}"
 
 grep -q "Version = \"$VERSION\"" "$ROOT/src/ShipbreakerVR/Plugin.cs" \
   || { echo "Plugin.cs does not declare version $VERSION" >&2; exit 1; }
