@@ -68,6 +68,12 @@ non-interactable in-game. `VrOptionsNavigation` therefore links only interactabl
 leads down into the VR rows, the first VR row leads back up), recomputes that every 0.25 s while the list is visible,
 gives the VR rows' bridges the action set of the game's rows, and logs the list and every selection change.
 
+Selection jumping back up while scrolling by keyboard: Doozy's `UIButton` selects a row on pointer enter, and
+`StandaloneInputModule` re-raycasts the mouse position every frame even when the mouse does not move. Keyboard
+navigation scrolls the list under the resting cursor (in the pause menu it sits in the middle of the screen), so the
+row sliding under it took the selection, one row further down each time. In lists with VR rows a pointer enter now
+selects only if the pointer moved (`PointerEventData.delta`) or the mouse wheel was used in the last half second.
+
 ## World scale
 Config `Bild/Weltmassstab` (also in the options menu) scales the VR rig. Unity derives the eye positions from the
 camera's world transform, so the rig scale also scales eye separation and tracked head movement: above 1 distant

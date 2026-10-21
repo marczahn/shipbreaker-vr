@@ -38,11 +38,16 @@ namespace ShipbreakerVR
         private string loggedState;
         private GameObject lastSelected;
         private static int selectionLogs;
+        private static float wheelAt = -10f;
+
+        // The mouse wheel scrolls the list under the pointer on purpose; then the row under it may take the selection.
+        public static bool WheelActive => Time.unscaledTime - wheelAt < 0.5f;
 
         private void OnEnable() => nextLink = 0f;
 
         private void LateUpdate()
         {
+            if (Input.mouseScrollDelta.sqrMagnitude > 0f) wheelAt = Time.unscaledTime;
             TrackSelection();
             if (Time.unscaledTime < nextLink) return;
             nextLink = Time.unscaledTime + 0.25f;
@@ -222,6 +227,32 @@ namespace ShipbreakerVR
             {
                 logged = true;
                 Plugin.Log.LogInfo($"Options scroll: keeping selection on '{selected.transform.parent.name}'");
+            }
+            return false;
+        }
+    }
+
+    // Doozy's UIButton selects an option row when the mouse pointer enters it, and Unity's input module re-checks what
+    // is under the pointer every frame, even when the mouse does not move. So when keyboard navigation scrolls the list
+    // under a resting cursor (in the pause menu it rests in the middle of the screen), the row that slides under the
+    // cursor takes the selection: it jumps back up, one row further each time. In lists with our rows only a pointer
+    // that actually moved, or the mouse wheel, may select.
+    [HarmonyPatch]
+    internal static class HoverSelectPatch
+    {
+        private static int logs;
+
+        private static MethodBase TargetMethod() =>
+            AccessTools.Method(AccessTools.TypeByName("Doozy.Engine.UI.UIButton"), "UnityEngine.EventSystems.IPointerEnterHandler.OnPointerEnter");
+
+        private static bool Prefix(MonoBehaviour __instance, PointerEventData eventData)
+        {
+            if (eventData == null || eventData.delta.sqrMagnitude > 0.01f || VrOptionsNavigation.WheelActive) return true;
+            if (__instance.GetComponentInParent<VrOptionsNavigation>() == null) return true;
+            if (logs++ < 10)
+            {
+                var entry = __instance.GetComponentInParent<OptionEntry>();
+                Plugin.Log.LogInfo($"Options hover: ignoring the resting mouse pointer over '{(entry != null ? entry.name : __instance.name)}'");
             }
             return false;
         }
