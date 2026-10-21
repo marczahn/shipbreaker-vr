@@ -72,7 +72,7 @@ shows whether the scale actually reaches the stereo rendering (about 63 mm times
 RTX 4070 Ti ran out of memory (D3D11 error 0x8007000e in Player.log); after that even 1.0 failed and the image
 smeared until the game was restarted. The plugin now estimates the limit from `SystemInfo.graphicsMemorySize`
 (about 250 bytes per pixel and eye, half of the video memory as budget; 1.55 still failed on 12 GB), clamps the setting to it and applies a
-change only after the slider has rested for a second.
+change only after the slider has rested for a second. Before raising it, it allocates test textures of the new size; if the driver refuses one, the previous value stays.
 
 ## Roadmap
 1. Inventory – done

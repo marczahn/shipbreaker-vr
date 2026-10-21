@@ -194,8 +194,19 @@ namespace ShipbreakerVR
                 resolutionChangedAt = Time.unscaledTime;
             }
             if (Time.unscaledTime - resolutionChangedAt < 1f) return;
-            if (!Mathf.Approximately(UnityEngine.XR.XRSettings.eyeTextureResolutionScale, scale))
+            var current = UnityEngine.XR.XRSettings.eyeTextureResolutionScale;
+            if (!Mathf.Approximately(current, scale))
             {
+                // Going up: first check that the new targets can be allocated while the old ones still exist,
+                // otherwise stay at the previous value instead of ending up with a black or smeared image.
+                if (scale > current && !FitsIntoMemory(scale))
+                {
+                    Plugin.Log.LogWarning($"Render resolution {scale:0.00}x does not fit into video memory, staying at {current:0.00}x");
+                    Plugin.ResolutionScale.Value = current;
+                    pendingResolution = current;
+                    VrOptions.Refresh(Plugin.ResolutionScale);
+                    return;
+                }
                 UnityEngine.XR.XRSettings.eyeTextureResolutionScale = scale;
                 Plugin.Log.LogInfo($"Render resolution per eye: {scale:0.00}x");
             }
@@ -217,6 +228,39 @@ namespace ShipbreakerVR
             maxResolutionScale = Mathf.Clamp(Mathf.Floor(fit * 20f) / 20f, 0.5f, ResolutionSliderMax);
             Plugin.Log.LogInfo($"{SystemInfo.graphicsDeviceName}, {SystemInfo.graphicsMemorySize} MB video memory, {width:0}x{height:0} per eye: render resolution limited to {maxResolutionScale:0.00}x");
             return maxResolutionScale;
+        }
+
+        // Allocates test textures as large as the render targets at this scale would be (about 160 bytes per pixel
+        // and eye) and frees them again. Fails if the graphics driver refuses one of them.
+        private static bool FitsIntoMemory(float scale)
+        {
+            var current = UnityEngine.XR.XRSettings.eyeTextureResolutionScale;
+            var width = Mathf.CeilToInt(UnityEngine.XR.XRSettings.eyeTextureWidth / current * scale);
+            var height = Mathf.CeilToInt(UnityEngine.XR.XRSettings.eyeTextureHeight / current * scale);
+            if (width <= 0 || height <= 0) return true;
+            const int bytesPerTexel = 8;
+            var count = Mathf.CeilToInt(160f * 2f / bytesPerTexel);
+            var probes = new List<RenderTexture>();
+            var ok = true;
+            try
+            {
+                for (var i = 0; i < count && ok; i++)
+                {
+                    var rt = new RenderTexture(width, height, 0, RenderTextureFormat.ARGBHalf) { name = "ShipbreakerVR memory probe" };
+                    probes.Add(rt);
+                    ok = rt.Create();
+                }
+            }
+            finally
+            {
+                foreach (var rt in probes)
+                {
+                    rt.Release();
+                    Destroy(rt);
+                }
+            }
+            Plugin.Log.LogInfo($"Video memory probe for {scale:0.00}x ({width}x{height}, {probes.Count} of {count} textures): {(ok ? "fits" : "too large")}");
+            return ok;
         }
 
         // Logs once per scale how far apart the eyes are in the world, to confirm the scale reaches the stereo rendering.
