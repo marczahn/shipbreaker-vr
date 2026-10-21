@@ -119,9 +119,26 @@ namespace ShipbreakerVR
             foreach (var component in root.GetComponentsInChildren<MonoBehaviour>(true))
             {
                 if (component == null) continue;
-                var field = AccessTools.Field(component.GetType(), "m_InControlActionSetType");
-                if (field != null && field.FieldType.IsEnum) yield return new KeyValuePair<Component, FieldInfo>(component, field);
+                var field = ActionSetField(component.GetType());
+                if (field != null) yield return new KeyValuePair<Component, FieldInfo>(component, field);
             }
+        }
+
+        private static readonly Dictionary<Type, FieldInfo> ActionSetFields = new Dictionary<Type, FieldInfo>();
+
+        // Looked up once per type with plain reflection: AccessTools.Field logs a warning for every type without the
+        // field, which on every relink flooded the log with thousands of lines.
+        private static FieldInfo ActionSetField(Type type)
+        {
+            if (ActionSetFields.TryGetValue(type, out var cached)) return cached;
+            FieldInfo found = null;
+            for (var t = type; t != null && found == null; t = t.BaseType)
+            {
+                var field = t.GetField("m_InControlActionSetType", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                if (field != null && field.FieldType.IsEnum) found = field;
+            }
+            ActionSetFields[type] = found;
+            return found;
         }
 
         private static int? ActionSetOf(GameObject row)

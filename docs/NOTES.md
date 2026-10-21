@@ -82,6 +82,13 @@ smeared until the game was restarted. The plugin now estimates the limit from `S
 (about 250 bytes per pixel and eye, half of the video memory as budget; 1.55 still failed on 12 GB), clamps the setting to it and applies a
 change only after the slider has rested for a second. Before raising it, it allocates test textures of the new size; if the driver refuses one, the previous value stays.
 
+HDRP's shared render targets never shrink: `RTHandleSystem.SetReferenceSize` keeps the largest width and the largest
+height any camera rendered at, and the game never calls `ResetReferenceSize` (`HDRenderPipeline.ResetRTHandleReferenceSize`
+is public but unused). A flat 3840x2160 view followed by VR at 2688x2880 therefore leaves every target at 3840x2880.
+The plugin resets the shared targets to the eye size (or the screen size) two seconds after VR starts or stops and
+one second after the render resolution goes down. A game crash during a mission load ran out of memory exactly when
+the eye textures were recreated a second after VR started (1.0, then 0.95); a lower setting is now applied at VR start.
+
 ## Roadmap
 1. Inventory – done
 2. Foundation (BepInEx, plugin, camera hook) – done

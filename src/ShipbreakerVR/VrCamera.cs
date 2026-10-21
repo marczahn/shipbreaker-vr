@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using BBI.Unity.Game;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.Rendering.HighDefinition;
 using UnityEngine.SpatialTracking;
 using UnityEngine.XR;
@@ -60,6 +61,7 @@ namespace ShipbreakerVR
 
         private float pendingResolution = -1f;
         private float resolutionChangedAt;
+        private float shrinkAt = -1f;
 
         // Switches to another game camera (main menu -> game): remove the old rig, re-enable the camera.
         public void Detach()
@@ -141,11 +143,17 @@ namespace ShipbreakerVR
             {
                 recenterAt = Time.unscaledTime + RecenterDelay;
                 VrBody.Resync();
+                LowerResolutionAtStart();
+                shrinkAt = Time.unscaledTime + 2f;
             }
             // Don't blindly re-enable on stop: in the Hab the game disabled its camera itself.
             if (!running && wasRunning)
+            {
                 gameCamera.enabled = gameCamera != LynxCameraController.MainCamera || GameSession.CurrentGameState != GameSession.GameState.Hab;
+                shrinkAt = Time.unscaledTime + 2f;
+            }
             wasRunning = running;
+            ShrinkRenderTargets(running);
 
             if (running)
             {
@@ -209,7 +217,49 @@ namespace ShipbreakerVR
                 }
                 UnityEngine.XR.XRSettings.eyeTextureResolutionScale = scale;
                 Plugin.Log.LogInfo($"Render resolution per eye: {scale:0.00}x");
+                if (scale < current) shrinkAt = Time.unscaledTime + 1f;
             }
+        }
+
+        // When VR starts the eye textures are created at 1.0 and, a second later, again at the configured scale.
+        // During a mission load that second allocation ran out of video memory. So lower the scale right away;
+        // raising above the current value still waits and goes through the memory probe in ApplyQuality.
+        private void LowerResolutionAtStart()
+        {
+            var max = MaxResolutionScale();
+            var scale = Mathf.Clamp(Plugin.ResolutionScale.Value, 0.5f, max > 0f ? max : 1f);
+            var current = UnityEngine.XR.XRSettings.eyeTextureResolutionScale;
+            if (scale >= current || Mathf.Approximately(scale, current)) return;
+            UnityEngine.XR.XRSettings.eyeTextureResolutionScale = scale;
+            Plugin.Log.LogInfo($"Render resolution per eye at VR start: {scale:0.00}x");
+        }
+
+        // HDRP's shared render targets only grow: they keep the largest width and height any camera rendered at
+        // (RTHandleSystem), and the game never shrinks them. After VR starts or stops, or the render resolution goes
+        // down, shrink them once to what is rendered now, so memory held for the flat view or a higher resolution is
+        // freed. A camera that needs more simply grows them again.
+        private void ShrinkRenderTargets(bool running)
+        {
+            if (shrinkAt < 0f || Time.unscaledTime < shrinkAt) return;
+            shrinkAt = -1f;
+            int width, height;
+            if (running)
+            {
+                width = UnityEngine.XR.XRSettings.eyeTextureWidth;
+                height = UnityEngine.XR.XRSettings.eyeTextureHeight;
+            }
+            else
+            {
+                width = gameCamera.pixelWidth;
+                height = gameCamera.pixelHeight;
+            }
+            int maxWidth = RTHandles.maxWidth, maxHeight = RTHandles.maxHeight;
+            // Compare with what they grow to once this size renders, and skip resets that would free next to nothing.
+            if (width <= 0 || height <= 0 || (float)Mathf.Max(maxWidth, width) * Mathf.Max(maxHeight, height) < 1.05f * width * height) return;
+            // Only the shared targets: each camera's history goes away with the camera (HDCamera.CleanUnused), and
+            // HDRenderPipeline.ResetRTHandleReferenceSize would also stretch other cameras' history to this size.
+            RTHandles.ResetReferenceSize(width, height);
+            Plugin.Log.LogInfo($"HDRP render targets reduced from {maxWidth}x{maxHeight} to {width}x{height} ({(running ? "eye" : "screen")} size)");
         }
 
         private static readonly List<XRDisplaySubsystem> Displays = new List<XRDisplaySubsystem>();
