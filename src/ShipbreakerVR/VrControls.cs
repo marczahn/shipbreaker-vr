@@ -9,10 +9,10 @@ namespace ShipbreakerVR
     // Flying with the left motion controller. Two schemes:
     // - Pavlov ("point and twist"): stick forward/back thrusts along the direction the controller points. Holding the
     //   trigger stores the controller orientation; twisting or tilting the hand away from it rolls, pitches or yaws the body.
-    //   Stick left/right snap-turns, pressing the stick brakes. The grip stays free for grabbing.
+    //   The grip stays free for grabbing.
     // - Vtol: holding the trigger stores the controller pose as a reference; moving the controller away from it thrusts in
     //   that direction, turning it away from it rotates the body. Back at the reference (or trigger released) nothing happens.
-    //   Stick left/right snap-turns.
+    // - Both: stick left/right snap-turns, pressing the stick brakes.
     // Thrust and brake go through the game's own actions (ThrustController reads them via LynxControls), so fuel, forces and
     // HUD stay the game's. Rotation is applied to the playspace in VrBody, so it needs "body follows head".
     internal static class VrControls
@@ -75,11 +75,11 @@ namespace ShipbreakerVR
             left.TryGetFeatureValue(CommonUsages.primary2DAxis, out var stick);
             SnapTurn(stick.x, playspace);
             left.TryGetFeatureValue(CommonUsages.trigger, out var trigger);
+            left.TryGetFeatureValue(CommonUsages.primary2DAxisClick, out braking);
 
             if (scheme == Scheme.Pavlov)
             {
                 thrust = playspace * (rotation * Vector3.forward) * Deadzone(stick.y, StickDeadzone);
-                left.TryGetFeatureValue(CommonUsages.primary2DAxisClick, out braking);
                 if (!Hold(trigger >= TriggerPress, position, rotation)) return;
                 TurnFromReference(rotation, playspace);
                 return;
@@ -112,13 +112,15 @@ namespace ShipbreakerVR
             if (rate != 0f && !float.IsInfinity(axis.x)) turn = Quaternion.AngleAxis(rate * TurnSpeed * Time.deltaTime, playspace * axis) * turn;
         }
 
-        // One fixed turn per stick flick around the playspace's up axis; the stick has to come back before the next one.
+        // One fixed turn per stick flick around the head's up axis (the playspace can be tilted in any way after rolling);
+        // the stick has to come back before the next one.
         private static void SnapTurn(float x, Quaternion playspace)
         {
             if (Mathf.Abs(x) < SnapRelease) { snapped = false; return; }
             if (snapped || Mathf.Abs(x) < SnapPress) return;
             snapped = true;
-            turn = Quaternion.AngleAxis(Mathf.Sign(x) * SnapAngle, playspace * Vector3.up) * turn;
+            var up = playspace * VrCamera.Instance.HeadRotation * Vector3.up;
+            turn = Quaternion.AngleAxis(Mathf.Sign(x) * SnapAngle, up) * turn;
         }
 
         private static bool GetLeft()
@@ -214,16 +216,35 @@ namespace ShipbreakerVR
     }
 
     // Presses the game's brake while the controller asks for it (both brake actions, so the double-input option works too).
-    [HarmonyPatch(typeof(LynxControlExtensions), nameof(LynxControlExtensions.GetInputIsPressed))]
+    // A postfix on LynxControlExtensions.GetInputIsPressed never ran: the method is small enough for Mono to inline it into
+    // its callers, so the call in ThrustController.Update is redirected instead.
+    [HarmonyPatch(typeof(ThrustController), "Update")]
     internal static class BrakePatch
     {
         private static readonly LynxControls.ActionSetAndId Left = GameplayActions.GameplayActionSet.ThrustBrakeLeft;
         private static readonly LynxControls.ActionSetAndId Right = GameplayActions.GameplayActionSet.ThrustBrakeRight;
 
-        private static void Postfix(LynxControls.ActionSetAndId actionSetAndId, ref bool __result)
+        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
         {
-            if (__result || (!actionSetAndId.Equals(Left) && !actionSetAndId.Equals(Right))) return;
-            if (VrControls.IsBraking()) __result = true;
+            var original = AccessTools.Method(typeof(LynxControlExtensions), nameof(LynxControlExtensions.GetInputIsPressed));
+            var replacement = AccessTools.Method(typeof(BrakePatch), nameof(GetInputIsPressed));
+            var replaced = 0;
+            foreach (var instruction in instructions)
+            {
+                if (instruction.Calls(original))
+                {
+                    instruction.operand = replacement;
+                    replaced++;
+                }
+                yield return instruction;
+            }
+            Plugin.Log.LogInfo($"ThrustController: {replaced} input call(s) redirected for braking");
+        }
+
+        private static bool GetInputIsPressed(LynxControls controls, LynxControls.ActionSetAndId actionSetAndId)
+        {
+            if (controls.GetInputIsPressed(actionSetAndId)) return true;
+            return (actionSetAndId.Equals(Left) || actionSetAndId.Equals(Right)) && VrControls.IsBraking();
         }
     }
 }
