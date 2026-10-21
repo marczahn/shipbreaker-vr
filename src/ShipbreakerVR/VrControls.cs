@@ -7,9 +7,9 @@ using UnityEngine.XR;
 namespace ShipbreakerVR
 {
     // Flying with the left motion controller. Two schemes:
-    // - Pavlov ("point and grip"): stick forward/back thrusts along the direction the controller points. Holding the grip
-    //   stores the controller orientation; twisting or tilting the hand away from it rolls, pitches or yaws the body.
-    //   Stick left/right snap-turns, the trigger brakes.
+    // - Pavlov ("point and twist"): stick forward/back thrusts along the direction the controller points. Holding the
+    //   trigger stores the controller orientation; twisting or tilting the hand away from it rolls, pitches or yaws the body.
+    //   Stick left/right snap-turns, X brakes. The grip stays free for grabbing.
     // - Vtol: holding the trigger stores the controller pose as a reference; moving the controller away from it thrusts in
     //   that direction, turning it away from it rotates the body. Back at the reference (or trigger released) nothing happens.
     //   Stick left/right snap-turns.
@@ -23,7 +23,6 @@ namespace ShipbreakerVR
         private const float SnapAngle = 30f;
         private const float SnapPress = 0.7f;
         private const float SnapRelease = 0.3f;
-        private const float GripPress = 0.5f;
         private const float TriggerPress = 0.5f;
         private const float MoveDeadzone = 0.02f;
         private const float MoveFull = 0.15f;
@@ -47,7 +46,7 @@ namespace ShipbreakerVR
         // Rotation for this frame in world space, already scaled by the frame time.
         private static Quaternion turn = Quaternion.identity;
 
-        // Reference pose while the grip (Pavlov) or trigger (Vtol) is held.
+        // Reference pose while the trigger is held.
         private static bool held;
         private static Vector3 heldPosition;
         private static Quaternion heldRotation;
@@ -75,20 +74,18 @@ namespace ShipbreakerVR
             var playspace = VrCamera.Instance.Playspace;
             left.TryGetFeatureValue(CommonUsages.primary2DAxis, out var stick);
             SnapTurn(stick.x, playspace);
+            left.TryGetFeatureValue(CommonUsages.trigger, out var trigger);
 
             if (scheme == Scheme.Pavlov)
             {
                 thrust = playspace * (rotation * Vector3.forward) * Deadzone(stick.y, StickDeadzone);
-                left.TryGetFeatureValue(CommonUsages.trigger, out var trigger);
-                braking = trigger >= TriggerPress;
-                left.TryGetFeatureValue(CommonUsages.grip, out var grip);
-                if (!Hold(grip >= GripPress, position, rotation)) return;
+                left.TryGetFeatureValue(CommonUsages.primaryButton, out braking);
+                if (!Hold(trigger >= TriggerPress, position, rotation)) return;
                 TurnFromReference(rotation, playspace);
                 return;
             }
 
-            left.TryGetFeatureValue(CommonUsages.trigger, out var vtolTrigger);
-            if (!Hold(vtolTrigger >= TriggerPress, position, rotation)) return;
+            if (!Hold(trigger >= TriggerPress, position, rotation)) return;
             var offset = position - heldPosition;
             var strength = Ramp(offset.magnitude, MoveDeadzone, MoveFull);
             if (strength > 0f) thrust = playspace * offset.normalized * strength;

@@ -125,15 +125,15 @@ and thrusts along its orientation transform (the body, or a steering transform).
 the controller thrust, converted into that transform's axes, so fuel, forces and the thrust HUD stay the game's.
 Rotation from the controllers (roll, VTOL turns) is applied to the playspace in `VrBody`, so it needs body-follows-head.
 Config `Steuerung/Controllersteuerung`, left controller only:
-- Pavlov (point and grip): stick forward/back thrusts along the controller's aim pose (`PointerRotation`; the
-  `deviceRotation` grip pose runs along the handle and pointed thrust upward). Holding the grip stores the hand's
+- Pavlov (point and twist): stick forward/back thrusts along the controller's aim pose (`PointerRotation`; the
+  `deviceRotation` grip pose runs along the handle and pointed thrust upward). Holding the trigger stores the hand's
   orientation; twisting or tilting away from it rolls, pitches or yaws (8 degree deadzone, full 45 degrees/s at 45).
-  The trigger presses the game's brake actions (`ThrustBrakeLeft/Right`, postfix on `GetInputIsPressed`).
+  X presses the game's brake actions (`ThrustBrakeLeft/Right`, postfix on `GetInputIsPressed`).
 - Vtol: hold the trigger; moving the controller away from where it was when pressed thrusts that way (2 cm deadzone,
   full at 15 cm), turning it turns the body as above.
 - Both: stick left/right snap-turns 30 degrees around the playspace's up axis.
-The left controller's name and features are logged once. OpenXR only reports controllers because `VrXr` enables the
-Oculus Touch interaction profile, which the AssetBundle's settings carry disabled.
+The grip stays free for grabbing later. The left controller's name and features are logged once. OpenXR only reports
+controllers because `VrXr` enables the Oculus Touch interaction profile, which the AssetBundle's settings carry disabled.
 
 ## Roadmap
 1. Inventory – done
