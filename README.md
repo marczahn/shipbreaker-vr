@@ -25,6 +25,8 @@ Installing a release: [docs/INSTALL.md](docs/INSTALL.md).
 - `unity/ShipbreakerVRUnity/` – helper project (Unity 2020.3.35f1). Builds the `xrmanager` AssetBundle with the
   XR/OpenXR settings and collects the OpenXR DLLs (menu *ShipbreakerVR → Build for the game*).
   The XR settings are derived from [ShipbreakerVR by Raicuparta](licenses/ShipbreakerVr-Raicuparta-MIT.txt) (MIT).
+- `src/ShipbreakerVR.Dev/`, `tools/PatchCheck/` – development only: hot reload, in-game self-test, patch check.
+  See [docs/TESTING.md](docs/TESTING.md).
 
 ## Building
 ```
