@@ -64,6 +64,15 @@ frame (`[Rendering] VrBeimStart`), so the launch intro video (`LynxVideoPlayer`,
 The game's own custom post-processes (`DigitalDistortion` scanlines/CRT at shift start, RetroLookPro glitches) are
 not XR-aware and fill the view with grey. `CustomPostProcessPatch` blits source to destination instead for the VR camera.
 
+Level loads use `PRF_UI_LoadScreen` (core_assets_all, under `master_lazy_load/SceneLoader`): `LoadScreenCamera`
+(depth 10, culling mask UI only, grey clear color, volume mask UI only) with the volume "Loadscreen Post" (CRT
+aperture, VHS scanlines, vignette, bleed, bloom, film grain) and `LoadScreenCanvas` (Screen Space Camera). HDRP renders
+every active game camera without a target texture into the headset (`XRSystem.SetupFrame` checks only that and
+`xrRendering`), so this camera drew its grey background and non-XR scanlines over the VR image until the load
+screen closed. While VR runs, `VrCamera` switches off UI-only cameras (their canvases are on the UI canvas anyway) and
+`FindMenuCamera` never picks them. Our UI pass volume sits on layer 29 (unused by the game), which the VR camera
+always adds to its volume mask; while the world is hidden the mask holds only that layer.
+
 ## Settings menu
 The VR rows are clones of real option rows (bool, slider, list) appended to the Video tab. The game's logic for
 those clones is intercepted via Harmony and redirected to the BepInEx config. Templates are taken from all tabs of

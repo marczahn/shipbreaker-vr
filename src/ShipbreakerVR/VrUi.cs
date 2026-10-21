@@ -23,6 +23,10 @@ namespace ShipbreakerVR
 
         public static VrUi Instance { get; private set; }
 
+        // Layer of our pass volume; unused by the game. HDRP only runs a custom pass volume for a camera whose
+        // volumeLayerMask contains its layer, and the load screen camera's mask had only the UI layer.
+        public const int PassLayer = 29;
+
         private VrCamera vr;
         private Camera uiCamera;
         private RenderTexture texture;
@@ -50,7 +54,7 @@ namespace ShipbreakerVR
             Instance = ui;
 
             // Our pass runs after post-processing so the UI doesn't go through tonemapping and exposure.
-            var go = new GameObject("ShipbreakerVR UI Pass");
+            var go = new GameObject("ShipbreakerVR UI Pass") { layer = PassLayer };
             go.SetActive(false);
             go.transform.SetParent(vr.transform.parent, false);
             var volume = go.AddComponent<CustomPassVolume>();

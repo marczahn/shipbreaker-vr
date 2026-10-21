@@ -68,6 +68,15 @@ namespace ShipbreakerVR
         // True while loading (no game camera, or the game's load screen covers the image): only the UI canvas on black.
         private bool worldHidden;
 
+        private const int UiLayer = 5;
+
+        // UI-only game cameras switched off while VR runs (see SilenceUiCameras), back on when it stops.
+        private readonly HashSet<Camera> silenced = new HashSet<Camera>();
+        private Camera[] cameraBuffer = new Camera[16];
+
+        // A camera that draws nothing but the UI layer, like the load screen's. Not a view for the VR camera to follow.
+        public static bool IsUiOnly(Camera camera) => camera.cullingMask != 0 && (camera.cullingMask & ~(1 << UiLayer)) == 0;
+
         // Creates the rig on first use, afterwards switches it to another game camera (main menu -> game).
         // gameCamera may be null (loading screen, intro without a camera yet).
         public static void Attach(Camera gameCamera)
@@ -130,6 +139,8 @@ namespace ShipbreakerVR
             var gameHd = camera.GetComponent<HDAdditionalCameraData>();
             if (gameHd != null) gameHd.CopyTo(vrHd);
             else vrHd.clearColorMode = HDAdditionalCameraData.ClearColorMode.Sky;
+            // Our UI pass must stay visible whatever volume layers the game camera uses.
+            vrHd.volumeLayerMask |= 1 << VrUi.PassLayer;
             vrHd.xrRendering = true;
             gameAntialiasing = vrHd.antialiasing;
 
@@ -152,6 +163,8 @@ namespace ShipbreakerVR
             vrCamera.backgroundColor = Color.black;
             vrHd.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
             vrHd.backgroundColorHDR = Color.black;
+            // Only our UI pass: no post-processing volumes of the level or the load screen on the black.
+            vrHd.volumeLayerMask = 1 << VrUi.PassLayer;
             vrHd.xrRendering = true;
             Plugin.Log.LogInfo(gameCamera == null ? "No game camera (loading): VR shows only the UI" : "Load screen: VR shows only the UI");
         }
@@ -197,6 +210,7 @@ namespace ShipbreakerVR
                 shrinkAt = Time.unscaledTime + 2f;
             }
             wasRunning = running;
+            SilenceUiCameras(running);
             ShrinkRenderTargets(running);
 
             if (running)
@@ -214,6 +228,36 @@ namespace ShipbreakerVR
             }
 
             FollowGameCamera();
+        }
+
+        // Every active game camera without a target texture also renders into the headset (HDRP's XRSystem only checks
+        // that and xrRendering). The load screen's camera (depth 10, after ours) thus covered our image with its grey
+        // background and its CRT and scanline effects, which are not made for VR. In VR its canvas is on our UI canvas,
+        // so UI-only cameras stay off while VR runs.
+        private void SilenceUiCameras(bool running)
+        {
+            if (!running)
+            {
+                if (silenced.Count == 0) return;
+                foreach (var camera in silenced)
+                    if (camera != null) camera.enabled = true;
+                silenced.Clear();
+                return;
+            }
+            if (Camera.allCamerasCount > cameraBuffer.Length) cameraBuffer = new Camera[Camera.allCamerasCount * 2];
+            var count = Camera.GetAllCameras(cameraBuffer);
+            for (var i = 0; i < count; i++)
+            {
+                var camera = cameraBuffer[i];
+                cameraBuffer[i] = null;
+                if (camera == vrCamera || camera.cameraType != CameraType.Game || camera.targetTexture != null || !IsUiOnly(camera)) continue;
+                if (camera.CompareTag("UI_Camera") || camera.name.StartsWith("ShipbreakerVR")) continue;
+                var hd = camera.GetComponent<HDAdditionalCameraData>();
+                if (hd != null && !hd.xrRendering) continue;
+                camera.enabled = false;
+                silenced.RemoveWhere(c => c == null);
+                if (silenced.Add(camera)) Plugin.Log.LogInfo($"Camera '{camera.name}' (UI only, depth {camera.depth}) switched off while VR runs");
+            }
         }
 
         private void ApplyQuality()

@@ -70,13 +70,14 @@ namespace ShipbreakerVR
         private float nextCameraSearch;
         private bool launched;
 
-        // The camera currently producing the image: active, no target texture, highest depth.
+        // The camera currently producing the image: active, no target texture, highest depth. Not one that only draws
+        // canvases, like the load screen camera: its volume layers hid our UI pass and it shows no world anyway.
         private static Camera FindMenuCamera()
         {
             Camera best = null;
             foreach (var cam in Camera.allCameras)
             {
-                if (cam.targetTexture != null || cam.CompareTag("UI_Camera") || cam.name.StartsWith("ShipbreakerVR")) continue;
+                if (cam.targetTexture != null || cam.CompareTag("UI_Camera") || cam.name.StartsWith("ShipbreakerVR") || VrCamera.IsUiOnly(cam)) continue;
                 if (best == null || cam.depth > best.depth) best = cam;
             }
             return best;
