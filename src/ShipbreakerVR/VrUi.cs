@@ -42,6 +42,13 @@ namespace ShipbreakerVR
         private Vector3 menuPosition;
         private Quaternion menuRotation;
 
+        public enum Steadying { Aus, Schwach, Stark }
+
+        // Visor rotation relative to the rig (playspace), lagging behind the head's tracked rotation (see SteadyVisor).
+        private Quaternion visorRotation = Quaternion.identity;
+        private bool visorFollowing;
+        private bool visorPlaced;
+
         // Pose and size of the quad in the world for the current frame.
         private Matrix4x4 screenMatrix;
 
@@ -80,6 +87,7 @@ namespace ShipbreakerVR
         {
             menuPlaced = false;
             placeAlongGaze = toGaze;
+            visorPlaced = false;
         }
 
         private void LateUpdate()
@@ -157,7 +165,11 @@ namespace ShipbreakerVR
             // The load screen is a menu too, even if the game already switched to gameplay behind it.
             var loadScreen = SceneLoader.Instance != null && SceneLoader.Instance.LoadScreenVisible;
             var gameplay = GameSession.CurrentGameState == GameSession.GameState.Gameplay && LynxCameraController.MainCamera != null && !loadScreen;
-            if (menuMode == gameplay) menuPlaced = false;
+            if (menuMode == gameplay)
+            {
+                menuPlaced = false;
+                visorPlaced = false;
+            }
             menuMode = !gameplay;
 
             if (!menuMode)
@@ -169,7 +181,9 @@ namespace ShipbreakerVR
                 var distance = Plugin.HudDistance.Value * VrCamera.WorldScale;
                 var fov = LynxCameraController.MainCamera != null ? LynxCameraController.MainCamera.fieldOfView : 60f;
                 var h = 2f * distance * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad) * Plugin.HudScale.Value;
-                screenMatrix = Matrix4x4.TRS(head.position + head.rotation * new Vector3(0, 0, distance), head.rotation, new Vector3(h * aspect, h, 1f));
+                // Stays centered on the head, only its rotation lags; the rig's rotation (turning the body) applies at once.
+                var rotation = head.parent.rotation * SteadyVisor(head.localRotation);
+                screenMatrix = Matrix4x4.TRS(head.position + rotation * new Vector3(0, 0, distance), rotation, new Vector3(h * aspect, h, 1f));
                 return;
             }
 
@@ -189,6 +203,36 @@ namespace ShipbreakerVR
             // menuPosition is in rig space and already scales with the rig; the width is in world units.
             var w = Plugin.MenuWidth.Value * VrCamera.WorldScale;
             screenMatrix = Matrix4x4.TRS(rig.TransformPoint(menuPosition), rig.rotation * menuRotation, new Vector3(w, w / aspect, 1f));
+        }
+
+        // A visor fixed to the head copies every small tremor of it. Within a dead zone the visor stays where it is; beyond
+        // it, it eases towards the gaze until it is centered again, but never lags more than maxLag behind the head.
+        private Quaternion SteadyVisor(Quaternion head)
+        {
+            float deadZone, speed, maxLag;
+            switch (Plugin.HudSteadying.Value)
+            {
+                case Steadying.Schwach: deadZone = 1.5f; speed = 8f; maxLag = 8f; break;
+                case Steadying.Stark: deadZone = 4f; speed = 4f; maxLag = 15f; break;
+                default: return head;
+            }
+            if (!visorPlaced)
+            {
+                visorPlaced = true;
+                visorFollowing = false;
+                visorRotation = head;
+                return head;
+            }
+            var angle = Quaternion.Angle(visorRotation, head);
+            if (angle > deadZone) visorFollowing = true;
+            if (visorFollowing)
+            {
+                visorRotation = Quaternion.Slerp(visorRotation, head, 1f - Mathf.Exp(-speed * Time.unscaledDeltaTime));
+                angle = Quaternion.Angle(visorRotation, head);
+                if (angle < 0.2f) visorFollowing = false;
+            }
+            if (angle > maxLag) visorRotation = Quaternion.RotateTowards(head, visorRotation, maxLag);
+            return visorRotation;
         }
 
         // Called from our own pass: draws the UI for the VR camera.

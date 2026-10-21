@@ -22,6 +22,7 @@ namespace ShipbreakerVR
         internal static ConfigEntry<bool> UiInVr;
         internal static ConfigEntry<float> HudDistance;
         internal static ConfigEntry<float> HudScale;
+        internal static ConfigEntry<VrUi.Steadying> HudSteadying;
         internal static ConfigEntry<float> MenuDistance;
         internal static ConfigEntry<float> MenuWidth;
         internal static ConfigEntry<bool> FlipUi;
@@ -49,6 +50,8 @@ namespace ShipbreakerVR
             HudDistance = Config.Bind("Anzeige", "HudAbstand", 1.5f, "Distance of the visor display in front of the eyes, in meters.");
             HudScale = Config.Bind("Anzeige", "VisierGroesse", 0.55f,
                 "Size of the visor display relative to the game camera's field of view. 1 = markers sit exactly on objects, but the corners are outside the field of view. Smaller = everything in view, but markers are slightly offset.");
+            HudSteadying = Config.Bind("Anzeige", "HudBeruhigung", VrUi.Steadying.Schwach,
+                "Keeps the visor display steady instead of copying every small head movement. Schwach: ignores small tremor, follows the gaze quickly. Stark: stays put for larger movements and follows more slowly. Aus: fixed to the head. Turning the body (mouse, stick, controller) always applies at once.");
             MenuDistance = Config.Bind("Anzeige", "MenueAbstand", 2.0f, "Distance of the menu canvas in meters.");
             MenuWidth = Config.Bind("Anzeige", "MenueBreite", 2.6f, "Width of the menu canvas in meters.");
             FlipUi = Config.Bind("Anzeige", "UiSpiegeln", false, "Flip the UI vertically in case it is upside down.");
