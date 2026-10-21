@@ -95,6 +95,16 @@ The plugin resets the shared targets to the eye size (or the screen size) two se
 one second after the render resolution goes down. A game crash during a mission load ran out of memory exactly when
 the eye textures were recreated a second after VR started (1.0, then 0.95); a lower setting is now applied at VR start.
 
+## Motion controller flying (proof of concept)
+`ThrustController.Update` reads the thrust axes via `LynxControls.GetOneAxisInputControlValue` (`ThrustMove...Composite`)
+and thrusts along its orientation transform (the body, or a steering transform). A postfix on that extension method adds
+the controller thrust, converted into that transform's axes, so fuel, forces and the thrust HUD stay the game's.
+Rotation from the controllers (roll, VTOL turns) is applied to the playspace in `VrBody`, so it needs body-follows-head.
+Config `Steuerung/Controllersteuerung`: Pavlov (left stick forward/back thrusts along the left controller, left/right
+rolls) or Vtol (hold the left trigger; moving the controller away from where it was when pressed thrusts that way,
+2 cm deadzone, full at 15 cm; turning it turns the body, 8 degree deadzone, full at 45 degrees). The left controller's
+name and features are logged once.
+
 ## Roadmap
 1. Inventory – done
 2. Foundation (BepInEx, plugin, camera hook) – done

@@ -29,6 +29,7 @@ namespace ShipbreakerVR
         internal static ConfigEntry<VrCamera.AntiAliasing> AntiAliasing;
         internal static ConfigEntry<float> ResolutionScale;
         internal static ConfigEntry<float> WorldScale;
+        internal static ConfigEntry<VrControls.Scheme> ControlScheme;
 
         private void Awake()
         {
@@ -39,6 +40,8 @@ namespace ShipbreakerVR
                 "A separate texture per eye instead of a Texture2DArray. Experimental, in case MultiPass alone is not enough.");
             BodyFollowsHead = Config.Bind("Steuerung", "KoerperFolgtKopf", true,
                 "The body, and with it the tools' aim, turns with the head. Mouse and stick add extra rotation. Off: the head looks around freely, only the mouse turns the body.");
+            ControlScheme = Config.Bind("Steuerung", "Controllersteuerung", VrControls.Scheme.Pavlov,
+                "Flying with the left motion controller. Pavlov: stick forward/back thrusts where the controller points, stick left/right rolls. Vtol: hold the trigger and move or turn the controller away from where it was when pressed to thrust or turn that way. Aus: off. Rolling and turning need KoerperFolgtKopf.");
             UiInVr = Config.Bind("Anzeige", "UiImRaum", true,
                 "Show HUD and menus on a canvas in the world instead of flat over the image.");
             HudDistance = Config.Bind("Anzeige", "HudAbstand", 1.5f, "Distance of the visor display in front of the eyes, in meters.");
