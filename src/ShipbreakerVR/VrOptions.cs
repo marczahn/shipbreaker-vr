@@ -69,6 +69,7 @@ namespace ShipbreakerVR
                 new SliderRow { Label = "VR: World scale", Entry = Plugin.WorldScale, Min = 0.5f, Max = 3f, Format = "0.00" },
                 EnumRow("VR: Helmet", Plugin.Helmet, new[] { "Follows head", "Hidden", "Game default" }),
                 new BoolRow { Label = "VR: HUD and menus in world", Entry = Plugin.UiInVr },
+                EnumRow("VR: Visor steadying", Plugin.HudSteadying, new[] { "Off", "Light", "Strong" }),
                 new SliderRow { Label = "VR: Visor size", Entry = Plugin.HudScale, Min = 0.3f, Max = 1f, Format = "0.00" },
                 new SliderRow { Label = "VR: Visor distance (m)", Entry = Plugin.HudDistance, Min = 0.5f, Max = 3f, Format = "0.0" },
                 new SliderRow { Label = "VR: Menu distance (m)", Entry = Plugin.MenuDistance, Min = 1f, Max = 4f, Format = "0.0" },
