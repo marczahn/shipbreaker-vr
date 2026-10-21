@@ -24,5 +24,7 @@ or let Steam verify the game files.
 When reporting problems, please attach `BepInEx\LogOutput.log`.
 
 ## Included third-party components
-BepInEx 5.4.23.3 (LGPL-2.1), Unity OpenXR / XR Management / Input System (Unity Companion License),
-XR settings derived from ShipbreakerVR by Raicuparta (MIT, see `LICENSE-ShipbreakerVr.txt`).
+BepInEx 5.4.23.3 (MIT) with UnityDoorstop 4.4.0 (LGPL-2.1), HarmonyX, MonoMod and Mono.Cecil (MIT),
+Unity OpenXR / XR Management / Input System (Unity Companion License), the Khronos OpenXR loader (Apache-2.0)
+and XR settings derived from ShipbreakerVR by Raicuparta (MIT). Details in `THIRD-PARTY-NOTICES.md`, license texts in
+`BepInEx\plugins\ShipbreakerVR\licenses\`.
