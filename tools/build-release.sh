@@ -35,8 +35,8 @@ find "$DEPLOY_DIR/plugin" -name 'Unity.*.dll' -exec cp {} "$PLUGIN/" \;
 cp "$DEPLOY_DIR/bundles/xrmanager" "$DEPLOY_DIR/bundles/xrmanager.manifest" "$PLUGIN/AssetBundles/"
 cp "$BUILD/ShipbreakerVR.dll" "$PLUGIN/"
 cp "$ROOT"/licenses/* "$PLUGIN/licenses/"
-cp "$ROOT/unity/ShipbreakerVRUnity/LICENSE-ShipbreakerVr.txt" "$PLUGIN/"
-cp "$ROOT/docs/INSTALL.md" "$ROOT/THIRD-PARTY-NOTICES.md" "$STAGE/"
+cp "$ROOT/LICENSE" "$ROOT/DISCLAIMER.md" "$PLUGIN/licenses/"
+cp "$ROOT/docs/INSTALL.md" "$ROOT/THIRD-PARTY-NOTICES.md" "$ROOT/DISCLAIMER.md" "$STAGE/"
 
 mkdir -p "$OUT"
 ZIP="$(cd "$OUT" && pwd)/ShipbreakerVR-$VERSION.zip"

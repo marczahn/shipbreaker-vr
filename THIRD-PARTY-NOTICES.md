@@ -12,6 +12,6 @@ The release ZIP bundles the following components. Their license texts are in `li
 | Mono.Cecil | `BepInEx\core\Mono.Cecil*.dll` | MIT (`Mono.Cecil-MIT.txt`) | https://github.com/jbevain/cecil |
 | Unity OpenXR Plugin 1.2.8, XR Plugin Management 4.2.1, Input System 1.0.2 | `BepInEx\plugins\ShipbreakerVR\Unity.*.dll`, `Shipbreaker_Data\Plugins\x86_64\UnityOpenXR.dll`, `Shipbreaker_Data\UnitySubsystems\UnityOpenXR\UnitySubsystemsManifest.json` | Unity Companion License (`Unity-Companion-License.md`) | Unity Package Manager |
 | Khronos OpenXR loader (shipped with the Unity OpenXR Plugin) | `Shipbreaker_Data\Plugins\x86_64\openxr_loader.dll` | Apache-2.0 (`OpenXR-SDK-Apache-2.0.txt`) | https://github.com/KhronosGroup/OpenXR-SDK |
-| XR settings derived from ShipbreakerVR by Raicuparta | `BepInEx\plugins\ShipbreakerVR\AssetBundles\xrmanager` | MIT (`ShipbreakerVR-Raicuparta-MIT.txt`) | ShipbreakerVR by Raicuparta (2022) |
+| XR settings derived from ShipbreakerVR by Raicuparta | `BepInEx\plugins\ShipbreakerVR\AssetBundles\xrmanager` | MIT (`ShipbreakerVr-Raicuparta-MIT.txt`) | ShipbreakerVR by Raicuparta (2022) |
 
 UnityDoorstop is used unmodified as a separate library; its source is available at the link above.
