@@ -39,7 +39,8 @@ namespace ShipbreakerVR
                     if (type == null || type.IsAbstract || !typeof(CustomPostProcessVolumeComponent).IsAssignableFrom(type)) continue;
                     var render = AccessTools.DeclaredMethod(type, "Render", parameters);
                     if (render == null) continue;
-                    Plugin.Log.LogInfo($"Full-screen effect bypassed in VR: {type.FullName}");
+                    // Harmony asks for the targets more than once.
+                    if (Logged.Add(type.FullName)) Plugin.Log.LogInfo($"Full-screen effect bypassed in VR: {type.FullName}");
                     yield return render;
                 }
             }
@@ -51,7 +52,7 @@ namespace ShipbreakerVR
             if (vr == null || __1.camera != vr.Camera) return true;
             HDUtils.BlitCameraTexture(__0, __2, __3);
             var name = __instance.GetType().Name;
-            if (Logged.Add(name)) Plugin.Log.LogInfo($"Effect '{name}' skipped for the VR camera");
+            if (Logged.Add("skip " + name)) Plugin.Log.LogInfo($"Effect '{name}' skipped for the VR camera");
             return false;
         }
     }
