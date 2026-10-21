@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using BBI.Unity.Game;
 using HarmonyLib;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace ShipbreakerVR
@@ -88,6 +89,34 @@ namespace ShipbreakerVR
                 if (result.selectOnRight != null && !result.selectOnRight.transform.IsChildOf(entry.transform)) result.selectOnRight = null;
             }
             return result;
+        }
+    
+    }
+
+    // When the list scrolls, the game reselects a visible row if the selected one counts as out of view. Its check
+    // ignores the list's padding, so a row that was just scrolled to by keyboard counts as out of view and the selection
+    // jumps back up. In lists with our rows, keep a selection that sits inside the list.
+    [HarmonyPatch(typeof(ScrollController), "ScrollBarUpdated")]
+    internal static class ScrollReselectPatch
+    {
+        private static readonly AccessTools.FieldRef<ScrollController, ScrollRect> ScrollRectRef =
+            AccessTools.FieldRefAccess<ScrollController, ScrollRect>("m_ScrollRect");
+
+        private static bool logged;
+
+        private static bool Prefix(ScrollController __instance)
+        {
+            var scroll = ScrollRectRef(__instance);
+            var content = scroll != null ? scroll.content : null;
+            if (content == null || content.GetComponent<VrOptionsNavigation>() == null) return true;
+            var selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
+            if (selected == null || !selected.transform.IsChildOf(content)) return true;
+            if (!logged)
+            {
+                logged = true;
+                Plugin.Log.LogInfo($"Options scroll: keeping selection on '{selected.transform.parent.name}'");
+            }
+            return false;
         }
     }
 }

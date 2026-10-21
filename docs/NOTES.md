@@ -71,7 +71,7 @@ shows whether the scale actually reaches the stereo rendering (about 63 mm times
 `XRSettings.eyeTextureResolutionScale` reallocates every HDRP render target. At 2.0 (5376x5760 per eye) a 12 GB
 RTX 4070 Ti ran out of memory (D3D11 error 0x8007000e in Player.log); after that even 1.0 failed and the image
 smeared until the game was restarted. The plugin now estimates the limit from `SystemInfo.graphicsMemorySize`
-(about 160 bytes per pixel and eye, half of the video memory as budget), clamps the setting to it and applies a
+(about 250 bytes per pixel and eye, half of the video memory as budget; 1.55 still failed on 12 GB), clamps the setting to it and applies a
 change only after the slider has rested for a second.
 
 ## Roadmap

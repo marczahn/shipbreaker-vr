@@ -48,10 +48,11 @@ namespace ShipbreakerVR
 
         private float loggedScale = -1f;
 
-        // Rough estimate: HDRP needs about 160 bytes of render targets per pixel and eye (G-buffer, depth, color,
-        // history, post effects). Half of the video memory stays free for the game's own textures and meshes.
-        // Calibrated on an RTX 4070 Ti (12 GB, 2688x2880 per eye): 2.0 ran out of memory, the estimate gives about 1.55.
-        private const float BytesPerPixelAndEye = 160f;
+        // Rough estimate: HDRP needs about 250 bytes of render targets per pixel and eye (G-buffer, depth, color,
+        // history, post effects, and the old targets while the new ones are allocated). Half of the video memory stays
+        // free for the game's own textures and meshes. Calibrated on an RTX 4070 Ti (12 GB, 2688x2880 per eye):
+        // 1.55 and 2.0 ran out of memory, 1.0 works; the estimate gives 1.25.
+        private const float BytesPerPixelAndEye = 250f;
         private const float VideoMemoryShare = 0.5f;
         public const float ResolutionSliderMax = 2f;
 
