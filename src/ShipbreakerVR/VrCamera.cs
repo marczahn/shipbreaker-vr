@@ -63,9 +63,6 @@ namespace ShipbreakerVR
         private float resolutionChangedAt;
         private float shrinkAt = -1f;
 
-        // Render resolution while only the loading UI shows; frees video memory for the level being loaded.
-        private const float LoadingResolution = 0.5f;
-
         public bool BodyFollowsHead => VrXr.IsRunning && Plugin.BodyFollowsHead.Value;
 
         // True while loading (no game camera, or the game's load screen covers the image): only the UI canvas on black.
@@ -157,16 +154,6 @@ namespace ShipbreakerVR
             vrHd.backgroundColorHDR = Color.black;
             vrHd.xrRendering = true;
             Plugin.Log.LogInfo(gameCamera == null ? "No game camera (loading): VR shows only the UI" : "Load screen: VR shows only the UI");
-
-            // The game loads the next level now and needs its video memory. At the configured resolution the eye
-            // render targets took so much that the level's textures failed to allocate (grey image after loading).
-            var current = UnityEngine.XR.XRSettings.eyeTextureResolutionScale;
-            if (VrXr.IsRunning && current > LoadingResolution + 0.01f)
-            {
-                UnityEngine.XR.XRSettings.eyeTextureResolutionScale = LoadingResolution;
-                shrinkAt = Time.unscaledTime + 0.5f;
-                Plugin.Log.LogInfo($"Render resolution per eye while loading: {LoadingResolution:0.00}x (was {current:0.00}x)");
-            }
         }
 
         private void OnEnable() => Application.onBeforeRender += FollowGameCamera;
@@ -244,9 +231,6 @@ namespace ShipbreakerVR
                 vrHd.antialiasing = mode;
                 Plugin.Log.LogInfo($"VR camera anti-aliasing: {mode} (game: {gameAntialiasing})");
             }
-            // While loading only the UI shows, at the low loading resolution (HideWorld). Back to the configured
-            // resolution once the world is visible again, through the memory probe below.
-            if (worldHidden) return;
             // Each change reallocates every render target. Wait until the slider has rested, otherwise dragging it
             // through all steps fragments video memory until allocations fail and the image smears.
             var max = MaxResolutionScale();

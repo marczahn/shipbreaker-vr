@@ -62,8 +62,7 @@ existing rig. `VrCanvases` restores and re-attaches the canvases when the UI cam
 frame (`[Rendering] VrBeimStart`), so the launch intro video (`LynxVideoPlayer`, a RawImage on a canvas) is visible too.
 
 The game's own custom post-processes (`DigitalDistortion` scanlines/CRT at shift start, RetroLookPro glitches) are
-not XR-aware and fill the view with grey. While the world is hidden the eye resolution drops to 0.5x and HDRP's shared
-targets shrink: at 1.25x the level load ran out of video memory (D3D11 0x8007000e) and the game showed grey. `CustomPostProcessPatch` blits source to destination instead for the VR camera.
+not XR-aware and fill the view with grey. `CustomPostProcessPatch` blits source to destination instead for the VR camera.
 
 ## Settings menu
 The VR rows are clones of real option rows (bool, slider, list) appended to the Video tab. The game's logic for
