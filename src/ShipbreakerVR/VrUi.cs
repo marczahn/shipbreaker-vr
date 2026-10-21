@@ -23,6 +23,10 @@ namespace ShipbreakerVR
 
         public static VrUi Instance { get; private set; }
 
+        // Layer of our pass volume; unused by the game. HDRP only runs a custom pass volume for a camera whose
+        // volumeLayerMask contains its layer, and the load screen camera's mask had only the UI layer.
+        public const int PassLayer = 29;
+
         private VrCamera vr;
         private Camera uiCamera;
         private RenderTexture texture;
@@ -34,6 +38,7 @@ namespace ShipbreakerVR
 
         private bool menuMode;
         private bool menuPlaced;
+        private bool placeAlongGaze;
         private Vector3 menuPosition;
         private Quaternion menuRotation;
 
@@ -49,7 +54,7 @@ namespace ShipbreakerVR
             Instance = ui;
 
             // Our pass runs after post-processing so the UI doesn't go through tonemapping and exposure.
-            var go = new GameObject("ShipbreakerVR UI Pass");
+            var go = new GameObject("ShipbreakerVR UI Pass") { layer = PassLayer };
             go.SetActive(false);
             go.transform.SetParent(vr.transform.parent, false);
             var volume = go.AddComponent<CustomPassVolume>();
@@ -70,8 +75,12 @@ namespace ShipbreakerVR
 
         public bool Active => VrXr.IsRunning && Plugin.UiInVr.Value && vr != null;
 
-        // For F4: place the menu canvas in front of the head again.
-        public void Recenter() => menuPlaced = false;
+        // Place the menu canvas in front of the head again. toGaze (F4): straight in front of the eyes, also tilted up or down. Otherwise upright at eye height.
+        public void Recenter(bool toGaze)
+        {
+            menuPlaced = false;
+            placeAlongGaze = toGaze;
+        }
 
         private void LateUpdate()
         {
@@ -145,12 +154,16 @@ namespace ShipbreakerVR
         {
             var head = vr.transform;
             var aspect = (float)texture.width / texture.height;
-            var gameplay = GameSession.CurrentGameState == GameSession.GameState.Gameplay && LynxCameraController.MainCamera != null;
+            // The load screen is a menu too, even if the game already switched to gameplay behind it.
+            var loadScreen = SceneLoader.Instance != null && SceneLoader.Instance.LoadScreenVisible;
+            var gameplay = GameSession.CurrentGameState == GameSession.GameState.Gameplay && LynxCameraController.MainCamera != null && !loadScreen;
             if (menuMode == gameplay) menuPlaced = false;
             menuMode = !gameplay;
 
             if (!menuMode)
             {
+                // F4 in gameplay only recenters the head; the next menu opens upright again.
+                placeAlongGaze = false;
                 // Visor: in front of the head, as large as the game camera's field of view.
                 // In world units, so the visor keeps its felt distance at any world scale.
                 var distance = Plugin.HudDistance.Value * VrCamera.WorldScale;
@@ -165,10 +178,11 @@ namespace ShipbreakerVR
             if (!menuPlaced)
             {
                 menuPlaced = true;
-                // Upright and at eye height, only turned towards where the head looks.
+                // Turned towards where the head looks, without roll. Upright at eye height unless placed along the gaze.
                 var forward = head.localRotation * Vector3.forward;
-                forward.y = 0f;
-                forward = forward.sqrMagnitude > 1e-4f ? forward.normalized : Vector3.forward;
+                if (!placeAlongGaze) forward.y = 0f;
+                placeAlongGaze = false;
+                forward = forward.sqrMagnitude > 1e-4f && Mathf.Abs(forward.normalized.y) < 0.99f ? forward.normalized : Vector3.forward;
                 menuRotation = Quaternion.LookRotation(forward, Vector3.up);
                 menuPosition = head.localPosition + forward * Plugin.MenuDistance.Value;
             }
@@ -222,7 +236,7 @@ namespace ShipbreakerVR
             culling.cullingOptions = CullingOptions.None;
 
             cmd.SetRenderTarget(texture.colorBuffer, texture.depthBuffer);
-            cmd.ClearRenderTarget(true, true, Plugin.ShowUiFrame.Value ? new Color(0f, 0.4f, 1f, 0.15f) : Color.clear);
+            cmd.ClearRenderTarget(true, true, Color.clear);
             renderContext.ExecuteCommandBuffer(cmd);
             cmd.Clear();
             renderContext.SetupCameraProperties(uiCamera);

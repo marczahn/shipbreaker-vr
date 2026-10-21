@@ -12,11 +12,12 @@ namespace ShipbreakerVR
     {
         public const string Guid = "de.marczahn.shipbreakervr";
         public const string Name = "ShipbreakerVR";
-        public const string Version = "0.7.0";
+        public const string Version = "0.8.0";
 
         internal static ManualLogSource Log;
         internal static ConfigEntry<bool> MultiPass;
         internal static ConfigEntry<bool> SeparateEyeTextures;
+        internal static ConfigEntry<bool> StartVrAtLaunch;
         internal static ConfigEntry<bool> BodyFollowsHead;
         internal static ConfigEntry<bool> UiInVr;
         internal static ConfigEntry<float> HudDistance;
@@ -24,7 +25,6 @@ namespace ShipbreakerVR
         internal static ConfigEntry<float> MenuDistance;
         internal static ConfigEntry<float> MenuWidth;
         internal static ConfigEntry<bool> FlipUi;
-        internal static ConfigEntry<bool> ShowUiFrame;
         internal static ConfigEntry<VrHelmet.Mode> Helmet;
         internal static ConfigEntry<VrCamera.AntiAliasing> AntiAliasing;
         internal static ConfigEntry<float> ResolutionScale;
@@ -37,6 +37,8 @@ namespace ShipbreakerVR
                 "Render each eye in its own pass. Single Pass Instanced needs shader variants the game lacks (result: only one eye, distorted image).");
             SeparateEyeTextures = Config.Bind("Rendering", "SeparateEyeTextures", false,
                 "A separate texture per eye instead of a Texture2DArray. Experimental, in case MultiPass alone is not enough.");
+            StartVrAtLaunch = Config.Bind("Rendering", "VrBeimStart", true,
+                "Start VR as soon as the game launches, so the intro and loading screens already show in the headset. Off: start VR with F3.");
             BodyFollowsHead = Config.Bind("Steuerung", "KoerperFolgtKopf", true,
                 "The body, and with it the tools' aim, turns with the head. Mouse and stick add extra rotation. Off: the head looks around freely, only the mouse turns the body.");
             UiInVr = Config.Bind("Anzeige", "UiImRaum", true,
@@ -46,8 +48,6 @@ namespace ShipbreakerVR
                 "Size of the visor display relative to the game camera's field of view. 1 = markers sit exactly on objects, but the corners are outside the field of view. Smaller = everything in view, but markers are slightly offset.");
             MenuDistance = Config.Bind("Anzeige", "MenueAbstand", 2.0f, "Distance of the menu canvas in meters.");
             MenuWidth = Config.Bind("Anzeige", "MenueBreite", 2.6f, "Width of the menu canvas in meters.");
-            ShowUiFrame = Config.Bind("Anzeige", "UiFlaecheZeigen", true,
-                "Tint the UI canvas light blue so you can see where it is. For testing.");
             FlipUi = Config.Bind("Anzeige", "UiSpiegeln", false, "Flip the UI vertically in case it is upside down.");
             Helmet = Config.Bind("Anzeige", "Helm", VrHelmet.Mode.Kopf,
                 "Kopf: the helmet follows the VR head. Aus: hide the helmet model. Spiel: the helmet stays on the body.");
@@ -68,14 +68,16 @@ namespace ShipbreakerVR
         }
 
         private float nextCameraSearch;
+        private bool launched;
 
-        // The camera currently producing the image: active, no target texture, highest depth.
+        // The camera currently producing the image: active, no target texture, highest depth. Not one that only draws
+        // canvases, like the load screen camera: its volume layers hid our UI pass and it shows no world anyway.
         private static Camera FindMenuCamera()
         {
             Camera best = null;
             foreach (var cam in Camera.allCameras)
             {
-                if (cam.targetTexture != null || cam.CompareTag("UI_Camera") || cam.name.StartsWith("ShipbreakerVR")) continue;
+                if (cam.targetTexture != null || cam.CompareTag("UI_Camera") || cam.name.StartsWith("ShipbreakerVR") || VrCamera.IsUiOnly(cam)) continue;
                 if (best == null || cam.depth > best.depth) best = cam;
             }
             return best;
@@ -83,18 +85,22 @@ namespace ShipbreakerVR
 
         private void Update()
         {
+            if (!launched)
+            {
+                launched = true;
+                if (StartVrAtLaunch.Value) VrXr.Toggle();
+            }
             if (Input.GetKeyDown(KeyCode.F3)) VrXr.Toggle();
 
             // The main menu has no LynxCameraController yet; the VR camera then attaches to the menu camera.
-            if (VrXr.IsRunning && VrCamera.Instance == null && Time.unscaledTime >= nextCameraSearch)
+            // Without any camera (intro, loading screen) the rig still exists and shows the UI on black.
+            var vr = VrCamera.Instance;
+            if (VrXr.IsRunning && (vr == null || vr.GameCamera == null) && Time.unscaledTime >= nextCameraSearch)
             {
-                nextCameraSearch = Time.unscaledTime + 1f;
+                nextCameraSearch = Time.unscaledTime + 0.25f;
                 var cam = LynxCameraController.MainCamera != null ? LynxCameraController.MainCamera : FindMenuCamera();
-                if (cam != null)
-                {
-                    Log.LogInfo($"VR camera attached to '{cam.name}'");
-                    VrCamera.Attach(cam);
-                }
+                if (cam != null) Log.LogInfo($"VR camera attached to '{cam.name}'");
+                if (cam != null || vr == null) VrCamera.Attach(cam);
             }
         }
     }
@@ -110,8 +116,7 @@ namespace ShipbreakerVR
                 ? "LynxCameraController started, but MainCamera is null"
                 : $"Game camera found: '{cam.name}', FOV {cam.fieldOfView}, resolution {LynxCameraController.ScreenWidth}x{LynxCameraController.ScreenHeight}");
             if (cam == null) return;
-            if (VrCamera.Instance != null && VrCamera.Instance.GameCamera != cam) VrCamera.Instance.Detach();
-            if (VrCamera.Instance == null) VrCamera.Attach(cam);
+            if (VrCamera.Instance == null || VrCamera.Instance.GameCamera != cam) VrCamera.Attach(cam);
         }
     }
 }
