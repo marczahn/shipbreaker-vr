@@ -34,6 +34,7 @@ namespace ShipbreakerVR
 
         private bool menuMode;
         private bool menuPlaced;
+        private bool placeAlongGaze;
         private Vector3 menuPosition;
         private Quaternion menuRotation;
 
@@ -70,8 +71,12 @@ namespace ShipbreakerVR
 
         public bool Active => VrXr.IsRunning && Plugin.UiInVr.Value && vr != null;
 
-        // For F4: place the menu canvas in front of the head again.
-        public void Recenter() => menuPlaced = false;
+        // Place the menu canvas in front of the head again. toGaze (F4): straight in front of the eyes, also tilted up or down. Otherwise upright at eye height.
+        public void Recenter(bool toGaze)
+        {
+            menuPlaced = false;
+            placeAlongGaze = toGaze;
+        }
 
         private void LateUpdate()
         {
@@ -153,6 +158,8 @@ namespace ShipbreakerVR
 
             if (!menuMode)
             {
+                // F4 in gameplay only recenters the head; the next menu opens upright again.
+                placeAlongGaze = false;
                 // Visor: in front of the head, as large as the game camera's field of view.
                 // In world units, so the visor keeps its felt distance at any world scale.
                 var distance = Plugin.HudDistance.Value * VrCamera.WorldScale;
@@ -167,10 +174,11 @@ namespace ShipbreakerVR
             if (!menuPlaced)
             {
                 menuPlaced = true;
-                // Upright and at eye height, only turned towards where the head looks.
+                // Turned towards where the head looks, without roll. Upright at eye height unless placed along the gaze.
                 var forward = head.localRotation * Vector3.forward;
-                forward.y = 0f;
-                forward = forward.sqrMagnitude > 1e-4f ? forward.normalized : Vector3.forward;
+                if (!placeAlongGaze) forward.y = 0f;
+                placeAlongGaze = false;
+                forward = forward.sqrMagnitude > 1e-4f && Mathf.Abs(forward.normalized.y) < 0.99f ? forward.normalized : Vector3.forward;
                 menuRotation = Quaternion.LookRotation(forward, Vector3.up);
                 menuPosition = head.localPosition + forward * Plugin.MenuDistance.Value;
             }

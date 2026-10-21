@@ -42,7 +42,7 @@ Idea for controllers: an aiming camera on the hand that receives these calls.
   `VrCanvases` re-parents them to the UI camera while VR runs.
 - `VrUi` renders the UI camera into its own RenderTexture once per frame and draws it per eye on a quad
   (`UI/Default`, ZTest Always, eye matrices via reflection from `HDCamera.xr`). In gameplay the quad is a visor in
-  front of the head; elsewhere it is a fixed canvas in the playspace (F4 re-places it).
+  front of the head; elsewhere it is a fixed canvas in the playspace (F4 re-places it along the gaze and, in menus, turns the playspace to the gaze).
 - The game switches its custom pass volumes off outside gameplay (e.g. pause), so the mod uses its own
   `CustomPassVolume` (AfterPostProcess) and only disables the game's UI passes for the VR camera.
 - The main menu has no `LynxCameraController` and no UI camera: the VR camera attaches to the active menu camera and

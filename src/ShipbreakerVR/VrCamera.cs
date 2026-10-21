@@ -167,7 +167,7 @@ namespace ShipbreakerVR
 
         private void Update()
         {
-            if (VrXr.IsRunning && Input.GetKeyDown(KeyCode.F4)) Recenter();
+            if (VrXr.IsRunning && Input.GetKeyDown(KeyCode.F4)) Recenter(true);
         }
 
         private void LateUpdate()
@@ -210,7 +210,7 @@ namespace ShipbreakerVR
             if (recenterAt > 0 && Time.unscaledTime >= recenterAt)
             {
                 recenterAt = -1f;
-                Recenter();
+                Recenter(false);
             }
 
             FollowGameCamera();
@@ -408,13 +408,23 @@ namespace ShipbreakerVR
         }
 
         // Puts the current head position on the game camera; without body-follows-head also the view direction (yaw only).
-        private void Recenter()
+        // With F4 (toGaze) the view direction is also centered in menus, where the body does not turn with the head,
+        // and the menu canvas is placed straight along the gaze.
+        private void Recenter(bool toGaze)
         {
             var head = transform;
             recenterPosition = head.localPosition;
-            recenterRotation = Quaternion.Inverse(Quaternion.Euler(0f, head.localEulerAngles.y, 0f));
-            if (VrUi.Instance != null) VrUi.Instance.Recenter();
-            Plugin.Log.LogInfo($"Head recentered (tracked head position {head.localPosition})");
+            var headYaw = Quaternion.Euler(0f, head.localEulerAngles.y, 0f);
+            recenterRotation = Quaternion.Inverse(headYaw);
+            var gameplay = GameSession.CurrentGameState == GameSession.GameState.Gameplay && gameCamera == LynxCameraController.MainCamera;
+            if (toGaze && BodyFollowsHead && !gameplay && gameCamera != null)
+            {
+                Playspace = Quaternion.Euler(0f, gameCamera.transform.eulerAngles.y, 0f) * Quaternion.Inverse(headYaw);
+                // Back in gameplay the body takes its playspace from where it actually points.
+                VrBody.Resync();
+            }
+            if (VrUi.Instance != null) VrUi.Instance.Recenter(toGaze);
+            Plugin.Log.LogInfo($"Head recentered{(toGaze ? " (F4)" : "")} (tracked head position {head.localPosition})");
         }
     }
 }

@@ -13,7 +13,7 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
 
 ## Use
 - Connect the headset and start the game; VR starts right away. **F3** toggles VR.
-- **F4** recenters the view (and the menu canvas).
+- **F4** recenters the view on the headset: position, and in menus also view direction and the menu canvas.
 - Settings: in the game's options (Video tab, rows starting with "VR:" at the bottom) or in
   `BepInEx\config\de.marczahn.shipbreakervr.cfg`.
 
