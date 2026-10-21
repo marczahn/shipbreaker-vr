@@ -55,9 +55,45 @@ Idea for controllers: an aiming camera on the hand that receives these calls.
 game camera. It can also be hidden.
 
 ## Settings menu
-The VR rows are clones of real option rows (bool, slider, list) appended to the Gameplay tab. The game's logic for
-those clones is intercepted via Harmony and redirected to the BepInEx config. The Gameplay tab has no slider, so
-templates are taken from all tabs of the options screen.
+The VR rows are clones of real option rows (bool, slider, list) appended to the Video tab. The game's logic for
+those clones is intercepted via Harmony and redirected to the BepInEx config. Templates are taken from all tabs of
+the options screen. The Gameplay tab was tried first, but its list does not scroll past its own rows, so the VR rows
+hung invisible below it. The scroll content is grown by the added rows' height in case it has no ContentSizeFitter.
+
+Keyboard/gamepad navigation (decompiled `UIInControlBridge`): Unity's navigation events are off; the selected row's
+bridge reads the arrow keys from its serialized action set (FrontEnd or Paused). `LynxControls` loads only the set of
+the current game state, so a bridge with the wrong set gets no input at all. With explicit navigation the bridge moves
+only to an active, interactable target and never falls back to automatic search. Title-screen-only rows are
+non-interactable in-game. `VrOptionsNavigation` therefore links only interactable rows (the last usable game row
+leads down into the VR rows, the first VR row leads back up), recomputes that every 0.25 s while the list is visible,
+gives the VR rows' bridges the action set of the game's rows, and logs the list and every selection change.
+
+Selection jumping back up while scrolling by keyboard: Doozy's `UIButton` selects a row on pointer enter, and
+`StandaloneInputModule` re-raycasts the mouse position every frame even when the mouse does not move. Keyboard
+navigation scrolls the list under the resting cursor (in the pause menu it sits in the middle of the screen), so the
+row sliding under it took the selection, one row further down each time. In lists with VR rows a pointer enter now
+selects only if the pointer moved (`PointerEventData.delta`) or the mouse wheel was used in the last half second.
+
+## World scale
+Config `Bild/Weltmassstab` (also in the options menu) scales the VR rig. Unity derives the eye positions from the
+camera's world transform, so the rig scale also scales eye separation and tracked head movement: above 1 distant
+objects keep more stereo depth (hyperstereo) and sizes are easier to judge, but the world looks smaller. Visor,
+menu canvas and helmet are scaled along so they keep their felt size. The log line "eye separation in the world"
+shows whether the scale actually reaches the stereo rendering (about 63 mm times the scale is expected).
+
+## Render resolution and video memory
+`XRSettings.eyeTextureResolutionScale` reallocates every HDRP render target. At 2.0 (5376x5760 per eye) a 12 GB
+RTX 4070 Ti ran out of memory (D3D11 error 0x8007000e in Player.log); after that even 1.0 failed and the image
+smeared until the game was restarted. The plugin now estimates the limit from `SystemInfo.graphicsMemorySize`
+(about 250 bytes per pixel and eye, half of the video memory as budget; 1.55 still failed on 12 GB), clamps the setting to it and applies a
+change only after the slider has rested for a second. Before raising it, it allocates test textures of the new size; if the driver refuses one, the previous value stays.
+
+HDRP's shared render targets never shrink: `RTHandleSystem.SetReferenceSize` keeps the largest width and the largest
+height any camera rendered at, and the game never calls `ResetReferenceSize` (`HDRenderPipeline.ResetRTHandleReferenceSize`
+is public but unused). A flat 3840x2160 view followed by VR at 2688x2880 therefore leaves every target at 3840x2880.
+The plugin resets the shared targets to the eye size (or the screen size) two seconds after VR starts or stops and
+one second after the render resolution goes down. A game crash during a mission load ran out of memory exactly when
+the eye textures were recreated a second after VR started (1.0, then 0.95); a lower setting is now applied at VR start.
 
 ## Roadmap
 1. Inventory – done

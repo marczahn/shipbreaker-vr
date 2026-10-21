@@ -22,6 +22,7 @@ namespace ShipbreakerVR
         private Quaternion relativeRotation;
         private Vector3 originalLocalPosition;
         private Quaternion originalLocalRotation;
+        private Vector3 originalLocalScale;
         private bool moved;
         private float nextSearch;
         private bool hidden;
@@ -46,6 +47,7 @@ namespace ShipbreakerVR
                 container = go.transform;
                 originalLocalPosition = container.localPosition;
                 originalLocalRotation = container.localRotation;
+                originalLocalScale = container.localScale;
                 moved = false;
                 var cam = LynxCameraController.MainCameraTransform;
                 if (cam == null) return;
@@ -63,6 +65,7 @@ namespace ShipbreakerVR
                 moved = false;
                 container.localPosition = originalLocalPosition;
                 container.localRotation = originalLocalRotation;
+                container.localScale = originalLocalScale;
             }
         }
 
@@ -77,7 +80,9 @@ namespace ShipbreakerVR
             if (container == null) return;
             var head = vr.transform;
             moved = true;
+            // TransformPoint already includes the world scale; the helmet itself grows with it so it stays the same size around the head.
             container.SetPositionAndRotation(head.TransformPoint(relativePosition), head.rotation * relativeRotation);
+            container.localScale = originalLocalScale * VrCamera.WorldScale;
         }
 
         private void SetHidden(bool hide)

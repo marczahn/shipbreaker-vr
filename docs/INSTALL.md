@@ -14,7 +14,7 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
 ## Use
 - Connect the headset, start the game, press **F3** to toggle VR.
 - **F4** recenters the view (and the menu canvas).
-- Settings: in the game's options (Gameplay tab, rows starting with "VR:") or in
+- Settings: in the game's options (Video tab, rows starting with "VR:" at the bottom) or in
   `BepInEx\config\de.marczahn.shipbreakervr.cfg`.
 
 ## Uninstall
@@ -26,7 +26,7 @@ or let Steam verify the game files.
 When reporting problems, please attach `BepInEx\LogOutput.log`.
 
 ## Included third-party components
-All license texts are in `BepInEx\plugins\ShipbreakerVR\licenses\`.
+All license texts are in `BepInEx\plugins\ShipbreakerVR\licenses\`; `THIRD-PARTY-NOTICES.md` lists the sources.
 
 | Component | Files | License |
 |---|---|---|

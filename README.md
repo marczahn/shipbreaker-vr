@@ -9,7 +9,7 @@ Tested with Meta Quest via Virtual Desktop. Early test build.
 - Stereo rendering (MultiPass) and head tracking
 - Body and tools follow the head; mouse/stick turning is added on top
 - HUD as a visor in front of the eyes, menus on a canvas in the room, helmet follows the head
-- VR settings inside the game's options (Gameplay tab, rows starting with "VR:")
+- VR settings inside the game's options (Video tab, rows starting with "VR:" at the bottom)
 - Not yet: motion controllers, laser pointer for menus, comfort options
 
 Notes on how the game works and why the mod does what it does: [docs/NOTES.md](docs/NOTES.md).

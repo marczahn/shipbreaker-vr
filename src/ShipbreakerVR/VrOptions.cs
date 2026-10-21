@@ -10,7 +10,7 @@ using UnityEngine.UI;
 
 namespace ShipbreakerVR
 {
-    // Appends the VR settings as extra rows to the game options ("Game" tab).
+    // Appends the VR settings as extra rows to the video options (that list already scrolls; the Gameplay one does not).
     // The rows are copies of real game option rows so that look, selection and mouse handling are right.
     // We intercept the copies' game logic (fixed enums for game options) via Harmony and read/write
     // the BepInEx config instead. Values take effect and are saved immediately.
@@ -64,7 +64,8 @@ namespace ShipbreakerVR
             {
                 new BoolRow { Label = "VR: Body follows head", Entry = Plugin.BodyFollowsHead },
                 EnumRow("VR: Anti-aliasing", Plugin.AntiAliasing, new[] { "TAA", "SMAA", "FXAA", "None", "Game default" }),
-                new SliderRow { Label = "VR: Render resolution", Entry = Plugin.ResolutionScale, Min = 0.5f, Max = 2f, Format = "0.00" },
+                new SliderRow { Label = "VR: Render resolution", Entry = Plugin.ResolutionScale, Min = 0.5f, Max = VrCamera.ResolutionSliderMax, Format = "0.00" },
+                new SliderRow { Label = "VR: World scale", Entry = Plugin.WorldScale, Min = 0.5f, Max = 3f, Format = "0.00" },
                 EnumRow("VR: Helmet", Plugin.Helmet, new[] { "Follows head", "Hidden", "Game default" }),
                 new BoolRow { Label = "VR: HUD and menus in world", Entry = Plugin.UiInVr },
                 new SliderRow { Label = "VR: Visor size", Entry = Plugin.HudScale, Min = 0.3f, Max = 1f, Format = "0.00" },
@@ -79,7 +80,7 @@ namespace ShipbreakerVR
         {
             var entries = screen.GetComponentsInChildren<OptionEntry>(true);
             if (entries.Length == 0) return;
-            // The Game tab has no slider, so take templates from all tabs of the options menu.
+            // Take templates from all tabs of the options menu, so every row type is available.
             var root = screen.transform.parent != null ? screen.transform.parent : screen.transform;
             var all = root.GetComponentsInChildren<OptionEntry>(true);
             var boolTemplate = PickTemplate<OptionEntryBool>(all);
@@ -88,6 +89,8 @@ namespace ShipbreakerVR
             Plugin.Log.LogInfo($"Options '{Path(screen.transform)}': {entries.Length} rows, templates from '{root.name}': toggle {Describe(boolTemplate)}, slider {Describe(sliderTemplate)}, list {Describe(listTemplate)}");
 
             var parent = entries.Last().transform.parent;
+            var addedHeight = 0f;
+            var added = 0;
             foreach (var row in CreateRows())
             {
                 OptionEntry template = row switch
@@ -104,10 +107,37 @@ namespace ShipbreakerVR
                 template.gameObject.SetActive(wasActive);
                 clone.name = "ShipbreakerVR " + row.Label;
                 var entry = clone.GetComponent<OptionEntry>();
+                // Only the list's first row resets the scroll position when selected.
+                Traverse.Create(entry).Field("m_IsTopItem").SetValue(false);
                 Rows[entry] = row;
                 SetText(Traverse.Create(entry).Field("m_OptionNameText").GetValue<TextMeshProUGUI>(), row.Label);
                 clone.SetActive(true);
+                addedHeight += ((RectTransform)template.transform).rect.height;
+                added++;
             }
+            GrowContent(parent as RectTransform, addedHeight, added);
+            if (added > 0) parent.gameObject.AddComponent<VrOptionsNavigation>();
+        }
+
+        public static bool IsOurs(OptionEntry entry) => entry != null && Rows.ContainsKey(entry);
+
+        // The scroll content has a fixed height in the game's prefab, so the extra rows would hang outside the
+        // viewport, invisible and not clickable. Grow it by the height of the added rows.
+        private static void GrowContent(RectTransform content, float rowsHeight, int rowCount)
+        {
+            if (content == null || rowsHeight <= 0f) return;
+            if (content.GetComponent<ContentSizeFitter>() != null)
+            {
+                Plugin.Log.LogInfo($"Options content '{content.name}' sizes itself, height {content.rect.height:0}");
+                return;
+            }
+            var layout = content.GetComponent<VerticalLayoutGroup>();
+            var extra = rowsHeight + (layout != null ? layout.spacing * rowCount : 0f);
+            var before = content.rect.height;
+            // With the usual top pivot the content grows downwards; the position keeps the top edge in place.
+            content.sizeDelta += new Vector2(0f, extra);
+            LayoutRebuilder.ForceRebuildLayoutImmediate(content);
+            Plugin.Log.LogInfo($"Options content '{content.name}' grown from {before:0} to {content.rect.height:0} (pivot {content.pivot}, layout {(layout != null ? "vertical" : "none")})");
         }
 
         // A row usable in-game (not title-screen only, no restart required).
@@ -154,6 +184,13 @@ namespace ShipbreakerVR
             return true;
         }
 
+        // Shows a value that was changed from outside the menu (e.g. clamped) in all rows bound to it.
+        public static void Refresh(ConfigEntry<float> config)
+        {
+            foreach (var pair in Rows)
+                if (pair.Key != null && pair.Value is SliderRow s && s.Entry == config) TryRefresh(pair.Key);
+        }
+
         public static bool TryToggle(OptionEntry entry)
         {
             if (!Rows.TryGetValue(entry, out var row) || !(row is BoolRow b)) return false;
@@ -188,7 +225,7 @@ namespace ShipbreakerVR
     {
         private static void Postfix(OptionsScreenController __instance)
         {
-            if (__instance is GameOptionsScreenController) VrOptions.Inject(__instance);
+            if (__instance is VideoOptionsScreenController) VrOptions.Inject(__instance);
         }
     }
 
