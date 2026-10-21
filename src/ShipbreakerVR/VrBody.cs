@@ -59,6 +59,8 @@ namespace ShipbreakerVR
             // Head expressed as a body rotation; the mouse rotation acts around the body's axes.
             var headAsBody = head * Quaternion.Inverse(cameraOffset);
             var playspace = vr.Playspace * headAsBody * mouse * Quaternion.Inverse(headAsBody);
+            // Roll and turns from the motion controllers act in world space.
+            playspace = VrControls.TakeTurn() * playspace;
 
             // In VR, "Reorient" levels the playspace instead of the body.
             if (LynxControls.Instance != null && LynxControls.Instance.GetInputIsPressed(GameplayActions.GameplayActionSet.Reorient))
