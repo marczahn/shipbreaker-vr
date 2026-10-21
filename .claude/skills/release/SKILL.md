@@ -34,5 +34,6 @@ The release is one ZIP laid out like the game folder; users extract it next to `
    `git log` since the previous tag. Commit and push with any script and license changes.
 6. Deliver the ZIP and the notes to the user (check the copy's checksum if it goes through a network folder).
 7. Publishing: a GitHub release needs the change on `main` (merge the PR only with the user's go) and a tag
-   `v<version>` on it. If you cannot create releases or push tags, the user creates the release on GitHub with a new
+   `alpha-v<version>` on it; the release title gets the same `alpha-` prefix (the project is alpha, older tags
+   `v0.6.1`/`v0.7.0` predate this). If you cannot create releases or push tags, the user creates the release on GitHub with a new
    tag on `main`, the release notes as body and the ZIP as asset.

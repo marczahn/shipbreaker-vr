@@ -1,7 +1,10 @@
 # ShipbreakerVR
 
 A VR mod for **Hardspace: Shipbreaker** (Unity 2020.3, HDRP), built on BepInEx 5 and OpenXR.
-Tested with Meta Quest via Virtual Desktop. Early test build.
+Tested with Meta Quest via Virtual Desktop.
+
+> **Alpha:** everything here is still alpha and far from ready for regular use. Features are added step by step.
+> Releases are tagged with an `alpha-` prefix (e.g. `alpha-v0.8.0`).
 
 > Unofficial fan project, use at your own risk. See the [disclaimer](DISCLAIMER.md) (liability, VR health notes).
 
@@ -15,6 +18,7 @@ Tested with Meta Quest via Virtual Desktop. Early test build.
 Notes on how the game works and why the mod does what it does: [docs/NOTES.md](docs/NOTES.md).
 
 ## Usage
+- VR starts with the game (config `VrBeimStart`), so intro and loading screens already show in the headset
 - **F3** toggles VR, **F4** recenters the view
 - Settings: in-game options or `BepInEx\config\de.marczahn.shipbreakervr.cfg`
 

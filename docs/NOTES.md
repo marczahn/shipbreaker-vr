@@ -42,7 +42,7 @@ Idea for controllers: an aiming camera on the hand that receives these calls.
   `VrCanvases` re-parents them to the UI camera while VR runs.
 - `VrUi` renders the UI camera into its own RenderTexture once per frame and draws it per eye on a quad
   (`UI/Default`, ZTest Always, eye matrices via reflection from `HDCamera.xr`). In gameplay the quad is a visor in
-  front of the head; elsewhere it is a fixed canvas in the playspace (F4 re-places it).
+  front of the head; elsewhere it is a fixed canvas in the playspace (F4 re-places it along the gaze and, in menus, turns the playspace to the gaze).
 - The game switches its custom pass volumes off outside gameplay (e.g. pause), so the mod uses its own
   `CustomPassVolume` (AfterPostProcess) and only disables the game's UI passes for the VR camera.
 - The main menu has no `LynxCameraController` and no UI camera: the VR camera attaches to the active menu camera and
@@ -53,6 +53,30 @@ Idea for controllers: an aiming camera on the hand that receives these calls.
 ## Helmet
 `HelmetController.m_HelmetContainer` (under `Main Camera/Helmet_Rig`) follows the VR head, keeping its offset to the
 game camera. It can also be hidden.
+
+## Intro and loading screens
+The VR rig lives in `DontDestroyOnLoad` and outlives scene changes. When the game camera is destroyed (scene teardown)
+or `SceneLoader.LoadScreenVisible` is set, the VR camera culls everything and clears to black, so only the UI canvas
+shows (menu placement). The next camera (`LynxCameraController.Start` or the highest enabled camera) takes over the
+existing rig. `VrCanvases` restores and re-attaches the canvases when the UI camera changes. VR starts on the first
+frame (`[Rendering] VrBeimStart`), so the launch intro video (`LynxVideoPlayer`, a RawImage on a canvas) is visible too.
+
+The game's own custom post-processes (`DigitalDistortion` scanlines/CRT at shift start, RetroLookPro glitches) are
+not XR-aware and fill the view with grey. `CustomPostProcessPatch` blits source to destination instead for the VR camera.
+
+Level loads use `PRF_UI_LoadScreen` (core_assets_all, under `master_lazy_load/SceneLoader`): `LoadScreenCamera`
+(depth 10, culling mask UI only, grey clear color, volume mask UI only) with the volume "Loadscreen Post" (CRT
+aperture, VHS scanlines, vignette, bleed, bloom, film grain) and `LoadScreenCanvas` (Screen Space Camera). HDRP renders
+every active game camera without a target texture into the headset (`XRSystem.SetupFrame` checks only that and
+`xrRendering`), so this camera drew its grey background and non-XR scanlines over the VR image until the load
+screen closed. While VR runs, `VrCamera` switches off UI-only cameras (their canvases are on the UI canvas anyway) and
+`FindMenuCamera` never picks them. Our UI pass volume sits on layer 29 (unused by the game), which the VR camera
+always adds to its volume mask; while the world is hidden the mask holds only that layer.
+
+At 1.25x per eye (RTX 4070 Ti, 12 GB, 2688x2880 native) the level start ran out of video memory
+(`Failed to create RenderTexture ... 0x8007000e` right after "Initializing Session 1", then a native crash). While the
+world is hidden the eye resolution drops to 1.0x (native, still sharp; 0.5x made the load screen blurry) and the
+shared HDRP targets shrink; afterwards `ApplyQuality` raises it again through the memory probe.
 
 ## Settings menu
 The VR rows are clones of real option rows (bool, slider, list) appended to the Video tab. The game's logic for

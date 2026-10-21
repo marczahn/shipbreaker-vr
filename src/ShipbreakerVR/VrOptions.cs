@@ -73,7 +73,6 @@ namespace ShipbreakerVR
                 new SliderRow { Label = "VR: Visor distance (m)", Entry = Plugin.HudDistance, Min = 0.5f, Max = 3f, Format = "0.0" },
                 new SliderRow { Label = "VR: Menu distance (m)", Entry = Plugin.MenuDistance, Min = 1f, Max = 4f, Format = "0.0" },
                 new SliderRow { Label = "VR: Menu width (m)", Entry = Plugin.MenuWidth, Min = 1f, Max = 4f, Format = "0.0" },
-                new BoolRow { Label = "VR: Tint UI surface", Entry = Plugin.ShowUiFrame },
             };
         }
 

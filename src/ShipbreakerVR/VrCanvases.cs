@@ -19,9 +19,17 @@ namespace ShipbreakerVR
         private readonly Dictionary<Canvas, Original> converted = new Dictionary<Canvas, Original>();
         private float nextScan;
         private bool logged;
+        private Camera convertedFor;
 
         public void Update(Camera uiCamera)
         {
+            // New UI camera (scene change, loading screen): the canvases still point to the old, possibly destroyed one.
+            if (uiCamera != convertedFor)
+            {
+                Restore();
+                convertedFor = uiCamera;
+                nextScan = 0f;
+            }
             if (Time.unscaledTime < nextScan) return;
             nextScan = Time.unscaledTime + 0.5f;
 
