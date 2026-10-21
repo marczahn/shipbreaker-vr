@@ -60,6 +60,14 @@ those clones is intercepted via Harmony and redirected to the BepInEx config. Te
 the options screen. The Gameplay tab was tried first, but its list does not scroll past its own rows, so the VR rows
 hung invisible below it. The scroll content is grown by the added rows' height in case it has no ContentSizeFitter.
 
+Keyboard/gamepad navigation (decompiled `UIInControlBridge`): Unity's navigation events are off; the selected row's
+bridge reads the arrow keys from its serialized action set (FrontEnd or Paused). `LynxControls` loads only the set of
+the current game state, so a bridge with the wrong set gets no input at all. With explicit navigation the bridge moves
+only to an active, interactable target and never falls back to automatic search. Title-screen-only rows are
+non-interactable in-game. `VrOptionsNavigation` therefore links only interactable rows (the last usable game row
+leads down into the VR rows, the first VR row leads back up), recomputes that every 0.25 s while the list is visible,
+gives the VR rows' bridges the action set of the game's rows, and logs the list and every selection change.
+
 ## World scale
 Config `Bild/Weltmassstab` (also in the options menu) scales the VR rig. Unity derives the eye positions from the
 camera's world transform, so the rig scale also scales eye separation and tracked head movement: above 1 distant
