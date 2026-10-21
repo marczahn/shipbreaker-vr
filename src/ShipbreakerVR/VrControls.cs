@@ -26,6 +26,8 @@ namespace ShipbreakerVR
 
         private static InputDevice left;
         private static bool loggedDevice;
+        private static float nextDeviceLog;
+        private static int deviceLogs;
         private static int updatedFrame = -1;
 
         // Desired thrust in world space, length 0..1, and the transform the game thrusts along.
@@ -95,7 +97,18 @@ namespace ShipbreakerVR
         private static bool GetLeft()
         {
             if (!left.isValid) left = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
-            if (!left.isValid) return false;
+            if (!left.isValid)
+            {
+                if (Time.unscaledTime >= nextDeviceLog && deviceLogs < 5)
+                {
+                    nextDeviceLog = Time.unscaledTime + 10f;
+                    deviceLogs++;
+                    var devices = new List<InputDevice>();
+                    InputDevices.GetDevices(devices);
+                    Plugin.Log.LogInfo($"No left controller yet. XR input devices: {string.Join(", ", devices.ConvertAll(d => $"'{d.name}' ({d.characteristics})"))}");
+                }
+                return false;
+            }
             if (!loggedDevice)
             {
                 loggedDevice = true;

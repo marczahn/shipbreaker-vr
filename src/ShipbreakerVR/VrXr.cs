@@ -1,9 +1,13 @@
 using System;
 using System.IO;
+using System.Linq;
 using BepInEx;
+using HarmonyLib;
 using UnityEngine;
 using UnityEngine.XR.Management;
 using UnityEngine.XR.OpenXR;
+using UnityEngine.XR.OpenXR.Features;
+using UnityEngine.XR.OpenXR.Features.Interactions;
 
 namespace ShipbreakerVR
 {
@@ -58,7 +62,27 @@ namespace ShipbreakerVR
             var openXr = OpenXRSettings.Instance;
             if (openXr != null && Plugin.MultiPass.Value) openXr.renderMode = OpenXRSettings.RenderMode.MultiPass;
             Plugin.Log.LogInfo($"XR settings loaded, OpenXR render mode: {openXr?.renderMode}");
+            if (openXr != null) EnableControllerProfile(openXr);
             settingsLoaded = true;
+        }
+
+        // The OpenXR features in the AssetBundle don't survive loading (the game can't bind their scripts), so
+        // OpenXRSettings.Instance is an empty fallback without interaction profiles and OpenXR reports no controllers.
+        // Adding the Oculus Touch profile before the loader starts makes OpenXR create the controller actions.
+        private static void EnableControllerProfile(OpenXRSettings settings)
+        {
+            var field = AccessTools.Field(typeof(OpenXRSettings), "features");
+            var features = (OpenXRFeature[])field.GetValue(settings) ?? new OpenXRFeature[0];
+            Plugin.Log.LogInfo($"OpenXR features from the settings: {features.Length} ({string.Join(", ", features.Where(f => f != null).Select(f => f.GetType().Name))})");
+            if (features.Any(f => f is OculusTouchControllerProfile)) return;
+
+            var profile = ScriptableObject.CreateInstance<OculusTouchControllerProfile>();
+            profile.name = "Oculus Touch Controller Profile";
+            AccessTools.Field(typeof(OpenXRFeature), "nameUi").SetValue(profile, "Oculus Touch Controller Profile");
+            AccessTools.Field(typeof(OpenXRFeature), "version").SetValue(profile, "0.0.1");
+            AccessTools.Field(typeof(OpenXRFeature), "m_enabled").SetValue(profile, true);
+            field.SetValue(settings, features.Concat(new OpenXRFeature[] { profile }).ToArray());
+            Plugin.Log.LogInfo("OpenXR: Oculus Touch controller profile added");
         }
     }
 }
