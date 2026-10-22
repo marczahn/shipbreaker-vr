@@ -13,8 +13,10 @@ namespace ShipbreakerVR
     // bumpers, pause = Menu). So both controllers together are presented to InControl as one more gamepad and the game
     // does the rest, including its gamepad button prompts. The mapping follows the buttons' places, as Marc asked:
     //   sticks = sticks, A/B/X/Y = A/B/X/Y, triggers = bumpers, grips = triggers, right stick pressed = R3.
-    //   Pressing the left stick is Menu (Start, the pause menu): the left menu button belongs to Virtual Desktop, and the
-    //   menus do not use L3. There is no View button (Back; B does the same in menus) and no D-pad.
+    //   Pressing the left stick is Menu (Start, the pause menu), but only in gameplay and on loading screens (where it
+    //   cycles the tips): the left menu button belongs to Virtual Desktop. In menus the game reads Start like Confirm on
+    //   the selected button, which set off things Marc never chose, so there the press sends nothing.
+    //   There is no View button (Back; B does the same in menus) and no D-pad.
     // In gameplay only the left stick press counts (it opens the pause menu); the rest belongs to controller flying.
     // The actions read only InControl's active device, and another device kept that role (see ActiveDevicePatch).
     internal class VrMenuInput : InControl.InputDevice
@@ -96,7 +98,7 @@ namespace ShipbreakerVR
             {
                 var state = GameSession.CurrentGameState;
                 var gameplay = state == GameSession.GameState.Gameplay;
-                var menu = Button(left, CommonUsages.primary2DAxisClick);
+                var menu = (gameplay || state == GameSession.GameState.LoadingInProgress) && Button(left, CommonUsages.primary2DAxisClick);
                 if (gameplay)
                 {
                     pressed[7] = menu;

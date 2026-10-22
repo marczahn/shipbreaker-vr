@@ -410,8 +410,10 @@ With that the menus started to respond, and Marc had a better idea than my one-h
 whole gamepad, each button where its counterpart sits. Sticks are sticks, A/B/X/Y are A/B/X/Y, the triggers are the
 shoulder buttons, the grips are the triggers. Only the View button has no home, but in menus B does the same. Start went
 to the left menu button first, until Marc pointed out that Virtual Desktop claims that button for itself; pressing the
-left stick took its place. In gameplay, Marc decided, only that press reaches the game, for the pause menu; the rest
-stays with flying. One trap
+left stick took its place. In menus that press then set off things nobody chose, such as starting the data collection:
+the game reads Start there like confirming the selected button. So it now counts only in gameplay, to open the pause
+menu, and on loading screens, where it cycles the tips. In gameplay, Marc decided, nothing else reaches the game; the
+rest stays with flying. One trap
 I saw coming: the press that opens the pause menu is still held in its first frame, and the pause menu would read it as
 "close". A press held across a change of menu now only counts once it was released.
 
