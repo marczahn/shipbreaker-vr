@@ -25,6 +25,8 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
   `BepInEx\config\de.marczahn.shipbreakervr.cfg`.
 
 ### Flying with the controllers
+![Controls overview](images/controls.svg)
+
 Switch it in the options row "Controller flying" in the VR tab. Hold the left trigger, then:
 - move the controller away from where it was when you pressed it to fly that way,
 - tilt it sideways to roll; the further, the faster.
