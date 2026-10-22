@@ -1,8 +1,10 @@
 using System.Collections.Generic;
 using System.Text;
+using HarmonyLib;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.HighDefinition;
+using UnityEngine.UI;
 
 namespace ShipbreakerVR
 {
@@ -13,6 +15,10 @@ namespace ShipbreakerVR
     // 50 pixels. That is roughly 30 times the work per eye and made the Hab stutter while the bay ran smoothly. A
     // global volume on our pass layer (only the VR camera has it in its volume mask) puts the quality back to Low;
     // intensity and radius stay as each scene sets them.
+    //
+    // The Hab's space truck viewer (SpaceTruck3DHABController) renders its own camera into a texture every frame, a
+    // third HDRP render next to the two eyes, even though only the truck screen at the terminal shows that image. In
+    // VR it renders only while the image is on screen.
     internal static class VrPerformance
     {
         public enum Occlusion { Niedrig, Aus, Spiel }
@@ -28,6 +34,17 @@ namespace ShipbreakerVR
         private static Camera labelCamera;
         private static Occlusion labelOcclusion;
         private static float labelScale;
+
+        // Main thread time from Update to the end of rendering, and what Unity's frame timing reports if enabled.
+        private static double mainSum, cpuSum, gpuSum;
+        private static int mainCount, timingCount;
+        private static float updateStart = -1f;
+        private static readonly FrameTiming[] timings = new FrameTiming[1];
+
+        private static Camera truckCamera;
+        private static readonly List<RawImage> truckImages = new List<RawImage>();
+        private static float nextTruckSearch;
+        private static bool truckPaused;
 
         public static void Attach(VrCamera vr)
         {
@@ -45,11 +62,24 @@ namespace ShipbreakerVR
             ambientOcclusion.intensity.value = 0f;
             volume.sharedProfile = profile;
             go.SetActive(true);
+            RenderPipelineManager.endFrameRendering += (context, cameras) => EndOfRendering();
+        }
+
+        // Called from the VR camera's Update.
+        public static void FrameStart() => updateStart = Time.realtimeSinceStartup;
+
+        private static void EndOfRendering()
+        {
+            if (updateStart < 0f || statsLabel == null) return;
+            mainSum += Time.realtimeSinceStartup - updateStart;
+            mainCount++;
+            updateStart = -1f;
         }
 
         // Called every frame by the VR camera.
         public static void Update(bool running, Camera followed, bool inHab, bool worldHidden)
         {
+            PauseTruckCamera(running && inHab);
             if (ambientOcclusion != null)
             {
                 var mode = Plugin.AmbientOcclusion.Value;
@@ -87,6 +117,13 @@ namespace ShipbreakerVR
             // The switch itself (new camera, new render targets) is not representative.
             if (statsLabel == null || Time.unscaledTime < statsStart + StatsSettle) return;
             frames.Add(Time.unscaledDeltaTime);
+            FrameTimingManager.CaptureFrameTimings();
+            if (FrameTimingManager.GetLatestTimings(1, timings) > 0 && timings[0].gpuFrameTime > 0.0)
+            {
+                cpuSum += timings[0].cpuFrameTime;
+                gpuSum += timings[0].gpuFrameTime;
+                timingCount++;
+            }
             if (Time.unscaledTime >= statsStart + StatsSettle + StatsPeriod)
             {
                 LogStats();
@@ -107,9 +144,73 @@ namespace ShipbreakerVR
                 var text = new StringBuilder($"Frame time ({statsLabel}): average {average * 1000f:0.0} ms ({1f / average:0} fps), ");
                 text.Append($"slowest 5 % from {slow * 1000f:0.0} ms, slowest {frames[frames.Count - 1] * 1000f:0} ms, {frames.Count} frames");
                 if (refresh > 0f) text.Append($", headset {refresh:0} Hz ({1000f / refresh:0.0} ms)");
+                // Whether the main thread or the GPU sets the pace (the frame waits for the headset either way).
+                if (mainCount > 0) text.Append($", main thread {mainSum / mainCount * 1000.0:0.0} ms");
+                text.Append(timingCount > 0 ? $", CPU {cpuSum / timingCount:0.0} ms, GPU {gpuSum / timingCount:0.0} ms" : ", GPU time unavailable");
+                if (truckCamera != null) text.Append($", truck viewer {(truckPaused ? "paused" : "rendering")}");
                 Plugin.Log.LogInfo(text.ToString());
             }
             frames.Clear();
+            mainSum = cpuSum = gpuSum = 0.0;
+            mainCount = timingCount = 0;
+        }
+
+        private static void PauseTruckCamera(bool pause)
+        {
+            if (pause && truckCamera == null && Time.unscaledTime >= nextTruckSearch)
+            {
+                nextTruckSearch = Time.unscaledTime + 1f;
+                FindTruckCamera();
+            }
+            if (truckCamera == null)
+            {
+                truckPaused = false;
+                return;
+            }
+            var paused = pause && !ShowsTruck();
+            if (paused == truckPaused) return;
+            truckPaused = paused;
+            truckCamera.enabled = !paused;
+            Plugin.Log.LogInfo($"Space truck viewer camera {(paused ? "paused, its image is not on screen" : "rendering")}");
+        }
+
+        private static void FindTruckCamera()
+        {
+            // The class is internal to the game.
+            var type = AccessTools.TypeByName("BBI.Unity.Game.SpaceTruck3DHABController");
+            var controller = type != null ? Object.FindObjectOfType(type) : null;
+            var camera = controller != null ? Traverse.Create(controller).Field<Camera>("m_Camera").Value : null;
+            if (camera == null || camera.targetTexture == null) return;
+            truckImages.Clear();
+            foreach (var image in Resources.FindObjectsOfTypeAll<RawImage>())
+                if (image.gameObject.scene.IsValid() && image.texture == camera.targetTexture) truckImages.Add(image);
+            // Without the image that shows it, it stays as the game has it.
+            if (truckImages.Count == 0) return;
+            truckCamera = camera;
+            truckPaused = false;
+            Plugin.Log.LogInfo($"Space truck viewer camera '{camera.name}' found, shown by {truckImages.Count} image(s)");
+        }
+
+        // Whether one of the images is drawn: active, on an enabled canvas, not faded out by a canvas group.
+        private static bool ShowsTruck()
+        {
+            foreach (var image in truckImages)
+            {
+                if (image == null || !image.isActiveAndEnabled) continue;
+                var shown = true;
+                var ignoreGroups = false;
+                for (var t = image.transform; t != null && shown; t = t.parent)
+                {
+                    var canvas = t.GetComponent<Canvas>();
+                    if (canvas != null && !canvas.enabled) shown = false;
+                    var group = ignoreGroups ? null : t.GetComponent<CanvasGroup>();
+                    if (group == null || !group.enabled) continue;
+                    if (group.alpha <= 0f) shown = false;
+                    if (group.ignoreParentGroups) ignoreGroups = true;
+                }
+                if (shown) return true;
+            }
+            return false;
         }
 
         // Every other camera that renders each frame costs GPU time too, also when its image only ends up on a screen

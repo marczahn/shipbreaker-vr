@@ -26,6 +26,7 @@ namespace ShipbreakerVR
         internal static ConfigEntry<float> MenuDistance;
         internal static ConfigEntry<float> MenuWidth;
         internal static ConfigEntry<bool> FlipUi;
+        internal static ConfigEntry<bool> MonitorLook;
         internal static ConfigEntry<VrHelmet.Mode> Helmet;
         internal static ConfigEntry<VrCamera.AntiAliasing> AntiAliasing;
         internal static ConfigEntry<float> ResolutionScale;
@@ -58,6 +59,8 @@ namespace ShipbreakerVR
             MenuDistance = Config.Bind("Anzeige", "MenueAbstand", 2.0f, "Distance of the menu canvas in meters.");
             MenuWidth = Config.Bind("Anzeige", "MenueBreite", 2.6f, "Width of the menu canvas in meters.");
             FlipUi = Config.Bind("Anzeige", "UiSpiegeln", false, "Flip the UI vertically in case it is upside down.");
+            MonitorLook = Config.Bind("Anzeige", "MonitorEffekt", true,
+                "Screen look for the menus on the station's monitors: a little dimmer, fine scan lines, darker edges, a faint reflection on the glass and light on the frame. F7 switches it on and off.");
             Helmet = Config.Bind("Anzeige", "Helm", VrHelmet.Mode.Kopf,
                 "Kopf: the helmet follows the VR head. Aus: hide the helmet model. Spiel: the helmet stays on the body.");
             AntiAliasing = Config.Bind("Bild", "Kantenglaettung", VrCamera.AntiAliasing.SMAA,

@@ -206,6 +206,7 @@ namespace ShipbreakerVR
 
         private void Update()
         {
+            VrPerformance.FrameStart();
             if (VrXr.IsRunning && Input.GetKeyDown(KeyCode.F4)) Recenter(true);
             VrDiagnostics.Update(this);
         }
@@ -507,8 +508,8 @@ namespace ShipbreakerVR
             var position = cam.position;
             if (FollowsHab && VrHab.Monitor != null) position = VrHab.MonitorViewpoint(VrHab.Monitor, position);
             // The Hab camera swings between bed, kitchen and terminal; the playspace turns along, but only around the
-            // vertical axis: its pitch would tilt the room. Looking up or down is up to the head.
-            if (FollowsHab) Playspace = Yaw(cam.rotation) * recenterRotation;
+            // vertical axis: its pitch would tilt the room. Looking up or down is up to the head. Except lying in bed.
+            if (FollowsHab) Playspace = HabHeading(cam.rotation) * recenterRotation;
             else if (!BodyFollowsHead) Playspace = cam.rotation * recenterRotation;
             // Cinemachine sets the lens every frame: in the Hab the rooms reach 500 m, the view out of the window
             // 5000 m (ship and dock). Copied only once, the ship stayed cut off at 500 m.
@@ -517,6 +518,17 @@ namespace ShipbreakerVR
             rig.localScale = new Vector3(scale, scale, scale);
             rig.rotation = Playspace;
             rig.position = position - Playspace * (recenterPosition * scale);
+        }
+
+        // Lying in bed (waking up, the monitor above the bed) the Hab camera looks up at the ceiling. There the playspace
+        // tilts along, as if lying on one's back: looking straight ahead shows what the flat game shows, the monitor
+        // with its menu. The tilt changes only during the fade between two spots. Elsewhere only the heading.
+        private const float LyingPitch = 30f;
+
+        private static Quaternion HabHeading(Quaternion rotation)
+        {
+            var forward = rotation * Vector3.forward;
+            return forward.y > Mathf.Sin(LyingPitch * Mathf.Deg2Rad) ? Quaternion.LookRotation(forward, Vector3.up) : Yaw(rotation);
         }
 
         // Heading of a rotation (turn around the world's up axis), from where it looks or, looking straight down or up, where its top points.

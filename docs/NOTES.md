@@ -196,6 +196,18 @@ dark monitor; a postfix on `Navigate` resets it only for a screen whose monitor 
 is on the menu canvas in front of the player and the dark monitor would otherwise stay in the room as a black
 rectangle.
 
+On a monitor the canvas gets a screen look (`[Anzeige] MonitorEffekt`, F7 at a monitor switches it), since our pass
+runs after post-processing and the flat UI looked pasted onto the room: the UI texture slightly dimmer and cooler,
+128 fine scan lines and edges darkened over the outer 10 % (one black texture), a faint sheen from the upper left
+(white), and light around the screen over 12 % of its height that the game's bloom would give a lit screen. All of it
+is drawn with `UI/Default` and textures made at runtime for the canvas's aspect; the plugin has no shaders of its own
+(an AssetBundle with shaders would need the Unity editor).
+
+Lying in bed (`Entry` after waking up and `WakeUpMonitor`) the Hab camera looks up at the ceiling (57 and 63 degrees).
+With only its heading the player looked straight ahead at the wall while the monitor with the morning menu was
+overhead. For a Hab camera looking up more than 30 degrees the playspace now takes its pitch too, as if lying on one's
+back; the change happens with the cut, inside the fade.
+
 After loading into the Hab (and when waking up), a black area about the size of the menu canvas hung in the room
 in VR, as if a piece of the world were missing, and was gone a few seconds later. Most likely it was the game's
 full-screen fades to black (`FadeScreen`, `HAB_General_Fade`, `WakeUpFade`, `QuitFromHabFade`; the dump 6 s after
@@ -248,6 +260,15 @@ the old spot while the view fades to black (0.15 s), jumps while black (0.05 s) 
 The game's own follow-up switch (`CameraToSwapToAfterBlend`, about 0.1 s after the cut) lands inside the black.
 `Hab3DController` only waits for `!IsBlending`, so cuts don't change its logic. The black is drawn in our pass after
 the UI, as a quad with identity matrices.
+
+Close to a monitor (0.7 m) the synthesized frames show: nodding the head, the screen and its frame seem to move back
+and forth slightly (Player.log of 22.10.: the Hab at 22.4 ms per frame, headset at 45 Hz). The space truck viewer
+(`SpaceTruck3DHABController`, camera `Root/CameraRig/Main Camera`) renders into a 960x540 texture every frame, an extra
+HDRP camera with its own culling, shadows and lighting, while only the `TruckImage` of the truck screen in the
+`Hab ScreenStack` shows it. In VR in the Hab `VrPerformance` now switches that camera off while none of the raw images
+showing its texture is drawn (inactive, on a disabled canvas or under a canvas group at alpha 0). The frame time line
+also gives the main thread's time from `Update` to the end of rendering and, where Unity's frame timing is enabled,
+CPU and GPU time, to tell whether the processor or the graphics card holds the Hab at 45 fps.
 
 ## Diagnostics
 F8 (`VrDiagnostics`) is for things only seen in the headset. It writes into the log: game state, head pose, the camera
