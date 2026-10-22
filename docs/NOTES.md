@@ -173,6 +173,16 @@ camera copied it only when attaching, so the window view was cut off at 500 m: t
 near the edge of the view (the far plane is a distance along the view direction). The far clip plane is now copied
 every frame.
 
+Three views are "navigable screens": the monitor above the bed (`Entry` -> `WakeUpMonitor`, the good morning screen
+after waking up), the terminal (`Comms` -> `HabScreen`) and the workbench (`Workstation` -> `Workstation_Screen`). Their
+virtual cameras sit about 0.35 m in front of a `PRF_Computer_Terminal_Hab`, and `Hab3DLocationNavigation.Navigate`
+sets the trigger `FadeOut` on the monitor's `LYNX_Screensaver` animator: the screen in the room goes dark and its
+content comes as the `Hab ScreenStack` overlay over the whole picture. In VR that overlay is on the UI canvas in front
+of the player, so the dark monitor stayed visible in the room. After waking up the camera lies in the bed looking up
+at its monitor, which then hung as a black rectangle above the player (gone in the flat game, where the overlay covers
+it). A postfix on `Navigate` resets `FadeOut` while the UI is in VR, so the monitor keeps its screensaver. A screen
+opened in the flat game before switching VR on stays dark until it is left.
+
 ## Performance in the Hab
 The Hab stuttered in VR while the bay ran smoothly at the same settings (Ultra, 1.25x, 3360x3600 per eye). What the
 scene data shows (`scenes-gameplay_scenes_all`, Hab scene CAB-11cf266b; profile in `vfx_assets_all`):

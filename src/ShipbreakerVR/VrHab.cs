@@ -143,6 +143,21 @@ namespace ShipbreakerVR
         }
     }
 
+    // Going to one of the Hab's screens (the monitor above the bed after waking up, the terminal, the workbench), the
+    // game fades out the monitor in the room: what it shows comes as an overlay over the whole picture instead. In VR that
+    // overlay is on our canvas in front of the player, and the switched-off monitor stayed in the room as a black
+    // rectangle, above the player when lying in bed. So while the UI is in VR the monitor keeps its screensaver.
+    [HarmonyPatch(typeof(Hab3DLocationNavigation), nameof(Hab3DLocationNavigation.Navigate))]
+    internal static class HabScreenNavigatePatch
+    {
+        private static void Postfix(NavigationOption navOpt)
+        {
+            if (navOpt == null || !navOpt.GoesToNavigableScreen || navOpt.ScreenAnimator == null) return;
+            if (VrUi.Instance == null || !VrUi.Instance.Active) return;
+            navOpt.ScreenAnimator.ResetTrigger("FadeOut");
+        }
+    }
+
     [HarmonyPatch(typeof(LynxCameraController), "OnGameStateChangedEvent")]
     internal static class LynxCameraControllerGameStatePatch
     {
