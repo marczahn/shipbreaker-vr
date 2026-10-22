@@ -39,7 +39,8 @@ Idea for controllers: an aiming camera on the hand that receives these calls.
   `DrawUICameraCustomPass`) as a full-screen overlay. `CustomPass.Execute` is overloaded, so patches must name the
   `CustomPassContext` parameter type.
 - Many menus and hints are Screen Space Overlay canvases; in VR Unity draws them into the left eye only.
-  `VrCanvases` re-parents them to the UI camera while VR runs.
+  `VrCanvases` re-parents them to the UI camera while VR runs, also Screen Space Camera canvases on other cameras
+  (the VR camera would otherwise see them in the world, in front of a camera it doesn't render with).
 - `VrUi` renders the UI camera into its own RenderTexture once per frame and draws it per eye on a quad
   (`UI/Default`, ZTest Always, eye matrices via reflection from `HDCamera.xr`). In gameplay the quad is a visor in
   front of the head; elsewhere it is a fixed canvas in the playspace (F4 re-places it along the gaze and, in menus, turns the playspace to the gaze).
@@ -178,10 +179,17 @@ after waking up), the terminal (`Comms` -> `HabScreen`) and the workbench (`Work
 virtual cameras sit about 0.35 m in front of a `PRF_Computer_Terminal_Hab`, and `Hab3DLocationNavigation.Navigate`
 sets the trigger `FadeOut` on the monitor's `LYNX_Screensaver` animator: the screen in the room goes dark and its
 content comes as the `Hab ScreenStack` overlay over the whole picture. In VR that overlay is on the UI canvas in front
-of the player, so the dark monitor stayed visible in the room. After waking up the camera lies in the bed looking up
-at its monitor, which then hung as a black rectangle above the player (gone in the flat game, where the overlay covers
-it). A postfix on `Navigate` resets `FadeOut` while the UI is in VR, so the monitor keeps its screensaver. A screen
-opened in the flat game before switching VR on stays dark until it is left.
+of the player, so the dark monitor stayed visible in the room, above the player after waking up (the camera lies in
+the bed looking up at it). A postfix on `Navigate` resets `FadeOut` while the UI is in VR, so the monitor keeps its
+screensaver. A screen opened in the flat game before switching VR on stays dark until it is left.
+
+Open: after waking up, a black area about the size of the menu canvas hung above the player in VR; it was gone after
+switching VR off and on again (the monitor above was a first guess and is not it). Toggling VR restores and re-attaches
+all canvases, so one suspect is a fade canvas of the Hab (`WakeUpFade`, `QuitFromHabFade`: Screen Space Camera, 0.25 m
+in front of `Unity_Camera`, black images) that ended up back on the Hab camera: the VR camera, which renders all layers
+in the Hab, then sees it in the room, filling the Hab camera's view up there. `VrCanvases` now checks the canvases it
+attached on every scan and attaches one again if it left the UI camera (logged as a warning). F8 writes what is drawn
+around the player into the log, see Diagnostics.
 
 ## Performance in the Hab
 The Hab stuttered in VR while the bay ran smoothly at the same settings (Ultra, 1.25x, 3360x3600 per eye). What the
@@ -217,6 +225,14 @@ the old spot while the view fades to black (0.15 s), jumps while black (0.05 s) 
 The game's own follow-up switch (`CameraToSwapToAfterBlend`, about 0.1 s after the cut) lands inside the black.
 `Hab3DController` only waits for `!IsBlending`, so cuts don't change its logic. The black is drawn in our pass after
 the UI, as a quad with identity matrices.
+
+## Diagnostics
+F8 (`VrDiagnostics`) is for things only seen in the headset. It writes into the log: game state, head pose, the camera
+the rig follows, where the UI canvas hangs, every active root canvas (render mode, camera, layer, whether `VrCanvases`
+attached it, direction and distance from the head for the non-overlay ones, and its dark, large or specially shaded
+graphics), and the visible renderers up to 3 m above eye height. Directions are relative to the gaze: "ahead 10, up 60"
+is 10 degrees right of where the head points and 60 degrees above the horizon. It also saves the UI texture and the
+game window as PNG files to `BepInEx\ShipbreakerVR-F8`.
 
 ## Roadmap
 1. Inventory – done

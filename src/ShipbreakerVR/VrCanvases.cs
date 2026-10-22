@@ -17,6 +17,7 @@ namespace ShipbreakerVR
         }
 
         private readonly Dictionary<Canvas, Original> converted = new Dictionary<Canvas, Original>();
+        private readonly List<Canvas> reverted = new List<Canvas>();
         private float nextScan;
         private bool logged;
         private Camera convertedFor;
@@ -43,6 +44,25 @@ namespace ShipbreakerVR
                     nearest = Mathf.Min(nearest, canvas.planeDistance);
             var distance = nearest < float.MaxValue ? nearest * 0.9f : 1f;
             distance = Mathf.Clamp(distance, Mathf.Max(uiCamera.nearClipPlane * 1.5f, 0.3f), uiCamera.farClipPlane * 0.5f);
+            // A canvas the game put back on its own camera would hang in the world for the VR camera to see (e.g. a
+            // fade 25 cm in front of the Hab camera). Attach it again, and give it back what the game set last.
+            reverted.Clear();
+            foreach (var entry in converted)
+                if (entry.Key != null && entry.Key.isRootCanvas && (entry.Key.renderMode != RenderMode.ScreenSpaceCamera || entry.Key.worldCamera != uiCamera))
+                    reverted.Add(entry.Key);
+            foreach (var canvas in reverted)
+            {
+                Plugin.Log.LogWarning($"Canvas '{canvas.name}' left the UI camera ({canvas.renderMode}, camera {(canvas.worldCamera != null ? canvas.worldCamera.name : "-")}, layer {canvas.gameObject.layer}), attached again");
+                var original = converted[canvas];
+                original.Mode = canvas.renderMode;
+                original.Camera = canvas.worldCamera;
+                original.PlaneDistance = canvas.planeDistance;
+                converted[canvas] = original;
+                SetLayer(canvas.transform, layer);
+                canvas.renderMode = RenderMode.ScreenSpaceCamera;
+                canvas.worldCamera = uiCamera;
+                canvas.planeDistance = distance;
+            }
             var added = 0;
             foreach (var canvas in canvases)
             {
@@ -64,6 +84,8 @@ namespace ShipbreakerVR
                 Plugin.Log.LogInfo($"{converted.Count} overlay canvases on layer {layer}, distance {distance:0.000}");
             }
         }
+
+        public bool IsConverted(Canvas canvas) => converted.ContainsKey(canvas);
 
         public void Restore()
         {

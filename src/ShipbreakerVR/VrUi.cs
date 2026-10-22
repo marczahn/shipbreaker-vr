@@ -83,6 +83,20 @@ namespace ShipbreakerVR
 
         public bool Active => VrXr.IsRunning && Plugin.UiInVr.Value && vr != null;
 
+        // For the F8 dump (VrDiagnostics).
+        public RenderTexture Texture => texture;
+
+        public bool IsConverted(Canvas canvas) => canvases.IsConverted(canvas);
+
+        public string Describe(Transform head)
+        {
+            if (!Active) return "UI canvas off";
+            Vector3 center = screenMatrix.GetColumn(3);
+            var width = ((Vector3)screenMatrix.GetColumn(0)).magnitude;
+            var height = ((Vector3)screenMatrix.GetColumn(1)).magnitude;
+            return $"UI canvas as {(menuMode ? "menu" : "visor")}, at {VrDiagnostics.Direction(head, center)} {Vector3.Distance(head.position, center):0.00} m, {width:0.00} x {height:0.00} m, UI camera '{(uiCamera != null ? uiCamera.name : "-")}' at {(uiCamera != null ? uiCamera.transform.position.ToString() : "-")}";
+        }
+
         // Place the menu canvas in front of the head again. toGaze (F4): straight in front of the eyes, also tilted up or down. Otherwise upright at eye height.
         public void Recenter(bool toGaze)
         {

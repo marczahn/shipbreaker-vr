@@ -205,6 +205,7 @@ namespace ShipbreakerVR
         private void Update()
         {
             if (VrXr.IsRunning && Input.GetKeyDown(KeyCode.F4)) Recenter(true);
+            if (Input.GetKeyDown(KeyCode.F8)) VrDiagnostics.Dump(this);
         }
 
         private void LateUpdate()
