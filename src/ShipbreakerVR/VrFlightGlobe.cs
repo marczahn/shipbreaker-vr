@@ -4,11 +4,11 @@ using UnityEngine.Rendering;
 
 namespace ShipbreakerVR
 {
-    // A small globe in the lower left of the visor that shows where the left controller is while flying (VrControls):
-    // three axes through its center, and a stylized controller that moves away from the center as the hand moves away
-    // from the reference pose and tilts as the hand tilts. The globe's surface is full thrust, the small inner globe the
-    // deadzone. The globe is aligned with the playspace, the frame the hand offset is measured in, so its axes are the
-    // directions the hand thrusts in. When the trigger is released the controller glides back to the center.
+    // A small globe at the bottom of the visor that shows where the left controller is while flying (VrControls):
+    // three axes through its center, and an upright block that moves away from the center as the hand moves away from
+    // the reference pose and tilts as the hand tilts. The globe's surface is full thrust; the line from the center to the
+    // block brightens with thrust. Kept plain and in one color to fit the game's HUD. The globe is aligned with the playspace, the frame the hand offset is measured in, so its axes are the
+    // directions the hand thrusts in. When the trigger is released the block glides back to the center.
     // Drawn in 3D for each eye after the visor (VrUi.Draw), from meshes built here, since the plugin brings no shaders.
     internal static class VrFlightGlobe
     {
@@ -17,22 +17,18 @@ namespace ShipbreakerVR
         private const float ReturnSpeed = 12f;
         private const float FadeSpeed = 6f;
 
-        private static readonly Color RingColor = new Color(0.6f, 0.85f, 1f, 0.3f);
-        private static readonly Color DeadzoneColor = new Color(0.6f, 0.85f, 1f, 0.45f);
-        private static readonly Color RightColor = new Color(1f, 0.4f, 0.35f, 0.9f);
-        private static readonly Color UpColor = new Color(0.45f, 1f, 0.45f, 0.9f);
-        private static readonly Color ForwardColor = new Color(0.4f, 0.65f, 1f, 0.9f);
-        private static readonly Color BodyColor = new Color(0.75f, 0.78f, 0.82f, 1f);
-        private static readonly Color AccentColor = new Color(0.35f, 0.85f, 1f, 1f);
-        private static readonly Color StickColor = new Color(1f, 1f, 1f, 1f);
-        private static readonly Color IdleTether = new Color(1f, 1f, 1f, 0.35f);
-        private static readonly Color FullTether = new Color(1f, 0.65f, 0.2f, 0.95f);
+        // One light, slightly blue tint like the game's HUD lines; only the brightness tells the parts apart.
+        private static readonly Color RingColor = new Color(0.8f, 0.92f, 1f, 0.18f);
+        private static readonly Color AxisColor = new Color(0.8f, 0.92f, 1f, 0.4f);
+        private static readonly Color BlockColor = new Color(0.85f, 0.95f, 1f, 0.8f);
+        private static readonly Color IdleTether = new Color(0.8f, 0.92f, 1f, 0.25f);
+        private static readonly Color FullTether = new Color(1f, 1f, 1f, 0.9f);
 
         private static Mesh globe;
-        private static Mesh controller;
+        private static Mesh block;
         private static Mesh tether;
         private static Material globeMaterial;
-        private static Material controllerMaterial;
+        private static Material blockMaterial;
         private static Material tetherMaterial;
         private static bool logged;
 
@@ -75,8 +71,8 @@ namespace ShipbreakerVR
                 cmd.DrawMesh(tether, frame * along, tetherMaterial, 0, 0);
             }
 
-            controllerMaterial.color = new Color(1f, 1f, 1f, alpha * (VrControls.Holding ? 1f : 0.55f));
-            cmd.DrawMesh(controller, frame * Matrix4x4.TRS(shownOffset, shownTurn, Vector3.one), controllerMaterial, 0, 0);
+            blockMaterial.color = new Color(1f, 1f, 1f, alpha * (VrControls.Holding ? 1f : 0.55f));
+            cmd.DrawMesh(block, frame * Matrix4x4.TRS(shownOffset, shownTurn, Vector3.one), blockMaterial, 0, 0);
 
             if (!logged)
             {
@@ -99,52 +95,37 @@ namespace ShipbreakerVR
                 shownOffset = Vector3.Lerp(shownOffset, Vector3.zero, ease);
                 shownTurn = Quaternion.Slerp(shownTurn, Quaternion.identity, ease);
             }
-            // BeimFliegen: only while the trigger is held, and until the controller is back in the center.
+            // BeimFliegen: only while the trigger is held, and until the block is back in the center.
             var visible = mode == Mode.Immer || VrControls.Holding || shownOffset.magnitude > 0.02f || Quaternion.Angle(shownTurn, Quaternion.identity) > 2f;
             alpha = Mathf.MoveTowards(alpha, visible ? 1f : 0f, FadeSpeed * dt);
         }
 
         private static void Create()
         {
-            var deadzone = VrControls.DeadzoneShare;
             var builder = new Builder();
-            builder.Ring(Vector3.right, Vector3.up, 1f, 0.008f, RingColor);
-            builder.Ring(Vector3.right, Vector3.forward, 1f, 0.008f, RingColor);
-            builder.Ring(Vector3.up, Vector3.forward, 1f, 0.008f, RingColor);
-            builder.Ring(Vector3.right, Vector3.up, deadzone, 0.006f, DeadzoneColor);
-            builder.Ring(Vector3.right, Vector3.forward, deadzone, 0.006f, DeadzoneColor);
-            builder.Ring(Vector3.up, Vector3.forward, deadzone, 0.006f, DeadzoneColor);
-            Axis(builder, Vector3.right, RightColor);
-            Axis(builder, Vector3.up, UpColor);
-            Axis(builder, Vector3.forward, ForwardColor);
+            builder.Ring(Vector3.right, Vector3.up, 1f, 0.005f, RingColor);
+            builder.Ring(Vector3.right, Vector3.forward, 1f, 0.005f, RingColor);
+            builder.Ring(Vector3.up, Vector3.forward, 1f, 0.005f, RingColor);
+            foreach (var axis in new[] { Vector3.right, Vector3.up, Vector3.forward })
+                builder.Tube(new[] { -axis, axis }, 0.007f, AxisColor);
             globe = builder.Mesh("Globe");
 
-            // Pointing forward (+z) with the thumbstick on top, like the controller held level; in globe radii.
+            // An upright block, so rolling the hand tilts it visibly sideways; in globe radii.
             builder = new Builder();
-            builder.Box(new Vector3(0f, 0f, -0.02f), new Vector3(0.13f, 0.11f, 0.34f), BodyColor);
-            builder.Box(new Vector3(0f, 0.01f, 0.18f), new Vector3(0.1f, 0.08f, 0.06f), AccentColor);
-            builder.Box(new Vector3(0f, 0.075f, -0.03f), new Vector3(0.05f, 0.04f, 0.05f), StickColor);
-            builder.Box(new Vector3(0f, -0.07f, 0.09f), new Vector3(0.05f, 0.04f, 0.06f), AccentColor);
-            controller = builder.Mesh("Controller");
+            builder.Box(Vector3.zero, new Vector3(0.14f, 0.4f, 0.07f), BlockColor);
+            block = builder.Mesh("Block");
 
             builder = new Builder();
-            builder.Tube(new[] { Vector3.zero, Vector3.forward }, 0.012f, Color.white);
+            builder.Tube(new[] { Vector3.zero, Vector3.forward }, 0.007f, Color.white);
             tether = builder.Mesh("Tether");
 
             globeMaterial = CreateMaterial();
-            controllerMaterial = CreateMaterial();
+            blockMaterial = CreateMaterial();
             tetherMaterial = CreateMaterial();
         }
 
-        // An axis through the globe, a little longer than it, with a small cube at its positive end.
-        private static void Axis(Builder builder, Vector3 direction, Color color)
-        {
-            builder.Tube(new[] { -1.1f * direction, 1.1f * direction }, 0.012f, color);
-            builder.Box(1.1f * direction, Vector3.one * 0.06f, color);
-        }
-
-        // Unlit with vertex colors, drawn over the world like the visor, but culling back faces so the controller's
-        // boxes look solid. Hidden/Internal-Colored offers that; UI/Default (no culling) is the fallback.
+        // Unlit with vertex colors, drawn over the world like the visor, but culling back faces so the
+        // block looks solid. Hidden/Internal-Colored offers that; UI/Default (no culling) is the fallback.
         private static Material CreateMaterial()
         {
             var shader = Shader.Find("Hidden/Internal-Colored");

@@ -296,9 +296,13 @@ Marc's idea was a little globe in the HUD with a tiny controller in the middle. 
 the tiny controller moves away from the center the same way; tilt your hand, and it tilts. Three axes run through the
 globe so you can tell where it is, and when you let go it glides back home.
 
-I made the globe's surface mean full thrust and put a small inner globe in it for the deadzone, so it doubles as a
-throttle gauge. A line from the center to the controller turns orange the harder you push. The globe turns with the
-playspace rather than with your head, because that is the frame the hand is measured in: turn your head, and the axes
-still point where the thrust goes. The plugin brings no shaders and no models, so the globe, the axes and the
-controller are thin tubes and boxes built from code.
+I made the globe's surface mean full thrust, so it doubles as a throttle gauge, and gave the first version everything:
+red, green and blue axes, a small inner globe for the deadzone, a tiny controller with a nose and a thumbstick, and a
+line to it that glowed orange under thrust. Marc found that it worked, but wanted it plainer so it would blend into the
+HUD, closer to the middle, and upright: a flat-lying controller makes rolling hard to see. The second version is plain: one pale HUD color, thin lines, no inner globe, and an upright block
+instead of the controller, which tilts sideways unmistakably. It moved to the bottom of the visor, in the middle, where
+the eyes reach it without a detour.
 
+The globe turns with the playspace rather than with your head, because that is the frame the hand is measured in: turn
+your head, and the axes still point where the thrust goes. The plugin brings no shaders and no models, so the globe, the
+axes and the block are thin tubes and boxes built from code.
