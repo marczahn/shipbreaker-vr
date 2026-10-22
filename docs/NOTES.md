@@ -174,23 +174,27 @@ camera copied it only when attaching, so the window view was cut off at 500 m: t
 near the edge of the view (the far plane is a distance along the view direction). The far clip plane is now copied
 every frame.
 
-Three views are "navigable screens": the monitor above the bed (`Entry` -> `WakeUpMonitor`, the good morning screen
-after waking up), the terminal (`Comms` -> `HabScreen`) and the workbench (`Workstation` -> `Workstation_Screen`). Their
-virtual cameras sit about 0.35 m in front of a `PRF_Computer_Terminal_Hab`, and `Hab3DLocationNavigation.Navigate`
-sets the trigger `FadeOut` on the monitor's `LYNX_Screensaver` animator: the screen in the room goes dark and its
-content comes as the `Hab ScreenStack` overlay over the whole picture. In VR that overlay is on the UI canvas in front
-of the player, so the dark monitor stayed visible in the room, above the player after waking up (the camera lies in
-the bed looking up at it). A postfix on `Navigate` resets `FadeOut` while the UI is in VR, so the monitor keeps its
-screensaver. A screen opened in the flat game before switching VR on stays dark until it is left.
+Three views are "navigable screens" on a monitor: the one above the bed (`Entry` -> `WakeUpMonitor`, the good morning
+screen after waking up), the terminal (`Comms` -> `HabScreen`) and the workbench (`Workstation` ->
+`Workstation_Screen`). Their virtual cameras sit 0.35 to 0.45 m in front of a `PRF_Computer_Terminal_Hab`, and
+`Hab3DLocationNavigation.Navigate` sets the trigger `FadeOut` on the monitor's `LYNX_Screensaver` animator: the screen
+in the room goes dark and its content comes as the `Hab ScreenStack` overlay over the whole picture. (`Exit` is a
+navigable screen too, without a monitor.)
 
-In the flat game the `Hab ScreenStack` fills the whole picture at a screen. In VR it is on the menu canvas (about 66
-degrees wide, 2.4 m away and drawn over everything), while the rig followed the virtual camera to 0.35 m in front of
-the monitor: the room showed around the canvas, and the eyes got the canvas at 2.4 m and the monitor at 0.35 m at
-once. Now `VrHab` collects the screens' virtual cameras (`CameraToGoTo` and `CameraToSwapToAfterBlend` of every
-`NavigationOption` with `GoesToNavigableScreen`, from `m_NavigationOptions` of each `Hab3DLocationNavigation` and on
-`Navigate`). While one of them is active the rig stays on the spot it had before (no fade going in or back out), and
-`VrUi` dims the room behind the canvas to 75 % black within 0.3 s, so the screen reads like a full screen in front of
-the player. If the Hab opens right at a screen, with no spot before it, the rig follows the camera as before.
+In VR that overlay was on the menu canvas (about 66 degrees wide, 2.4 m away and drawn over everything) while the rig
+followed the virtual camera to 0.35 m in front of the monitor: the room showed around the canvas, and the eyes got the
+canvas at 2.4 m and the monitor at 0.35 m at once. Now the canvas lies on the monitor. Each terminal prefab has a world
+space canvas for its "locked" screensaver (`LYNX_Screensaver_Locked/Canvas`, inactive, 0.56 x 0.31 m) that covers
+exactly its screen; `VrHab` maps the virtual cameras of every `NavigationOption` with a `ScreenAnimator`
+(`CameraToGoTo`, `CameraToSwapToAfterBlend`, from `m_NavigationOptions` and on `Navigate`) to that canvas. While one of
+them is active, `VrUi` draws the UI texture on the canvas's corners (as large as fits at the texture's aspect) and the
+rig puts the head 0.7 m in front of the screen along its normal (about 43 degrees wide), with the heading of the
+virtual camera. The monitor above the bed faces down onto the pillow; pulled back, the head would be in the mattress,
+so there the head stays where the game's camera is (0.44 m). The rig and the canvas change spot only once the view is
+black, like any other Hab move. The game's `FadeOut` of the monitor stays, as in the flat game the overlay is over the
+dark monitor; a postfix on `Navigate` resets it only for a screen whose monitor canvas was not found, where the overlay
+is on the menu canvas in front of the player and the dark monitor would otherwise stay in the room as a black
+rectangle.
 
 After loading into the Hab (and when waking up), a black area about the size of the menu canvas hung in the room
 in VR, as if a piece of the world were missing, and was gone a few seconds later. Most likely it was the game's

@@ -212,6 +212,16 @@ namespace ShipbreakerVR
                 return;
             }
 
+            // At one of the Hab's screens the canvas lies on the monitor, as large as fits on it.
+            var monitor = vr.FollowsHab ? VrHab.Monitor : null;
+            if (monitor != null)
+            {
+                VrHab.MonitorScreen(monitor, out var center, out var rotation, out var size);
+                var fit = Mathf.Min(size.x, size.y * aspect);
+                screenMatrix = Matrix4x4.TRS(center, rotation, new Vector3(fit, fit / aspect, 1f));
+                return;
+            }
+
             // Menu: place once in front of the head (without roll), then keep it fixed in the playspace.
             var rig = head.parent;
             if (!menuPlaced)
@@ -280,14 +290,12 @@ namespace ShipbreakerVR
 
             cmd.SetRenderTarget(context.cameraColorBuffer, 0, CubemapFace.Unknown, -1);
             cmd.SetViewport(new Rect(0, 0, context.hdCamera.actualWidth, context.hdCamera.actualHeight));
-            // The game's fades to black, kept off the menu canvas (VrCanvases), and the dimmed room at a Hab screen
-            // (VrHab): over the whole room, under the canvas, as in the flat game, where subtitles and prompts stay on
-            // top of them.
-            var under = Mathf.Max(gameFade, vr.FollowsHab ? VrHab.ScreenDim : 0f);
-            if (under > 0f)
+            // The game's fades to black, kept off the menu canvas (VrCanvases): over the whole room, under the canvas,
+            // as in the flat game, where subtitles and prompts stay on top of them.
+            if (gameFade > 0f)
             {
                 if (gameFadeMaterial == null) gameFadeMaterial = BlackMaterial();
-                gameFadeMaterial.color = new Color(0f, 0f, 0f, under);
+                gameFadeMaterial.color = new Color(0f, 0f, 0f, gameFade);
                 cmd.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
                 cmd.DrawMesh(quad, Matrix4x4.Scale(new Vector3(2f, 2f, 1f)), gameFadeMaterial, 0, 0);
             }

@@ -499,11 +499,13 @@ namespace ShipbreakerVR
         private void FollowGameCamera()
         {
             if (gameCamera == null || rig == null) return;
-            // Hab camera moves become fades in VR: until the view is black the rig stays on the old spot. At one of the
-            // Hab's screens it stays where it was (VrHab.AtScreen).
+            // Hab camera moves become fades in VR: until the view is black the rig stays on the old spot.
             VrHab.UpdateTransition();
-            if (FollowsHab && (VrHab.Holding || VrHab.AtScreen)) return;
+            if (FollowsHab && VrHab.Holding) return;
             var cam = gameCamera.transform;
+            // At a monitor in the Hab the head goes in front of it instead of right up to it (VrHab.Monitor).
+            var position = cam.position;
+            if (FollowsHab && VrHab.Monitor != null) position = VrHab.MonitorViewpoint(VrHab.Monitor, position);
             // The Hab camera swings between bed, kitchen and terminal; the playspace turns along, but only around the
             // vertical axis: its pitch would tilt the room. Looking up or down is up to the head.
             if (FollowsHab) Playspace = Yaw(cam.rotation) * recenterRotation;
@@ -514,7 +516,7 @@ namespace ShipbreakerVR
             var scale = WorldScale;
             rig.localScale = new Vector3(scale, scale, scale);
             rig.rotation = Playspace;
-            rig.position = cam.position - Playspace * (recenterPosition * scale);
+            rig.position = position - Playspace * (recenterPosition * scale);
         }
 
         // Heading of a rotation (turn around the world's up axis), from where it looks or, looking straight down or up, where its top points.
