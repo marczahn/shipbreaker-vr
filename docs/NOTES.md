@@ -191,6 +191,14 @@ that sets the occlusion quality back to Low (`[Bild] Umgebungsverdeckung`, also 
 default). It also logs frame times every 30 s and whenever the place or a setting changes, and once per camera switch
 which other cameras render, to compare bay and Hab from one Player.log.
 
+With the occlusion at Low the Hab still ran at a steady 22.2 ms per frame (45 fps), and `XRDevice.refreshRate` read
+45 Hz instead of 90 Hz: Virtual Desktop's Synchronous Spacewarp halves the rate when the app misses 90 fps and
+synthesizes every second frame. During the Hab's fast Cinemachine moves those synthesized frames smear sideways
+(ghosting). Entering the Hab at 1.25x also failed several render target allocations every time, because the bay stays
+loaded next to the Hab. The resolution in the Hab is therefore capped at 1.0x (native), and the rig moves onto the
+Hab camera in `VrCamera.LateUpdate` as well, since the game can post `GameState.Hab` and hide the load screen in the
+same frame after `Plugin.Update` ran (the bay then showed for a frame and the resolution went up for it).
+
 ## Roadmap
 1. Inventory – done
 2. Foundation (BepInEx, plugin, camera hook) – done

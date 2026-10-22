@@ -108,12 +108,11 @@ namespace ShipbreakerVR
             // In the Hab the game shows the station through its own camera; back in gameplay the main camera takes over again.
             var vr = VrCamera.Instance;
             if (!VrXr.IsRunning) return;
-            // Every frame: the game switches to the Hab first and hides its load screen afterwards; by then the rig
-            // should be on the Hab camera instead of showing the bay from the switched-off main camera.
+            // The rig moves onto the Hab camera by itself (VrCamera.LateUpdate); here only when VR starts in the Hab.
             var hab = VrHab.Camera;
             if (hab != null)
             {
-                if (vr == null || vr.GameCamera != hab)
+                if (vr == null)
                 {
                     Log.LogInfo($"VR camera attached to the Hab camera '{hab.name}'");
                     VrCamera.Attach(hab);

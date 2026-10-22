@@ -70,6 +70,12 @@ namespace ShipbreakerVR
         // while the level being loaded gets the video memory (at 1.25x the level start ran out of it and crashed).
         private const float LoadingResolution = 1f;
 
+        // Highest render resolution in the Hab. The bay stays loaded next to it, and at 1.25x the 12 GB card ran out of
+        // video memory each time the Hab appeared (Failed to create RenderTexture ... 0x8007000e). It also leaves the
+        // Hab more room to reach the headset's frame rate.
+        private const float HabResolution = 1f;
+        private bool habLimited;
+
         public bool BodyFollowsHead => VrXr.IsRunning && Plugin.BodyFollowsHead.Value;
 
         // True while loading (no game camera, or the game's load screen covers the image): only the UI canvas on black.
@@ -203,6 +209,16 @@ namespace ShipbreakerVR
 
         private void LateUpdate()
         {
+            var running = VrXr.IsRunning;
+            // The game may switch to the Hab and hide its load screen in the same frame, after Plugin.Update looked.
+            // Without this the bay showed for a frame and the resolution went up for it.
+            var hab = running ? VrHab.Camera : null;
+            if (hab != null && hab != gameCamera)
+            {
+                Plugin.Log.LogInfo($"VR camera attached to the Hab camera '{hab.name}'");
+                Retarget(hab);
+            }
+
             // The game camera belongs to a scene and goes with it; the rig stays until the next camera.
             // In between, and while the game's load screen covers the image, only the UI shows.
             var hideWorld = gameCamera == null || (SceneLoader.Instance != null && SceneLoader.Instance.LoadScreenVisible);
@@ -212,7 +228,6 @@ namespace ShipbreakerVR
                 else Retarget(gameCamera);
             }
 
-            var running = VrXr.IsRunning;
             if (running && !wasRunning)
             {
                 recenterAt = Time.unscaledTime + RecenterDelay;
@@ -313,6 +328,13 @@ namespace ShipbreakerVR
                 VrOptions.Refresh(Plugin.ResolutionScale);
             }
             var scale = Mathf.Clamp(Plugin.ResolutionScale.Value, 0.5f, max > 0f ? max : 1f);
+            var limited = FollowsHab && scale > HabResolution;
+            if (limited != habLimited)
+            {
+                habLimited = limited;
+                if (limited) Plugin.Log.LogInfo($"Render resolution in the Hab limited to {HabResolution:0.00}x (setting {scale:0.00}x): the bay stays in video memory next to it");
+            }
+            if (limited) scale = HabResolution;
             if (!Mathf.Approximately(scale, pendingResolution))
             {
                 pendingResolution = scale;
