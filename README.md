@@ -17,6 +17,7 @@ Tested with Meta Quest via Virtual Desktop.
 - Not yet: tools in the hands, laser pointer for menus, comfort options
 
 Notes on how the game works and why the mod does what it does: [docs/NOTES.md](docs/NOTES.md).
+How the mod came about, including the dead ends: [docs/JOURNAL.md](docs/JOURNAL.md).
 
 ## Usage
 - VR starts with the game (config `VrBeimStart`), so intro and loading screens already show in the headset
