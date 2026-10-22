@@ -205,7 +205,7 @@ namespace ShipbreakerVR
         private void Update()
         {
             if (VrXr.IsRunning && Input.GetKeyDown(KeyCode.F4)) Recenter(true);
-            if (Input.GetKeyDown(KeyCode.F8)) VrDiagnostics.Dump(this);
+            VrDiagnostics.Update(this);
         }
 
         private void LateUpdate()
@@ -218,6 +218,7 @@ namespace ShipbreakerVR
             {
                 Plugin.Log.LogInfo($"VR camera attached to the Hab camera '{hab.name}'");
                 Retarget(hab);
+                VrDiagnostics.Schedule(6f, "Hab entered 6 s ago");
             }
 
             // The game camera belongs to a scene and goes with it; the rig stays until the next camera.

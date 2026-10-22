@@ -230,7 +230,9 @@ the UI, as a quad with identity matrices.
 F8 (`VrDiagnostics`) is for things only seen in the headset. It writes into the log: game state, head pose, the camera
 the rig follows, where the UI canvas hangs, every active root canvas (render mode, camera, layer, whether `VrCanvases`
 attached it, direction and distance from the head for the non-overlay ones, and its dark, large or specially shaded
-graphics), and the visible renderers up to 3 m above eye height. Directions are relative to the gaze: "ahead 10, up 60"
+graphics, and its visible texts with their position on the canvas, so a prompt that is off the canvas or covered
+shows up), and the visible renderers within 4 m that reach above eye height. It also runs on its own 6 s after the rig
+enters the Hab, for things that show right after waking up. Directions are relative to the gaze: "ahead 10, up 60"
 is 10 degrees right of where the head points and 60 degrees above the horizon. It also saves the UI texture and the
 game window as PNG files to `BepInEx\ShipbreakerVR-F8`.
 

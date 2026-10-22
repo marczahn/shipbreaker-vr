@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using BBI.Unity.Game;
 using BepInEx;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -13,21 +14,42 @@ namespace ShipbreakerVR
     // F8: writes what is drawn around the player into the log, for things only seen in the headset. Directions are
     // relative to the head: "ahead 10, up 60" is 10 degrees to the right of the gaze's heading and 60 degrees above the
     // horizon. Also saves the UI texture (what the canvas in front shows) and the game window (the headset's mirror)
-    // as PNG files next to the log.
+    // as PNG files next to the log. Also runs on its own a few seconds after the rig enters the Hab (Schedule), since
+    // what shows up there right after waking up is gone by the time one thinks of pressing a key.
     internal static class VrDiagnostics
     {
         private const int MaxGraphicsPerCanvas = 6;
-        private const int MaxRenderers = 20;
+        private const int MaxTextsPerCanvas = 12;
+        private const int MaxRenderers = 30;
 
-        public static void Dump(VrCamera vr)
+        private static float dueAt = -1f;
+        private static string dueReason;
+
+        public static void Schedule(float delay, string reason)
+        {
+            dueAt = Time.unscaledTime + delay;
+            dueReason = reason;
+        }
+
+        public static void Update(VrCamera vr)
+        {
+            if (Input.GetKeyDown(KeyCode.F8)) Dump(vr, "F8");
+            else if (dueAt >= 0f && Time.unscaledTime >= dueAt)
+            {
+                dueAt = -1f;
+                Dump(vr, dueReason);
+            }
+        }
+
+        public static void Dump(VrCamera vr, string reason)
         {
             var head = vr.transform;
             var text = new StringBuilder();
-            text.AppendLine($"F8 dump at {Time.unscaledTime:0.0} s, game state {GameSession.CurrentGameState}, load screen {(SceneLoader.Instance != null && SceneLoader.Instance.LoadScreenVisible)}, VR {VrXr.IsRunning}");
+            text.AppendLine($"Dump ({reason}) at {Time.unscaledTime:0.0} s, game state {GameSession.CurrentGameState}, load screen {(SceneLoader.Instance != null && SceneLoader.Instance.LoadScreenVisible)}, VR {VrXr.IsRunning}, screen {Screen.width}x{Screen.height}, eye {UnityEngine.XR.XRSettings.eyeTextureWidth}x{UnityEngine.XR.XRSettings.eyeTextureHeight}");
             text.AppendLine($"  head at {head.position}, looking {Direction(head, head.position + head.forward)}, rig scale {head.parent.localScale.x:0.00}");
             var game = vr.GameCamera;
             if (game != null)
-                text.AppendLine($"  following '{Path(game.transform)}' at {Direction(head, game.transform.position)} {Vector3.Distance(head.position, game.transform.position):0.00} m, its view {Direction(head, head.position + game.transform.forward)}, fov {game.fieldOfView:0}, mask {game.cullingMask}, Hab {vr.FollowsHab}, fade {VrHab.Fade:0.00}");
+                text.AppendLine($"  following '{Path(game.transform)}' at {Direction(head, game.transform.position)} {Vector3.Distance(head.position, game.transform.position):0.00} m, its view {Direction(head, head.position + game.transform.forward)}, fov {game.fieldOfView:0}, pixels {game.pixelWidth}x{game.pixelHeight}, stereo {game.stereoEnabled}, mask {game.cullingMask}, far {game.farClipPlane:0}, Hab {vr.FollowsHab}, fade {VrHab.Fade:0.00}");
             var ui = VrUi.Instance;
             if (ui != null) text.AppendLine("  " + ui.Describe(head));
 
@@ -37,11 +59,11 @@ namespace ShipbreakerVR
                 .OrderBy(c => c.renderMode).ThenBy(c => Path(c.transform));
             foreach (var canvas in canvases) DescribeCanvas(text, head, canvas, ui);
 
-            text.AppendLine("  Renderers seen last frame within 3 m above the horizon:");
+            text.AppendLine("  Renderers seen last frame within 4 m, above the horizon:");
             var renderers = UnityEngine.Object.FindObjectsOfType<Renderer>()
                 .Where(r => r.enabled && r.isVisible)
                 .Select(r => (renderer: r, distance: Vector3.Distance(head.position, r.bounds.center)))
-                .Where(e => e.distance < 3f && e.renderer.bounds.center.y > head.position.y)
+                .Where(e => e.distance < 4f && e.renderer.bounds.max.y > head.position.y)
                 .OrderBy(e => e.distance)
                 .Take(MaxRenderers);
             foreach (var (renderer, distance) in renderers)
@@ -86,6 +108,30 @@ namespace ShipbreakerVR
                     break;
                 }
                 text.AppendLine($"      '{graphic.name}' {graphic.GetType().Name}, color {c.r:0.00}/{c.g:0.00}/{c.b:0.00}, alpha {alpha:0.00}, {share.x * 100f:0}% x {share.y * 100f:0}% of the canvas, shader {shader}");
+            }
+
+            // Visible texts with where they sit on the canvas (0 0 lower left, 100 100 upper right; outside that range
+            // they are off the canvas). Finds prompts that are missing in VR.
+            var canvasRect = ((RectTransform)canvas.transform).rect;
+            var texts = 0;
+            var corners = new Vector3[4];
+            foreach (var label in canvas.GetComponentsInChildren<TMP_Text>())
+            {
+                if (!label.enabled || label.canvasRenderer.cull || string.IsNullOrWhiteSpace(label.text)) continue;
+                var alpha = label.color.a * label.canvasRenderer.GetAlpha() * GroupAlpha(label.transform);
+                if (alpha < 0.05f) continue;
+                if (++texts > MaxTextsPerCanvas)
+                {
+                    text.AppendLine("      ...");
+                    break;
+                }
+                label.rectTransform.GetWorldCorners(corners);
+                var center = canvas.transform.InverseTransformPoint((corners[0] + corners[2]) * 0.5f);
+                var x = canvasRect.width > 0 ? (center.x - canvasRect.xMin) / canvasRect.width * 100f : 0f;
+                var y = canvasRect.height > 0 ? (center.y - canvasRect.yMin) / canvasRect.height * 100f : 0f;
+                var content = label.text.Replace("\n", " ");
+                if (content.Length > 40) content = content.Substring(0, 40) + "...";
+                text.AppendLine($"      text '{content}' ('{label.name}' under '{label.transform.parent?.parent?.name}'), at {x:0} {y:0}, alpha {alpha:0.00}");
             }
         }
 
