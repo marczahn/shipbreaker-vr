@@ -1,4 +1,6 @@
+using System.Linq;
 using BBI.Unity.Game;
+using HarmonyLib;
 using InControl;
 using UnityEngine;
 using UnityEngine.XR;
@@ -13,6 +15,7 @@ namespace ShipbreakerVR
     //   Stick: navigate. Grip + stick left/right: previous/next tab, grip + stick up/down: scroll.
     //   A or trigger: confirm. B: back. Stick press: pause menu (also in gameplay) and close it again.
     // In gameplay only the stick press counts, so the stick keeps snap turning and nothing else reaches the game.
+    // The actions read only InControl's active device, and another device kept that role (see ActiveDevicePatch).
     internal class VrMenuInput : InControl.InputDevice
     {
         private const float TriggerPress = 0.5f;
@@ -51,6 +54,10 @@ namespace ShipbreakerVR
         }
 
         // True while the right controller works the menus, i.e. outside gameplay. Snap turning pauses meanwhile.
+        public static VrMenuInput Current => instance;
+
+        public static bool HasInput => instance != null && instance.IsActive;
+
         public static bool InMenus => VrXr.IsRunning && GameSession.CurrentGameState != GameSession.GameState.Gameplay;
 
         // Attaches the device once InControl is set up, and again if InControl was reset. Called every frame.
@@ -61,6 +68,13 @@ namespace ShipbreakerVR
             if (InputManager.Devices.Contains(instance)) return;
             InputManager.AttachDevice(instance);
             Plugin.Log.LogInfo("Menu control: right controller attached to InControl as a gamepad");
+            LogDevices("attached");
+        }
+
+        public static void LogDevices(string when)
+        {
+            var devices = InputManager.Devices.Select(d => $"'{d.Name}' ({d.DeviceClass}, {d.DeviceStyle}, last input {d.LastInputTick}{(d.Passive ? ", passive" : "")})");
+            Plugin.Log.LogInfo($"Menu control, InControl devices {when} (tick {InputManager.CurrentTick}): {string.Join(", ", devices)}; active '{InputManager.ActiveDevice?.Name}'");
         }
 
         // Called by InControl in InputManager.Update (from LynxControls.Update), before the actions read the devices.
@@ -134,7 +148,30 @@ namespace ShipbreakerVR
             if (pressed == lastPressed) return;
             lastPressed = pressed;
             if (pressed.Length > 0 && pressLogs++ < 50)
+            {
                 Plugin.Log.LogInfo($"Menu control:{pressed} ({state}, active device '{InputManager.ActiveDevice?.Name}')");
+                if (pressLogs <= 2) LogDevices("on press");
+            }
+        }
+    }
+
+    // InControl hands the active device role only to a device whose last input is strictly newer than the current one's.
+    // In the first test an "Unknown Device" (likely a joystick the runtime exposes) reported input every frame, so it kept
+    // the role, our presses tied with it and never reached the game. While the right controller presses something, it
+    // takes the role.
+    [HarmonyPatch(typeof(InputManager), "UpdateActiveDevice")]
+    internal static class ActiveDevicePatch
+    {
+        private static readonly AccessTools.FieldRef<InControl.InputDevice> Active =
+            AccessTools.StaticFieldRefAccess<InControl.InputDevice>(AccessTools.Field(typeof(InputManager), "activeDevice"));
+
+        private static int logs;
+
+        private static void Postfix()
+        {
+            if (!VrMenuInput.HasInput || InputManager.ActiveDevice is VrMenuInput) return;
+            if (logs++ < 5) Plugin.Log.LogInfo($"Menu control: taking the active device role from '{InputManager.ActiveDevice?.Name}'");
+            Active() = VrMenuInput.Current;
         }
     }
 }
