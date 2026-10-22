@@ -280,12 +280,14 @@ namespace ShipbreakerVR
 
             cmd.SetRenderTarget(context.cameraColorBuffer, 0, CubemapFace.Unknown, -1);
             cmd.SetViewport(new Rect(0, 0, context.hdCamera.actualWidth, context.hdCamera.actualHeight));
-            // The game's fades to black, kept off the menu canvas (VrCanvases): over the whole room, under the canvas,
-            // as in the flat game, where subtitles and prompts stay on top of them.
-            if (gameFade > 0f)
+            // The game's fades to black, kept off the menu canvas (VrCanvases), and the dimmed room at a Hab screen
+            // (VrHab): over the whole room, under the canvas, as in the flat game, where subtitles and prompts stay on
+            // top of them.
+            var under = Mathf.Max(gameFade, vr.FollowsHab ? VrHab.ScreenDim : 0f);
+            if (under > 0f)
             {
                 if (gameFadeMaterial == null) gameFadeMaterial = BlackMaterial();
-                gameFadeMaterial.color = new Color(0f, 0f, 0f, gameFade);
+                gameFadeMaterial.color = new Color(0f, 0f, 0f, under);
                 cmd.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
                 cmd.DrawMesh(quad, Matrix4x4.Scale(new Vector3(2f, 2f, 1f)), gameFadeMaterial, 0, 0);
             }

@@ -30,11 +30,49 @@ namespace ShipbreakerVR
         private static ICinemachineCamera lastVirtualCamera;
         private static float transitionStart = -1f;
 
+        // The navigable screens (monitor above the bed, terminal, workbench): their virtual cameras sit 35 cm in front
+        // of a monitor, and the screen comes as an overlay over the whole picture. In VR the overlay is on the menu
+        // canvas 2.4 m away, drawn in front of a monitor at 35 cm: two distances at once for the eyes. So in VR the rig
+        // stays where it was (placeVirtualCamera) and the room is dimmed behind the canvas instead, like a full screen.
+        private const float ScreenDimTarget = 0.75f;
+        private const float ScreenDimTime = 0.3f;
+        private static readonly HashSet<ICinemachineCamera> screenCameras = new HashSet<ICinemachineCamera>();
+        private static ICinemachineCamera placeVirtualCamera;
+        private static float lastDimTime;
+
         // How far the VR view is faded to black, 0 to 1.
         public static float Fade { get; private set; }
 
         // True while the view fades out: the rig stays where it was until it is black.
         public static bool Holding => transitionStart >= 0f && Time.unscaledTime - transitionStart < FadeOut;
+
+        // True while one of the navigable screens is open: the rig stays where it was. Unless the Hab opened right at a
+        // screen, with no spot to stay at yet.
+        public static bool AtScreen => cutBrain != null && placeVirtualCamera != null && IsScreen(cutBrain.ActiveVirtualCamera);
+
+        // How far the room behind the menu canvas is dimmed for a navigable screen, 0 to ScreenDimTarget.
+        public static float ScreenDim { get; private set; }
+
+        private static bool IsScreen(ICinemachineCamera camera) => camera != null && screenCameras.Contains(camera);
+
+        // Remembers the virtual cameras of a navigation option that opens a screen.
+        public static void AddScreen(NavigationOption navOpt)
+        {
+            if (navOpt == null || !navOpt.GoesToNavigableScreen) return;
+            if (navOpt.CameraToGoTo != null) screenCameras.Add(navOpt.CameraToGoTo);
+            if (navOpt.CameraToSwapToAfterBlend != null) screenCameras.Add(navOpt.CameraToSwapToAfterBlend);
+        }
+
+        private static void FindScreens()
+        {
+            var options = AccessTools.FieldRefAccess<Hab3DLocationNavigation, List<NavigationOption>>("m_NavigationOptions");
+            foreach (var location in Resources.FindObjectsOfTypeAll<Hab3DLocationNavigation>())
+            {
+                if (!location.gameObject.scene.IsValid() || options(location) == null) continue;
+                foreach (var navOpt in options(location)) AddScreen(navOpt);
+            }
+            Plugin.Log.LogInfo($"Hab screens: {screenCameras.Count} virtual camera(s)");
+        }
 
         // Original amplitude of each sway (Perlin noise) we silenced; the game itself toggles their enabled flag.
         private static readonly Dictionary<CinemachineBasicMultiChannelPerlin, float> calmed = new Dictionary<CinemachineBasicMultiChannelPerlin, float>();
@@ -56,6 +94,11 @@ namespace ShipbreakerVR
                 {
                     nextControllerSearch = Time.unscaledTime + 0.25f;
                     controller = Object.FindObjectOfType<Hab3DController>();
+                    if (controller != null)
+                    {
+                        screenCameras.Clear();
+                        FindScreens();
+                    }
                 }
                 if (controller == null || !controller.isActiveAndEnabled || controller.CinemachineBrain == null) return null;
                 var camera = controller.CinemachineBrain.OutputCamera;
@@ -102,8 +145,10 @@ namespace ShipbreakerVR
             }
             cutBrain = brain;
             lastVirtualCamera = null;
+            placeVirtualCamera = null;
             transitionStart = -1f;
             Fade = 0f;
+            ScreenDim = 0f;
             if (brain == null) return;
             originalBlend = brain.m_DefaultBlend;
             originalCustomBlends = brain.m_CustomBlends;
@@ -118,7 +163,8 @@ namespace ShipbreakerVR
             if (cutBrain == null) return;
             var current = cutBrain.ActiveVirtualCamera;
             var now = Time.unscaledTime;
-            if (lastVirtualCamera != null && current != lastVirtualCamera)
+            // Into a screen the rig stays, and back out to where it stayed it doesn't move either.
+            if (lastVirtualCamera != null && current != lastVirtualCamera && !IsScreen(current) && current != placeVirtualCamera)
             {
                 var elapsed = transitionStart >= 0f ? now - transitionStart : float.MaxValue;
                 // Fading out or black already: the rig jumps to wherever the camera is once it is black.
@@ -126,6 +172,13 @@ namespace ShipbreakerVR
                 if (elapsed >= FadeOut + Black) transitionStart = now - Fade * FadeOut;
             }
             lastVirtualCamera = current;
+            if (!IsScreen(current)) placeVirtualCamera = current;
+
+            // Called more than once per frame, so the step follows the time since the last call.
+            var dimTarget = IsScreen(current) ? ScreenDimTarget : 0f;
+            ScreenDim = Mathf.MoveTowards(ScreenDim, dimTarget, (now - lastDimTime) * ScreenDimTarget / ScreenDimTime);
+            lastDimTime = now;
+
             if (transitionStart < 0f)
             {
                 Fade = 0f;
@@ -152,6 +205,7 @@ namespace ShipbreakerVR
     {
         private static void Postfix(NavigationOption navOpt)
         {
+            VrHab.AddScreen(navOpt);
             if (navOpt == null || !navOpt.GoesToNavigableScreen || navOpt.ScreenAnimator == null) return;
             if (VrUi.Instance == null || !VrUi.Instance.Active) return;
             navOpt.ScreenAnimator.ResetTrigger("FadeOut");

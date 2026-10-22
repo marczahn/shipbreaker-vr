@@ -183,6 +183,15 @@ of the player, so the dark monitor stayed visible in the room, above the player 
 the bed looking up at it). A postfix on `Navigate` resets `FadeOut` while the UI is in VR, so the monitor keeps its
 screensaver. A screen opened in the flat game before switching VR on stays dark until it is left.
 
+In the flat game the `Hab ScreenStack` fills the whole picture at a screen. In VR it is on the menu canvas (about 66
+degrees wide, 2.4 m away and drawn over everything), while the rig followed the virtual camera to 0.35 m in front of
+the monitor: the room showed around the canvas, and the eyes got the canvas at 2.4 m and the monitor at 0.35 m at
+once. Now `VrHab` collects the screens' virtual cameras (`CameraToGoTo` and `CameraToSwapToAfterBlend` of every
+`NavigationOption` with `GoesToNavigableScreen`, from `m_NavigationOptions` of each `Hab3DLocationNavigation` and on
+`Navigate`). While one of them is active the rig stays on the spot it had before (no fade going in or back out), and
+`VrUi` dims the room behind the canvas to 75 % black within 0.3 s, so the screen reads like a full screen in front of
+the player. If the Hab opens right at a screen, with no spot before it, the rig follows the camera as before.
+
 After loading into the Hab (and when waking up), a black area about the size of the menu canvas hung in the room
 in VR, as if a piece of the world were missing, and was gone a few seconds later. Most likely it was the game's
 full-screen fades to black (`FadeScreen`, `HAB_General_Fade`, `WakeUpFade`, `QuitFromHabFade`; the dump 6 s after
