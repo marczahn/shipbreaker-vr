@@ -155,7 +155,7 @@ Config `Steuerung/Controllersteuerung` (Aus/Vtol; the earlier "point and twist" 
   The hand's roll away from the reference (`eulerAngles.z`) rolls the body around the head's forward axis (8 degree
   deadzone, full 45 degrees/s at 45). Turning and pitching by twisting the hand worked, but holding the trigger and the
   hand angle at the same time was tiring, so both moved to the stick.
-- Left stick (no trigger needed): left/right turns around the head's up axis, up/down pitches around its right axis
+- Left stick (no trigger needed, gameplay only; in menus it works them as a gamepad): left/right turns around the head's up axis, up/down pitches around its right axis
   (stick up looks up), 15% deadzone, full 45 degrees/s at full deflection.
 - Right stick left/right snap-turns 30 degrees around the head's up axis (the playspace's up axis tilted the view after
   rolling). Y (left `secondaryButton`) presses the game's brake actions (`ThrustBrakeLeft/Right`); it used to be the

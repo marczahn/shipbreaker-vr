@@ -71,8 +71,12 @@ namespace ShipbreakerVR
             if (GetRight() && right.TryGetFeatureValue(CommonUsages.primary2DAxis, out var rightStick)) SnapTurn(rightStick.x, playspace);
 
             if (!GetLeft()) { held = false; return; }
-            left.TryGetFeatureValue(CommonUsages.secondaryButton, out braking);
-            if (left.TryGetFeatureValue(CommonUsages.primary2DAxis, out var leftStick)) TurnFromStick(leftStick, playspace);
+            // Outside gameplay the sticks and buttons work the menus as a gamepad; turning there would swing the menus.
+            if (GameSession.CurrentGameState == GameSession.GameState.Gameplay)
+            {
+                left.TryGetFeatureValue(CommonUsages.secondaryButton, out braking);
+                if (left.TryGetFeatureValue(CommonUsages.primary2DAxis, out var leftStick)) TurnFromStick(leftStick, playspace);
+            }
             if (!left.TryGetFeatureValue(CommonUsages.devicePosition, out var grip)
                 || !left.TryGetFeatureValue(CommonUsages.deviceRotation, out var rotation)) { held = false; return; }
             // Thrust follows the wrist, not the controller: tilting the hand swings the controller around the wrist, and
