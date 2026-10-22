@@ -19,13 +19,15 @@ namespace ShipbreakerVR
         private abstract class Row
         {
             public string Label;
+            // What the setting is for and when to change it, shown below the list in the VR tab.
+            public string Hint;
             public abstract string ValueText { get; }
         }
 
         private class BoolRow : Row
         {
             public ConfigEntry<bool> Entry;
-            public override string ValueText => Entry.Value ? "On" : "Off";
+            public override string ValueText => Entry.Value ? L("On", "An") : L("Off", "Aus");
         }
 
         private class SliderRow : Row
@@ -49,12 +51,13 @@ namespace ShipbreakerVR
 
         private static Row[] CreateRows()
         {
-            ListRow EnumRow<T>(string label, ConfigEntry<T> entry, string[] names) where T : Enum
+            ListRow EnumRow<T>(string label, ConfigEntry<T> entry, string[] names, string hint) where T : Enum
             {
                 var values = (T[])Enum.GetValues(typeof(T));
                 return new ListRow
                 {
                     Label = label,
+                    Hint = hint,
                     Names = names,
                     Get = () => Array.IndexOf(values, entry.Value),
                     Set = i => entry.Value = values[(i % values.Length + values.Length) % values.Length],
@@ -64,22 +67,83 @@ namespace ShipbreakerVR
 
             return new Row[]
             {
-                new BoolRow { Label = "Body follows head", Entry = Plugin.BodyFollowsHead },
-                EnumRow("Controller flying", Plugin.ControlScheme, new[] { "Off", "VTOL (trigger)" }),
-                EnumRow("Anti-aliasing", Plugin.AntiAliasing, new[] { "TAA", "SMAA", "FXAA", "None", "Game default" }),
-                new SliderRow { Label = "Render resolution", Entry = Plugin.ResolutionScale, Min = 0.5f, Max = VrCamera.ResolutionSliderMax, Format = "0.00" },
-                new SliderRow { Label = "Station resolution", Entry = Plugin.StationResolution, Min = 0.5f, Max = 1f, Format = "0.00" },
-                new SliderRow { Label = "World scale", Entry = Plugin.WorldScale, Min = 0.5f, Max = 3f, Format = "0.00" },
-                EnumRow("Ambient occlusion", Plugin.AmbientOcclusion, new[] { "Low", "Off", "Game default" }),
-                EnumRow("Helmet", Plugin.Helmet, new[] { "Follows head", "Hidden", "Game default" }),
-                new BoolRow { Label = "HUD and menus in world", Entry = Plugin.UiInVr },
-                EnumRow("Visor steadying", Plugin.HudSteadying, new[] { "Off", "Light", "Strong" }),
-                new SliderRow { Label = "Visor size", Entry = Plugin.HudScale, Min = 0.3f, Max = 1f, Format = "0.00" },
-                new SliderRow { Label = "Visor distance (m)", Entry = Plugin.HudDistance, Min = 0.5f, Max = 3f, Format = "0.0" },
-                new SliderRow { Label = "Menu distance (m)", Entry = Plugin.MenuDistance, Min = 1f, Max = 4f, Format = "0.0" },
-                new SliderRow { Label = "Menu width (m)", Entry = Plugin.MenuWidth, Min = 1f, Max = 4f, Format = "0.0" },
+                new BoolRow
+                {
+                    Label = L("Body follows head", "Körper folgt Kopf"), Entry = Plugin.BodyFollowsHead,
+                    Hint = L("The body and the tools' aim turn with your head; mouse and stick turn on top. Turn it off to look around without turning the body. Controller flying needs it on.",
+                        "Körper und Zielrichtung der Werkzeuge drehen sich mit dem Kopf, Maus und Stick drehen zusätzlich. Aus, um dich umzusehen, ohne den Körper zu drehen. Die Controllersteuerung braucht es an."),
+                },
+                EnumRow(L("Controller flying", "Controllersteuerung"), Plugin.ControlScheme, new[] { L("Off", "Aus"), L("VTOL (trigger)", "VTOL (Trigger)") },
+                    L("Hold the left trigger: moving the controller thrusts that way, turning or tilting it turns, rolls and pitches. Right stick: snap turn, press the left stick: brake. Off if you fly with mouse and keyboard or a gamepad.",
+                        "Linken Trigger halten: Controller verschieben gibt Schub in diese Richtung, Drehen und Kippen dreht, rollt und neigt. Rechter Stick: Snap-Turn, linken Stick drücken: Bremse. Aus, wenn du mit Maus und Tastatur oder Gamepad fliegst.")),
+                EnumRow(L("Anti-aliasing", "Kantenglättung"), Plugin.AntiAliasing, new[] { "TAA", "SMAA", "FXAA", L("None", "Keine"), L("Game default", "Spielstandard") },
+                    L("Smooths jagged edges. SMAA stays sharp and is the best choice in VR. TAA looks blurry in VR and makes objects jitter, FXAA is cheap but soft.",
+                        "Glättet treppige Kanten. SMAA bleibt scharf und ist in VR die beste Wahl. TAA wirkt in VR unscharf und lässt Objekte zittern, FXAA ist günstig, aber weich.")),
+                new SliderRow
+                {
+                    Label = L("Render resolution", "Renderauflösung"), Entry = Plugin.ResolutionScale, Min = 0.5f, Max = VrCamera.ResolutionSliderMax, Format = "0.00",
+                    Hint = L("Resolution per eye relative to the headset's default. Higher is sharper but costs a lot of performance and video memory. Lower it if the game stutters.",
+                        "Auflösung pro Auge im Verhältnis zum Standard des Headsets. Höher ist schärfer, kostet aber viel Leistung und Grafikspeicher. Senken, wenn das Spiel ruckelt."),
+                },
+                new SliderRow
+                {
+                    Label = L("Station resolution", "Auflösung Station"), Entry = Plugin.StationResolution, Min = 0.5f, Max = 1f, Format = "0.00",
+                    Hint = L("Own resolution for the station between shifts, which is harder on the graphics card. If the view wobbles at the monitors when you move your head, lower it step by step until that stops.",
+                        "Eigene Auflösung für die Station zwischen den Schichten, die die Grafikkarte stärker fordert. Wackelt das Bild an den Monitoren, wenn du den Kopf bewegst, schrittweise senken, bis es aufhört."),
+                },
+                new SliderRow
+                {
+                    Label = L("World scale", "Weltmaßstab"), Entry = Plugin.WorldScale, Min = 0.5f, Max = 3f, Format = "0.00",
+                    Hint = L("Your size relative to the world. Above 1, distant objects keep more depth and are easier to judge, but the world looks smaller; below 1 the opposite. 1 is true to scale.",
+                        "Deine Größe im Verhältnis zur Welt. Über 1 behalten ferne Objekte mehr Tiefe und lassen sich besser einschätzen, die Welt wirkt aber kleiner; unter 1 umgekehrt. 1 ist maßstabsgetreu."),
+                },
+                EnumRow(L("Ambient occlusion", "Umgebungsverdeckung"), Plugin.AmbientOcclusion, new[] { L("Low", "Niedrig"), L("Off", "Aus"), L("Game default", "Spielstandard") },
+                    L("Shading in corners and creases. Low looks nearly the same and saves a lot of performance; the game default can stutter on the station. Off for the most performance.",
+                        "Schattierung in Ecken und Fugen. Niedrig sieht fast gleich aus und spart viel Leistung; der Spielstandard kann auf der Station ruckeln. Aus für die meiste Leistung.")),
+                EnumRow(L("Helmet", "Helm"), Plugin.Helmet, new[] { L("Follows head", "Folgt dem Kopf"), L("Hidden", "Ausgeblendet"), L("Game default", "Spielstandard") },
+                    L("Follows head: the helmet frame moves with the headset. Hidden: a clear view without the frame. Game default: the helmet stays on the body.",
+                        "Folgt dem Kopf: der Helmrahmen bewegt sich mit dem Headset. Ausgeblendet: freie Sicht ohne Rahmen. Spielstandard: der Helm bleibt am Körper.")),
+                new BoolRow
+                {
+                    Label = L("HUD and menus in world", "HUD und Menüs im Raum"), Entry = Plugin.UiInVr,
+                    Hint = L("Shows the HUD and the menus on a surface in the room instead of flat over the image. Leave it on; off is only for troubleshooting.",
+                        "Zeigt HUD und Menüs auf einer Fläche im Raum statt flach über dem Bild. An lassen; aus nur zur Fehlersuche."),
+                },
+                EnumRow(L("Visor steadying", "Visierberuhigung"), Plugin.HudSteadying, new[] { L("Off", "Aus"), L("Light", "Leicht"), L("Strong", "Stark") },
+                    L("Keeps the visor display still instead of copying every small head movement. Light follows your gaze quickly, Strong stays put longer. Off: fixed to the head.",
+                        "Hält die Visieranzeige ruhig, statt jede kleine Kopfbewegung mitzumachen. Leicht folgt dem Blick schnell, Stark bleibt länger stehen. Aus: fest am Kopf.")),
+                new SliderRow
+                {
+                    Label = L("Visor size", "Visiergröße"), Entry = Plugin.HudScale, Min = 0.3f, Max = 1f, Format = "0.00",
+                    Hint = L("Size of the visor display. At 1 markers sit exactly on their objects, but the corners are outside your view. Smaller: everything in view, markers slightly offset.",
+                        "Größe der Visieranzeige. Bei 1 sitzen Markierungen genau auf den Objekten, die Ecken liegen aber außerhalb des Blickfelds. Kleiner: alles im Blick, Markierungen leicht versetzt."),
+                },
+                new SliderRow
+                {
+                    Label = L("Visor distance (m)", "Visierabstand (m)"), Entry = Plugin.HudDistance, Min = 0.5f, Max = 3f, Format = "0.0",
+                    Hint = L("How far in front of your eyes the visor display floats. Change it if reading the display or switching focus between it and the world is uncomfortable.",
+                        "Wie weit die Visieranzeige vor den Augen schwebt. Anpassen, wenn das Lesen der Anzeige oder der Blickwechsel zwischen ihr und der Welt unangenehm ist."),
+                },
+                new SliderRow
+                {
+                    Label = L("Menu distance (m)", "Menüabstand (m)"), Entry = Plugin.MenuDistance, Min = 1f, Max = 4f, Format = "0.0",
+                    Hint = L("How far away the menus appear. Together with the width it sets how large the text looks; adjust until it reads comfortably.",
+                        "Wie weit entfernt die Menüs erscheinen. Bestimmt zusammen mit der Breite, wie groß der Text wirkt; anpassen, bis er sich bequem lesen lässt."),
+                },
+                new SliderRow
+                {
+                    Label = L("Menu width (m)", "Menübreite (m)"), Entry = Plugin.MenuWidth, Min = 1f, Max = 4f, Format = "0.0",
+                    Hint = L("Width of the menus. Wider makes the text larger but needs more head movement to see everything.",
+                        "Breite der Menüs. Breiter macht den Text größer, braucht aber mehr Kopfbewegung, um alles zu sehen."),
+                },
             };
         }
+
+        // Texts follow the game's language: German, otherwise English.
+        public static string L(string english, string german) =>
+            (LynxGameUserOptions.Language ?? "").StartsWith("de", StringComparison.OrdinalIgnoreCase) ? german : english;
+
+        public static string HintFor(OptionEntry entry) => entry != null && Rows.TryGetValue(entry, out var row) ? row.Hint : null;
 
         // Fallback when the VR tab cannot be built: append the rows to the video options like before.
         public static void AppendTo(OptionsScreenController screen)

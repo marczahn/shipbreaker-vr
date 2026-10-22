@@ -92,6 +92,10 @@ video view is copied (controller and rows removed, `VrOptionsScreen` and the VR 
 renamed so Doozy's lookups by category/name don't hit it), the last tab button is copied with its click redirected to
 `ShowTab(new index)`, and both are appended to the arrays. `UIView.Show` does not hide other views and the game's way
 of hiding the previous tab does not know the copy, so after every tab switch all other views are hidden.
+The video view's display quality description (`m_DisplayPerformanceDescription`) stays in the copy and shows the hint
+of the selected VR row (`VrOptionsScreen.Update`, from the EventSystem selection, which the mouse pointer also sets).
+Labels, values and hints are German when the game's language (`LynxGameUserOptions.Language`) starts with "de",
+otherwise English.
 
 Keyboard/gamepad navigation (`UIInControlBridge`): Unity's navigation events are off; the selected row's
 bridge reads the arrow keys from its serialized action set (FrontEnd or Paused). `LynxControls` loads only the set of

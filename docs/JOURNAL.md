@@ -373,3 +373,21 @@ pressing it put the menu at a slant below you. Marc wanted menus at eye height, 
 after recentering but always, with a dead zone of 30 cm so they do not drift with every movement. That was his design,
 and it is what the mod does now: the menu opens upright at eye height in the direction the head faces, and if the eyes
 end up more than 30 cm above or below its center, from standing up or sitting down, it glides back to their height.
+
+<a id="vtol-and-vr-tab"></a>
+## 2026-10-22 · One way to fly, and a tab of its own
+
+Marc settled the controller question from [the controllers](#controllers) for now: point and twist goes, VTOL
+stays, but with the turning reworked. Until then, turning the hand while holding the trigger turned the body around
+whatever axis the hand happened to turn around, all three directions mixed into one rotation. Marc wanted them apart:
+turning the controller left or right turns the body, tilting it sideways rolls, tilting it forward or back pitches. I
+now split the hand's rotation into those three parts, each with its own dead zone, and turn the body around its own
+matching axis. The snap turn moved to the right stick, so the left hand only flies.
+
+He also wanted the VR settings out of the Video tab, where they had hung below the game's rows since [the settings menu](#settings-menu), into a
+tab of their own. The options screen keeps three lists side by side (screens, their views, the tab buttons) and
+switches by index, so I copy the video tab's view and the last tab button, swap the video rows for ours and append both
+to the lists. Showing a view in that menu does not hide the others; the game does that by means that do not know the
+new view, so after every tab switch I hide every view but the active one. The video tab has a text below its rows that
+explains the display quality setting. The VR tab uses it to explain the selected setting, in German or English
+depending on the game's language, and the rows and their values follow the language too.

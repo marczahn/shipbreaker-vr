@@ -8,6 +8,7 @@ using HarmonyLib;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace ShipbreakerVR
@@ -82,9 +83,9 @@ namespace ShipbreakerVR
             var t = Traverse.Create(video);
             var container = t.Field("m_OptionsContainer").GetValue<GameObject>();
             if (container == null || !container.transform.IsChildOf(copy.transform)) throw new InvalidOperationException("the video options list is outside its view");
-            // The display quality explanation below the video rows.
-            var description = t.Field("m_DisplayPerformanceDescription").GetValue<Component>();
-            if (description != null && description.transform.IsChildOf(copy.transform)) description.gameObject.SetActive(false);
+            // The display quality explanation below the video rows shows the selected VR row's hint instead.
+            var description = t.Field("m_DisplayPerformanceDescription").GetValue<LocalizedTextMeshProUGUI>();
+            if (description != null && !description.transform.IsChildOf(copy.transform)) description = null;
             var host = video.gameObject;
             UnityEngine.Object.DestroyImmediate(video);
 
@@ -104,6 +105,10 @@ namespace ShipbreakerVR
 
             var vr = host.AddComponent<VrOptionsScreen>();
             Traverse.Create(vr).Field("m_OptionsContainer").SetValue(container);
+            vr.Hint = description != null ? description.TMProText : null;
+            Plugin.Log.LogInfo(description != null
+                ? $"Options: hints in '{description.name}', {((RectTransform)description.transform).rect.size}, word wrap {description.TMProText.enableWordWrapping}"
+                : "Options: no description text in the video view, no hints");
             screen = vr;
             copy.SetActive(wasActive);
             return copy;
@@ -186,10 +191,27 @@ namespace ShipbreakerVR
         }
     }
 
-    // The VR tab's screen: values apply and save at once, so there is never anything to save or discard.
+    // The VR tab's screen: values apply and save at once, so there is never anything to save or discard. Shows the hint
+    // of the selected row (keyboard, gamepad or mouse pointer) in the description text below the list.
     internal class VrOptionsScreen : OptionsScreenController
     {
+        public TextMeshProUGUI Hint;
+        private string shown;
+
         public override bool OptionsAreDirty => false;
+
+        protected override void Update()
+        {
+            base.Update();
+            if (Hint == null) return;
+            var selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
+            var hint = VrOptions.HintFor(selected != null ? selected.GetComponentInParent<OptionEntry>() : null)
+                ?? VrOptions.L("Select a setting to see what it is for.", "Wähle eine Einstellung, um zu sehen, wofür sie gut ist.");
+            if (hint == shown) return;
+            shown = hint;
+            Hint.enableWordWrapping = true;
+            VrOptions.SetText(Hint, hint);
+        }
 
         protected override void OnEnable()
         {
