@@ -75,8 +75,17 @@ namespace ShipbreakerVR
             copy.name = "ShipbreakerVR Options";
             copy.transform.SetSiblingIndex(source.transform.GetSiblingIndex() + 1);
             view = copy.GetComponent<UIView>();
-            // Views are also found by category and name; the copy must not answer to the video tab's name.
-            view.ViewName = "ShipbreakerVR";
+            // Views are also found by category and name; the copy must not answer to the video tab's name. A view shows
+            // and hides its child views by its own category and name, so children with the parent's name are renamed
+            // with it (otherwise the VR list stayed hidden, and would have shown with the video tab).
+            var category = view.ViewCategory;
+            var name = view.ViewName;
+            foreach (var v in copy.GetComponentsInChildren<UIView>(true))
+            {
+                var old = v.ViewName;
+                v.ViewName = v.ViewCategory == category && v.ViewName == name ? "ShipbreakerVR" : "ShipbreakerVR " + v.ViewName;
+                if (v != view) Plugin.Log.LogInfo($"Options: child view '{v.name}' ({v.ViewCategory}/{old}) renamed to '{v.ViewName}'");
+            }
 
             var video = copy.GetComponentInChildren<VideoOptionsScreenController>(true);
             if (video == null) throw new InvalidOperationException("the video view holds no VideoOptionsScreenController");

@@ -89,7 +89,9 @@ that is still the fallback if the tab cannot be built.
 The tab (`VrOptionsTab`): `UnifiedOptionsScreen` holds parallel arrays of screen controllers, Doozy `UIView`s and
 `GenericTab` buttons and switches tabs by index (`ShowTab`, `Next/PreviousOptionTab`). On its first `OnEnable` the
 video view is copied (controller and rows removed, `VrOptionsScreen` and the VR rows added, list height fitted, view
-renamed so Doozy's lookups by category/name don't hit it), the last tab button is copied with its click redirected to
+renamed so Doozy's lookups by category/name don't hit it; a `UIView` shows and hides its child views by
+its own category/name a frame later, so the copy's child views with the video name are renamed too, otherwise the list
+stayed hidden while the tab could be selected), the last tab button is copied with its click redirected to
 `ShowTab(new index)`, and both are appended to the arrays. `UIView.Show` does not hide other views and the game's way
 of hiding the previous tab does not know the copy, so after every tab switch all other views are hidden.
 The video tab's display quality description (`m_DisplayPerformanceDescription`) lies outside the video view, so it is
