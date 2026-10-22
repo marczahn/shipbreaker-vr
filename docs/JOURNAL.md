@@ -266,3 +266,21 @@ took the job. In menus that press then set off things nobody had asked for, data
 reads Start there like "confirm whatever is selected". So it now only counts in gameplay, to pause, and on loading
 screens, to flip through the tips. In gameplay nothing else reaches the game, by Marc's choice; the rest belongs to
 flying.
+
+<a id="stick-steering"></a>
+## 2026-10-22 · Steering with the stick
+
+[Twisting the controller to turn](#vtol-and-vr-tab) worked, but Marc found it tiring in the long run: hold the trigger,
+hold the hand at an angle, and keep holding both while the ship drifts past. He wanted turning and pitching on the left
+stick instead, where they need no trigger and no wrist gymnastics. Pushing the stick sideways now turns, pushing it up or
+down pitches, and the further you push, the faster. Tilting the controller sideways with the trigger held still rolls,
+because a stick only has two directions and roll had to live somewhere.
+
+The brake moved too, from pressing the left stick to Y. Pressing a stick you are also steering with is a good way to
+brake by accident, and since [the menus](#menu-controller) the left stick press also paused the game. Braking and
+pausing with one press was not a feature. Pausing by accident while steering wasn't either, so Marc moved the pause to
+A and X pressed together, which other VR games have made the habit anyway. The left stick press now does nothing at
+all, and that is its best feature.
+
+With turning on the left stick, the old snap turn on the right stick was a second way to do the same thing, and Marc
+dropped it. Instead the VR tab now asks how you like to turn: smoothly, or in steps of 30, 45 or 90 degrees per flick.

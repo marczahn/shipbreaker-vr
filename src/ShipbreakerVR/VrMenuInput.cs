@@ -13,11 +13,12 @@ namespace ShipbreakerVR
     // bumpers, pause = Menu). So both controllers together are presented to InControl as one more gamepad and the game
     // does the rest, including its gamepad button prompts. The mapping follows the buttons' places, as Marc asked:
     //   sticks = sticks, A/B/X/Y = A/B/X/Y, triggers = bumpers, grips = triggers, right stick pressed = R3.
-    //   Pressing the left stick is Menu (Start, the pause menu), but only in gameplay and on loading screens (where it
-    //   cycles the tips): the left menu button belongs to Virtual Desktop. In menus the game reads Start like Confirm on
-    //   the selected button, which set off things Marc never chose, so there the press sends nothing.
+    //   A + X together is Menu (Start, the pause menu), but only in gameplay and on loading screens (where it cycles the
+    //   tips): the left menu button belongs to Virtual Desktop, and A + X is the usual VR pause combo. It used to be the
+    //   left stick press, which is too easy to hit while steering with that stick. In menus the game reads Start like
+    //   Confirm on the selected button, which set off things Marc never chose, so there the combo sends nothing.
     //   There is no View button (Back; B does the same in menus) and no D-pad.
-    // In gameplay only the left stick press counts (it opens the pause menu); the rest belongs to controller flying.
+    // In gameplay only A + X counts (it opens the pause menu); the rest belongs to controller flying.
     // The actions read only InControl's active device, and another device kept that role (see ActiveDevicePatch).
     internal class VrMenuInput : InControl.InputDevice
     {
@@ -66,9 +67,6 @@ namespace ShipbreakerVR
 
         public static bool HasInput => instance != null && instance.IsActive;
 
-        // True while the controllers work the menus, i.e. outside gameplay. Snap turning pauses meanwhile.
-        public static bool InMenus => VrXr.IsRunning && GameSession.CurrentGameState != GameSession.GameState.Gameplay;
-
         // Attaches the device once InControl is set up, and again if InControl was reset. Called every frame.
         public static void EnsureAttached()
         {
@@ -98,7 +96,8 @@ namespace ShipbreakerVR
             {
                 var state = GameSession.CurrentGameState;
                 var gameplay = state == GameSession.GameState.Gameplay;
-                var menu = (gameplay || state == GameSession.GameState.LoadingInProgress) && Button(left, CommonUsages.primary2DAxisClick);
+                var menu = (gameplay || state == GameSession.GameState.LoadingInProgress)
+                    && Button(right, CommonUsages.primaryButton) && Button(left, CommonUsages.primaryButton);
                 if (gameplay)
                 {
                     pressed[7] = menu;
@@ -117,6 +116,8 @@ namespace ShipbreakerVR
                     pressed[5] = Trigger(right);
                     pressed[6] = Button(right, CommonUsages.primary2DAxisClick);
                     pressed[7] = menu;
+                    // A and X are the combo here, not Confirm and Action3.
+                    if (menu) pressed[0] = pressed[2] = false;
                 }
 
                 // A press that opened or closed a menu is still held when the next state starts; it must not act there

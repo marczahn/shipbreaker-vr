@@ -153,10 +153,15 @@ Config `Steuerung/Controllersteuerung` (Aus/Vtol; the earlier "point and twist" 
 - Hold the left trigger; moving the controller away from where it was when pressed thrusts that way (2 cm deadzone,
   full at 15 cm), measured at an estimated wrist point 8 cm behind the grip pose: measured at the controller, tilting
   the hand to turn swung it past the deadzone and added thrust in a direction nobody asked for. Rotation uses the aim pose (`PointerRotation`; the `deviceRotation` grip pose runs along the handle).
-  The hand's rotation away from the reference is split via `eulerAngles` into turn (controller up), pitch (right) and
-  roll (forward); each turns the body around the head's matching axis (8 degree deadzone, full 45 degrees/s at 45).
-- Right stick left/right snap-turns 30 degrees around the head's up axis (the playspace's up axis tilted the view after
-  rolling). Pressing the left stick presses the game's brake actions (`ThrustBrakeLeft/Right`). A postfix on
+  The hand's roll away from the reference (`eulerAngles.z`) rolls the body around the head's forward axis (8 degree
+  deadzone, full 45 degrees/s at 45). Turning and pitching by twisting the hand worked, but holding the trigger and the
+  hand angle at the same time was tiring, so both moved to the stick.
+- Left stick (no trigger needed, gameplay only; in menus it works them as a gamepad): left/right turns around the head's up axis, up/down pitches around its right axis
+  (stick up looks up), 15% deadzone, full 45 degrees/s at full deflection.
+- Config `Steuerung/Drehen` (Fliessend/Snap30/Snap45/Snap90) makes the left stick's turn one step per flick (press at
+  0.7, release below 0.3), around the head's up axis like the smooth turn (the playspace's up axis tilted the view after
+  rolling). The fixed 30 degree snap turn on the right stick is gone. Y (left `secondaryButton`) presses the game's brake actions (`ThrustBrakeLeft/Right`); it used to be the
+  left stick press. A postfix on
   `LynxControlExtensions.GetInputIsPressed` never ran because Mono inlines it, so a transpiler redirects the calls in
   `ThrustController.Update`.
 The grip stays free for grabbing later. The left controller's name and features are logged once. OpenXR only reports
@@ -173,11 +178,11 @@ updated from `LynxControls.Update`.
 `VrMenuInput` is an InControl `InputDevice` (class Controller, style XboxOne, so the prompts show Xbox glyphs) attached
 with `InputManager.AttachDevice` once InControl is set up. In its `Update` it reads both XR controllers and maps them
 by place: sticks = sticks, A/B/X/Y = A/B/X/Y, triggers = bumpers, grips = analog triggers, right stick pressed =
-R3. Pressing the left stick is Menu (Start), only in `Gameplay` and `LoadingInProgress` (it cycles the loading tips): the
-left menu button belongs to Virtual Desktop, and in menus the Doozy button bridges read Start like Confirm on the
+R3. A + X together is Menu (Start), only in `Gameplay` and `LoadingInProgress` (it cycles the loading tips; A and X then
+send nothing else): the left menu button belongs to Virtual Desktop, the left stick press (the first choice) was too easy
+to hit while steering with the left stick, and in menus the Doozy button bridges read Start like Confirm on the
 selected button. No View button (Back; `BackButtonService` treats Decline/B the same, so B covers Esc in menus) and no D-pad. In
-`Gameplay` it reports only the left stick press, which opens the pause menu; everything else stays with controller flying, and `VrControls` keeps
-snap turning (outside gameplay it pauses). A press held across a game state change is ignored until released, so the
+`Gameplay` it reports only A + X, which opens the pause menu; everything else stays with controller flying. A press held across a game state change is ignored until released, so the
 press that opens the pause menu does not close it again. Pressed buttons are logged as `Menu control: ...`.
 InControl makes a device active only when its last input is strictly newer than the active one's. An "Unknown
 Device" (probably a joystick exposed by the runtime) had input every frame and kept the role, so the first version's

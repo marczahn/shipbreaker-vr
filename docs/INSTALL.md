@@ -25,11 +25,14 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
   `BepInEx\config\de.marczahn.shipbreakervr.cfg`.
 
 ### Flying with the controllers
+![Controls overview](images/controls.svg)
+
 Switch it in the options row "Controller flying" in the VR tab. Hold the left trigger, then:
 - move the controller away from where it was when you pressed it to fly that way,
-- turn it left/right to turn, tilt it sideways to roll, tilt it forward/back to pitch; the further, the faster.
+- tilt it sideways to roll; the further, the faster.
 
-The right stick left/right snap-turns 30 degrees, pressing the left stick brakes. Mouse, keyboard and gamepad keep working.
+The left stick turns (left/right) and pitches (up/down), the further, the faster; it needs no trigger. The row "Turning"
+switches turning to steps of 30, 45 or 90 degrees per flick. Y brakes. Mouse, keyboard and gamepad keep working.
 
 ### Menus with the controllers
 In menus both controllers act as one Xbox gamepad, each button where its counterpart sits, so the game shows gamepad
@@ -37,11 +40,11 @@ button prompts:
 - sticks = sticks (left: navigate, right: scroll), right stick pressed = R3
 - A/B/X/Y = A/B/X/Y (A confirms, B goes back)
 - triggers = shoulder buttons (switch tabs), grips = triggers
-- pressing the left stick = Start: in gameplay it opens the pause menu, on loading screens it cycles the tips. In menus
-  it does nothing, since the game would read it as "confirm".
+- A + X together = Start: in gameplay it opens the pause menu, on loading screens it cycles the tips. In menus it is
+  just A and X, since the game would read Start as "confirm".
 
-There is no View button and no D-pad; the left menu button stays with Virtual Desktop. In gameplay only the left stick
-press reaches the game.
+There is no View button and no D-pad; the left menu button stays with Virtual Desktop. In gameplay only A + X
+reaches the game.
 
 ## Uninstall
 Delete `winhttp.dll` from the game folder (disables all BepInEx mods). For a full removal also delete `BepInEx\`,
