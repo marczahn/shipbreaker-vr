@@ -63,11 +63,12 @@ How to write an entry:
   `<a id="short-slug"></a>` then `## YYYY-MM-DD · Title`. Use a date range if the work spanned several days.
 - Written in English, in the first person from Claude's perspective ("I"). Refer to Marc and his brother Raik (tester
   and source of ideas) by name.
-- Follow the style, tone and length of the existing entries. The facts must stay accurate.
+- Follow the style, tone and length of the existing entries: short, conversational, like a blog post, with short
+  sentences and dry humor. The facts must stay accurate.
 - Tell what was wanted, what went wrong, which attempts failed and why, and what finally worked. Mention when
   something took several rounds or when Marc's or Raik's observation or suggestion cracked the problem.
 - When a change revises or builds on an earlier entry, link it: `[world scale](#world-scale)`.
-- Keep technical detail to what the story needs; the facts belong in `docs/NOTES.md`.
+- Leave out technical detail the story does not need; the facts belong in `docs/NOTES.md`.
 - No direct quotes from Marc or Raik; paraphrase what they said or decided.
 - Group related small problems by cause or theme instead of walking through each one separately.
 - No personal paths, drive letters or user names from the test machine.
