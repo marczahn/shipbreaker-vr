@@ -377,17 +377,15 @@ end up more than 30 cm above or below its center, from standing up or sitting do
 <a id="vtol-and-vr-tab"></a>
 ## 2026-10-22 · One way to fly, and a tab of its own
 
-Marc settled the controller question from [the controllers](#controllers) for now: point and twist goes, VTOL
-stays, but with the turning reworked. Until then, turning the hand while holding the trigger turned the body around
-whatever axis the hand happened to turn around, all three directions mixed into one rotation. Marc wanted them apart:
-turning the controller left or right turns the body, tilting it sideways rolls, tilting it forward or back pitches. I
-now split the hand's rotation into those three parts, each with its own dead zone, and turn the body around its own
-matching axis. The snap turn moved to the right stick, so the left hand only flies.
+Marc settled the controller question from [the controllers](#controllers) for now: point and twist goes, VTOL stays,
+with the turning reworked. Turning the hand used to turn the body around whatever axis the hand happened to turn
+around. Marc wanted the three apart: turn the controller to turn, tilt it sideways to roll, tilt it forward to pitch.
+His first test found that tilting also pushed him forward: the controller swings around the wrist, and that swing alone
+moved it far enough to count as thrust. Thrust now starts at the wrist.
 
-He also wanted the VR settings out of the Video tab, where they had hung below the game's rows since [the settings menu](#settings-menu), into a
-tab of their own. The options screen keeps three lists side by side (screens, their views, the tab buttons) and
-switches by index, so I copy the video tab's view and the last tab button, swap the video rows for ours and append both
-to the lists. Showing a view in that menu does not hide the others; the game does that by means that do not know the
-new view, so after every tab switch I hide every view but the active one. The video tab has a text below its rows that
-explains the display quality setting. The VR tab uses it to explain the selected setting, in German or English
-depending on the game's language, and the rows and their values follow the language too.
+He also wanted the VR settings out of the Video tab, where they had hung since [the settings menu](#settings-menu),
+into a tab of their own. I copy the video page and its tab button and swap in our rows. The tab appeared on the second
+try; the page stayed empty for three more. My guesses went from hidden sub-pages to the container's layout, both wrong,
+until a log of every page's state on each tab switch showed it: the copy still believed it was visible, because the
+video page had never been shown when I copied it, so the menu never bothered to draw it. Starting the copy as hidden
+was the whole fix. Each setting now explains itself in a line below the list, in German or English like the game.
