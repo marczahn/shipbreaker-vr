@@ -83,9 +83,9 @@ namespace ShipbreakerVR
             var t = Traverse.Create(video);
             var container = t.Field("m_OptionsContainer").GetValue<GameObject>();
             if (container == null || !container.transform.IsChildOf(copy.transform)) throw new InvalidOperationException("the video options list is outside its view");
-            // The display quality explanation below the video rows shows the selected VR row's hint instead.
+            // The display quality explanation of the video tab. It lies outside the video view, so the copy still points
+            // at the original.
             var description = t.Field("m_DisplayPerformanceDescription").GetValue<LocalizedTextMeshProUGUI>();
-            if (description != null && !description.transform.IsChildOf(copy.transform)) description = null;
             var host = video.gameObject;
             UnityEngine.Object.DestroyImmediate(video);
 
@@ -105,14 +105,33 @@ namespace ShipbreakerVR
 
             var vr = host.AddComponent<VrOptionsScreen>();
             Traverse.Create(vr).Field("m_OptionsContainer").SetValue(container);
-            vr.Hint = description != null ? description.TMProText : null;
-            Plugin.Log.LogInfo(description != null
-                ? $"Options: hints in '{description.name}', {((RectTransform)description.transform).rect.size}, word wrap {description.TMProText.enableWordWrapping}"
-                : "Options: no description text in the video view, no hints");
+            vr.View = view;
+            if (description != null) vr.Hint = CreateHint(description, copy.transform, vr);
+            else Plugin.Log.LogInfo("Options: the video tab has no description text, no hints");
             screen = vr;
             copy.SetActive(wasActive);
             return copy;
         }
+
+        // A copy of the description text for the hints, at the same place but inside the VR view, so it shows and hides
+        // with it. The original is hidden while the VR tab shows, in case it stays visible across tabs.
+        private static TextMeshProUGUI CreateHint(LocalizedTextMeshProUGUI description, Transform view, VrOptionsScreen screen)
+        {
+            var wasActive = description.gameObject.activeSelf;
+            description.gameObject.SetActive(false);
+            var copy = UnityEngine.Object.Instantiate(description.gameObject, description.transform.parent, false);
+            description.gameObject.SetActive(wasActive);
+            copy.name = "ShipbreakerVR Hint";
+            copy.transform.SetParent(view, true);
+            copy.SetActive(true);
+            screen.Original = description.gameObject;
+            var text = copy.GetComponent<LocalizedTextMeshProUGUI>().TMProText;
+            text.enableWordWrapping = true;
+            Plugin.Log.LogInfo($"Options: hints in a copy of '{Path(description.transform)}' (active {description.gameObject.activeInHierarchy}), size {((RectTransform)description.transform).rect.size}");
+            return text;
+        }
+
+        private static string Path(Transform t) => t.parent == null ? t.name : Path(t.parent) + "/" + t.name;
 
         // The list content has a fixed height for the video rows in the game's prefab; make it fit ours.
         private static void FitContent(RectTransform content)
@@ -187,7 +206,7 @@ namespace ShipbreakerVR
             var views = Views(unified);
             var active = Active(unified);
             for (var i = 0; i < views.Length; i++)
-                if (i != active && views[i] != null && (views[i].IsVisible || views[i].IsShowing)) views[i].Hide();
+                if (i != active && views[i] != null && views[i].gameObject.activeInHierarchy && (views[i].IsVisible || views[i].IsShowing)) views[i].Hide();
         }
     }
 
@@ -196,14 +215,33 @@ namespace ShipbreakerVR
     internal class VrOptionsScreen : OptionsScreenController
     {
         public TextMeshProUGUI Hint;
+        public UIView View;
+        // The video tab's description text, hidden while this tab shows.
+        public GameObject Original;
         private string shown;
+        private bool originalHidden;
+        private bool originalWasActive;
 
         public override bool OptionsAreDirty => false;
+
+        // Gives the video tab its description back when this view is switched off while showing.
+        private new void OnDisable()
+        {
+            if (Original != null && originalHidden) Original.SetActive(originalWasActive);
+            originalHidden = false;
+        }
 
         protected override void Update()
         {
             base.Update();
             if (Hint == null) return;
+            var showing = View != null && (View.IsVisible || View.IsShowing);
+            if (Original != null && showing != originalHidden)
+            {
+                if (showing) originalWasActive = Original.activeSelf;
+                Original.SetActive(!showing && originalWasActive);
+                originalHidden = showing;
+            }
             var selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
             var hint = VrOptions.HintFor(selected != null ? selected.GetComponentInParent<OptionEntry>() : null)
                 ?? VrOptions.L("Select a setting to see what it is for.", "Wähle eine Einstellung, um zu sehen, wofür sie gut ist.");

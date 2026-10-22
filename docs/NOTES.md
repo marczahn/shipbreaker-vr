@@ -92,8 +92,11 @@ video view is copied (controller and rows removed, `VrOptionsScreen` and the VR 
 renamed so Doozy's lookups by category/name don't hit it), the last tab button is copied with its click redirected to
 `ShowTab(new index)`, and both are appended to the arrays. `UIView.Show` does not hide other views and the game's way
 of hiding the previous tab does not know the copy, so after every tab switch all other views are hidden.
-The video view's display quality description (`m_DisplayPerformanceDescription`) stays in the copy and shows the hint
-of the selected VR row (`VrOptionsScreen.Update`, from the EventSystem selection, which the mouse pointer also sets).
+The video tab's display quality description (`m_DisplayPerformanceDescription`) lies outside the video view, so it is
+copied into the VR view at the same place and shows the hint of the selected VR row (`VrOptionsScreen.Update`, from the
+EventSystem selection, which the mouse pointer also sets); the original is hidden while the VR tab shows. The first
+template lookup searched under the `UnifiedOptionsScreen` object, which holds no rows; the templates come from the
+views' container ("Options Body Container").
 Labels, values and hints are German when the game's language (`LynxGameUserOptions.Language`) starts with "de",
 otherwise English.
 
