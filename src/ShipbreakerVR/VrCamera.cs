@@ -500,9 +500,10 @@ namespace ShipbreakerVR
         private void FollowGameCamera()
         {
             if (gameCamera == null || rig == null) return;
-            // Hab camera moves become fades in VR: until the view is black the rig stays on the old spot.
+            // Hab camera moves become fades in VR: until the view is black the rig stays on the old spot. At the monitor
+            // above the bed it stays where it was.
             VrHab.UpdateTransition();
-            if (FollowsHab && VrHab.Holding) return;
+            if (FollowsHab && (VrHab.Holding || VrHab.Staying)) return;
             var cam = gameCamera.transform;
             // At a monitor in the Hab the head goes in front of it instead of right up to it (VrHab.Monitor).
             var position = cam.position;
@@ -512,8 +513,9 @@ namespace ShipbreakerVR
             if (FollowsHab) Playspace = HabHeading(cam.rotation) * recenterRotation;
             else if (!BodyFollowsHead) Playspace = cam.rotation * recenterRotation;
             // Cinemachine sets the lens every frame: in the Hab the rooms reach 500 m, the view out of the window
-            // 5000 m (ship and dock). Copied only once, the ship stayed cut off at 500 m.
-            vrCamera.farClipPlane = gameCamera.farClipPlane;
+            // 5000 m (ship and dock). Copied only once, the ship stayed cut off at 500 m. In the Hab at least as far
+            // as its farthest view: at the terminal (2555 m) the earth outside was cut off depending on the head.
+            vrCamera.farClipPlane = FollowsHab ? Mathf.Max(gameCamera.farClipPlane, VrHab.FarClip) : gameCamera.farClipPlane;
             var scale = WorldScale;
             rig.localScale = new Vector3(scale, scale, scale);
             rig.rotation = Playspace;

@@ -172,7 +172,9 @@ Cinemachine applies each virtual camera's lens to `Unity_Camera` every frame. Mo
 500 m, the window view 5000 m (the ship and the dock below), the comms view 5000 m and the Hab screen 2555 m. The VR
 camera copied it only when attaching, so the window view was cut off at 500 m: the ship showed only in part, and only
 near the edge of the view (the far plane is a distance along the view direction). The far clip plane is now copied
-every frame.
+every frame, and in the Hab it is at least the farthest of the Hab's virtual cameras (5000 m): the game sets each
+view's far plane for what its camera looks at, but in VR one looks out of the window from anywhere. At the terminal
+(2555 m) parts of the earth outside were cut off depending on the head.
 
 Three views are "navigable screens" on a monitor: the one above the bed (`Entry` -> `WakeUpMonitor`, the good morning
 screen after waking up), the terminal (`Comms` -> `HabScreen`) and the workbench (`Workstation` ->
@@ -187,11 +189,15 @@ canvas at 2.4 m and the monitor at 0.35 m at once. Now the canvas lies on the mo
 space canvas for its "locked" screensaver (`LYNX_Screensaver_Locked/Canvas`, inactive, 0.56 x 0.31 m) that covers
 exactly its screen; `VrHab` maps the virtual cameras of every `NavigationOption` with a `ScreenAnimator`
 (`CameraToGoTo`, `CameraToSwapToAfterBlend`, from `m_NavigationOptions` and on `Navigate`) to that canvas. While one of
-them is active, `VrUi` draws the UI texture on the canvas's corners (as large as fits at the texture's aspect) and the
-rig puts the head 0.7 m in front of the screen along its normal (about 43 degrees wide), with the heading of the
-virtual camera. The monitor above the bed faces down onto the pillow; pulled back, the head would be in the mattress,
-so there the head stays where the game's camera is (0.44 m). The rig and the canvas change spot only once the view is
-black, like any other Hab move. The game's `FadeOut` of the monitor stays, as in the flat game the overlay is over the
+them is active, `VrUi` draws the UI texture on the canvas's corners (as large as fits at the texture's aspect), moved
+1 cm along the normal onto the glass (the screensaver's canvas floats about that far in front of it), and the rig puts
+the head 0.7 m in front of the screen along its normal (about 43 degrees wide), with the heading of the virtual
+camera. The monitor above the bed faces down onto the pillow (`WakeUpMonitor` sits 0.44 m below it): there the rig
+stays where it was (`Entry` after waking up, about 1 m away), without a fade going in or back out; only if the Hab
+opens right at that monitor does the head go where the game's camera is. Otherwise the rig and the canvas change spot
+only once the view is black, like any other Hab move. The Hab's 3D waypoint markers (`PRF_3DHAB_WaypointMarkers`, the
+green arrows pointing at the terminal) stuck into the monitor from 0.7 m; in the flat game the overlay covers them, so
+in VR their renderers are hidden (`forceRenderingOff`) while the rig is at a monitor. The game's `FadeOut` of the monitor stays, as in the flat game the overlay is over the
 dark monitor; a postfix on `Navigate` resets it only for a screen whose monitor canvas was not found, where the overlay
 is on the menu canvas in front of the player and the dark monitor would otherwise stay in the room as a black
 rectangle.
@@ -266,9 +272,12 @@ and forth slightly (Player.log of 22.10.: the Hab at 22.4 ms per frame, headset 
 (`SpaceTruck3DHABController`, camera `Root/CameraRig/Main Camera`) renders into a 960x540 texture every frame, an extra
 HDRP camera with its own culling, shadows and lighting, while only the `TruckImage` of the truck screen in the
 `Hab ScreenStack` shows it. In VR in the Hab `VrPerformance` now switches that camera off while none of the raw images
-showing its texture is drawn (inactive, on a disabled canvas or under a canvas group at alpha 0). The frame time line
-also gives the main thread's time from `Update` to the end of rendering and, where Unity's frame timing is enabled,
-CPU and GPU time, to tell whether the processor or the graphics card holds the Hab at 45 fps.
+showing its texture is drawn (inactive, on a disabled canvas or under a canvas group at alpha 0). That alone did not
+get the Hab to 90 fps. The frame time line now also gives the main thread's time from `Update` until rendering starts
+(game logic), the time rendering takes on the main thread (including the wait for the headset's next frame) and, if
+the runtime reports it, the app's GPU time (`XRDisplaySubsystem.TryGetAppGPUTimeLastFrame`). Unity's
+`FrameTimingManager` reports nothing in this build, and a main thread time from `Update` to the end of rendering
+came out at the full frame time, because the wait for the headset falls inside it.
 
 ## Diagnostics
 F8 (`VrDiagnostics`) is for things only seen in the headset. It writes into the log: game state, head pose, the camera

@@ -33,11 +33,24 @@ namespace ShipbreakerVR
         // The navigable screens with a monitor (above the bed, terminal, workbench): their virtual cameras sit 35 to 45 cm
         // in front of it, and what the screen shows comes as an overlay over the whole picture. In VR that overlay is on
         // the menu canvas 2.4 m away, which was drawn over the monitor 35 cm away: two distances at once for the eyes.
-        // So in VR the canvas lies on the monitor itself (VrUi), and the head is ViewDistance in front of it.
+        // So in VR the canvas lies on the monitor itself (VrUi), and the head is ViewDistance in front of it. The monitor
+        // above the bed is looked at from where one lies after waking up; there the rig stays where it was (Staying).
+        // The screensaver's canvas floats about a centimetre in front of the glass; the canvas goes onto the glass.
         private const float ViewDistance = 0.7f;
+        private const float ScreenInset = 0.01f;
         private static readonly Dictionary<ICinemachineCamera, RectTransform> monitors = new Dictionary<ICinemachineCamera, RectTransform>();
         private static RectTransform placedMonitor;
+        private static ICinemachineCamera placeVirtualCamera;
         private static readonly Vector3[] corners = new Vector3[4];
+
+        // The Hab's 3D waypoint markers (the green arrows pointing at the terminal and so on). In the flat game the
+        // screen's overlay covers them; in VR, 0.7 m in front of the monitor, they stuck into it. Hidden at a monitor.
+        private static readonly List<Renderer> markers = new List<Renderer>();
+        private static bool markersHidden;
+
+        // The farthest any of the Hab's virtual cameras sees (the window view, 5000 m). Each view's far clip plane only
+        // fits what the game camera looks at there; in VR one can look out of the window from anywhere.
+        public static float FarClip { get; private set; }
 
         // How far the VR view is faded to black, 0 to 1.
         public static float Fade { get; private set; }
@@ -47,6 +60,9 @@ namespace ShipbreakerVR
 
         // The monitor the rig stands at, or null. Changes only once the view is black, like the rig's spot.
         public static RectTransform Monitor => cutBrain != null ? placedMonitor : null;
+
+        // True while the rig stays on the spot it had before the current camera (the monitor above the bed).
+        public static bool Staying { get; private set; }
 
         // Remembers the virtual cameras of a navigation option that opens a screen on a monitor; true if the monitor is known.
         public static bool AddScreen(NavigationOption navOpt)
@@ -71,31 +87,48 @@ namespace ShipbreakerVR
         private static void FindMonitors()
         {
             monitors.Clear();
+            markers.Clear();
+            markersHidden = false;
+            foreach (var t in Resources.FindObjectsOfTypeAll<Transform>())
+                if (t.name == "PRF_3DHAB_WaypointMarkers" && t.gameObject.scene.IsValid()) t.GetComponentsInChildren(true, markers);
+            FarClip = 0f;
+            foreach (var camera in controller.GetComponentsInChildren<CinemachineVirtualCamera>(true))
+                FarClip = Mathf.Max(FarClip, camera.m_Lens.FarClipPlane);
             var options = AccessTools.FieldRefAccess<Hab3DLocationNavigation, List<NavigationOption>>("m_NavigationOptions");
             foreach (var location in Resources.FindObjectsOfTypeAll<Hab3DLocationNavigation>())
             {
                 if (!location.gameObject.scene.IsValid() || options(location) == null) continue;
                 foreach (var navOpt in options(location)) AddScreen(navOpt);
             }
-            Plugin.Log.LogInfo($"Hab monitors: {monitors.Count} virtual camera(s)");
+            Plugin.Log.LogInfo($"Hab monitors: {monitors.Count} virtual camera(s), {markers.Count} waypoint marker renderer(s), farthest view {FarClip:0} m");
         }
 
         // Center, orientation (forward into the screen) and size of a monitor's screen.
         public static void MonitorScreen(RectTransform monitor, out Vector3 center, out Quaternion rotation, out Vector2 size)
         {
             monitor.GetWorldCorners(corners);
-            center = (corners[0] + corners[2]) * 0.5f;
             rotation = monitor.rotation;
+            center = (corners[0] + corners[2]) * 0.5f + rotation * Vector3.forward * ScreenInset;
             size = new Vector2(Vector3.Distance(corners[0], corners[3]), Vector3.Distance(corners[0], corners[1]));
         }
 
-        // Where the head goes at a monitor. The one above the bed is looked at lying on the pillow, as the game's camera
-        // does; further back the head would be in the mattress.
+        // Where the head goes at a monitor. One overhead (above the bed) is looked at from the spot before (Staying), or
+        // where the game's camera is if the Hab opened right at it; further back the head would be in the mattress.
         public static Vector3 MonitorViewpoint(RectTransform monitor, Vector3 cameraPosition)
         {
             MonitorScreen(monitor, out var center, out var rotation, out _);
             var forward = rotation * Vector3.forward;
-            return Mathf.Abs(forward.y) > 0.7f ? cameraPosition : center - forward * ViewDistance;
+            return Overhead(monitor) ? cameraPosition : center - forward * ViewDistance;
+        }
+
+        private static bool Overhead(RectTransform monitor) => Mathf.Abs((monitor.rotation * Vector3.forward).y) > 0.7f;
+
+        private static void HideMarkers(bool hide)
+        {
+            if (hide == markersHidden) return;
+            markersHidden = hide;
+            foreach (var marker in markers)
+                if (marker != null) marker.forceRenderingOff = hide;
         }
 
         // Original amplitude of each sway (Perlin noise) we silenced; the game itself toggles their enabled flag.
@@ -165,7 +198,10 @@ namespace ShipbreakerVR
             }
             cutBrain = brain;
             lastVirtualCamera = null;
+            placeVirtualCamera = null;
             placedMonitor = null;
+            Staying = false;
+            HideMarkers(false);
             transitionStart = -1f;
             Fade = 0f;
             if (brain == null) return;
@@ -182,7 +218,10 @@ namespace ShipbreakerVR
             if (cutBrain == null) return;
             var current = cutBrain.ActiveVirtualCamera;
             var now = Time.unscaledTime;
-            if (lastVirtualCamera != null && current != lastVirtualCamera)
+            var monitor = current != null && monitors.TryGetValue(current, out var found) && found != null ? found : null;
+            // Into the monitor above the bed the rig stays, and back out to where it stayed it doesn't move either.
+            var stay = monitor != null && placeVirtualCamera != null && Overhead(monitor);
+            if (lastVirtualCamera != null && current != lastVirtualCamera && !stay && current != placeVirtualCamera)
             {
                 var elapsed = transitionStart >= 0f ? now - transitionStart : float.MaxValue;
                 // Fading out or black already: the rig jumps to wherever the camera is once it is black.
@@ -190,7 +229,10 @@ namespace ShipbreakerVR
                 if (elapsed >= FadeOut + Black) transitionStart = now - Fade * FadeOut;
             }
             lastVirtualCamera = current;
-            if (!Holding) placedMonitor = current != null && monitors.TryGetValue(current, out var monitor) && monitor != null ? monitor : null;
+            Staying = stay;
+            if (!stay) placeVirtualCamera = current;
+            if (!Holding) placedMonitor = monitor;
+            HideMarkers(placedMonitor != null);
 
             if (transitionStart < 0f)
             {

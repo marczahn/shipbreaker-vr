@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.HighDefinition;
 using UnityEngine.UI;
+using UnityEngine.XR;
 
 namespace ShipbreakerVR
 {
@@ -35,11 +36,14 @@ namespace ShipbreakerVR
         private static Occlusion labelOcclusion;
         private static float labelScale;
 
-        // Main thread time from Update to the end of rendering, and what Unity's frame timing reports if enabled.
-        private static double mainSum, cpuSum, gpuSum;
-        private static int mainCount, timingCount;
+        // Where a frame's time goes: the main thread from Update until rendering starts (game logic), rendering on the
+        // main thread (which also waits for the headset's next frame, so it fills up to the frame time), and the GPU
+        // time the headset runtime reports for the app, if it does.
+        private static double logicSum, renderSum, gpuSum;
+        private static int logicCount, renderCount, gpuCount;
         private static float updateStart = -1f;
-        private static readonly FrameTiming[] timings = new FrameTiming[1];
+        private static float renderStart = -1f;
+        private static readonly List<XRDisplaySubsystem> displays = new List<XRDisplaySubsystem>();
 
         private static Camera truckCamera;
         private static readonly List<RawImage> truckImages = new List<RawImage>();
@@ -62,18 +66,28 @@ namespace ShipbreakerVR
             ambientOcclusion.intensity.value = 0f;
             volume.sharedProfile = profile;
             go.SetActive(true);
+            RenderPipelineManager.beginFrameRendering += (context, cameras) => StartOfRendering();
             RenderPipelineManager.endFrameRendering += (context, cameras) => EndOfRendering();
         }
 
         // Called from the VR camera's Update.
         public static void FrameStart() => updateStart = Time.realtimeSinceStartup;
 
+        private static void StartOfRendering()
+        {
+            renderStart = Time.realtimeSinceStartup;
+            if (updateStart < 0f || statsLabel == null) return;
+            logicSum += renderStart - updateStart;
+            logicCount++;
+            updateStart = -1f;
+        }
+
         private static void EndOfRendering()
         {
-            if (updateStart < 0f || statsLabel == null) return;
-            mainSum += Time.realtimeSinceStartup - updateStart;
-            mainCount++;
-            updateStart = -1f;
+            if (renderStart < 0f || statsLabel == null) return;
+            renderSum += Time.realtimeSinceStartup - renderStart;
+            renderCount++;
+            renderStart = -1f;
         }
 
         // Called every frame by the VR camera.
@@ -117,13 +131,14 @@ namespace ShipbreakerVR
             // The switch itself (new camera, new render targets) is not representative.
             if (statsLabel == null || Time.unscaledTime < statsStart + StatsSettle) return;
             frames.Add(Time.unscaledDeltaTime);
-            FrameTimingManager.CaptureFrameTimings();
-            if (FrameTimingManager.GetLatestTimings(1, timings) > 0 && timings[0].gpuFrameTime > 0.0)
-            {
-                cpuSum += timings[0].cpuFrameTime;
-                gpuSum += timings[0].gpuFrameTime;
-                timingCount++;
-            }
+            SubsystemManager.GetInstances(displays);
+            foreach (var display in displays)
+                if (display.running && display.TryGetAppGPUTimeLastFrame(out var gpu) && gpu > 0f)
+                {
+                    gpuSum += gpu;
+                    gpuCount++;
+                    break;
+                }
             if (Time.unscaledTime >= statsStart + StatsSettle + StatsPeriod)
             {
                 LogStats();
@@ -144,15 +159,18 @@ namespace ShipbreakerVR
                 var text = new StringBuilder($"Frame time ({statsLabel}): average {average * 1000f:0.0} ms ({1f / average:0} fps), ");
                 text.Append($"slowest 5 % from {slow * 1000f:0.0} ms, slowest {frames[frames.Count - 1] * 1000f:0} ms, {frames.Count} frames");
                 if (refresh > 0f) text.Append($", headset {refresh:0} Hz ({1000f / refresh:0.0} ms)");
-                // Whether the main thread or the GPU sets the pace (the frame waits for the headset either way).
-                if (mainCount > 0) text.Append($", main thread {mainSum / mainCount * 1000.0:0.0} ms");
-                text.Append(timingCount > 0 ? $", CPU {cpuSum / timingCount:0.0} ms, GPU {gpuSum / timingCount:0.0} ms" : ", GPU time unavailable");
+                // Whether the main thread or the GPU sets the pace.
+                if (logicCount > 0) text.Append($", game logic {logicSum / logicCount * 1000.0:0.0} ms");
+                if (renderCount > 0) text.Append($", rendering with waiting {renderSum / renderCount * 1000.0:0.0} ms");
+                // Unity doesn't document the unit; runtimes report seconds or milliseconds.
+                var gpu = gpuCount > 0 ? gpuSum / gpuCount : 0.0;
+                text.Append(gpuCount > 0 ? $", app GPU {(gpu < 1.0 ? gpu * 1000.0 : gpu):0.0} ms" : ", GPU time unavailable");
                 if (truckCamera != null) text.Append($", truck viewer {(truckPaused ? "paused" : "rendering")}");
                 Plugin.Log.LogInfo(text.ToString());
             }
             frames.Clear();
-            mainSum = cpuSum = gpuSum = 0.0;
-            mainCount = timingCount = 0;
+            logicSum = renderSum = gpuSum = 0.0;
+            logicCount = renderCount = gpuCount = 0;
         }
 
         private static void PauseTruckCamera(bool pause)
