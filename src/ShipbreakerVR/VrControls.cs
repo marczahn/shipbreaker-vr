@@ -67,7 +67,8 @@ namespace ShipbreakerVR
             if (Active == Scheme.Aus) { held = false; return; }
             // Controller poses are in tracking space, i.e. relative to the rig whose rotation is the playspace.
             var playspace = VrCamera.Instance.Playspace;
-            if (GetRight() && right.TryGetFeatureValue(CommonUsages.primary2DAxis, out var rightStick)) SnapTurn(rightStick.x, playspace);
+            // Outside gameplay the right stick works the menus (VrMenuInput).
+            if (!VrMenuInput.InMenus && GetRight() && right.TryGetFeatureValue(CommonUsages.primary2DAxis, out var rightStick)) SnapTurn(rightStick.x, playspace);
 
             if (!GetLeft()) { held = false; return; }
             if (!left.TryGetFeatureValue(CommonUsages.devicePosition, out var grip)

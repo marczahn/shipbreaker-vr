@@ -30,6 +30,13 @@ namespace ShipbreakerVR
             public override string ValueText => Entry.Value ? L("On", "An") : L("Off", "Aus");
         }
 
+        // A row that runs something when activated, shown as a toggle row without the toggle.
+        private class ActionRow : Row
+        {
+            public Action Run;
+            public override string ValueText => L("Go", "Los");
+        }
+
         private class SliderRow : Row
         {
             public ConfigEntry<float> Entry;
@@ -67,6 +74,12 @@ namespace ShipbreakerVR
 
             return new Row[]
             {
+                new ActionRow
+                {
+                    Label = L("Center view", "Ansicht zentrieren"), Run = VrCamera.RecenterView,
+                    Hint = L("Puts the view and the menus in front of you again, like F4. Use it after you turned around or moved away from your spot.",
+                        "Richtet Blick und Menüs wieder vor dir aus, wie F4. Nutzen, wenn du dich umgedreht oder von deinem Platz entfernt hast."),
+                },
                 new BoolRow
                 {
                     Label = L("Body follows head", "Körper folgt Kopf"), Entry = Plugin.BodyFollowsHead,
@@ -173,6 +186,7 @@ namespace ShipbreakerVR
                 OptionEntry template = row switch
                 {
                     BoolRow _ => boolTemplate,
+                    ActionRow _ => boolTemplate,
                     SliderRow _ => sliderTemplate,
                     _ => listTemplate,
                 };
@@ -268,6 +282,11 @@ namespace ShipbreakerVR
                     slider.SetValueWithoutNotify(Mathf.Clamp(s.Entry.Value, s.Min, s.Max));
                     SetText(t.Field("m_ValueText").GetValue<TextMeshProUGUI>(), row.ValueText);
                     break;
+                case ActionRow _:
+                    SetText(t.Field("m_EnabledDisabledText").GetValue<TextMeshProUGUI>(), row.ValueText);
+                    var box = t.Field("m_ToggleFill").GetValue<Image>();
+                    if (box != null) box.gameObject.SetActive(false);
+                    break;
                 case ListRow _:
                     SetText(t.Field("m_ListText").GetValue<TextMeshProUGUI>(), row.ValueText);
                     break;
@@ -284,7 +303,13 @@ namespace ShipbreakerVR
 
         public static bool TryToggle(OptionEntry entry)
         {
-            if (!Rows.TryGetValue(entry, out var row) || !(row is BoolRow b)) return false;
+            if (!Rows.TryGetValue(entry, out var row)) return false;
+            if (row is ActionRow action)
+            {
+                action.Run();
+                return true;
+            }
+            if (!(row is BoolRow b)) return false;
             b.Entry.Value = !b.Entry.Value;
             TryRefresh(entry);
             return true;

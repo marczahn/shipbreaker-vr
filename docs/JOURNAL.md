@@ -389,3 +389,21 @@ try; the page stayed empty for three more. My guesses went from hidden sub-pages
 until a log of every page's state on each tab switch showed it: the copy still believed it was visible, because the
 video page had never been shown when I copied it, so the menu never bothered to draw it. Starting the copy as hidden
 was the whole fix. Each setting now explains itself in a line below the list, in German or English like the game.
+
+<a id="menu-controller"></a>
+## 2026-10-22 · Menus with the right controller
+
+Until now the menus still needed the mouse or the keyboard, which is awkward with a headset on. Marc wanted to work them
+with the right controller, and he wanted a "Center view" row in the VR tab that does what F4 does, so recentering no
+longer needs the keyboard either.
+
+A laser pointer would be the usual VR answer, but the game already offered a shorter way: all its menus work with a
+gamepad, and they read the gamepad through InControl, which accepts devices from outside. So the right controller now
+joins InControl as one more Xbox gamepad. Its stick navigates, A or the trigger confirms, B goes back, the grip with the
+stick switches tabs and scrolls, and pressing the stick opens the pause menu and closes it again. The game does the rest,
+including its gamepad button prompts. In gameplay only the stick press reaches the game, so the stick keeps its snap
+turn from [the controllers](#controllers); in menus the snap turn pauses. One trap I saw coming: the press that opens the
+pause menu is still held in its first frame, and the pause menu would read it as "close". A press held across a change
+of menu now only counts once it was released.
+
+The new row is a copy of a toggle row without the toggle, like the other rows in [the VR tab](#vtol-and-vr-tab).
