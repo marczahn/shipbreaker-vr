@@ -6,26 +6,25 @@ using UnityEngine.XR;
 
 namespace ShipbreakerVR
 {
-    // Flying with the left motion controller. Two schemes:
-    // - Pavlov ("point and twist"): stick forward/back thrusts along the direction the controller points. Holding the
-    //   trigger stores the controller orientation; twisting or tilting the hand away from it rolls, pitches or yaws the body.
-    //   The grip stays free for grabbing.
-    // - Vtol: holding the trigger stores the controller pose as a reference; moving the controller away from it thrusts in
-    //   that direction, turning it away from it rotates the body. Back at the reference (or trigger released) nothing happens.
-    // - Both: stick left/right snap-turns, pressing the stick brakes.
+    // Flying with the motion controllers (VTOL): holding the left trigger stores the left controller pose as a reference.
+    // Moving the controller away from it thrusts in that direction; turning it left/right turns the body, tilting it
+    // sideways rolls and tilting it forward/back pitches, each around the body's own axis and faster the further the hand
+    // is turned. Back at the reference (or trigger released) nothing happens. Pressing the left stick brakes, the right
+    // stick left/right snap-turns. The grips stay free for grabbing.
     // Thrust and brake go through the game's own actions (ThrustController reads them via LynxControls), so fuel, forces and
-    // HUD stay the game's. Rotation is applied to the playspace in VrBody, so it needs "body follows head".
+    // HUD stay the game's. Rotation is applied in VrBody: to the playspace with "body follows head", to the body without.
     internal static class VrControls
     {
-        public enum Scheme { Aus, Pavlov, Vtol }
+        public enum Scheme { Aus, Vtol }
 
-        private const float StickDeadzone = 0.15f;
         private const float SnapAngle = 30f;
         private const float SnapPress = 0.7f;
         private const float SnapRelease = 0.3f;
         private const float TriggerPress = 0.5f;
         private const float MoveDeadzone = 0.02f;
         private const float MoveFull = 0.15f;
+        // The wrist relative to the grip pose (which runs along the handle): an estimate, about 8 cm behind the grip.
+        private static readonly Vector3 WristOffset = new Vector3(0f, 0f, -0.08f);
         private const float TurnDeadzone = 8f;
         private const float TurnFull = 45f;
         private const float TurnSpeed = 45f;
@@ -34,6 +33,7 @@ namespace ShipbreakerVR
         private static readonly InputFeatureUsage<Quaternion> PointerRotation = new InputFeatureUsage<Quaternion>("PointerRotation");
 
         private static InputDevice left;
+        private static InputDevice right;
         private static bool loggedDevice;
         private static float nextDeviceLog;
         private static int deviceLogs;
@@ -64,26 +64,20 @@ namespace ShipbreakerVR
             turn = Quaternion.identity;
             braking = false;
 
-            var scheme = Active;
-            if (scheme == Scheme.Aus || !GetLeft()) { held = false; return; }
-            if (!left.TryGetFeatureValue(CommonUsages.devicePosition, out var position)
-                || !left.TryGetFeatureValue(CommonUsages.deviceRotation, out var rotation)) { held = false; return; }
-            if (left.TryGetFeatureValue(PointerRotation, out var aim)) rotation = aim;
-
+            if (Active == Scheme.Aus) { held = false; return; }
             // Controller poses are in tracking space, i.e. relative to the rig whose rotation is the playspace.
             var playspace = VrCamera.Instance.Playspace;
-            left.TryGetFeatureValue(CommonUsages.primary2DAxis, out var stick);
-            SnapTurn(stick.x, playspace);
+            if (GetRight() && right.TryGetFeatureValue(CommonUsages.primary2DAxis, out var rightStick)) SnapTurn(rightStick.x, playspace);
+
+            if (!GetLeft()) { held = false; return; }
+            if (!left.TryGetFeatureValue(CommonUsages.devicePosition, out var grip)
+                || !left.TryGetFeatureValue(CommonUsages.deviceRotation, out var rotation)) { held = false; return; }
+            // Thrust follows the wrist, not the controller: tilting the hand swings the controller around the wrist, and
+            // measured at the controller that swing alone moved it past the deadzone, adding thrust nobody asked for.
+            var position = grip + rotation * WristOffset;
+            if (left.TryGetFeatureValue(PointerRotation, out var aim)) rotation = aim;
             left.TryGetFeatureValue(CommonUsages.trigger, out var trigger);
             left.TryGetFeatureValue(CommonUsages.primary2DAxisClick, out braking);
-
-            if (scheme == Scheme.Pavlov)
-            {
-                thrust = playspace * (rotation * Vector3.forward) * Deadzone(stick.y, StickDeadzone);
-                if (!Hold(trigger >= TriggerPress, position, rotation)) return;
-                TurnFromReference(rotation, playspace);
-                return;
-            }
 
             if (!Hold(trigger >= TriggerPress, position, rotation)) return;
             var offset = position - heldPosition;
@@ -103,13 +97,27 @@ namespace ShipbreakerVR
             return false;
         }
 
-        // Turns the body the way the hand is turned away from the reference, faster the further it is turned.
+        // Splits the hand's rotation away from the reference into turn (around the controller's up axis), pitch (right
+        // axis) and roll (forward axis), and turns the body around its own matching axis, each with its own deadzone.
+        // Unity's signs line up: hand turned right, tilted forward or tilted left turns, pitches or rolls the body that way.
         private static void TurnFromReference(Quaternion rotation, Quaternion playspace)
         {
-            (rotation * Quaternion.Inverse(heldRotation)).ToAngleAxis(out var angle, out var axis);
+            var hand = (Quaternion.Inverse(heldRotation) * rotation).eulerAngles;
+            var body = playspace * VrCamera.Instance.HeadRotation;
+            var yaw = Rate(hand.y);
+            var pitch = Rate(hand.x);
+            var roll = Rate(hand.z);
+            if (yaw != 0f) turn = Quaternion.AngleAxis(yaw, body * Vector3.up) * turn;
+            if (pitch != 0f) turn = Quaternion.AngleAxis(pitch, body * Vector3.right) * turn;
+            if (roll != 0f) turn = Quaternion.AngleAxis(roll, body * Vector3.forward) * turn;
+        }
+
+        // Degrees to turn this frame for a hand angle (0..360 from eulerAngles): none inside the deadzone, full speed from
+        // TurnFull on.
+        private static float Rate(float angle)
+        {
             if (angle > 180f) angle -= 360f;
-            var rate = Ramp(Mathf.Abs(angle), TurnDeadzone, TurnFull) * Mathf.Sign(angle);
-            if (rate != 0f && !float.IsInfinity(axis.x)) turn = Quaternion.AngleAxis(rate * TurnSpeed * Time.deltaTime, playspace * axis) * turn;
+            return Ramp(Mathf.Abs(angle), TurnDeadzone, TurnFull) * Mathf.Sign(angle) * TurnSpeed * Time.deltaTime;
         }
 
         // One fixed turn per stick flick around the head's up axis (the playspace can be tilted in any way after rolling);
@@ -121,6 +129,12 @@ namespace ShipbreakerVR
             snapped = true;
             var up = playspace * VrCamera.Instance.HeadRotation * Vector3.up;
             turn = Quaternion.AngleAxis(Mathf.Sign(x) * SnapAngle, up) * turn;
+        }
+
+        private static bool GetRight()
+        {
+            if (!right.isValid) right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
+            return right.isValid;
         }
 
         private static bool GetLeft()
@@ -148,12 +162,9 @@ namespace ShipbreakerVR
             return true;
         }
 
-        private static float Deadzone(float value, float deadzone) =>
-            Mathf.Abs(value) <= deadzone ? 0f : Mathf.Sign(value) * (Mathf.Abs(value) - deadzone) / (1f - deadzone);
-
         private static float Ramp(float value, float start, float full) => Mathf.Clamp01((value - start) / (full - start));
 
-        // Rotation to apply to the playspace this frame (world space). Called by VrBody once per body update.
+        // Rotation to apply to the playspace (or the body) this frame, in world space. Called by VrBody once per body update.
         public static Quaternion TakeTurn()
         {
             Update();

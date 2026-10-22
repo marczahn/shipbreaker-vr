@@ -166,10 +166,11 @@ The first test did absolutely nothing. The controller support was in the build, 
 been off in every version so far. Nobody had asked for a controller before. Next, the stick sent you up instead of
 forward, because I had taken the direction the handle points rather than the direction you aim.
 
-After that Marc raised the bar: all 13 kinds of movement with one hand. Both schemes handled it, and his next idea made
-them better still, rolling on the trigger so the grip stays free for grabbing. Braking moved twice in a minute and then
-turned out never to have worked at all. The game had quietly folded the button check into its thrust code, so my patch
-was guarding a door nobody used. Now it guards the right one. That was 0.9.0.
+After that Marc raised the bar: all 13 kinds of movement with one hand. I built a third scheme for that, "point and
+grip". It and VTOL both worked well, and his next idea made them better still, rolling on the trigger so the grip stays
+free for grabbing. Braking moved twice in a minute and then turned out never to have worked at all. The game had quietly
+folded the button check into its thrust code, so my patch was guarding a door nobody used. Now it guards the right one.
+That was 0.9.0.
 
 <a id="visor-steadying"></a>
 ## 2026-10-21 · Steadying the visor
@@ -228,3 +229,18 @@ on two plain settings: one resolution for outside, one for the station. Sometime
 F4 used to put the menu wherever you were looking, so looking down put it at your feet, tilted. Marc wanted menus at eye
 height always, and with 30 cm of slack so they don't chase every movement. That's what the mod does now. Stand up or sit
 down, and the menu glides back to your eyes.
+
+<a id="vtol-and-vr-tab"></a>
+## 2026-10-22 · One way to fly, and a tab of its own
+
+Three ways to fly with a controller is two too many. Marc picked VTOL and retired the rest, but wanted the turning done
+properly: turn the controller to turn, tilt it sideways to roll, tilt it forward to pitch. His first test found a
+catch. Tilting the hand also pushed him forward, because a controller swinging around your wrist moves far enough to
+count as thrust. Thrust now starts at the wrist, and wrists are no longer engines.
+
+He also wanted the VR settings out of the Video tab, where they had been squatting since [the hide and seek
+game](#options-hide-and-seek), and into a tab of their own. I copy the game's video page and swap in our rows. The tab
+showed up on the second try. The page stayed empty for three more, while I blamed one innocent suspect after another.
+A log of every page on every tab switch finally explained it: the copy thought it was already visible, so the menu
+never bothered to draw it. Telling it that it starts hidden was the whole fix. Every setting now also explains itself in
+a line below the list, in German or English, like the game.

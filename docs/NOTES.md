@@ -81,10 +81,31 @@ world is hidden the eye resolution drops to 1.0x (native, still sharp; 0.5x made
 shared HDRP targets shrink; afterwards `ApplyQuality` raises it again through the memory probe.
 
 ## Settings menu
-The VR rows are clones of real option rows (bool, slider, list) appended to the Video tab. The game's logic for
-those clones is intercepted via Harmony and redirected to the BepInEx config. Templates are taken from all tabs of
-the options screen. The Gameplay tab was tried first, but its list does not scroll past its own rows, so the VR rows
-hung invisible below it. The scroll content is grown by the added rows' height in case it has no ContentSizeFitter.
+The VR rows are clones of real option rows (bool, slider, list) in their own "VR" tab. The game's logic for those
+clones is intercepted via Harmony and redirected to the BepInEx config. Templates are taken from all tabs of the
+options screen. Earlier the rows were appended to the Video tab (the Gameplay list does not scroll past its own rows);
+that is still the fallback if the tab cannot be built.
+
+The tab (`VrOptionsTab`): `UnifiedOptionsScreen` holds parallel arrays of screen controllers, Doozy `UIView`s and
+`GenericTab` buttons and switches tabs by index (`ShowTab`, `Next/PreviousOptionTab`). On its first `OnEnable` the
+video view is copied (controller and rows removed, `VrOptionsScreen` and the VR rows added, list height fitted, view
+renamed so Doozy's lookups by category/name don't hit it; a `UIView` also shows and hides its child views by
+its own category/name, so child views with the video name would be renamed too, though the video view has none), the last tab button is copied with its click redirected to
+`ShowTab(new index)`, and both are appended to the arrays. `UIView.Show` does not hide other views and the game's way
+of hiding the previous tab does not know the copy, so after every tab switch all other views are hidden.
+The video tab's description field (`m_DisplayPerformanceDescription`) is not assigned in the game, so the VR view gets
+its own text strip at the bottom (the list's viewport is shortened for it) showing the hint of the selected VR row
+(`VrOptionsScreen.Update`, from the EventSystem selection, which the mouse pointer also sets). The first template
+lookup searched under the `UnifiedOptionsScreen` object, which holds no rows; the templates come from the views'
+container ("Options Body Container", a VerticalLayoutGroup that lays out the active views).
+
+Empty VR page: the video view is copied before it was ever shown, so its `Visibility` still holds the default
+`Visible`. `UIView.Show` returns early for a visible view and never enables its canvas, and its first `Start` would apply
+`BehaviorAtStart` on top. The copy starts as `NotVisible` with `BehaviorAtStart = DoNothing`. While invisible but active
+it also took space in the container's layout. A tab switch logs every view's state (active, visibility, canvas, alpha,
+rect, list rows).
+Labels, values and hints are German when the game's language (`LynxGameUserOptions.Language`) starts with "de",
+otherwise English.
 
 Keyboard/gamepad navigation (`UIInControlBridge`): Unity's navigation events are off; the selected row's
 bridge reads the arrow keys from its serialized action set (FrontEnd or Paused). `LynxControls` loads only the set of
@@ -125,15 +146,16 @@ the eye textures were recreated a second after VR started (1.0, then 0.95); a lo
 `ThrustController.Update` reads the thrust axes via `LynxControls.GetOneAxisInputControlValue` (`ThrustMove...Composite`)
 and thrusts along its orientation transform (the body, or a steering transform). A postfix on that extension method adds
 the controller thrust, converted into that transform's axes, so fuel, forces and the thrust HUD stay the game's.
-Rotation from the controllers (roll, VTOL turns) is applied to the playspace in `VrBody`, so it needs body-follows-head.
-Config `Steuerung/Controllersteuerung`, left controller only:
-- Pavlov (point and twist): stick forward/back thrusts along the controller's aim pose (`PointerRotation`; the
-  `deviceRotation` grip pose runs along the handle and pointed thrust upward). Holding the trigger stores the hand's
-  orientation; twisting or tilting away from it rolls, pitches or yaws (8 degree deadzone, full 45 degrees/s at 45).
-- Vtol: hold the trigger; moving the controller away from where it was when pressed thrusts that way (2 cm deadzone,
-  full at 15 cm), turning it turns the body as above.
-- Both: stick left/right snap-turns 30 degrees around the head's up axis (the playspace's up axis tilted the view after
-  rolling). Pressing the stick presses the game's brake actions (`ThrustBrakeLeft/Right`). A postfix on
+Rotation from the controllers is applied in `VrBody`: to the playspace with body-follows-head, otherwise to the body
+(`turn * gameTarget` in the redirected `MoveRotation`), which the camera follows.
+Config `Steuerung/Controllersteuerung` (Aus/Vtol; the earlier "point and twist" Pavlov scheme was removed for now):
+- Hold the left trigger; moving the controller away from where it was when pressed thrusts that way (2 cm deadzone,
+  full at 15 cm), measured at an estimated wrist point 8 cm behind the grip pose: measured at the controller, tilting
+  the hand to turn swung it past the deadzone and added thrust in a direction nobody asked for. Rotation uses the aim pose (`PointerRotation`; the `deviceRotation` grip pose runs along the handle).
+  The hand's rotation away from the reference is split via `eulerAngles` into turn (controller up), pitch (right) and
+  roll (forward); each turns the body around the head's matching axis (8 degree deadzone, full 45 degrees/s at 45).
+- Right stick left/right snap-turns 30 degrees around the head's up axis (the playspace's up axis tilted the view after
+  rolling). Pressing the left stick presses the game's brake actions (`ThrustBrakeLeft/Right`). A postfix on
   `LynxControlExtensions.GetInputIsPressed` never ran because Mono inlines it, so a transpiler redirects the calls in
   `ThrustController.Update`.
 The grip stays free for grabbing later. The left controller's name and features are logged once. OpenXR only reports
@@ -291,7 +313,7 @@ switch off, among others, contact shadows, shadowmask, transmission, subsurface 
 reflection; the Hab camera uses the HDRP defaults. Most of those cost little where nothing uses them, and shadowmask
 and sky reflection change the Hab's baked lighting, so they were left alone.
 
-Instead the Hab has its own render resolution (`[Bild] AufloesungStation`, in the options menu as "VR: Station
+Instead the Hab has its own render resolution (`[Bild] AufloesungStation`, in the options menu as "Station
 resolution", 0.75 by default, at most 1.0x), independent of the one for everywhere else (`[Bild] Aufloesung`).
 A first version lowered it automatically by 0.05 while the median frame time was above 1.3 headset intervals. It
 stopped at 0.8x, where the view still wobbled: the Hab ran at 90 Hz on average (11.4 ms per frame) but missed about
