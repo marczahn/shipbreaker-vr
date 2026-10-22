@@ -54,6 +54,9 @@ namespace ShipbreakerVR
                 Screens(unified) = screens.Append(screen).ToArray();
                 Views(unified) = views.Append(view).ToArray();
                 Tabs(unified) = tabs.Append(tab).ToArray();
+                // The game's own lists get the scroll and hover fixes too.
+                foreach (var scroll in views.Where(v => v != null).SelectMany(v => v.GetComponentsInChildren<ScrollRect>(true)))
+                    if (scroll.content != null && scroll.content.GetComponent<VrOptionsList>() == null) scroll.content.gameObject.AddComponent<VrOptionsList>();
                 Plugin.Log.LogInfo($"Options '{unified.name}': VR tab added as tab {screens.Length + 1} (view '{viewObject.name}', button '{tab.name}')");
             }
             catch (Exception e)
@@ -74,6 +77,20 @@ namespace ShipbreakerVR
             source.gameObject.SetActive(wasActive);
             copy.name = "ShipbreakerVR Options";
             copy.transform.SetSiblingIndex(source.transform.GetSiblingIndex() + 1);
+            // If the views' container lays out its children, one more child would squeeze the others (the video list
+            // could no longer scroll to its last row) and put the copy elsewhere. Keep it out of the layout, on top of
+            // the video view.
+            var layout = source.transform.parent != null ? source.transform.parent.GetComponent<LayoutGroup>() : null;
+            var element = copy.GetComponent<LayoutElement>() ?? copy.AddComponent<LayoutElement>();
+            element.ignoreLayout = true;
+            var from = (RectTransform)source.transform;
+            var to = (RectTransform)copy.transform;
+            to.anchorMin = from.anchorMin;
+            to.anchorMax = from.anchorMax;
+            to.pivot = from.pivot;
+            to.sizeDelta = from.sizeDelta;
+            to.anchoredPosition3D = from.anchoredPosition3D;
+            Plugin.Log.LogInfo($"Options: video view '{Path(from)}' at {from.anchoredPosition} size {from.rect.size}, container layout {(layout != null ? layout.GetType().Name : "none")}");
             view = copy.GetComponent<UIView>();
             // Views are also found by category and name; the copy must not answer to the video tab's name. A view shows
             // and hides its child views by its own category and name, so children with the parent's name are renamed
@@ -216,6 +233,28 @@ namespace ShipbreakerVR
             var active = Active(unified);
             for (var i = 0; i < views.Length; i++)
                 if (i != active && views[i] != null && views[i].gameObject.activeInHierarchy && (views[i].IsVisible || views[i].IsShowing)) views[i].Hide();
+            if (tabLogs++ < 20)
+            {
+                var text = new System.Text.StringBuilder($"Options: tab {active} of {views.Length}");
+                for (var i = 0; i < views.Length; i++) text.Append("\n  ").Append(Describe(views[i]));
+                Plugin.Log.LogInfo(text.ToString());
+            }
+        }
+
+        private static int tabLogs;
+
+        // State of a view for the log: what decides whether it and its list can be seen.
+        private static string Describe(UIView view)
+        {
+            if (view == null) return "-";
+            var rect = (RectTransform)view.transform;
+            var canvas = view.GetComponent<Canvas>();
+            var alpha = view.GetComponentsInParent<CanvasGroup>(true).Aggregate(1f, (a, g) => a * g.alpha);
+            var scroll = view.GetComponentInChildren<ScrollRect>(true);
+            var content = scroll != null ? scroll.content : null;
+            var rows = content != null ? content.Cast<Transform>().Count(c => c.gameObject.activeSelf) : -1;
+            return $"'{view.name}' ({view.ViewCategory}/{view.ViewName}) active {view.gameObject.activeInHierarchy}, {view.Visibility}, canvas {(canvas != null ? canvas.enabled.ToString() : "-")}, alpha {alpha:0.00}, " +
+                $"at {rect.anchoredPosition} size {rect.rect.size} scale {rect.localScale}, content {(content != null ? $"{content.anchoredPosition} size {content.rect.size}" : "-")}, {rows} active rows";
         }
     }
 

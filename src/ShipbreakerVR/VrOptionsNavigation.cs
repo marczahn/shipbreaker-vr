@@ -38,16 +38,16 @@ namespace ShipbreakerVR
         private string loggedState;
         private GameObject lastSelected;
         private static int selectionLogs;
-        private static float wheelAt = -10f;
 
-        // The mouse wheel scrolls the list under the pointer on purpose; then the row under it may take the selection.
-        public static bool WheelActive => Time.unscaledTime - wheelAt < 0.5f;
+        private void Awake()
+        {
+            if (GetComponent<VrOptionsList>() == null) gameObject.AddComponent<VrOptionsList>();
+        }
 
         private void OnEnable() => nextLink = 0f;
 
         private void LateUpdate()
         {
-            if (Input.mouseScrollDelta.sqrMagnitude > 0f) wheelAt = Time.unscaledTime;
             TrackSelection();
             if (Time.unscaledTime < nextLink) return;
             nextLink = Time.unscaledTime + 0.25f;
@@ -205,9 +205,25 @@ namespace ShipbreakerVR
         }
     }
 
+    // Marks an options list that gets the scroll and hover fixes below: the lists with VR rows and, since the VR rows have
+    // their own tab, all the game's option lists too: the fixes are about the game's own behavior. Without the VR rows in
+    // the video list, its last row (Contrast) could no longer be reached; most likely this jump-back was the reason.
+    internal class VrOptionsList : MonoBehaviour
+    {
+        private static float wheelAt = -10f;
+
+        // The mouse wheel scrolls the list under the pointer on purpose; then the row under it may take the selection.
+        public static bool WheelActive => Time.unscaledTime - wheelAt < 0.5f;
+
+        private void LateUpdate()
+        {
+            if (Input.mouseScrollDelta.sqrMagnitude > 0f) wheelAt = Time.unscaledTime;
+        }
+    }
+
     // When the list scrolls, the game reselects a visible row if the selected one counts as out of view. Its check
     // ignores the list's padding, so a row that was just scrolled to by keyboard counts as out of view and the selection
-    // jumps back up. In lists with our rows, keep a selection that sits inside the list.
+    // jumps back up. In marked lists (VrOptionsList), keep a selection that sits inside the list.
     [HarmonyPatch(typeof(ScrollController), "ScrollBarUpdated")]
     internal static class ScrollReselectPatch
     {
@@ -220,7 +236,7 @@ namespace ShipbreakerVR
         {
             var scroll = ScrollRectRef(__instance);
             var content = scroll != null ? scroll.content : null;
-            if (content == null || content.GetComponent<VrOptionsNavigation>() == null) return true;
+            if (content == null || content.GetComponent<VrOptionsList>() == null) return true;
             var selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
             if (selected == null || !selected.transform.IsChildOf(content)) return true;
             if (!logged)
@@ -235,7 +251,7 @@ namespace ShipbreakerVR
     // Doozy's UIButton selects an option row when the mouse pointer enters it, and Unity's input module re-checks what
     // is under the pointer every frame, even when the mouse does not move. So when keyboard navigation scrolls the list
     // under a resting cursor (in the pause menu it rests in the middle of the screen), the row that slides under the
-    // cursor takes the selection: it jumps back up, one row further each time. In lists with our rows only a pointer
+    // cursor takes the selection: it jumps back up, one row further each time. In marked lists only a pointer
     // that actually moved, or the mouse wheel, may select.
     [HarmonyPatch]
     internal static class HoverSelectPatch
@@ -247,8 +263,8 @@ namespace ShipbreakerVR
 
         private static bool Prefix(MonoBehaviour __instance, PointerEventData eventData)
         {
-            if (eventData == null || eventData.delta.sqrMagnitude > 0.01f || VrOptionsNavigation.WheelActive) return true;
-            if (__instance.GetComponentInParent<VrOptionsNavigation>() == null) return true;
+            if (eventData == null || eventData.delta.sqrMagnitude > 0.01f || VrOptionsList.WheelActive) return true;
+            if (__instance.GetComponentInParent<VrOptionsList>() == null) return true;
             if (logs++ < 10)
             {
                 var entry = __instance.GetComponentInParent<OptionEntry>();
