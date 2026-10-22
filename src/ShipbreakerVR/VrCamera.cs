@@ -603,8 +603,8 @@ namespace ShipbreakerVR
         }
 
         // Puts the current head position on the game camera; without body-follows-head also the view direction (yaw only).
-        // With F4 (toGaze) the view direction is also centered in menus, where the body does not turn with the head,
-        // and the menu canvas is placed straight along the gaze.
+        // With F4 (toGaze) the view direction is also centered in menus, where the body does not turn with the head.
+        // The menu canvas is placed in front of the head again, upright at eye height.
         private void Recenter(bool toGaze)
         {
             var head = transform;
@@ -618,7 +618,7 @@ namespace ShipbreakerVR
                 // Back in gameplay the body takes its playspace from where it actually points.
                 VrBody.Resync();
             }
-            if (VrUi.Instance != null) VrUi.Instance.Recenter(toGaze);
+            if (VrUi.Instance != null) VrUi.Instance.Recenter();
             Plugin.Log.LogInfo($"Head recentered{(toGaze ? " (F4)" : "")} (tracked head position {head.localPosition})");
         }
     }

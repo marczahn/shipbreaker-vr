@@ -42,9 +42,14 @@ namespace ShipbreakerVR
 
         private bool menuMode;
         private bool menuPlaced;
-        private bool placeAlongGaze;
+        private bool menuFollowing;
         private Vector3 menuPosition;
         private Quaternion menuRotation;
+
+        // The menu canvas stays at eye height: once the eyes are more than MenuDeadZone (tracked meters) above or below
+        // its center, it eases back to their height.
+        private const float MenuDeadZone = 0.3f;
+        private const float MenuFollowSpeed = 4f;
 
         public enum Steadying { Aus, Schwach, Stark }
 
@@ -115,11 +120,10 @@ namespace ShipbreakerVR
             return $"UI canvas as {(menuMode ? "menu" : "visor")}, at {VrDiagnostics.Direction(head, center)} {Vector3.Distance(head.position, center):0.00} m, {width:0.00} x {height:0.00} m, UI camera '{(uiCamera != null ? uiCamera.name : "-")}' at {(uiCamera != null ? uiCamera.transform.position.ToString() : "-")}";
         }
 
-        // Place the menu canvas in front of the head again. toGaze (F4): straight in front of the eyes, also tilted up or down. Otherwise upright at eye height.
-        public void Recenter(bool toGaze)
+        // Place the menu canvas in front of the head again: upright at eye height, in the direction the head faces.
+        public void Recenter()
         {
             menuPlaced = false;
-            placeAlongGaze = toGaze;
             visorPlaced = false;
         }
 
@@ -222,8 +226,6 @@ namespace ShipbreakerVR
 
             if (!menuMode)
             {
-                // F4 in gameplay only recenters the head; the next menu opens upright again.
-                placeAlongGaze = false;
                 // Visor: in front of the head, as large as the game camera's field of view.
                 // In world units, so the visor keeps its felt distance at any world scale.
                 var distance = Plugin.HudDistance.Value * VrCamera.WorldScale;
@@ -251,18 +253,26 @@ namespace ShipbreakerVR
                 return;
             }
 
-            // Menu: place once in front of the head (without roll), then keep it fixed in the playspace.
+            // Menu: place once in front of the head, upright at eye height, then keep it fixed in the playspace except for
+            // following the eye height.
             var rig = head.parent;
             if (!menuPlaced)
             {
                 menuPlaced = true;
-                // Turned towards where the head looks, without roll. Upright at eye height unless placed along the gaze.
-                var forward = head.localRotation * Vector3.forward;
-                if (!placeAlongGaze) forward.y = 0f;
-                placeAlongGaze = false;
-                forward = forward.sqrMagnitude > 1e-4f && Mathf.Abs(forward.normalized.y) < 0.99f ? forward.normalized : Vector3.forward;
-                menuRotation = Quaternion.LookRotation(forward, Vector3.up);
-                menuPosition = head.localPosition + forward * Plugin.MenuDistance.Value;
+                menuFollowing = false;
+                // Turned to the head's yaw, so looking far up or down still puts it straight ahead at eye height.
+                menuRotation = Quaternion.Euler(0f, head.localEulerAngles.y, 0f);
+                menuPosition = head.localPosition + menuRotation * Vector3.forward * Plugin.MenuDistance.Value;
+            }
+            else
+            {
+                var offset = head.localPosition.y - menuPosition.y;
+                if (Mathf.Abs(offset) > MenuDeadZone) menuFollowing = true;
+                if (menuFollowing)
+                {
+                    menuPosition.y += offset * (1f - Mathf.Exp(-MenuFollowSpeed * Time.unscaledDeltaTime));
+                    if (Mathf.Abs(head.localPosition.y - menuPosition.y) < 0.01f) menuFollowing = false;
+                }
             }
             // menuPosition is in rig space and already scales with the rig; the width is in world units.
             var w = Plugin.MenuWidth.Value * VrCamera.WorldScale;
