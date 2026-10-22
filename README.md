@@ -13,7 +13,8 @@ Tested with Meta Quest via Virtual Desktop.
 - Body and tools follow the head; mouse/stick turning is added on top
 - HUD as a visor in front of the eyes, menus on a canvas in the room, helmet follows the head
 - VR settings in their own "VR" tab of the game's options
-- Flying with the left motion controller (two schemes, see [docs/INSTALL.md](docs/INSTALL.md#flying-with-the-left-controller))
+- Flying with the left motion controller: trigger and hand movement thrust, the left stick turns and pitches, Y brakes
+  (see [docs/INSTALL.md](docs/INSTALL.md#flying-with-the-controllers))
 - Menus with the motion controllers (both controllers act as one gamepad)
 - Not yet: tools in the hands, laser pointer for menus, comfort options
 
