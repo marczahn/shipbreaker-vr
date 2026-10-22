@@ -244,6 +244,7 @@ namespace ShipbreakerVR
             wasRunning = running;
             SilenceOtherCameras(running);
             VrHab.Calm(running && FollowsHab);
+            VrHab.CutBlends(running && FollowsHab);
             VrPerformance.Update(running, gameCamera, FollowsHab, worldHidden);
             ShrinkRenderTargets(running);
 
@@ -494,6 +495,9 @@ namespace ShipbreakerVR
         private void FollowGameCamera()
         {
             if (gameCamera == null || rig == null) return;
+            // Hab camera moves become fades in VR: until the view is black the rig stays on the old spot.
+            VrHab.UpdateTransition();
+            if (FollowsHab && VrHab.Holding) return;
             var cam = gameCamera.transform;
             // The Hab camera swings between bed, kitchen and terminal; the playspace turns along, but only around the
             // vertical axis: its pitch would tilt the room. Looking up or down is up to the head.

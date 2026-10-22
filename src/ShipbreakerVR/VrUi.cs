@@ -31,6 +31,7 @@ namespace ShipbreakerVR
         private Camera uiCamera;
         private RenderTexture texture;
         private Material material;
+        private Material fadeMaterial;
         private Mesh quad;
         private int renderedFrame = -1;
         private int loggedEyes;
@@ -268,6 +269,30 @@ namespace ShipbreakerVR
             }
         }
 
+        // Black over the whole view, UI included, while the Hab fades between its camera spots (VrHab).
+        public void DrawFade(CustomPassContext context)
+        {
+            var fade = VrHab.Fade;
+            if (fade <= 0f || !VrXr.IsRunning || vr == null || context.hdCamera.camera != vr.Camera) return;
+            if (fadeMaterial == null)
+            {
+                fadeMaterial = new Material(Shader.Find("UI/Default"));
+                fadeMaterial.SetInt("unity_GUIZTestMode", (int)CompareFunction.Always);
+            }
+            if (quad == null) quad = CreateQuad();
+            fadeMaterial.color = new Color(0f, 0f, 0f, fade);
+
+            var cmd = context.cmd;
+            cmd.SetRenderTarget(context.cameraColorBuffer, 0, CubemapFace.Unknown, -1);
+            cmd.SetViewport(new Rect(0, 0, context.hdCamera.actualWidth, context.hdCamera.actualHeight));
+            // Identity matrices: the quad's corners at +-1 are the corners of the view.
+            cmd.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
+            cmd.DrawMesh(quad, Matrix4x4.Scale(new Vector3(2f, 2f, 1f)), fadeMaterial, 0, 0);
+            context.renderContext.ExecuteCommandBuffer(cmd);
+            cmd.Clear();
+            context.renderContext.SetupCameraProperties(context.hdCamera.camera, true);
+        }
+
         // Like the game's HUDCustomPass, but into our texture and with a fixed aspect ratio.
         private void RenderUi(CustomPassContext context)
         {
@@ -344,7 +369,9 @@ namespace ShipbreakerVR
     {
         protected override void Execute(CustomPassContext ctx)
         {
-            if (VrUi.Instance != null) VrUi.Instance.Draw(ctx);
+            if (VrUi.Instance == null) return;
+            VrUi.Instance.Draw(ctx);
+            VrUi.Instance.DrawFade(ctx);
         }
     }
 }

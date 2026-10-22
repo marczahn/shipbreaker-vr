@@ -17,6 +17,25 @@ namespace ShipbreakerVR
         private static Hab3DController controller;
         private static float nextControllerSearch;
 
+        // Moving between bed, kitchen, terminal and so on, the Hab camera swings through the room for a second. In VR
+        // the room then rushes past without the player moving, and at the Hab's 45 fps the headset's frame synthesis
+        // smeared it sideways. While VR runs the brain cuts instead (original blends restored afterwards), and the VR
+        // view fades to black on the old spot, jumps while black and fades in on the new one.
+        private const float FadeOut = 0.15f;
+        private const float Black = 0.05f;
+        private const float FadeIn = 0.25f;
+        private static CinemachineBrain cutBrain;
+        private static CinemachineBlendDefinition originalBlend;
+        private static CinemachineBlenderSettings originalCustomBlends;
+        private static ICinemachineCamera lastVirtualCamera;
+        private static float transitionStart = -1f;
+
+        // How far the VR view is faded to black, 0 to 1.
+        public static float Fade { get; private set; }
+
+        // True while the view fades out: the rig stays where it was until it is black.
+        public static bool Holding => transitionStart >= 0f && Time.unscaledTime - transitionStart < FadeOut;
+
         // Original amplitude of each sway (Perlin noise) we silenced; the game itself toggles their enabled flag.
         private static readonly Dictionary<CinemachineBasicMultiChannelPerlin, float> calmed = new Dictionary<CinemachineBasicMultiChannelPerlin, float>();
         private static float nextNoiseScan;
@@ -69,6 +88,58 @@ namespace ShipbreakerVR
                 added++;
             }
             if (added > 0) Plugin.Log.LogInfo($"Hab camera sway off in VR ({added} virtual camera(s))");
+        }
+
+        // Cuts instead of blends while the rig follows the Hab camera in VR; the game's blends again otherwise.
+        public static void CutBlends(bool cut)
+        {
+            var brain = cut && controller != null ? controller.CinemachineBrain : null;
+            if (brain == cutBrain) return;
+            if (cutBrain != null)
+            {
+                cutBrain.m_DefaultBlend = originalBlend;
+                cutBrain.m_CustomBlends = originalCustomBlends;
+            }
+            cutBrain = brain;
+            lastVirtualCamera = null;
+            transitionStart = -1f;
+            Fade = 0f;
+            if (brain == null) return;
+            originalBlend = brain.m_DefaultBlend;
+            originalCustomBlends = brain.m_CustomBlends;
+            brain.m_DefaultBlend = new CinemachineBlendDefinition(CinemachineBlendDefinition.Style.Cut, 0f);
+            brain.m_CustomBlends = null;
+            Plugin.Log.LogInfo("Hab camera moves replaced by fades in VR");
+        }
+
+        // Called before the rig follows the camera, also right before rendering, once the brain has picked its camera.
+        public static void UpdateTransition()
+        {
+            if (cutBrain == null) return;
+            var current = cutBrain.ActiveVirtualCamera;
+            var now = Time.unscaledTime;
+            if (lastVirtualCamera != null && current != lastVirtualCamera)
+            {
+                var elapsed = transitionStart >= 0f ? now - transitionStart : float.MaxValue;
+                // Fading out or black already: the rig jumps to wherever the camera is once it is black.
+                // Fading in: fade out again from where the fade is now.
+                if (elapsed >= FadeOut + Black) transitionStart = now - Fade * FadeOut;
+            }
+            lastVirtualCamera = current;
+            if (transitionStart < 0f)
+            {
+                Fade = 0f;
+                return;
+            }
+            var t = now - transitionStart;
+            if (t < FadeOut) Fade = t / FadeOut;
+            else if (t < FadeOut + Black) Fade = 1f;
+            else if (t < FadeOut + Black + FadeIn) Fade = 1f - (t - FadeOut - Black) / FadeIn;
+            else
+            {
+                Fade = 0f;
+                transitionStart = -1f;
+            }
         }
     }
 

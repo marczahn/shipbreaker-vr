@@ -199,6 +199,15 @@ loaded next to the Hab. The resolution in the Hab is therefore capped at 1.0x (n
 Hab camera in `VrCamera.LateUpdate` as well, since the game can post `GameState.Hab` and hide the load screen in the
 same frame after `Plugin.Update` ran (the bay then showed for a frame and the resolution went up for it).
 
+At 1.0x the Hab still did not reach 90 fps, so in VR its camera moves are replaced by fades. The Hab brain blends with
+`EaseInOut` 1 s by default plus a `CinemachineBlenderSettings` asset. While the rig follows the Hab camera in VR,
+`VrHab.CutBlends` sets the default blend to `Cut` and removes the custom blends (both restored when VR stops or the rig
+leaves the Hab), so the flat game keeps its moves. When the brain's `ActiveVirtualCamera` changes, the rig stays on
+the old spot while the view fades to black (0.15 s), jumps while black (0.05 s) and fades in on the new spot (0.25 s).
+The game's own follow-up switch (`CameraToSwapToAfterBlend`, about 0.1 s after the cut) lands inside the black.
+`Hab3DController` only waits for `!IsBlending`, so cuts don't change its logic. The black is drawn in our pass after
+the UI, as a quad with identity matrices.
+
 ## Roadmap
 1. Inventory – done
 2. Foundation (BepInEx, plugin, camera hook) – done
