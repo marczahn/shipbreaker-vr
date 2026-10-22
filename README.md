@@ -17,10 +17,11 @@ Tested with Meta Quest via Virtual Desktop.
 - Not yet: tools in the hands, laser pointer for menus, comfort options
 
 Notes on how the game works and why the mod does what it does: [docs/NOTES.md](docs/NOTES.md).
+How the mod came about, including the dead ends: [docs/JOURNAL.md](docs/JOURNAL.md).
 
 ## Usage
 - VR starts with the game (config `VrBeimStart`), so intro and loading screens already show in the headset
-- **F3** toggles VR, **F4** recenters the view
+- **F3** toggles VR, **F4** recenters the view, **F7** switches the screen look on the station's monitors, **F8** writes what is drawn around the player into the log (for bug reports)
 - Settings: in-game options or `BepInEx\config\de.marczahn.shipbreakervr.cfg`
 
 Installing a release: [docs/INSTALL.md](docs/INSTALL.md).

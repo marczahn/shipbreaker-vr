@@ -29,12 +29,16 @@
     <Reference Include="Unity.RenderPipelines.HighDefinition.Runtime" HintPath="$(ManagedDir)\Unity.RenderPipelines.HighDefinition.Runtime.dll" Private="false" />
     <Reference Include="UnityEngine.PhysicsModule" HintPath="$(ManagedDir)\UnityEngine.PhysicsModule.dll" Private="false" />
     <Reference Include="InControl" HintPath="$(ManagedDir)\InControl.dll" Private="false" />
+    <Reference Include="Cinemachine" HintPath="$(ManagedDir)\Cinemachine.dll" Private="false" />
     <Reference Include="Unity.RenderPipelines.Core.Runtime" HintPath="$(ManagedDir)\Unity.RenderPipelines.Core.Runtime.dll" Private="false" />
     <Reference Include="UnityEngine.UIModule" HintPath="$(ManagedDir)\UnityEngine.UIModule.dll" Private="false" />
     <Reference Include="UnityEngine.UI" HintPath="$(ManagedDir)\UnityEngine.UI.dll" Private="false" />
     <Reference Include="Unity.TextMeshPro" HintPath="$(ManagedDir)\Unity.TextMeshPro.dll" Private="false" />
     <Reference Include="Doozy.Engine" HintPath="$(ManagedDir)\Doozy.Engine.dll" Private="false" />
     <Reference Include="UnityEngine.SubsystemsModule" HintPath="$(ManagedDir)\UnityEngine.SubsystemsModule.dll" Private="false" />
+    <Reference Include="UnityEngine.AnimationModule" HintPath="$(ManagedDir)\UnityEngine.AnimationModule.dll" Private="false" />
+    <Reference Include="UnityEngine.ScreenCaptureModule" HintPath="$(ManagedDir)\UnityEngine.ScreenCaptureModule.dll" Private="false" />
+    <Reference Include="UnityEngine.ImageConversionModule" HintPath="$(ManagedDir)\UnityEngine.ImageConversionModule.dll" Private="false" />
     <!-- Aus dem Unity-Hilfsprojekt (Output\BepInEx\plugins\ShipbreakerVR), liegen im Spiel neben dem Plugin -->
     <Reference Include="Unity.XR.Management" HintPath="$(XrDir)\Unity.XR.Management.dll" Private="false" />
     <Reference Include="Unity.XR.OpenXR" HintPath="$(XrDir)\Unity.XR.OpenXR.dll" Private="false" />

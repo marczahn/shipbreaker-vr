@@ -12,7 +12,7 @@ namespace ShipbreakerVR
     {
         public const string Guid = "de.marczahn.shipbreakervr";
         public const string Name = "ShipbreakerVR";
-        public const string Version = "0.9.0";
+        public const string Version = "0.10.0";
 
         internal static ManualLogSource Log;
         internal static ConfigEntry<bool> MultiPass;
@@ -26,10 +26,13 @@ namespace ShipbreakerVR
         internal static ConfigEntry<float> MenuDistance;
         internal static ConfigEntry<float> MenuWidth;
         internal static ConfigEntry<bool> FlipUi;
+        internal static ConfigEntry<bool> MonitorLook;
         internal static ConfigEntry<VrHelmet.Mode> Helmet;
         internal static ConfigEntry<VrCamera.AntiAliasing> AntiAliasing;
         internal static ConfigEntry<float> ResolutionScale;
+        internal static ConfigEntry<float> StationResolution;
         internal static ConfigEntry<float> WorldScale;
+        internal static ConfigEntry<VrPerformance.Occlusion> AmbientOcclusion;
         internal static ConfigEntry<VrControls.Scheme> ControlScheme;
 
         private void Awake()
@@ -43,6 +46,8 @@ namespace ShipbreakerVR
                 "Start VR as soon as the game launches, so the intro and loading screens already show in the headset. Off: start VR with F3.");
             BodyFollowsHead = Config.Bind("Steuerung", "KoerperFolgtKopf", true,
                 "The body, and with it the tools' aim, turns with the head. Mouse and stick add extra rotation. Off: the head looks around freely, only the mouse turns the body.");
+            AmbientOcclusion = Config.Bind("Bild", "Umgebungsverdeckung", VrPerformance.Occlusion.Niedrig,
+                "Ambient occlusion (shading in corners and creases) in VR. Niedrig: half resolution and few steps, as the game uses it in the bay. The station asks for full resolution and 16 steps, which at VR resolution costs so much GPU time that it stutters. Aus: off. Spiel: as the game sets it.");
             ControlScheme = Config.Bind("Steuerung", "Controllersteuerung", VrControls.Scheme.Vtol,
                 "Flying with the motion controllers. Vtol: hold the left trigger and move the controller away from where it was when pressed to thrust that way; turn it left/right to turn, tilt it sideways to roll, tilt it forward/back to pitch. Right stick left/right snap-turns 30 degrees, pressing the left stick brakes. Aus: off. Turning needs KoerperFolgtKopf.");
             UiInVr = Config.Bind("Anzeige", "UiImRaum", true,
@@ -55,12 +60,16 @@ namespace ShipbreakerVR
             MenuDistance = Config.Bind("Anzeige", "MenueAbstand", 2.0f, "Distance of the menu canvas in meters.");
             MenuWidth = Config.Bind("Anzeige", "MenueBreite", 2.6f, "Width of the menu canvas in meters.");
             FlipUi = Config.Bind("Anzeige", "UiSpiegeln", false, "Flip the UI vertically in case it is upside down.");
+            MonitorLook = Config.Bind("Anzeige", "MonitorEffekt", true,
+                "Screen look for the menus on the station's monitors: a little dimmer, fine scan lines, darker edges, a faint reflection on the glass and light on the frame. F7 switches it on and off.");
             Helmet = Config.Bind("Anzeige", "Helm", VrHelmet.Mode.Kopf,
                 "Kopf: the helmet follows the VR head. Aus: hide the helmet model. Spiel: the helmet stays on the body.");
             AntiAliasing = Config.Bind("Bild", "Kantenglaettung", VrCamera.AntiAliasing.SMAA,
                 "SMAA: smooths edges, stays sharp. TAA: looks blurry in VR and makes objects jitter. FXAA: cheap and soft. Keine: none. Spiel: use the game's setting.");
             ResolutionScale = Config.Bind("Bild", "Aufloesung", 1.0f,
                 "Render resolution per eye relative to the headset's default (0.5 to 2). Above 1 smooths further but costs significant performance and video memory; it is limited to what should fit into the graphics card's memory. Applied one second after the last change.");
+            StationResolution = Config.Bind("Bild", "AufloesungStation", 0.75f,
+                "Render resolution per eye in the station between shifts (0.5 to 1), instead of Aufloesung. The station costs the graphics card more than the bay. If it misses the headset's frame rate, Virtual Desktop and other runtimes compute frames in between, which makes the view wobble close to the monitors; lower it until that stops (an RTX 4070 Ti at 2688x2880 per eye needed 0.7).");
             WorldScale = Config.Bind("Bild", "Weltmassstab", 1.0f,
                 "Size of the player relative to the world (0.5 to 3). Above 1 widens eye distance and head movement: distant objects keep more depth and their size is easier to judge, but the world looks smaller. Below 1 the opposite.");
             Log.LogInfo($"{Name} {Version} loaded. Unity {Application.unityVersion}, game {Application.version}");
@@ -84,6 +93,8 @@ namespace ShipbreakerVR
             foreach (var cam in Camera.allCameras)
             {
                 if (cam.targetTexture != null || cam.CompareTag("UI_Camera") || cam.name.StartsWith("ShipbreakerVR") || VrCamera.IsUiOnly(cam)) continue;
+                // Only while the game shows the Hab (VrHab.Camera); a leftover Hab camera during a load is not a menu.
+                if (VrHab.IsHabCamera(cam)) continue;
                 if (best == null || cam.depth > best.depth) best = cam;
             }
             return best;
@@ -100,13 +111,25 @@ namespace ShipbreakerVR
 
             // The main menu has no LynxCameraController yet; the VR camera then attaches to the menu camera.
             // Without any camera (intro, loading screen) the rig still exists and shows the UI on black.
+            // In the Hab the game shows the station through its own camera; back in gameplay the main camera takes over again.
             var vr = VrCamera.Instance;
-            if (VrXr.IsRunning && (vr == null || vr.GameCamera == null) && Time.unscaledTime >= nextCameraSearch)
+            if (!VrXr.IsRunning) return;
+            // The rig moves onto the Hab camera by itself (VrCamera.LateUpdate); here only when VR starts in the Hab.
+            var hab = VrHab.Camera;
+            if (hab != null)
+            {
+                if (vr == null)
+                {
+                    Log.LogInfo($"VR camera attached to the Hab camera '{hab.name}'");
+                    VrCamera.Attach(hab);
+                }
+            }
+            else if (Time.unscaledTime >= nextCameraSearch && (vr == null || vr.GameCamera == null || vr.FollowsHab))
             {
                 nextCameraSearch = Time.unscaledTime + 0.25f;
                 var cam = LynxCameraController.MainCamera != null ? LynxCameraController.MainCamera : FindMenuCamera();
                 if (cam != null) Log.LogInfo($"VR camera attached to '{cam.name}'");
-                if (cam != null || vr == null) VrCamera.Attach(cam);
+                if (cam != null || vr == null || vr.GameCamera != null) VrCamera.Attach(cam);
             }
         }
     }
@@ -121,6 +144,8 @@ namespace ShipbreakerVR
             Plugin.Log.LogInfo(cam == null
                 ? "LynxCameraController started, but MainCamera is null"
                 : $"Game camera found: '{cam.name}', FOV {cam.fieldOfView}, resolution {LynxCameraController.ScreenWidth}x{LynxCameraController.ScreenHeight}");
+            // A new main camera starts switched on; the game turns it off again when it shows the Hab.
+            VrHab.MainCameraOff = false;
             if (cam == null) return;
             if (VrCamera.Instance == null || VrCamera.Instance.GameCamera != cam) VrCamera.Attach(cam);
         }

@@ -31,6 +31,10 @@ namespace ShipbreakerVR
         private Camera uiCamera;
         private RenderTexture texture;
         private Material material;
+        private Material fadeMaterial;
+        private Material gameFadeMaterial;
+        private float gameFade;
+        private bool loggedGameFade;
         private Mesh quad;
         private int renderedFrame = -1;
         private int loggedEyes;
@@ -38,9 +42,14 @@ namespace ShipbreakerVR
 
         private bool menuMode;
         private bool menuPlaced;
-        private bool placeAlongGaze;
+        private bool menuFollowing;
         private Vector3 menuPosition;
         private Quaternion menuRotation;
+
+        // The menu canvas stays at eye height: once the eyes are more than MenuDeadZone (tracked meters) above or below
+        // its center, it eases back to their height.
+        private const float MenuDeadZone = 0.3f;
+        private const float MenuFollowSpeed = 4f;
 
         public enum Steadying { Aus, Schwach, Stark }
 
@@ -51,6 +60,21 @@ namespace ShipbreakerVR
 
         // Pose and size of the quad in the world for the current frame.
         private Matrix4x4 screenMatrix;
+
+        // On a monitor in the Hab (VrHab.Monitor) the canvas gets a screen look, so it sits in the room like the game's
+        // own screens: a little dimmer and cooler, fine scan lines, edges falling off towards the frame, a faint
+        // reflection on the glass and light spilling onto the frame (the game's bloom doesn't reach our pass). Made of
+        // UI/Default and textures built here, since the plugin brings no shaders of its own.
+        private const float GlowMargin = 0.12f;
+        private const float ScreenCorner = 0.04f;
+        private static readonly Color MonitorTint = new Color(0.9f, 0.93f, 0.96f, 1f);
+        private static readonly Color GlowColor = new Color(0.55f, 0.85f, 1f, 0.14f);
+        private bool onMonitor;
+        private Matrix4x4 glowMatrix;
+        private Material shadeMaterial;
+        private Material glareMaterial;
+        private Material glowMaterial;
+        private float lookAspect;
 
         private Camera ownUiCamera;
 
@@ -82,11 +106,24 @@ namespace ShipbreakerVR
 
         public bool Active => VrXr.IsRunning && Plugin.UiInVr.Value && vr != null;
 
-        // Place the menu canvas in front of the head again. toGaze (F4): straight in front of the eyes, also tilted up or down. Otherwise upright at eye height.
-        public void Recenter(bool toGaze)
+        // For the F8 dump (VrDiagnostics).
+        public RenderTexture Texture => texture;
+
+        public bool IsConverted(Canvas canvas) => canvases.IsConverted(canvas);
+
+        public string Describe(Transform head)
+        {
+            if (!Active) return "UI canvas off";
+            Vector3 center = screenMatrix.GetColumn(3);
+            var width = ((Vector3)screenMatrix.GetColumn(0)).magnitude;
+            var height = ((Vector3)screenMatrix.GetColumn(1)).magnitude;
+            return $"UI canvas as {(menuMode ? "menu" : "visor")}, at {VrDiagnostics.Direction(head, center)} {Vector3.Distance(head.position, center):0.00} m, {width:0.00} x {height:0.00} m, UI camera '{(uiCamera != null ? uiCamera.name : "-")}' at {(uiCamera != null ? uiCamera.transform.position.ToString() : "-")}";
+        }
+
+        // Place the menu canvas in front of the head again: upright at eye height, in the direction the head faces.
+        public void Recenter()
         {
             menuPlaced = false;
-            placeAlongGaze = toGaze;
             visorPlaced = false;
         }
 
@@ -96,6 +133,12 @@ namespace ShipbreakerVR
             {
                 canvases.Restore();
                 return;
+            }
+
+            if (onMonitor && Input.GetKeyDown(KeyCode.F7))
+            {
+                Plugin.MonitorLook.Value = !Plugin.MonitorLook.Value;
+                Plugin.Log.LogInfo($"Monitor look {(Plugin.MonitorLook.Value ? "on" : "off")} (F7)");
             }
 
             if (uiCamera == null || uiCamera == ownUiCamera)
@@ -138,7 +181,14 @@ namespace ShipbreakerVR
             uiCamera.pixelRect = new Rect(0, 0, width, height);
             uiCamera.aspect = (float)width / height;
 
+            canvases.HideFades = menuMode;
             canvases.Update(uiCamera);
+            gameFade = canvases.FadeAlpha();
+            if (gameFade > 0.5f && !loggedGameFade)
+            {
+                loggedGameFade = true;
+                Plugin.Log.LogInfo("Game fade to black drawn over the whole view instead of on the menu canvas");
+            }
         }
 
         // Own UI camera for scenes without the game's; renders only the UI layer and never on its own.
@@ -165,6 +215,8 @@ namespace ShipbreakerVR
             // The load screen is a menu too, even if the game already switched to gameplay behind it.
             var loadScreen = SceneLoader.Instance != null && SceneLoader.Instance.LoadScreenVisible;
             var gameplay = GameSession.CurrentGameState == GameSession.GameState.Gameplay && LynxCameraController.MainCamera != null && !loadScreen;
+            onMonitor = false;
+            material.color = Color.white;
             if (menuMode == gameplay)
             {
                 menuPlaced = false;
@@ -174,8 +226,6 @@ namespace ShipbreakerVR
 
             if (!menuMode)
             {
-                // F4 in gameplay only recenters the head; the next menu opens upright again.
-                placeAlongGaze = false;
                 // Visor: in front of the head, as large as the game camera's field of view.
                 // In world units, so the visor keeps its felt distance at any world scale.
                 var distance = Plugin.HudDistance.Value * VrCamera.WorldScale;
@@ -187,18 +237,42 @@ namespace ShipbreakerVR
                 return;
             }
 
-            // Menu: place once in front of the head (without roll), then keep it fixed in the playspace.
+            // At one of the Hab's screens the canvas lies on the monitor, as large as fits on it.
+            var monitor = vr.FollowsHab ? VrHab.Monitor : null;
+            if (monitor != null)
+            {
+                onMonitor = true;
+                if (Plugin.MonitorLook.Value) material.color = MonitorTint;
+                VrHab.MonitorScreen(monitor, out var center, out var rotation, out var size);
+                var fit = Mathf.Min(size.x, size.y * aspect);
+                var height = fit / aspect;
+                screenMatrix = Matrix4x4.TRS(center, rotation, new Vector3(fit, height, 1f));
+                var margin = 2f * GlowMargin * height;
+                glowMatrix = Matrix4x4.TRS(center, rotation, new Vector3(fit + margin, height + margin, 1f));
+                if (!Mathf.Approximately(aspect, lookAspect)) CreateMonitorLook(aspect);
+                return;
+            }
+
+            // Menu: place once in front of the head, upright at eye height, then keep it fixed in the playspace except for
+            // following the eye height.
             var rig = head.parent;
             if (!menuPlaced)
             {
                 menuPlaced = true;
-                // Turned towards where the head looks, without roll. Upright at eye height unless placed along the gaze.
-                var forward = head.localRotation * Vector3.forward;
-                if (!placeAlongGaze) forward.y = 0f;
-                placeAlongGaze = false;
-                forward = forward.sqrMagnitude > 1e-4f && Mathf.Abs(forward.normalized.y) < 0.99f ? forward.normalized : Vector3.forward;
-                menuRotation = Quaternion.LookRotation(forward, Vector3.up);
-                menuPosition = head.localPosition + forward * Plugin.MenuDistance.Value;
+                menuFollowing = false;
+                // Turned to the head's yaw, so looking far up or down still puts it straight ahead at eye height.
+                menuRotation = Quaternion.Euler(0f, head.localEulerAngles.y, 0f);
+                menuPosition = head.localPosition + menuRotation * Vector3.forward * Plugin.MenuDistance.Value;
+            }
+            else
+            {
+                var offset = head.localPosition.y - menuPosition.y;
+                if (Mathf.Abs(offset) > MenuDeadZone) menuFollowing = true;
+                if (menuFollowing)
+                {
+                    menuPosition.y += offset * (1f - Mathf.Exp(-MenuFollowSpeed * Time.unscaledDeltaTime));
+                    if (Mathf.Abs(head.localPosition.y - menuPosition.y) < 0.01f) menuFollowing = false;
+                }
             }
             // menuPosition is in rig space and already scales with the rig; the width is in world units.
             var w = Plugin.MenuWidth.Value * VrCamera.WorldScale;
@@ -255,8 +329,24 @@ namespace ShipbreakerVR
 
             cmd.SetRenderTarget(context.cameraColorBuffer, 0, CubemapFace.Unknown, -1);
             cmd.SetViewport(new Rect(0, 0, context.hdCamera.actualWidth, context.hdCamera.actualHeight));
+            // The game's fades to black, kept off the menu canvas (VrCanvases): over the whole room, under the canvas,
+            // as in the flat game, where subtitles and prompts stay on top of them.
+            if (gameFade > 0f)
+            {
+                if (gameFadeMaterial == null) gameFadeMaterial = OverlayMaterial();
+                gameFadeMaterial.color = new Color(0f, 0f, 0f, gameFade);
+                cmd.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
+                cmd.DrawMesh(quad, Matrix4x4.Scale(new Vector3(2f, 2f, 1f)), gameFadeMaterial, 0, 0);
+            }
             cmd.SetViewProjectionMatrices(view, proj);
+            var look = onMonitor && Plugin.MonitorLook.Value && shadeMaterial != null;
+            if (look) cmd.DrawMesh(quad, glowMatrix, glowMaterial, 0, 0);
             cmd.DrawMesh(quad, screenMatrix, material, 0, 0);
+            if (look)
+            {
+                cmd.DrawMesh(quad, screenMatrix, shadeMaterial, 0, 0);
+                cmd.DrawMesh(quad, screenMatrix, glareMaterial, 0, 0);
+            }
             renderContext.ExecuteCommandBuffer(cmd);
             cmd.Clear();
             renderContext.SetupCameraProperties(context.hdCamera.camera, true);
@@ -266,6 +356,35 @@ namespace ShipbreakerVR
                 loggedEyes |= 1 << eye;
                 Plugin.Log.LogInfo($"UI drawn in VR (eye {eye}, {context.hdCamera.actualWidth}x{context.hdCamera.actualHeight})");
             }
+        }
+
+        // Black over the whole view, UI included, while the Hab fades between its camera spots (VrHab).
+        public void DrawFade(CustomPassContext context)
+        {
+            var fade = VrHab.Fade;
+            if (fade <= 0f || !VrXr.IsRunning || vr == null || context.hdCamera.camera != vr.Camera) return;
+            if (fadeMaterial == null) fadeMaterial = OverlayMaterial();
+            if (quad == null) quad = CreateQuad();
+            fadeMaterial.color = new Color(0f, 0f, 0f, fade);
+
+            var cmd = context.cmd;
+            cmd.SetRenderTarget(context.cameraColorBuffer, 0, CubemapFace.Unknown, -1);
+            cmd.SetViewport(new Rect(0, 0, context.hdCamera.actualWidth, context.hdCamera.actualHeight));
+            // Identity matrices: the quad's corners at +-1 are the corners of the view.
+            cmd.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
+            cmd.DrawMesh(quad, Matrix4x4.Scale(new Vector3(2f, 2f, 1f)), fadeMaterial, 0, 0);
+            context.renderContext.ExecuteCommandBuffer(cmd);
+            cmd.Clear();
+            context.renderContext.SetupCameraProperties(context.hdCamera.camera, true);
+        }
+
+        // UI/Default drawn over everything. For the fades its color sets how dark, drawn on a quad with identity
+        // matrices, whose corners at +-1 are the corners of the view.
+        private static Material OverlayMaterial()
+        {
+            var overlay = new Material(Shader.Find("UI/Default"));
+            overlay.SetInt("unity_GUIZTestMode", (int)CompareFunction.Always);
+            return overlay;
         }
 
         // Like the game's HUDCustomPass, but into our texture and with a fixed aspect ratio.
@@ -310,6 +429,79 @@ namespace ShipbreakerVR
             return Mathf.Clamp((int)getMultipassId.Invoke(xr, null), 0, 7);
         }
 
+        // The monitor look's textures for a canvas of this aspect (width / height). Distances are in screen heights.
+        private void CreateMonitorLook(float aspect)
+        {
+            lookAspect = aspect;
+            var halfWidth = aspect * 0.5f;
+
+            // Darkening: 128 fine scan lines, and the edges falling off over the outer 10 %.
+            var shade = LookTexture("Shade", 256, 512, (x, y) =>
+            {
+                var line = Mathf.FloorToInt(y * 512f) % 4 < 2 ? 0.09f : 0f;
+                var inside = -RoundedRect((x - 0.5f) * aspect, y - 0.5f, halfWidth, 0.5f, ScreenCorner);
+                var edge = 0.3f * (1f - Mathf.SmoothStep(0f, 1f, inside / 0.1f));
+                return new Color(0f, 0f, 0f, 1f - (1f - line) * (1f - edge));
+            });
+            // A faint sheen on the glass, from the upper left.
+            var glare = LookTexture("Glare", 64, 64, (x, y) =>
+            {
+                var diagonal = (x + (1f - y)) * 0.5f;
+                var sheen = 1f - Mathf.SmoothStep(0f, 1f, diagonal / 0.55f);
+                return new Color(1f, 1f, 1f, 0.06f * sheen * sheen);
+            });
+            // Light around the screen, nothing on it (the canvas may be see-through in places).
+            var glowWidth = aspect + 2f * GlowMargin;
+            var glowHeight = 1f + 2f * GlowMargin;
+            var glow = LookTexture("Glow", 256, 128, (x, y) =>
+            {
+                var outside = RoundedRect((x - 0.5f) * glowWidth, (y - 0.5f) * glowHeight, halfWidth, 0.5f, ScreenCorner);
+                var fall = outside <= 0f ? 0f : 1f - Mathf.SmoothStep(0f, 1f, outside / GlowMargin);
+                return new Color(1f, 1f, 1f, fall * fall);
+            });
+
+            shadeMaterial = LookMaterial(shadeMaterial, shade, Color.white);
+            glareMaterial = LookMaterial(glareMaterial, glare, Color.white);
+            glowMaterial = LookMaterial(glowMaterial, glow, GlowColor);
+            Plugin.Log.LogInfo($"Monitor look created for aspect {aspect:0.00}");
+        }
+
+        private static Texture2D LookTexture(string name, int width, int height, System.Func<float, float, Color> pixel)
+        {
+            var texture = new Texture2D(width, height, TextureFormat.RGBA32, true)
+            {
+                name = "ShipbreakerVR Monitor " + name,
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Trilinear,
+                anisoLevel = 4
+            };
+            var pixels = new Color[width * height];
+            for (var y = 0; y < height; y++)
+                for (var x = 0; x < width; x++)
+                    pixels[y * width + x] = pixel((x + 0.5f) / width, (y + 0.5f) / height);
+            texture.SetPixels(pixels);
+            texture.Apply(true, true);
+            return texture;
+        }
+
+        private static Material LookMaterial(Material material, Texture2D texture, Color color)
+        {
+            if (material == null) material = OverlayMaterial();
+            else if (material.mainTexture != null) Destroy(material.mainTexture);
+            material.mainTexture = texture;
+            material.color = color;
+            return material;
+        }
+
+        // Signed distance to a rectangle with rounded corners (half sizes, corner radius), negative inside.
+        private static float RoundedRect(float x, float y, float halfWidth, float halfHeight, float radius)
+        {
+            var qx = Mathf.Abs(x) - halfWidth + radius;
+            var qy = Mathf.Abs(y) - halfHeight + radius;
+            var outside = new Vector2(Mathf.Max(qx, 0f), Mathf.Max(qy, 0f)).magnitude;
+            return outside + Mathf.Min(Mathf.Max(qx, qy), 0f) - radius;
+        }
+
         private static Mesh CreateQuad()
         {
             var flip = Plugin.FlipUi.Value;
@@ -344,7 +536,9 @@ namespace ShipbreakerVR
     {
         protected override void Execute(CustomPassContext ctx)
         {
-            if (VrUi.Instance != null) VrUi.Instance.Draw(ctx);
+            if (VrUi.Instance == null) return;
+            VrUi.Instance.Draw(ctx);
+            VrUi.Instance.DrawFade(ctx);
         }
     }
 }

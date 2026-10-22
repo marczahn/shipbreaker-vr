@@ -7,7 +7,6 @@ Findings about the game and decisions made while building the mod. Newest sectio
 - Game logic lives in `BBI.Unity.Game.dll` (`Assembly-CSharp` is nearly empty)
 - Input: InControl (`GameplayActions`, `LynxControls`)
 - Camera: `LynxCameraController` (static `MainCamera`, `ScreenCenter`, `ScreenWidth/Height`), driven by Cinemachine
-- Decompile: `ilspycmd -p -o out -r <Managed> <Managed>/BBI.Unity.Game.dll` (needs `DOTNET_ROLL_FORWARD=Major` on .NET 8)
 - Test setup: Meta Quest via Virtual Desktop (VDXR OpenXR runtime)
 
 ## XR bootstrapping
@@ -39,10 +38,13 @@ Idea for controllers: an aiming camera on the hand that receives these calls.
   `DrawUICameraCustomPass`) as a full-screen overlay. `CustomPass.Execute` is overloaded, so patches must name the
   `CustomPassContext` parameter type.
 - Many menus and hints are Screen Space Overlay canvases; in VR Unity draws them into the left eye only.
-  `VrCanvases` re-parents them to the UI camera while VR runs.
+  `VrCanvases` re-parents them to the UI camera while VR runs, also Screen Space Camera canvases on other cameras
+  (the VR camera would otherwise see them in the world, in front of a camera it doesn't render with).
 - `VrUi` renders the UI camera into its own RenderTexture once per frame and draws it per eye on a quad
   (`UI/Default`, ZTest Always, eye matrices via reflection from `HDCamera.xr`). In gameplay the quad is a visor in
-  front of the head; elsewhere it is a fixed canvas in the playspace (F4 re-places it along the gaze and, in menus, turns the playspace to the gaze).
+  front of the head; elsewhere it is a canvas fixed in the playspace, upright at eye height in the direction the head
+  faces. It follows the eye height once the eyes are more than 30 cm above or below its center (standing up, sitting
+  down). F4 places it in front of the head again and, in menus, turns the playspace to the gaze.
 - The game switches its custom pass volumes off outside gameplay (e.g. pause), so the mod uses its own
   `CustomPassVolume` (AfterPostProcess) and only disables the game's UI passes for the VR camera.
 - The main menu has no `LynxCameraController` and no UI camera: the VR camera attaches to the active menu camera and
@@ -91,7 +93,7 @@ renamed so Doozy's lookups by category/name don't hit it), the last tab button i
 `ShowTab(new index)`, and both are appended to the arrays. `UIView.Show` does not hide other views and the game's way
 of hiding the previous tab does not know the copy, so after every tab switch all other views are hidden.
 
-Keyboard/gamepad navigation (decompiled `UIInControlBridge`): Unity's navigation events are off; the selected row's
+Keyboard/gamepad navigation (`UIInControlBridge`): Unity's navigation events are off; the selected row's
 bridge reads the arrow keys from its serialized action set (FrontEnd or Paused). `LynxControls` loads only the set of
 the current game state, so a bridge with the wrong set gets no input at all. With explicit navigation the bridge moves
 only to an active, interactable target and never falls back to automatic search. Title-screen-only rows are
@@ -142,6 +144,177 @@ Config `Steuerung/Controllersteuerung` (Aus/Vtol; the earlier "point and twist" 
   `ThrustController.Update`.
 The grip stays free for grabbing later. The left controller's name and features are logged once. OpenXR only reports
 controllers because `VrXr` enables the Oculus Touch interaction profile, which the AssetBundle's settings carry disabled.
+
+## Hab (the station between shifts)
+The Hab is an extra scene (`Hab Container`, loaded additively next to the bay after a shift or at the start of a
+career session). It has its own camera, `PRF_HAB_Camera_Navigation/Unity_Camera` (depth 2, all layers, sky clear,
+`xrRendering` on), driven by `Hab3DController.CinemachineBrain`, which blends between about 20 virtual cameras (bed,
+kitchen, terminal, suit, ...), each with Cinemachine Perlin noise as camera sway. On `GameState.Hab`,
+`LynxCameraController.OnGameStateChangedEvent` switches the bay's main camera off (on again in `Gameplay`).
+
+The VR rig used to stay on the main camera. In the Hab the headset then got two full stereo HDRP renders per frame:
+our camera drew the whole bay with the ship from the player's position (invisible), then the Hab camera drew the Hab
+on top. That doubled GPU time and render targets (at 1.25x the log showed `Failed to create RenderTexture ...
+0x8007000e` after re-entering VR in the Hab), the visible image came from a camera without head tracking (the room
+stuck to the head and swayed with the noise), and it painted over our UI pass, so the prompts of
+`PRF_HAB_3DNav_UI_Canvas` (an overlay canvas: R, Tab, location markers) never showed.
+
+Now a postfix on `OnGameStateChangedEvent` records whether the game has the main camera off (`VrHab.MainCameraOff`).
+While it is off and a `Hab3DController` exists, the rig follows the Hab camera and switches it off like any game
+camera; switching back never re-enables the main camera while the game wants it off. The playspace follows only the
+Hab camera's heading (its pitch would tilt the room), the Perlin noise amplitude of the Hab's virtual cameras is set
+to 0 while VR runs (the game itself toggles their enabled flag), and the helmet only follows the head while the rig
+is on the main camera (it would otherwise come along from the bay). The Hab's overlay and screen-space canvases
+(3D navigation prompts, the terminal `Hab ScreenStack` at 0.25 m) go onto the UI canvas like other menus.
+
+The Hab scene is loaded while the load screen still shows (a career load starts in the Hab), and everything in it is
+active, so `Unity_Camera` already renders then. In the flat game the load screen camera (depth 10) covers it. In VR
+that camera is off and the Hab camera (depth 2) drew the Hab over our black image and the UI pass, without head
+tracking: the headset seemed frozen while the game waited for a key. `VrCamera` therefore switches the Hab camera off
+like the UI-only cameras whenever the rig follows another camera. `GameState.Hab` is posted on that key press and
+the load screen hides afterwards (`SceneLoader.EndProcess`), so the Hab camera is checked every frame and the rig is
+already on it when the Hab appears.
+
+Cinemachine applies each virtual camera's lens to `Unity_Camera` every frame. Most Hab views have a far clip plane of
+500 m, the window view 5000 m (the ship and the dock below), the comms view 5000 m and the Hab screen 2555 m. The VR
+camera copied it only when attaching, so the window view was cut off at 500 m: the ship showed only in part, and only
+near the edge of the view (the far plane is a distance along the view direction). The far clip plane is now copied
+every frame, and in the Hab it is at least the farthest of the Hab's virtual cameras (5000 m): the game sets each
+view's far plane for what its camera looks at, but in VR one looks out of the window from anywhere. At the terminal
+(2555 m) parts of the earth outside were cut off depending on the head.
+
+Three views are "navigable screens" on a monitor: the one above the bed (`Entry` -> `WakeUpMonitor`, the good morning
+screen after waking up), the terminal (`Comms` -> `HabScreen`) and the workbench (`Workstation` ->
+`Workstation_Screen`). Their virtual cameras sit 0.35 to 0.45 m in front of a `PRF_Computer_Terminal_Hab`, and
+`Hab3DLocationNavigation.Navigate` sets the trigger `FadeOut` on the monitor's `LYNX_Screensaver` animator: the screen
+in the room goes dark and its content comes as the `Hab ScreenStack` overlay over the whole picture. (`Exit` is a
+navigable screen too, without a monitor.)
+
+In VR that overlay was on the menu canvas (about 66 degrees wide, 2.4 m away and drawn over everything) while the rig
+followed the virtual camera to 0.35 m in front of the monitor: the room showed around the canvas, and the eyes got the
+canvas at 2.4 m and the monitor at 0.35 m at once. Now the canvas lies on the monitor. Each terminal prefab has a world
+space canvas for its "locked" screensaver (`LYNX_Screensaver_Locked/Canvas`, inactive, 0.56 x 0.31 m) that covers
+exactly its screen; `VrHab` maps the virtual cameras of every `NavigationOption` with a `ScreenAnimator`
+(`CameraToGoTo`, `CameraToSwapToAfterBlend`, from `m_NavigationOptions` and on `Navigate`) to that canvas. While one of
+them is active, `VrUi` draws the UI texture on the canvas's corners (as large as fits at the texture's aspect), moved
+1 cm along the normal onto the glass (the screensaver's canvas floats about that far in front of it), and the rig puts
+the head 0.7 m in front of the screen along its normal (about 43 degrees wide), with the heading of the virtual
+camera. The monitor above the bed faces down onto the pillow (`WakeUpMonitor` sits 0.44 m below it): there the rig
+stays where it was (`Entry` after waking up, about 1 m away), without a fade going in or back out; only if the Hab
+opens right at that monitor does the head go where the game's camera is. Otherwise the rig and the canvas change spot
+only once the view is black, like any other Hab move. The Hab's 3D waypoint markers (`PRF_3DHAB_WaypointMarkers`, the
+green arrows pointing at the terminal) stuck into the monitor from 0.7 m; in the flat game the overlay covers them, so
+in VR their renderers are hidden (`forceRenderingOff`) while the rig is at a monitor. The game's `FadeOut` of the monitor stays, as in the flat game the overlay is over the
+dark monitor; a postfix on `Navigate` resets it only for a screen whose monitor canvas was not found, where the overlay
+is on the menu canvas in front of the player and the dark monitor would otherwise stay in the room as a black
+rectangle.
+
+On a monitor the canvas gets a screen look (`[Anzeige] MonitorEffekt`, F7 at a monitor switches it), since our pass
+runs after post-processing and the flat UI looked pasted onto the room: the UI texture slightly dimmer and cooler,
+128 fine scan lines and edges darkened over the outer 10 % (one black texture), a faint sheen from the upper left
+(white), and light around the screen over 12 % of its height that the game's bloom would give a lit screen. All of it
+is drawn with `UI/Default` and textures made at runtime for the canvas's aspect; the plugin has no shaders of its own
+(an AssetBundle with shaders would need the Unity editor).
+
+Lying in bed (`Entry` after waking up and `WakeUpMonitor`) the Hab camera looks up at the ceiling (57 and 63 degrees).
+With only its heading the player looked straight ahead at the wall while the monitor with the morning menu was
+overhead. For a Hab camera looking up more than 30 degrees the playspace now takes its pitch too, as if lying on one's
+back; the change happens with the cut, inside the fade.
+
+After loading into the Hab (and when waking up), a black area about the size of the menu canvas hung in the room
+in VR, as if a piece of the world were missing, and was gone a few seconds later. Most likely it was the game's
+full-screen fades to black (`FadeScreen`, `HAB_General_Fade`, `WakeUpFade`, `QuitFromHabFade`; the dump 6 s after
+entering showed them done and nothing else dark around the player), which in VR land on the UI texture like any other
+canvas. On the visor in gameplay that covers the view as meant; on the menu canvas fixed in the room it is a black
+rectangle with the room around it. In menu mode `VrCanvases` puts these canvases on our pass layer (which neither the UI
+camera nor the VR camera draws) and reports how dark they would make the screen; `VrUi` darkens the whole view by that
+under the canvas, so subtitles and prompts stay on top as in the flat game. `VrCanvases` also scans inactive canvases
+now: a canvas the game switches on later used to show for up to half a second where the game put it, which for the
+Hab's fades is 25 cm in front of the Hab camera, in the room in front of the VR camera.
+
+The prompt to answer a call at the terminal (`Comms_UI/Comms Interact Button`) never showed in VR. Its
+`UITrackTransform` sets the prompt's world position to `WorldToScreenPoint` of the spot it tracks, which only works on
+an overlay canvas (one unit per pixel). On the canvas attached to the UI camera the prompt landed far off it. A postfix
+turns the screen point into the matching point on the canvas (`RectTransformUtility.ScreenPointToWorldPointInRectangle`
+with the UI camera). The other Hab prompts are placed by `Hab3DLocationNavigation` through `localPosition` scaled to the
+canvas and work as they are.
+
+## Performance in the Hab
+The Hab stuttered in VR while the bay ran smoothly at the same settings (Ultra, 1.25x, 3360x3600 per eye). What the
+scene data shows (`scenes-gameplay_scenes_all`, Hab scene CAB-11cf266b; profile in `vfx_assets_all`):
+- Ambient occlusion makes the difference. The bay's global `BaseSessionPostprocessProfile` uses HDRP's Low level (half
+  resolution, 4 steps). The Hab's local volume `HAB_PostprocessProfile2` (priority 15) sets a custom level: full
+  resolution, 16 steps, up to 50 pixels radius. Per eye that is roughly 30 times the work, at 2 x 12 million pixels.
+- Lights are not the cause: 45 lights, but almost all are baked; only two realtime lights cast shadows (512 and 1024).
+- The single reflection probe is baked. The space truck viewer (`Root/CameraRig/Main Camera`, `SpaceTruck3DHABController`)
+  renders into a texture every frame, in the flat game as well.
+- The Hab camera has no custom frame settings, so it uses the HDRP asset's defaults; the bay's main camera switches
+  off contact shadows, subsurface scattering, transmission, depth of field and a few others. None of those have a
+  volume override in the Hab, so they should cost little.
+
+`VrPerformance` adds a global volume on our pass layer (priority 1000, only the VR camera has the layer in its mask)
+that sets the occlusion quality back to Low (`[Bild] Umgebungsverdeckung`, also in the options menu: Low, Off, Game
+default). It also logs frame times every 30 s and whenever the place or a setting changes, and once per camera switch
+which other cameras render, to compare bay and Hab from one Player.log.
+
+With the occlusion at Low the Hab still ran at a steady 22.2 ms per frame (45 fps), and `XRDevice.refreshRate` read
+45 Hz instead of 90 Hz: Virtual Desktop's Synchronous Spacewarp halves the rate when the app misses 90 fps and
+synthesizes every second frame. During the Hab's fast Cinemachine moves those synthesized frames smear sideways
+(ghosting). Entering the Hab at 1.25x also failed several render target allocations every time, because the bay stays
+loaded next to the Hab. The resolution in the Hab is therefore capped at 1.0x (native), and the rig moves onto the
+Hab camera in `VrCamera.LateUpdate` as well, since the game can post `GameState.Hab` and hide the load screen in the
+same frame after `Plugin.Update` ran (the bay then showed for a frame and the resolution went up for it).
+
+At 1.0x the Hab still did not reach 90 fps, so in VR its camera moves are replaced by fades. The Hab brain blends with
+`EaseInOut` 1 s by default plus a `CinemachineBlenderSettings` asset. While the rig follows the Hab camera in VR,
+`VrHab.CutBlends` sets the default blend to `Cut` and removes the custom blends (both restored when VR stops or the rig
+leaves the Hab), so the flat game keeps its moves. When the brain's `ActiveVirtualCamera` changes, the rig stays on
+the old spot while the view fades to black (0.15 s), jumps while black (0.05 s) and fades in on the new spot (0.25 s).
+The game's own follow-up switch (`CameraToSwapToAfterBlend`, about 0.1 s after the cut) lands inside the black.
+`Hab3DController` only waits for `!IsBlending`, so cuts don't change its logic. The black is drawn in our pass after
+the UI, as a quad with identity matrices.
+
+Close to a monitor (0.7 m) the synthesized frames show: nodding the head, the screen and its frame seem to move back
+and forth slightly (Player.log of 22.10.: the Hab at 22.4 ms per frame, headset at 45 Hz). The space truck viewer
+(`SpaceTruck3DHABController`, camera `Root/CameraRig/Main Camera`) renders into a 960x540 texture every frame, an extra
+HDRP camera with its own culling, shadows and lighting, while only the `TruckImage` of the truck screen in the
+`Hab ScreenStack` shows it. In VR in the Hab `VrPerformance` now switches that camera off while none of the raw images
+showing its texture is drawn (inactive, on a disabled canvas or under a canvas group at alpha 0). That alone did not
+get the Hab to 90 fps. The frame time line now also gives the main thread's time from `Update` until rendering starts
+(game logic), the time rendering takes on the main thread (including the wait for the headset's next frame) and, if
+the runtime reports it, the app's GPU time (`XRDisplaySubsystem.TryGetAppGPUTimeLastFrame`). Unity's
+`FrameTimingManager` reports nothing in this build, and a main thread time from `Update` to the end of rendering
+came out at the full frame time, because the wait for the headset falls inside it.
+
+The next log (22.10., Hab at 1.0x and 0.75x) settled it. The runtime reports no GPU time either, and the wait for the
+headset falls between `Update` and the start of rendering: at 45 Hz "game logic" read about 15 ms, at 90 Hz 3.5 to
+3.9 ms, with rendering on the main thread at 6 ms in both. At 0.75x the Hab ran at 90 Hz (11.2 ms per frame, slowest
+5 % from 12.3 ms) and the wobble at the monitors was gone; at 1.0x it fell back to 45 Hz. So the GPU sets the limit,
+and the main thread (about 10 ms at 90 Hz) has little room left.
+
+The frame settings the game gives the bay's main camera (`GameCameras/Main Camera`, override mask in the scene data)
+switch off, among others, contact shadows, shadowmask, transmission, subsurface scattering, depth of field and sky
+reflection; the Hab camera uses the HDRP defaults. Most of those cost little where nothing uses them, and shadowmask
+and sky reflection change the Hab's baked lighting, so they were left alone.
+
+Instead the Hab has its own render resolution (`[Bild] AufloesungStation`, in the options menu as "Station
+resolution", 0.75 by default, at most 1.0x), independent of the one for everywhere else (`[Bild] Aufloesung`).
+A first version lowered it automatically by 0.05 while the median frame time was above 1.3 headset intervals. It
+stopped at 0.8x, where the view still wobbled: the Hab ran at 90 Hz on average (11.4 ms per frame) but missed about
+3 % of the frames, and each of those is synthesized. At 0.7x it was steady. Rather than tuning a threshold that
+depends on the runtime and the scene, the setting is now set by hand. The frame time line gives the share of missed
+frames (1.4 to 4 intervals of the highest refresh rate seen, the headset's own; longer ones are hitches) to help with
+that.
+
+## Diagnostics
+F8 (`VrDiagnostics`) is for things only seen in the headset. It writes into the log: game state, head pose, the camera
+the rig follows, where the UI canvas hangs, every active root canvas (render mode, camera, layer, whether `VrCanvases`
+attached it, direction and distance from the head for the non-overlay ones, and its dark, large or specially shaded
+graphics, and its visible texts with their position on the canvas, so a prompt that is off the canvas or covered
+shows up), and the visible renderers within 4 m that reach above eye height. It also runs on its own 6 s after the rig
+enters the Hab, for things that show right after waking up. Directions are relative to the gaze: "ahead 10, up 60"
+is 10 degrees right of where the head points and 60 degrees above the horizon. It also saves the UI texture and the
+game window as PNG files to `BepInEx\ShipbreakerVR-F8`.
 
 ## Roadmap
 1. Inventory – done

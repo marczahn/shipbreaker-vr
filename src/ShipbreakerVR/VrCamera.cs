@@ -44,6 +44,9 @@ namespace ShipbreakerVR
 
         public Camera GameCamera => gameCamera;
 
+        // True while the rig follows the Hab's own camera instead of the player's.
+        public bool FollowsHab { get; private set; }
+
         // Player size relative to the world. Scaling the rig also scales eye distance and tracked head movement.
         public static float WorldScale => Mathf.Clamp(Plugin.WorldScale.Value, 0.5f, 3f);
 
@@ -66,6 +69,18 @@ namespace ShipbreakerVR
         // Render resolution while only the loading UI shows: the headset's native one, so the load screen stays sharp
         // while the level being loaded gets the video memory (at 1.25x the level start ran out of it and crashed).
         private const float LoadingResolution = 1f;
+
+        // Highest render resolution in the Hab. The bay stays loaded next to it, and at 1.25x the 12 GB card ran out of
+        // video memory each time the Hab appeared (Failed to create RenderTexture ... 0x8007000e). It also leaves the
+        // Hab more room to reach the headset's frame rate.
+        private const float HabResolution = 1f;
+
+        // The Hab costs the GPU more than the bay: on an RTX 4070 Ti at 2688x2880 per eye it ran at 45 fps at 1.0x and at
+        // the headset's 90 at 0.7x. Below the headset's rate Virtual Desktop halves it and synthesizes every second frame,
+        // and even a few missed frames (3 % at 0.8x) wobble close to the monitors. So the Hab has its own resolution
+        // setting ([Bild] AufloesungStation), independent of the one for everywhere else, at most HabResolution.
+        private static float HabScale => Mathf.Clamp(Plugin.StationResolution.Value, 0.5f, HabResolution);
+        private bool habScaleLogged;
 
         public bool BodyFollowsHead => VrXr.IsRunning && Plugin.BodyFollowsHead.Value;
 
@@ -114,13 +129,15 @@ namespace ShipbreakerVR
             vr.Retarget(gameCamera);
             VrUi.Attach(vr);
             VrHelmet.Attach(vr);
+            VrPerformance.Attach(vr);
         }
 
         private void Retarget(Camera camera)
         {
-            // Hand the screen back to the previous camera if it still exists.
-            if (gameCamera != null && gameCamera != camera) gameCamera.enabled = true;
+            // Hand the screen back to the previous camera if it still exists and the game wants it on.
+            if (gameCamera != null && gameCamera != camera) gameCamera.enabled = GameWantsEnabled(gameCamera);
             gameCamera = camera;
+            FollowsHab = VrHab.IsHabCamera(camera);
             if (camera == null)
             {
                 HideWorld();
@@ -133,6 +150,8 @@ namespace ShipbreakerVR
             Playspace = Quaternion.Euler(0f, camera.transform.eulerAngles.y, 0f);
 
             vrCamera.CopyFrom(camera);
+            // Nothing of the game is on our pass layer, but the screen fades hidden from the menu canvas are (VrCanvases).
+            vrCamera.cullingMask &= ~(1 << VrUi.PassLayer);
             vrCamera.ResetProjectionMatrix();
             vrCamera.ResetWorldToCameraMatrix();
             vrCamera.nearClipPlane = 0.05f;
@@ -156,6 +175,7 @@ namespace ShipbreakerVR
             }
 
             Plugin.Log.LogInfo($"VR camera follows '{camera.name}' (HDRP data copied: {gameHd != null})");
+            VrPerformance.LogOtherCameras(camera);
         }
 
         // Nothing of the (half-loaded) world, only black behind the UI canvas. Retarget restores the camera settings.
@@ -192,11 +212,24 @@ namespace ShipbreakerVR
 
         private void Update()
         {
+            VrPerformance.FrameStart();
             if (VrXr.IsRunning && Input.GetKeyDown(KeyCode.F4)) Recenter(true);
+            VrDiagnostics.Update(this);
         }
 
         private void LateUpdate()
         {
+            var running = VrXr.IsRunning;
+            // The game may switch to the Hab and hide its load screen in the same frame, after Plugin.Update looked.
+            // Without this the bay showed for a frame and the resolution went up for it.
+            var hab = running ? VrHab.Camera : null;
+            if (hab != null && hab != gameCamera)
+            {
+                Plugin.Log.LogInfo($"VR camera attached to the Hab camera '{hab.name}'");
+                Retarget(hab);
+                VrDiagnostics.Schedule(6f, "Hab entered 6 s ago");
+            }
+
             // The game camera belongs to a scene and goes with it; the rig stays until the next camera.
             // In between, and while the game's load screen covers the image, only the UI shows.
             var hideWorld = gameCamera == null || (SceneLoader.Instance != null && SceneLoader.Instance.LoadScreenVisible);
@@ -206,7 +239,6 @@ namespace ShipbreakerVR
                 else Retarget(gameCamera);
             }
 
-            var running = VrXr.IsRunning;
             if (running && !wasRunning)
             {
                 recenterAt = Time.unscaledTime + RecenterDelay;
@@ -217,12 +249,14 @@ namespace ShipbreakerVR
             // Don't blindly re-enable on stop: in the Hab the game disabled its camera itself.
             if (!running && wasRunning)
             {
-                if (gameCamera != null)
-                    gameCamera.enabled = gameCamera != LynxCameraController.MainCamera || GameSession.CurrentGameState != GameSession.GameState.Hab;
+                if (gameCamera != null) gameCamera.enabled = GameWantsEnabled(gameCamera);
                 shrinkAt = Time.unscaledTime + 2f;
             }
             wasRunning = running;
-            SilenceUiCameras(running);
+            SilenceOtherCameras(running);
+            VrHab.Calm(running && FollowsHab);
+            VrHab.CutBlends(running && FollowsHab);
+            VrPerformance.Update(running, gameCamera, FollowsHab, worldHidden);
             ShrinkRenderTargets(running);
 
             if (running)
@@ -242,11 +276,16 @@ namespace ShipbreakerVR
             FollowGameCamera();
         }
 
+        // Whether the game itself has this camera on. It switches the main camera off while it shows the Hab with its own.
+        private static bool GameWantsEnabled(Camera camera) => camera != LynxCameraController.MainCamera || !VrHab.MainCameraOff;
+
         // Every active game camera without a target texture also renders into the headset (HDRP's XRSystem only checks
         // that and xrRendering). The load screen's camera (depth 10, after ours) thus covered our image with its grey
         // background and its CRT and scanline effects, which are not made for VR. In VR its canvas is on our UI canvas,
-        // so UI-only cameras stay off while VR runs.
-        private void SilenceUiCameras(bool running)
+        // so UI-only cameras stay off while VR runs. So does the Hab's camera (depth 2) while the rig follows another
+        // one: the Hab scene is loaded behind the load screen, and its camera painted the Hab over the load screen and
+        // its "press a key" prompt, fixed to the face as if the game had frozen.
+        private void SilenceOtherCameras(bool running)
         {
             if (!running)
             {
@@ -262,13 +301,15 @@ namespace ShipbreakerVR
             {
                 var camera = cameraBuffer[i];
                 cameraBuffer[i] = null;
-                if (camera == vrCamera || camera.cameraType != CameraType.Game || camera.targetTexture != null || !IsUiOnly(camera)) continue;
+                if (camera == vrCamera || camera == gameCamera || camera.cameraType != CameraType.Game || camera.targetTexture != null) continue;
                 if (camera.CompareTag("UI_Camera") || camera.name.StartsWith("ShipbreakerVR")) continue;
+                var uiOnly = IsUiOnly(camera);
+                if (!uiOnly && !VrHab.IsHabCamera(camera)) continue;
                 var hd = camera.GetComponent<HDAdditionalCameraData>();
                 if (hd != null && !hd.xrRendering) continue;
                 camera.enabled = false;
                 silenced.RemoveWhere(c => c == null);
-                if (silenced.Add(camera)) Plugin.Log.LogInfo($"Camera '{camera.name}' (UI only, depth {camera.depth}) switched off while VR runs");
+                if (silenced.Add(camera)) Plugin.Log.LogInfo($"Camera '{camera.name}' ({(uiOnly ? "UI only" : "Hab")}, depth {camera.depth}) switched off while VR runs");
             }
         }
 
@@ -298,7 +339,12 @@ namespace ShipbreakerVR
                 Plugin.ResolutionScale.Value = max;
                 VrOptions.Refresh(Plugin.ResolutionScale);
             }
-            var scale = Mathf.Clamp(Plugin.ResolutionScale.Value, 0.5f, max > 0f ? max : 1f);
+            var scale = Mathf.Clamp(FollowsHab ? HabScale : Plugin.ResolutionScale.Value, 0.5f, max > 0f ? max : 1f);
+            if (FollowsHab != habScaleLogged)
+            {
+                habScaleLogged = FollowsHab;
+                if (FollowsHab) Plugin.Log.LogInfo($"Render resolution in the Hab: {scale:0.00}x (station setting, at most {HabResolution:0.00}x since the bay stays in video memory next to it)");
+            }
             if (!Mathf.Approximately(scale, pendingResolution))
             {
                 pendingResolution = scale;
@@ -313,9 +359,10 @@ namespace ShipbreakerVR
                 if (scale > current && !FitsIntoMemory(scale))
                 {
                     Plugin.Log.LogWarning($"Render resolution {scale:0.00}x does not fit into video memory, staying at {current:0.00}x");
-                    Plugin.ResolutionScale.Value = current;
+                    var entry = FollowsHab ? Plugin.StationResolution : Plugin.ResolutionScale;
+                    entry.Value = current;
                     pendingResolution = current;
-                    VrOptions.Refresh(Plugin.ResolutionScale);
+                    VrOptions.Refresh(entry);
                     return;
                 }
                 UnityEngine.XR.XRSettings.eyeTextureResolutionScale = scale;
@@ -458,17 +505,55 @@ namespace ShipbreakerVR
         private void FollowGameCamera()
         {
             if (gameCamera == null || rig == null) return;
+            // Hab camera moves become fades in VR: until the view is black the rig stays on the old spot. At the monitor
+            // above the bed it stays where it was.
+            VrHab.UpdateTransition();
+            if (FollowsHab && (VrHab.Holding || VrHab.Staying)) return;
             var cam = gameCamera.transform;
-            if (!BodyFollowsHead) Playspace = cam.rotation * recenterRotation;
+            // At a monitor in the Hab the head goes in front of it instead of right up to it (VrHab.Monitor).
+            var position = cam.position;
+            if (FollowsHab && VrHab.Monitor != null) position = VrHab.MonitorViewpoint(VrHab.Monitor, position);
+            // The Hab camera swings between bed, kitchen and terminal; the playspace turns along, but only around the
+            // vertical axis: its pitch would tilt the room. Looking up or down is up to the head. Except lying in bed.
+            if (FollowsHab) Playspace = HabHeading(cam.rotation) * recenterRotation;
+            else if (!BodyFollowsHead) Playspace = cam.rotation * recenterRotation;
+            // Cinemachine sets the lens every frame: in the Hab the rooms reach 500 m, the view out of the window
+            // 5000 m (ship and dock). Copied only once, the ship stayed cut off at 500 m. In the Hab at least as far
+            // as its farthest view: at the terminal (2555 m) the earth outside was cut off depending on the head.
+            vrCamera.farClipPlane = FollowsHab ? Mathf.Max(gameCamera.farClipPlane, VrHab.FarClip) : gameCamera.farClipPlane;
             var scale = WorldScale;
             rig.localScale = new Vector3(scale, scale, scale);
             rig.rotation = Playspace;
-            rig.position = cam.position - Playspace * (recenterPosition * scale);
+            rig.position = position - Playspace * (recenterPosition * scale);
+        }
+
+        // Lying in bed (waking up, the monitor above the bed) the Hab camera looks up at the ceiling. There the playspace
+        // tilts along, as if lying on one's back: looking straight ahead shows what the flat game shows, the monitor
+        // with its menu. The tilt changes only during the fade between two spots. Elsewhere only the heading.
+        private const float LyingPitch = 30f;
+
+        private static Quaternion HabHeading(Quaternion rotation)
+        {
+            var forward = rotation * Vector3.forward;
+            return forward.y > Mathf.Sin(LyingPitch * Mathf.Deg2Rad) ? Quaternion.LookRotation(forward, Vector3.up) : Yaw(rotation);
+        }
+
+        // Heading of a rotation (turn around the world's up axis), from where it looks or, looking straight down or up, where its top points.
+        private static Quaternion Yaw(Quaternion rotation)
+        {
+            var forward = rotation * Vector3.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 1e-4f)
+            {
+                forward = rotation * Vector3.up;
+                forward.y = 0f;
+            }
+            return forward.sqrMagnitude < 1e-8f ? Quaternion.identity : Quaternion.LookRotation(forward, Vector3.up);
         }
 
         // Puts the current head position on the game camera; without body-follows-head also the view direction (yaw only).
-        // With F4 (toGaze) the view direction is also centered in menus, where the body does not turn with the head,
-        // and the menu canvas is placed straight along the gaze.
+        // With F4 (toGaze) the view direction is also centered in menus, where the body does not turn with the head.
+        // The menu canvas is placed in front of the head again, upright at eye height.
         private void Recenter(bool toGaze)
         {
             var head = transform;
@@ -482,7 +567,7 @@ namespace ShipbreakerVR
                 // Back in gameplay the body takes its playspace from where it actually points.
                 VrBody.Resync();
             }
-            if (VrUi.Instance != null) VrUi.Instance.Recenter(toGaze);
+            if (VrUi.Instance != null) VrUi.Instance.Recenter();
             Plugin.Log.LogInfo($"Head recentered{(toGaze ? " (F4)" : "")} (tracked head position {head.localPosition})");
         }
     }
