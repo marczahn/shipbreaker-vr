@@ -152,10 +152,14 @@ Config `Steuerung/Controllersteuerung` (Aus/Vtol; the earlier "point and twist" 
 - Hold the left trigger; moving the controller away from where it was when pressed thrusts that way (2 cm deadzone,
   full at 15 cm), measured at an estimated wrist point 8 cm behind the grip pose: measured at the controller, tilting
   the hand to turn swung it past the deadzone and added thrust in a direction nobody asked for. Rotation uses the aim pose (`PointerRotation`; the `deviceRotation` grip pose runs along the handle).
-  The hand's rotation away from the reference is split via `eulerAngles` into turn (controller up), pitch (right) and
-  roll (forward); each turns the body around the head's matching axis (8 degree deadzone, full 45 degrees/s at 45).
+  The hand's roll away from the reference (`eulerAngles.z`) rolls the body around the head's forward axis (8 degree
+  deadzone, full 45 degrees/s at 45). Turning and pitching by twisting the hand worked, but holding the trigger and the
+  hand angle at the same time was tiring, so both moved to the stick.
+- Left stick (no trigger needed): left/right turns around the head's up axis, up/down pitches around its right axis
+  (stick up looks up), 15% deadzone, full 45 degrees/s at full deflection.
 - Right stick left/right snap-turns 30 degrees around the head's up axis (the playspace's up axis tilted the view after
-  rolling). Pressing the left stick presses the game's brake actions (`ThrustBrakeLeft/Right`). A postfix on
+  rolling). Y (left `secondaryButton`) presses the game's brake actions (`ThrustBrakeLeft/Right`); it used to be the
+  left stick press. A postfix on
   `LynxControlExtensions.GetInputIsPressed` never ran because Mono inlines it, so a transpiler redirects the calls in
   `ThrustController.Update`.
 The grip stays free for grabbing later. The left controller's name and features are logged once. OpenXR only reports

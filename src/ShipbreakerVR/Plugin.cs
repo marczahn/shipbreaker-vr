@@ -49,7 +49,7 @@ namespace ShipbreakerVR
             AmbientOcclusion = Config.Bind("Bild", "Umgebungsverdeckung", VrPerformance.Occlusion.Niedrig,
                 "Ambient occlusion (shading in corners and creases) in VR. Niedrig: half resolution and few steps, as the game uses it in the bay. The station asks for full resolution and 16 steps, which at VR resolution costs so much GPU time that it stutters. Aus: off. Spiel: as the game sets it.");
             ControlScheme = Config.Bind("Steuerung", "Controllersteuerung", VrControls.Scheme.Vtol,
-                "Flying with the motion controllers. Vtol: hold the left trigger and move the controller away from where it was when pressed to thrust that way; turn it left/right to turn, tilt it sideways to roll, tilt it forward/back to pitch. Right stick left/right snap-turns 30 degrees, pressing the left stick brakes. Aus: off.");
+                "Flying with the motion controllers. Vtol: hold the left trigger and move the controller away from where it was when pressed to thrust that way, tilt it sideways to roll. Left stick: turn (left/right) and pitch (up/down). Right stick left/right snap-turns 30 degrees, Y brakes. Aus: off.");
             UiInVr = Config.Bind("Anzeige", "UiImRaum", true,
                 "Show HUD and menus on a canvas in the world instead of flat over the image.");
             HudDistance = Config.Bind("Anzeige", "HudAbstand", 1.5f, "Distance of the visor display in front of the eyes, in meters.");

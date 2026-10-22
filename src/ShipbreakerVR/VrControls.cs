@@ -7,9 +7,9 @@ using UnityEngine.XR;
 namespace ShipbreakerVR
 {
     // Flying with the motion controllers (VTOL): holding the left trigger stores the left controller pose as a reference.
-    // Moving the controller away from it thrusts in that direction; turning it left/right turns the body, tilting it
-    // sideways rolls and tilting it forward/back pitches, each around the body's own axis and faster the further the hand
-    // is turned. Back at the reference (or trigger released) nothing happens. Pressing the left stick brakes, the right
+    // Moving the controller away from it thrusts in that direction; tilting it sideways rolls, around the body's own axis
+    // and faster the further the hand is tilted. Back at the reference (or trigger released) nothing happens. The left
+    // stick turns (left/right) and pitches (up/down) at any time, faster the further it is pushed; Y brakes, the right
     // stick left/right snap-turns. The grips stay free for grabbing.
     // Thrust and brake go through the game's own actions (ThrustController reads them via LynxControls), so fuel, forces and
     // HUD stay the game's. Rotation is applied in VrBody: to the playspace with "body follows head", to the body without.
@@ -28,6 +28,7 @@ namespace ShipbreakerVR
         private const float TurnDeadzone = 8f;
         private const float TurnFull = 45f;
         private const float TurnSpeed = 45f;
+        private const float StickDeadzone = 0.15f;
 
         // The aim pose points where the controller points; the device (grip) pose runs along the handle, tilted upward.
         private static readonly InputFeatureUsage<Quaternion> PointerRotation = new InputFeatureUsage<Quaternion>("PointerRotation");
@@ -70,6 +71,8 @@ namespace ShipbreakerVR
             if (GetRight() && right.TryGetFeatureValue(CommonUsages.primary2DAxis, out var rightStick)) SnapTurn(rightStick.x, playspace);
 
             if (!GetLeft()) { held = false; return; }
+            left.TryGetFeatureValue(CommonUsages.secondaryButton, out braking);
+            if (left.TryGetFeatureValue(CommonUsages.primary2DAxis, out var leftStick)) TurnFromStick(leftStick, playspace);
             if (!left.TryGetFeatureValue(CommonUsages.devicePosition, out var grip)
                 || !left.TryGetFeatureValue(CommonUsages.deviceRotation, out var rotation)) { held = false; return; }
             // Thrust follows the wrist, not the controller: tilting the hand swings the controller around the wrist, and
@@ -77,13 +80,12 @@ namespace ShipbreakerVR
             var position = grip + rotation * WristOffset;
             if (left.TryGetFeatureValue(PointerRotation, out var aim)) rotation = aim;
             left.TryGetFeatureValue(CommonUsages.trigger, out var trigger);
-            left.TryGetFeatureValue(CommonUsages.primary2DAxisClick, out braking);
 
             if (!Hold(trigger >= TriggerPress, position, rotation)) return;
             var offset = position - heldPosition;
             var strength = Ramp(offset.magnitude, MoveDeadzone, MoveFull);
             if (strength > 0f) thrust = playspace * offset.normalized * strength;
-            TurnFromReference(rotation, playspace);
+            RollFromReference(rotation, playspace);
         }
 
         // Stores the pose when the button goes down; true while it stays down (from the frame after the press).
@@ -97,20 +99,27 @@ namespace ShipbreakerVR
             return false;
         }
 
-        // Splits the hand's rotation away from the reference into turn (around the controller's up axis), pitch (right
-        // axis) and roll (forward axis), and turns the body around its own matching axis, each with its own deadzone.
-        // Unity's signs line up: hand turned right, tilted forward or tilted left turns, pitches or rolls the body that way.
-        private static void TurnFromReference(Quaternion rotation, Quaternion playspace)
+        // Rolls the body around its forward axis by the hand's roll away from the reference (around the controller's
+        // forward axis). Unity's signs line up: hand tilted left rolls the body left.
+        private static void RollFromReference(Quaternion rotation, Quaternion playspace)
         {
             var hand = (Quaternion.Inverse(heldRotation) * rotation).eulerAngles;
-            var body = playspace * VrCamera.Instance.HeadRotation;
-            var yaw = Rate(hand.y);
-            var pitch = Rate(hand.x);
             var roll = Rate(hand.z);
+            if (roll != 0f) turn = Quaternion.AngleAxis(roll, playspace * VrCamera.Instance.HeadRotation * Vector3.forward) * turn;
+        }
+
+        // Left stick left/right turns around the body's up axis, up/down pitches around its right axis (stick up looks
+        // up, like the mouse), each faster the further the stick is pushed.
+        private static void TurnFromStick(Vector2 stick, Quaternion playspace)
+        {
+            var body = playspace * VrCamera.Instance.HeadRotation;
+            var yaw = StickRate(stick.x);
+            var pitch = -StickRate(stick.y);
             if (yaw != 0f) turn = Quaternion.AngleAxis(yaw, body * Vector3.up) * turn;
             if (pitch != 0f) turn = Quaternion.AngleAxis(pitch, body * Vector3.right) * turn;
-            if (roll != 0f) turn = Quaternion.AngleAxis(roll, body * Vector3.forward) * turn;
         }
+
+        private static float StickRate(float value) => Ramp(Mathf.Abs(value), StickDeadzone, 1f) * Mathf.Sign(value) * TurnSpeed * Time.deltaTime;
 
         // Degrees to turn this frame for a hand angle (0..360 from eulerAngles): none inside the deadzone, full speed from
         // TurnFull on.

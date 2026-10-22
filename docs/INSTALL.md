@@ -26,9 +26,10 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
 ### Flying with the controllers
 Switch it in the options row "Controller flying" in the VR tab. Hold the left trigger, then:
 - move the controller away from where it was when you pressed it to fly that way,
-- turn it left/right to turn, tilt it sideways to roll, tilt it forward/back to pitch; the further, the faster.
+- tilt it sideways to roll; the further, the faster.
 
-The right stick left/right snap-turns 30 degrees, pressing the left stick brakes. Mouse, keyboard and gamepad keep working.
+The left stick turns (left/right) and pitches (up/down), the further, the faster; it needs no trigger. The right stick
+left/right snap-turns 30 degrees, Y brakes. Mouse, keyboard and gamepad keep working.
 
 ## Uninstall
 Delete `winhttp.dll` from the game folder (disables all BepInEx mods). For a full removal also delete `BepInEx\`,

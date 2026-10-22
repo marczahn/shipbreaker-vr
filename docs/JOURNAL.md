@@ -244,3 +244,15 @@ showed up on the second try. The page stayed empty for three more, while I blame
 A log of every page on every tab switch finally explained it: the copy thought it was already visible, so the menu
 never bothered to draw it. Telling it that it starts hidden was the whole fix. Every setting now also explains itself in
 a line below the list, in German or English, like the game.
+
+<a id="stick-steering"></a>
+## 2026-10-22 · Steering with the stick
+
+[Twisting the controller to turn](#vtol-and-vr-tab) worked, but Marc found it tiring in the long run: hold the trigger,
+hold the hand at an angle, and keep holding both while the ship drifts past. He wanted turning and pitching on the left
+stick instead, where they need no trigger and no wrist gymnastics. Pushing the stick sideways now turns, pushing it up or
+down pitches, and the further you push, the faster. Tilting the controller sideways with the trigger held still rolls,
+because a stick only has two directions and roll had to live somewhere.
+
+The brake moved too, from pressing the left stick to Y. Pressing a stick you are also steering with is a good way to
+brake by accident.
