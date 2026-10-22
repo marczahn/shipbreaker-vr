@@ -73,7 +73,7 @@ Version 0.2.0 then did nothing at all when F3 was pressed. One of my new Harmony
 and took the whole plugin down with it. My mistake, and an instructive one: since then every patch is applied on its
 own, so one broken patch can no longer drag the others along. 0.2.1 worked.
 
-First entry on the bug list: objects at a distance looked "compressed", as if size and distance could not be judged
+First entry on the bug list: objects at a distance looked compressed, as if size and distance could not be judged
 beyond a few meters. We parked that for later (see [World scale](#world-scale)).
 
 <a id="body-follows-head"></a>
@@ -99,9 +99,9 @@ the eye texture (2688x2880) as its screen size but aimed through the flat camera
 screen" sat near its top edge.
 
 Against the flickering edges, 0.4.1 switched the VR camera to TAA. The result looked washed out, and the debris in the
-tutorial started trembling as if it was cold. "Almost" was not accepted, and rightly so: TAA relies on motion data that
-is wrong in Multi-Pass VR. I replaced it with SMAA, which stays sharp. The game itself, for the record, uses no
-anti-aliasing at all.
+tutorial started trembling as if it was cold. Almost right was not good enough, and rightly so: TAA relies on motion
+data that is wrong in Multi-Pass VR. I replaced it with SMAA, which stays sharp. The game itself, for the record, uses
+no anti-aliasing at all.
 
 The menus still did not show, because most of them are not drawn by the UI camera at all. They are overlay canvases that
 Unity paints at the very end, and in VR that only reaches the left eye. 0.4.2 re-parents them to the UI camera so they
@@ -148,7 +148,7 @@ by hand. That is still the case.
 <a id="world-scale"></a>
 ## 2026-10-20 · World scale, or why space looks flat
 
-Back to the "compressed" distances from [first light](#first-light). Part of it is not a bug but physics: stereo depth
+Back to the compressed distances from [first light](#first-light). Part of it is not a bug but physics: stereo depth
 fades quickly with distance. At 1 m the two eyes see clearly different images, at 30 to 50 m almost the same one. On
 Earth, haze, shadows on the ground and objects of known size fill the gap. In space there is a black background and a
 ship section the size of a building, so distant things look flat in most space games in VR.
@@ -279,84 +279,88 @@ after rolling, because it turned around the playspace's up axis; it now turns ar
 <a id="visor-steadying"></a>
 ## 2026-10-21 · Steadying the visor
 
-Next on Marc's list was a calmer HUD, phrased as "smoothing of the display". I read that as anti-aliasing and started
-looking at edge smoothing. It was meant differently: the HUD followed every tiny head movement and looked jittery. My
-proposal was a visor with a small dead zone and damped following, while turns of the body still apply instantly so the
-HUD does not drift behind during maneuvers.
+Next on Marc's list was a smoother HUD. I read that as anti-aliasing and started looking at edge smoothing. It was meant
+differently: the HUD followed every tiny head movement and looked jittery. My proposal was a visor with a small dead
+zone and damped following, while turns of the body still apply instantly so the HUD does not drift behind during
+maneuvers.
 
 Halfway through the build it became clear that the text at the bottom edge of the helmet was meant. I asked back whether
 that was the HUD layer or text on the helmet model itself, and what exactly the jitter looked like. The answer came
-after testing the build: "No, it's perfect." I will take it. It ships as the option "Visor steadying" (off, weak,
-strong).
+after testing the build: it was exactly what he had in mind. I will take it. It ships as the option "Visor steadying"
+(off, weak, strong).
 
 <a id="station"></a>
 ## 2026-10-21 to 10-22 · The station between shifts
 
-Between shifts the player wakes up in the Hab, a small station with a bed, a kitchen and a terminal. Marc's report from
-there had three items: the head position was fixed, it stuttered badly ("is my PC too slow?"), and the prompts for R
-and Tab were missing. The game code explained all three at once. The Hab has a camera of its own, and the game switches
-the bay's main camera off while you are there. My VR rig stayed on the main camera anyway, so every frame rendered the
-whole bay with the ship nobody could see, and then the Hab camera rendered the Hab on top of it: two full stereo
-renders, a camera without head tracking providing the visible image, and our UI painted over. The rig now follows the
-Hab camera, takes only its heading so the room does not tilt, and the camera's built-in sway is off in VR.
+Between shifts the player wakes up in the Hab, a small station with a bed, a kitchen and a terminal. Marc's first visits
+there in VR produced a whole list of problems: the head position was fixed, the view stuttered, the prompts for R and
+Tab were missing, the load screen looked frozen, the view out of the window was cut off, and after waking up a black
+rectangle hung in the air. Apart from the stutter, which gets [its own entry](#station-wobble), they all came down to
+the same pattern: something built for a flat screen ended up in the wrong place once there were two eyes.
 
-The first test went "quite well", with two catches. Loading a career from the main menu, the load screen looked frozen.
-The Hab is loaded behind the load screen with its camera already running, and in VR that camera drew the Hab over the
-"press space" prompt, a close relative of [the grey wall](#intro-and-loading). And the view out of the window was cut
-off, because the game sets the far clip per spot (500 m in the rooms, 5000 m at the window) and the VR camera had copied
-it only once.
+The biggest one was the camera. The Hab has a camera of its own, and the game switches the bay's main camera off while
+you are there. My VR rig stayed on the main camera anyway, so every frame rendered the whole bay with the ship nobody
+could see, and then the Hab camera rendered the Hab on top of it: two full stereo renders, a camera without head
+tracking providing the visible image, and our UI painted over. The rig now follows the Hab camera, takes only its
+heading so the room does not tilt, and the camera's built-in sway is off in VR. Two smaller camera problems came along
+with it. The frozen load screen was a close relative of [the grey wall](#intro-and-loading): the Hab is loaded behind
+the load screen with its camera already running, and in VR that camera drew the Hab over the "press space" prompt. The
+cut-off view came from the far clip, which the game sets per spot (500 m in the rooms, 2.5 km at the terminal, 5000 m
+at the window) and which the VR camera had copied only once. The Hab now uses its farthest view everywhere.
 
-Then the stutter. Marc suspected too many details or lights. Not the lights: almost all 45 of them are baked. The
-difference was ambient occlusion: the Hab's own post-processing asks for it at full resolution with 16 steps, while the
-bay uses half resolution and 4. Lowering it to the bay's level helped a lot. Marc then noticed a smear during the camera
-moves between spots and guessed it came from those fast moves. He was right: the Hab still ran at 45 fps, and Virtual
-Desktop fills every second frame with a computed one, which smears during fast motion. Entering the Hab at 1.25x also
-ran out of video memory every time, because the bay stays loaded next to it, so the Hab is now capped at 1.0x. That
-still did not reach 90 ("and I have a fairly good PC already"), so Marc chose the other option I had offered: in VR
-the camera moves became a short fade to black and back. The flat game keeps its moves, which Marc
-insisted on.
+The black rectangle took longer, because I guessed twice before looking properly. My first guess, the monitor above the
+bed, Marc ruled out right away: the black area had the size of the Esc menu. My second, one of the game's fade canvases
+landing on the wrong camera, the next log ruled out. So I built F8, which writes everything drawn around the player into
+the log, plus an automatic dump right after entering the Hab. It showed the game's full-screen fades to black landing on
+the menu canvas, which in the Hab hangs fixed in the room, so a fade became a black board. Marc checked the flat game,
+where there is nothing of the kind. In VR the fades now darken the whole view instead. The same dump explained the
+missing phone prompt: the game positions that one prompt with a trick that only works on a flat screen, and in VR it
+landed far off the canvas.
 
 <a id="station-screens"></a>
-## 2026-10-22 · Screens in the room, and a black rectangle
-
-After waking up, Marc saw a black rectangle above him that disappeared once he switched VR off and on. My first guess
-was the monitor above the bed, which the game switches off while its content shows as an overlay. Marc said it was
-definitely not that: it was a black area the size of the Esc menu. My second guess, one of the game's fade canvases
-landing on the wrong camera, was ruled out by the next log. So I stopped guessing and built F8, which writes everything
-drawn around the player into the log, plus an automatic dump right after entering the Hab. With that it came out: the
-game's full-screen fades to black. In VR they land on the menu canvas, which in the Hab hangs fixed in the room, so a
-fade became a black board. Marc checked the flat game, where nothing is there at all. In VR the fades now darken the
-whole view instead. The same dump also explained why the phone prompt never showed: the game positions that one prompt
-with a trick that only works on a flat screen, and in VR it landed far off the canvas.
+## 2026-10-22 · Screens in the room
 
 The terminal raised a design question. The game moves its camera to 35 cm in front of the monitor and shows the content
 full screen. In VR the canvas hung 2.4 m away, behind the monitor, but was drawn in front of it, so the eyes got two
 distances at once. I offered three ways out and recommended keeping the distance and dimming the room, worried that the
-game's small text would be hard to read on the real monitor. Marc picked the real monitor. It turned out "excellent",
-in his words, and he asked whether a shader could make it blend into the room. The mod cannot bring its own shaders
-without the Unity editor, so the screen look is made from layers over the canvas: slightly dimmer and cooler, fine scan
-lines, darker edges, a faint sheen and light spilling onto the frame. F7 switches it for comparison.
+game's small text would be hard to read on the real monitor. Marc picked the real monitor, and it worked better than my
+worry had suggested. He then asked whether a shader could make it blend into the room. The mod cannot bring its own
+shaders without the Unity editor, so the screen look is made from layers over the canvas: slightly dimmer and cooler,
+fine scan lines, darker edges, a faint sheen and light spilling onto the frame. F7 switches it for comparison.
 
-Fine-tuning took two more rounds. Lying in bed, the player looked straight at the wall while the morning menu waited on
-the monitor overhead, because the playspace took only the camera's heading; when the camera looks up steeply, it now
-takes the pitch too. At the bed monitor I had put him on the pillow, which Marc found too close; he now stays where he
-lies after waking up. The green waypoint arrow stuck into the terminal's monitor and is hidden at the screens, the canvas
-floated a centimeter in front of the glass, and at the terminal the earth outside was cut off because the far clip
-there is only 2.5 km. The Hab now uses its farthest view everywhere.
+The fine-tuning around the screens came down to two things: where the player is, and what gets in the way. Lying in bed,
+the player looked straight at the wall while the morning menu waited on the monitor overhead, because the playspace took
+only the camera's heading; when the camera looks up steeply, it now takes the pitch too. At the bed monitor I had put
+him on the pillow, which Marc found too close, so he now stays where he lies after waking up. In the way were the green
+waypoint arrow, which stuck into the terminal's monitor and is now hidden at the screens, and the canvas itself, which
+floated a centimeter in front of the glass and now sits on it.
 
 <a id="station-wobble"></a>
-## 2026-10-22 · The wobble at the monitors
+## 2026-10-21 to 10-22 · Chasing 90 frames in the station
 
-One problem outlasted all the others. At the terminal, nodding the head made the view seem to move back and forth, only
-slightly, but enough to make Marc dizzy. The cause was the same 45 fps: close to a monitor, the frames Virtual Desktop
-computes in between are visibly off. I found one thing that cost time for nothing: the 3D model of a "space truck" in
-one of the terminal's menus is rendered every frame, even when no one looks at it. I called it "your space truck", and
-Marc asked what that was supposed to be. I only knew the name from the game files. It is paused now when hidden, which
-did not get the Hab to 90 either.
+Performance in the Hab outlasted every other problem there. Even after [the double render](#station) was gone, the
+station ran at 45 fps instead of the headset's 90, and Virtual Desktop fills every missing frame with a computed one.
+That one cause produced all the symptoms Marc reported over two days: the stutter on his first visit, a smear during the
+game's camera moves between spots, which he correctly put down to the fast motion, and finally a slight back-and-forth
+wobble at the terminal when nodding, enough to make him dizzy. Close to a monitor, the computed frames are visibly off.
 
-Marc's question was the obvious one: why not simply render the station at 90? My frame time log could not answer it
-yet, because what I measured as main thread time included the wait for the headset. I fixed the measurement and asked
-Marc to try a lower render resolution in the Hab. At 0.75x the wobble was gone, so the graphics card was the limit.
+The first round went after the obvious costs:
+
+- Marc suspected too many details or lights. Not the lights: almost all 45 of them are baked. The real cost was ambient
+  occlusion, which the Hab's post-processing requests at full resolution with 16 steps, while the bay uses half
+  resolution and 4. Lowering it to the bay's level helped a lot.
+- Entering the Hab at 1.25x ran out of video memory every time, because the bay stays loaded next to it, so the Hab is
+  capped at 1.0x.
+- The 3D model of a "space truck" in one of the terminal's menus was rendered every frame, even when no one looked at
+  it. I called it "your space truck", and Marc asked what that was supposed to be; I only knew the name from the game
+  files. It is paused now when hidden.
+
+None of it reached 90 on a machine that is far from slow. For the camera moves, Marc chose the other option I had
+offered: in VR they became a short fade to black and back, while the flat game keeps its moves, which he insisted on.
+The wobble at the terminal remained. Marc's question was the obvious one: why not simply render the station at 90? My
+frame time log could not answer it yet, because what I measured as main thread time included the wait for the headset.
+I fixed the measurement and asked Marc to try a lower render resolution in the Hab. At 0.75x the wobble was gone, so the
+graphics card was the limit.
 
 Marc suggested lowering the detail automatically whenever the Hab misses 90 fps, and I built it: the station gets its
 own resolution, lowered in steps of 0.05 while the median frame time is well above the headset's interval. It stopped at

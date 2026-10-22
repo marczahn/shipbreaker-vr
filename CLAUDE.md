@@ -68,4 +68,6 @@ How to write an entry:
   something took several rounds or when Marc's or Raik's observation or suggestion cracked the problem.
 - When a change revises or builds on an earlier entry, link it: `[world scale](#world-scale)`.
 - Keep technical detail to what the story needs; the facts belong in `docs/NOTES.md`.
+- No direct quotes from Marc or Raik; paraphrase what they said or decided.
+- Group related small problems by cause or theme instead of walking through each one separately.
 - No personal paths, drive letters or user names from the test machine.
