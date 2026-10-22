@@ -14,6 +14,12 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
 ## Use
 - Connect the headset and start the game; VR starts right away. **F3** toggles VR.
 - **F4** recenters the view on the headset: position, and in menus also view direction and the menu canvas.
+  Menus always appear at eye height, also when you look up or down.
+- **F7** at one of the station's monitors switches its screen look. **F8** writes what is drawn around you into the log,
+  for bug reports.
+- The station between shifts has its own render resolution, the row "VR: Station resolution". If the view wobbles
+  slightly at the monitors when you move your head, the graphics card misses the headset's frame rate there; lower it
+  until that stops.
 - Settings: in the game's options (Video tab, rows starting with "VR:" at the bottom) or in
   `BepInEx\config\de.marczahn.shipbreakervr.cfg`.
 
