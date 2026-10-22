@@ -244,3 +244,25 @@ showed up on the second try. The page stayed empty for three more, while I blame
 A log of every page on every tab switch finally explained it: the copy thought it was already visible, so the menu
 never bothered to draw it. Telling it that it starts hidden was the whole fix. Every setting now also explains itself in
 a line below the list, in German or English, like the game.
+
+<a id="menu-controller"></a>
+## 2026-10-22 · Menus with the controllers
+
+Taking off the headset to find the mouse got old. Marc wanted to work the menus with the controllers, plus a "Center
+view" row in the VR tab that does what F4 does, so recentering no longer needs the keyboard either.
+
+The usual VR answer is a laser pointer. The game offered a shortcut: every menu already works with a gamepad, and the
+game reads gamepads through a library that happily accepts one more. So the controllers now pretend to be an Xbox
+controller.
+
+Marc's first test showed nothing at all. The presses reached the mod, and the game ignored them. It only listens to the
+"active" gamepad, and that role belonged to an unknown device that reported input every single frame. A device only
+takes over with newer input, so ours could tie but never win. Now it takes the role whenever it presses something.
+
+With that working, Marc had a better idea than my one-handed scheme: use both controllers as one whole gamepad, every
+button where its twin sits. Sticks are sticks, A/B/X/Y are A/B/X/Y, the triggers are the shoulder buttons, the grips
+are the triggers. Start took a few rounds. The left menu button belongs to Virtual Desktop, so pressing the left stick
+took the job. In menus that press then set off things nobody had asked for, data collection included, because the game
+reads Start there like "confirm whatever is selected". So it now only counts in gameplay, to pause, and on loading
+screens, to flip through the tips. In gameplay nothing else reaches the game, by Marc's choice; the rest belongs to
+flying.
