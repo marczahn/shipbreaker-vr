@@ -551,6 +551,12 @@ namespace ShipbreakerVR
             return forward.sqrMagnitude < 1e-8f ? Quaternion.identity : Quaternion.LookRotation(forward, Vector3.up);
         }
 
+        // "Center view" in the VR options: the same as F4.
+        public static void RecenterView()
+        {
+            if (VrXr.IsRunning && Instance != null) Instance.Recenter(true);
+        }
+
         // Puts the current head position on the game camera; without body-follows-head also the view direction (yaw only).
         // With F4 (toGaze) the view direction is also centered in menus, where the body does not turn with the head.
         // The menu canvas is placed in front of the head again, upright at eye height.
@@ -568,7 +574,7 @@ namespace ShipbreakerVR
                 VrBody.Resync();
             }
             if (VrUi.Instance != null) VrUi.Instance.Recenter();
-            Plugin.Log.LogInfo($"Head recentered{(toGaze ? " (F4)" : "")} (tracked head position {head.localPosition})");
+            Plugin.Log.LogInfo($"Head recentered{(toGaze ? " (F4 or options)" : "")} (tracked head position {head.localPosition})");
         }
     }
 }

@@ -9,7 +9,7 @@ namespace ShipbreakerVR
     // Flying with the motion controllers (VTOL): holding the left trigger stores the left controller pose as a reference.
     // Moving the controller away from it thrusts in that direction; tilting it sideways rolls, around the body's own axis
     // and faster the further the hand is tilted. Back at the reference (or trigger released) nothing happens. The left
-    // stick turns (left/right) and pitches (up/down) at any time, faster the further it is pushed; Y brakes, the right
+    // stick turns (left/right) and pitches (up/down) in gameplay, faster the further it is pushed; Y brakes, the right
     // stick left/right snap-turns. The grips stay free for grabbing.
     // Thrust and brake go through the game's own actions (ThrustController reads them via LynxControls), so fuel, forces and
     // HUD stay the game's. Rotation is applied in VrBody: to the playspace with "body follows head", to the body without.
@@ -68,7 +68,8 @@ namespace ShipbreakerVR
             if (Active == Scheme.Aus) { held = false; return; }
             // Controller poses are in tracking space, i.e. relative to the rig whose rotation is the playspace.
             var playspace = VrCamera.Instance.Playspace;
-            if (GetRight() && right.TryGetFeatureValue(CommonUsages.primary2DAxis, out var rightStick)) SnapTurn(rightStick.x, playspace);
+            // Outside gameplay the right stick works the menus (VrMenuInput).
+            if (!VrMenuInput.InMenus && GetRight() && right.TryGetFeatureValue(CommonUsages.primary2DAxis, out var rightStick)) SnapTurn(rightStick.x, playspace);
 
             if (!GetLeft()) { held = false; return; }
             // Outside gameplay the sticks and buttons work the menus as a gamepad; turning there would swing the menus.

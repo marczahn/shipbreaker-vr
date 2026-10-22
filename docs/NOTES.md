@@ -44,7 +44,8 @@ Idea for controllers: an aiming camera on the hand that receives these calls.
   (`UI/Default`, ZTest Always, eye matrices via reflection from `HDCamera.xr`). In gameplay the quad is a visor in
   front of the head; elsewhere it is a canvas fixed in the playspace, upright at eye height in the direction the head
   faces. It follows the eye height once the eyes are more than 30 cm above or below its center (standing up, sitting
-  down). F4 places it in front of the head again and, in menus, turns the playspace to the gaze.
+  down). F4 places it in front of the head again and, in menus, turns the playspace to the gaze. The VR tab row "Center view" (`VrOptions.ActionRow`, a toggle row
+  without the toggle) does the same.
 - The game switches its custom pass volumes off outside gameplay (e.g. pause), so the mod uses its own
   `CustomPassVolume` (AfterPostProcess) and only disables the game's UI passes for the VR camera.
 - The main menu has no `LynxCameraController` and no UI camera: the VR camera attaches to the active menu camera and
@@ -164,6 +165,28 @@ Config `Steuerung/Controllersteuerung` (Aus/Vtol; the earlier "point and twist" 
   `ThrustController.Update`.
 The grip stays free for grabbing later. The left controller's name and features are logged once. OpenXR only reports
 controllers because `VrXr` enables the Oculus Touch interaction profile, which the AssetBundle's settings carry disabled.
+
+## Menu control with the motion controllers
+The game's menus are fully usable with a gamepad. Each selected control has a `UIInControlBridge` that reads the
+navigation composite of the action set for the current game state (`FrontEnd` in the main menu and the Hab, `Paused` in
+the pause menu, `NIS` in cutscenes; `LynxControls.AdjustControlsForGameState` loads only that one). Default gamepad
+bindings (`LynxConfigurableControlOptions`): Confirm Action1, Decline Action2, Navigate left stick and D-pad, Scroll
+right stick, tabs bumpers, Start/Pause `GenericStart` (= Menu, Start or Options), Back `GenericBack` (= View/Back).
+Actions read `InputManager.ActiveDevice`, the device with the most recent input. InControl runs in manual mode and is
+updated from `LynxControls.Update`.
+`VrMenuInput` is an InControl `InputDevice` (class Controller, style XboxOne, so the prompts show Xbox glyphs) attached
+with `InputManager.AttachDevice` once InControl is set up. In its `Update` it reads both XR controllers and maps them
+by place: sticks = sticks, A/B/X/Y = A/B/X/Y, triggers = bumpers, grips = analog triggers, right stick pressed =
+R3. Pressing the left stick is Menu (Start), only in `Gameplay` and `LoadingInProgress` (it cycles the loading tips): the
+left menu button belongs to Virtual Desktop, and in menus the Doozy button bridges read Start like Confirm on the
+selected button. No View button (Back; `BackButtonService` treats Decline/B the same, so B covers Esc in menus) and no D-pad. In
+`Gameplay` it reports only the left stick press, which opens the pause menu; everything else stays with controller flying, and `VrControls` keeps
+snap turning (outside gameplay it pauses). A press held across a game state change is ignored until released, so the
+press that opens the pause menu does not close it again. Pressed buttons are logged as `Menu control: ...`.
+InControl makes a device active only when its last input is strictly newer than the active one's. An "Unknown
+Device" (probably a joystick exposed by the runtime) had input every frame and kept the role, so the first version's
+presses never reached the game. A postfix on `InputManager.UpdateActiveDevice` gives our device the role while it has
+input. The device list is logged on attach and on the first presses.
 
 ## Hab (the station between shifts)
 The Hab is an extra scene (`Hab Container`, loaded additively next to the bay after a shift or at the start of a
@@ -341,5 +364,5 @@ game window as PNG files to `BepInEx\ShipbreakerVR-F8`.
 2. Foundation (BepInEx, plugin, camera hook) – done
 3. Seeing VR (stereo, head tracking) – working
 4. Playing VR: controllers, tools in hand, bindings
-5. Using VR: HUD as visor, menus with a pointer – in progress
+5. Using VR: HUD as visor, menus with the right controller (no pointer yet) – in progress
 6. Comfort and performance

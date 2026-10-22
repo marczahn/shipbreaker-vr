@@ -108,6 +108,7 @@ namespace ShipbreakerVR
                 if (StartVrAtLaunch.Value) VrXr.Toggle();
             }
             if (Input.GetKeyDown(KeyCode.F3)) VrXr.Toggle();
+            VrMenuInput.EnsureAttached();
 
             // The main menu has no LynxCameraController yet; the VR camera then attaches to the menu camera.
             // Without any camera (intro, loading screen) the rig still exists and shows the UI on black.
