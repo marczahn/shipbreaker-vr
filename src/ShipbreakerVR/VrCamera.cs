@@ -117,6 +117,7 @@ namespace ShipbreakerVR
             vr.Retarget(gameCamera);
             VrUi.Attach(vr);
             VrHelmet.Attach(vr);
+            VrPerformance.Attach(vr);
         }
 
         private void Retarget(Camera camera)
@@ -160,6 +161,7 @@ namespace ShipbreakerVR
             }
 
             Plugin.Log.LogInfo($"VR camera follows '{camera.name}' (HDRP data copied: {gameHd != null})");
+            VrPerformance.LogOtherCameras(camera);
         }
 
         // Nothing of the (half-loaded) world, only black behind the UI canvas. Retarget restores the camera settings.
@@ -227,6 +229,7 @@ namespace ShipbreakerVR
             wasRunning = running;
             SilenceOtherCameras(running);
             VrHab.Calm(running && FollowsHab);
+            VrPerformance.Update(running, gameCamera, FollowsHab, worldHidden);
             ShrinkRenderTargets(running);
 
             if (running)

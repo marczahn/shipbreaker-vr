@@ -30,6 +30,7 @@ namespace ShipbreakerVR
         internal static ConfigEntry<VrCamera.AntiAliasing> AntiAliasing;
         internal static ConfigEntry<float> ResolutionScale;
         internal static ConfigEntry<float> WorldScale;
+        internal static ConfigEntry<VrPerformance.Occlusion> AmbientOcclusion;
         internal static ConfigEntry<VrControls.Scheme> ControlScheme;
 
         private void Awake()
@@ -43,6 +44,8 @@ namespace ShipbreakerVR
                 "Start VR as soon as the game launches, so the intro and loading screens already show in the headset. Off: start VR with F3.");
             BodyFollowsHead = Config.Bind("Steuerung", "KoerperFolgtKopf", true,
                 "The body, and with it the tools' aim, turns with the head. Mouse and stick add extra rotation. Off: the head looks around freely, only the mouse turns the body.");
+            AmbientOcclusion = Config.Bind("Bild", "Umgebungsverdeckung", VrPerformance.Occlusion.Niedrig,
+                "Ambient occlusion (shading in corners and creases) in VR. Niedrig: half resolution and few steps, as the game uses it in the bay. The station asks for full resolution and 16 steps, which at VR resolution costs so much GPU time that it stutters. Aus: off. Spiel: as the game sets it.");
             ControlScheme = Config.Bind("Steuerung", "Controllersteuerung", VrControls.Scheme.Pavlov,
                 "Flying with the left motion controller. Pavlov (point and twist): stick forward/back thrusts where the controller points; hold the trigger and twist or tilt the hand to roll, pitch or turn. Vtol: hold the trigger and move or turn the controller away from where it was when pressed to thrust or turn that way. Both: stick left/right snap-turns 30 degrees, pressing the stick brakes. Aus: off. Rolling and turning need KoerperFolgtKopf.");
             UiInVr = Config.Bind("Anzeige", "UiImRaum", true,

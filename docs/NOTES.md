@@ -173,6 +173,24 @@ camera copied it only when attaching, so the window view was cut off at 500 m: t
 near the edge of the view (the far plane is a distance along the view direction). The far clip plane is now copied
 every frame.
 
+## Performance in the Hab
+The Hab stuttered in VR while the bay ran smoothly at the same settings (Ultra, 1.25x, 3360x3600 per eye). What the
+scene data shows (`scenes-gameplay_scenes_all`, Hab scene CAB-11cf266b; profile in `vfx_assets_all`):
+- Ambient occlusion makes the difference. The bay's global `BaseSessionPostprocessProfile` uses HDRP's Low level (half
+  resolution, 4 steps). The Hab's local volume `HAB_PostprocessProfile2` (priority 15) sets a custom level: full
+  resolution, 16 steps, up to 50 pixels radius. Per eye that is roughly 30 times the work, at 2 x 12 million pixels.
+- Lights are not the cause: 45 lights, but almost all are baked; only two realtime lights cast shadows (512 and 1024).
+- The single reflection probe is baked. The space truck viewer (`Root/CameraRig/Main Camera`, `SpaceTruck3DHABController`)
+  renders into a texture every frame, in the flat game as well.
+- The Hab camera has no custom frame settings, so it uses the HDRP asset's defaults; the bay's main camera switches
+  off contact shadows, subsurface scattering, transmission, depth of field and a few others. None of those have a
+  volume override in the Hab, so they should cost little.
+
+`VrPerformance` adds a global volume on our pass layer (priority 1000, only the VR camera has the layer in its mask)
+that sets the occlusion quality back to Low (`[Bild] Umgebungsverdeckung`, also in the options menu: Low, Off, Game
+default). It also logs frame times every 30 s and whenever the place or a setting changes, and once per camera switch
+which other cameras render, to compare bay and Hab from one Player.log.
+
 ## Roadmap
 1. Inventory – done
 2. Foundation (BepInEx, plugin, camera hook) – done
