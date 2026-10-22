@@ -33,6 +33,7 @@
     <Reference Include="UnityEngine.UIModule" HintPath="$(ManagedDir)\UnityEngine.UIModule.dll" Private="false" />
     <Reference Include="UnityEngine.UI" HintPath="$(ManagedDir)\UnityEngine.UI.dll" Private="false" />
     <Reference Include="Unity.TextMeshPro" HintPath="$(ManagedDir)\Unity.TextMeshPro.dll" Private="false" />
+    <Reference Include="Doozy.Engine" HintPath="$(ManagedDir)\Doozy.Engine.dll" Private="false" />
     <Reference Include="UnityEngine.SubsystemsModule" HintPath="$(ManagedDir)\UnityEngine.SubsystemsModule.dll" Private="false" />
     <!-- Aus dem Unity-Hilfsprojekt (Output\BepInEx\plugins\ShipbreakerVR), liegen im Spiel neben dem Plugin -->
     <Reference Include="Unity.XR.Management" HintPath="$(XrDir)\Unity.XR.Management.dll" Private="false" />

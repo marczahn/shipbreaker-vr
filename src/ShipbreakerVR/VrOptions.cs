@@ -10,8 +10,8 @@ using UnityEngine.UI;
 
 namespace ShipbreakerVR
 {
-    // Appends the VR settings as extra rows to the video options (that list already scrolls; the Gameplay one does not).
-    // The rows are copies of real game option rows so that look, selection and mouse handling are right.
+    // The VR settings as option rows, shown in their own "VR" tab (VrOptionsTab) or, if that cannot be built, appended to
+    // the video options. The rows are copies of real game option rows so that look, selection and mouse handling are right.
     // We intercept the copies' game logic (fixed enums for game options) via Harmony and read/write
     // the BepInEx config instead. Values take effect and are saved immediately.
     internal static class VrOptions
@@ -41,6 +41,7 @@ namespace ShipbreakerVR
             public Func<int> Get;
             public Action<int> Set;
             public string[] Names;
+            public Action Reset;
             public override string ValueText => Names[Mathf.Clamp(Get(), 0, Names.Length - 1)];
         }
 
@@ -57,39 +58,48 @@ namespace ShipbreakerVR
                     Names = names,
                     Get = () => Array.IndexOf(values, entry.Value),
                     Set = i => entry.Value = values[(i % values.Length + values.Length) % values.Length],
+                    Reset = () => entry.Value = (T)entry.DefaultValue,
                 };
             }
 
             return new Row[]
             {
-                new BoolRow { Label = "VR: Body follows head", Entry = Plugin.BodyFollowsHead },
-                EnumRow("VR: Controller flying", Plugin.ControlScheme, new[] { "Off", "VTOL (trigger)" }),
-                EnumRow("VR: Anti-aliasing", Plugin.AntiAliasing, new[] { "TAA", "SMAA", "FXAA", "None", "Game default" }),
-                new SliderRow { Label = "VR: Render resolution", Entry = Plugin.ResolutionScale, Min = 0.5f, Max = VrCamera.ResolutionSliderMax, Format = "0.00" },
-                new SliderRow { Label = "VR: World scale", Entry = Plugin.WorldScale, Min = 0.5f, Max = 3f, Format = "0.00" },
-                EnumRow("VR: Helmet", Plugin.Helmet, new[] { "Follows head", "Hidden", "Game default" }),
-                new BoolRow { Label = "VR: HUD and menus in world", Entry = Plugin.UiInVr },
-                EnumRow("VR: Visor steadying", Plugin.HudSteadying, new[] { "Off", "Light", "Strong" }),
-                new SliderRow { Label = "VR: Visor size", Entry = Plugin.HudScale, Min = 0.3f, Max = 1f, Format = "0.00" },
-                new SliderRow { Label = "VR: Visor distance (m)", Entry = Plugin.HudDistance, Min = 0.5f, Max = 3f, Format = "0.0" },
-                new SliderRow { Label = "VR: Menu distance (m)", Entry = Plugin.MenuDistance, Min = 1f, Max = 4f, Format = "0.0" },
-                new SliderRow { Label = "VR: Menu width (m)", Entry = Plugin.MenuWidth, Min = 1f, Max = 4f, Format = "0.0" },
+                new BoolRow { Label = "Body follows head", Entry = Plugin.BodyFollowsHead },
+                EnumRow("Controller flying", Plugin.ControlScheme, new[] { "Off", "VTOL (trigger)" }),
+                EnumRow("Anti-aliasing", Plugin.AntiAliasing, new[] { "TAA", "SMAA", "FXAA", "None", "Game default" }),
+                new SliderRow { Label = "Render resolution", Entry = Plugin.ResolutionScale, Min = 0.5f, Max = VrCamera.ResolutionSliderMax, Format = "0.00" },
+                new SliderRow { Label = "World scale", Entry = Plugin.WorldScale, Min = 0.5f, Max = 3f, Format = "0.00" },
+                EnumRow("Helmet", Plugin.Helmet, new[] { "Follows head", "Hidden", "Game default" }),
+                new BoolRow { Label = "HUD and menus in world", Entry = Plugin.UiInVr },
+                EnumRow("Visor steadying", Plugin.HudSteadying, new[] { "Off", "Light", "Strong" }),
+                new SliderRow { Label = "Visor size", Entry = Plugin.HudScale, Min = 0.3f, Max = 1f, Format = "0.00" },
+                new SliderRow { Label = "Visor distance (m)", Entry = Plugin.HudDistance, Min = 0.5f, Max = 3f, Format = "0.0" },
+                new SliderRow { Label = "Menu distance (m)", Entry = Plugin.MenuDistance, Min = 1f, Max = 4f, Format = "0.0" },
+                new SliderRow { Label = "Menu width (m)", Entry = Plugin.MenuWidth, Min = 1f, Max = 4f, Format = "0.0" },
             };
         }
 
-        public static void Inject(OptionsScreenController screen)
+        // Fallback when the VR tab cannot be built: append the rows to the video options like before.
+        public static void AppendTo(OptionsScreenController screen)
         {
             var entries = screen.GetComponentsInChildren<OptionEntry>(true);
             if (entries.Length == 0) return;
-            // Take templates from all tabs of the options menu, so every row type is available.
-            var root = screen.transform.parent != null ? screen.transform.parent : screen.transform;
-            var all = root.GetComponentsInChildren<OptionEntry>(true);
+            var parent = entries.Last().transform.parent;
+            var (height, added) = AddRows(parent, screen.transform.parent != null ? screen.transform.parent : screen.transform, false);
+            GrowContent(parent as RectTransform, height, added);
+            if (added > 0) parent.gameObject.AddComponent<VrOptionsNavigation>();
+        }
+
+        // Adds a copy of a game option row for each VR setting to parent. The templates come from all option rows under
+        // templateRoot, so every row type is available. Returns the height of the added rows and their number.
+        public static (float height, int count) AddRows(Transform parent, Transform templateRoot, bool firstIsTop)
+        {
+            var all = templateRoot.GetComponentsInChildren<OptionEntry>(true);
             var boolTemplate = PickTemplate<OptionEntryBool>(all);
             var sliderTemplate = PickTemplate<OptionEntrySlider>(all);
             var listTemplate = PickTemplate<OptionEntryList>(all);
-            Plugin.Log.LogInfo($"Options '{Path(screen.transform)}': {entries.Length} rows, templates from '{root.name}': toggle {Describe(boolTemplate)}, slider {Describe(sliderTemplate)}, list {Describe(listTemplate)}");
+            Plugin.Log.LogInfo($"Options '{Path(parent)}': templates from '{templateRoot.name}': toggle {Describe(boolTemplate)}, slider {Describe(sliderTemplate)}, list {Describe(listTemplate)}");
 
-            var parent = entries.Last().transform.parent;
             var addedHeight = 0f;
             var added = 0;
             foreach (var row in CreateRows())
@@ -109,15 +119,29 @@ namespace ShipbreakerVR
                 clone.name = "ShipbreakerVR " + row.Label;
                 var entry = clone.GetComponent<OptionEntry>();
                 // Only the list's first row resets the scroll position when selected.
-                Traverse.Create(entry).Field("m_IsTopItem").SetValue(false);
+                Traverse.Create(entry).Field("m_IsTopItem").SetValue(firstIsTop && added == 0);
                 Rows[entry] = row;
                 SetText(Traverse.Create(entry).Field("m_OptionNameText").GetValue<TextMeshProUGUI>(), row.Label);
                 clone.SetActive(true);
                 addedHeight += ((RectTransform)template.transform).rect.height;
                 added++;
             }
-            GrowContent(parent as RectTransform, addedHeight, added);
-            if (added > 0) parent.gameObject.AddComponent<VrOptionsNavigation>();
+            return (addedHeight, added);
+        }
+
+        // Puts every VR setting back to its default and shows it.
+        public static void ResetToDefaults()
+        {
+            foreach (var pair in Rows)
+            {
+                switch (pair.Value)
+                {
+                    case BoolRow b: b.Entry.Value = (bool)b.Entry.DefaultValue; break;
+                    case SliderRow s: s.Entry.Value = (float)s.Entry.DefaultValue; break;
+                    case ListRow l: l.Reset(); break;
+                }
+                if (pair.Key != null) TryRefresh(pair.Key);
+            }
         }
 
         public static bool IsOurs(OptionEntry entry) => entry != null && Rows.ContainsKey(entry);
@@ -150,7 +174,7 @@ namespace ShipbreakerVR
                 !e.name.StartsWith("ShipbreakerVR"));
         }
 
-        private static void SetText(TextMeshProUGUI text, string value)
+        public static void SetText(TextMeshProUGUI text, string value)
         {
             if (text == null) return;
             // Otherwise localized text would overwrite ours again on activation.
@@ -219,15 +243,6 @@ namespace ShipbreakerVR
         private static string Describe(OptionEntry e) => e == null ? "none" : $"'{e.name}'";
 
         private static string Path(Transform t) => t.parent == null ? t.name : Path(t.parent) + "/" + t.name;
-    }
-
-    [HarmonyPatch(typeof(OptionsScreenController), "Awake")]
-    internal static class OptionsScreenAwakePatch
-    {
-        private static void Postfix(OptionsScreenController __instance)
-        {
-            if (__instance is VideoOptionsScreenController) VrOptions.Inject(__instance);
-        }
     }
 
     [HarmonyPatch]

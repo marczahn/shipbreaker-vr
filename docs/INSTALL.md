@@ -14,11 +14,11 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
 ## Use
 - Connect the headset and start the game; VR starts right away. **F3** toggles VR.
 - **F4** recenters the view on the headset: position, and in menus also view direction and the menu canvas.
-- Settings: in the game's options (Video tab, rows starting with "VR:" at the bottom) or in
+- Settings: in the game's options (tab "VR") or in
   `BepInEx\config\de.marczahn.shipbreakervr.cfg`.
 
 ### Flying with the controllers
-Switch it in the options row "VR: Controller flying" (needs "VR: Body follows head"). Hold the left trigger, then:
+Switch it in the options row "Controller flying" in the VR tab (needs "Body follows head"). Hold the left trigger, then:
 - move the controller away from where it was when you pressed it to fly that way,
 - turn it left/right to turn, tilt it sideways to roll, tilt it forward/back to pitch; the further, the faster.
 

@@ -79,10 +79,17 @@ world is hidden the eye resolution drops to 1.0x (native, still sharp; 0.5x made
 shared HDRP targets shrink; afterwards `ApplyQuality` raises it again through the memory probe.
 
 ## Settings menu
-The VR rows are clones of real option rows (bool, slider, list) appended to the Video tab. The game's logic for
-those clones is intercepted via Harmony and redirected to the BepInEx config. Templates are taken from all tabs of
-the options screen. The Gameplay tab was tried first, but its list does not scroll past its own rows, so the VR rows
-hung invisible below it. The scroll content is grown by the added rows' height in case it has no ContentSizeFitter.
+The VR rows are clones of real option rows (bool, slider, list) in their own "VR" tab. The game's logic for those
+clones is intercepted via Harmony and redirected to the BepInEx config. Templates are taken from all tabs of the
+options screen. Earlier the rows were appended to the Video tab (the Gameplay list does not scroll past its own rows);
+that is still the fallback if the tab cannot be built.
+
+The tab (`VrOptionsTab`): `UnifiedOptionsScreen` holds parallel arrays of screen controllers, Doozy `UIView`s and
+`GenericTab` buttons and switches tabs by index (`ShowTab`, `Next/PreviousOptionTab`). On its first `OnEnable` the
+video view is copied (controller and rows removed, `VrOptionsScreen` and the VR rows added, list height fitted, view
+renamed so Doozy's lookups by category/name don't hit it), the last tab button is copied with its click redirected to
+`ShowTab(new index)`, and both are appended to the arrays. `UIView.Show` does not hide other views and the game's way
+of hiding the previous tab does not know the copy, so after every tab switch all other views are hidden.
 
 Keyboard/gamepad navigation (decompiled `UIInControlBridge`): Unity's navigation events are off; the selected row's
 bridge reads the arrow keys from its serialized action set (FrontEnd or Paused). `LynxControls` loads only the set of
