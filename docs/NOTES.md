@@ -7,7 +7,6 @@ Findings about the game and decisions made while building the mod. Newest sectio
 - Game logic lives in `BBI.Unity.Game.dll` (`Assembly-CSharp` is nearly empty)
 - Input: InControl (`GameplayActions`, `LynxControls`)
 - Camera: `LynxCameraController` (static `MainCamera`, `ScreenCenter`, `ScreenWidth/Height`), driven by Cinemachine
-- Decompile: `ilspycmd -p -o out -r <Managed> <Managed>/BBI.Unity.Game.dll` (needs `DOTNET_ROLL_FORWARD=Major` on .NET 8)
 - Test setup: Meta Quest via Virtual Desktop (VDXR OpenXR runtime)
 
 ## XR bootstrapping
@@ -87,7 +86,7 @@ those clones is intercepted via Harmony and redirected to the BepInEx config. Te
 the options screen. The Gameplay tab was tried first, but its list does not scroll past its own rows, so the VR rows
 hung invisible below it. The scroll content is grown by the added rows' height in case it has no ContentSizeFitter.
 
-Keyboard/gamepad navigation (decompiled `UIInControlBridge`): Unity's navigation events are off; the selected row's
+Keyboard/gamepad navigation (`UIInControlBridge`): Unity's navigation events are off; the selected row's
 bridge reads the arrow keys from its serialized action set (FrontEnd or Paused). `LynxControls` loads only the set of
 the current game state, so a bridge with the wrong set gets no input at all. With explicit navigation the bridge moves
 only to an active, interactable target and never falls back to automatic search. Title-screen-only rows are
