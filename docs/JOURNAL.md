@@ -277,5 +277,7 @@ down pitches, and the further you push, the faster. Tilting the controller sidew
 because a stick only has two directions and roll had to live somewhere.
 
 The brake moved too, from pressing the left stick to Y. Pressing a stick you are also steering with is a good way to
-brake by accident, and since [the menus](#menu-controller) the left stick press pauses the game anyway. Braking and
-pausing with one press was not a feature.
+brake by accident, and since [the menus](#menu-controller) the left stick press also paused the game. Braking and
+pausing with one press was not a feature. Pausing by accident while steering wasn't either, so Marc moved the pause to
+A and X pressed together, which other VR games have made the habit anyway. The left stick press now does nothing at
+all, and that is its best feature.

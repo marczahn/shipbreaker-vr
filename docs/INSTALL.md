@@ -38,11 +38,11 @@ button prompts:
 - sticks = sticks (left: navigate, right: scroll), right stick pressed = R3
 - A/B/X/Y = A/B/X/Y (A confirms, B goes back)
 - triggers = shoulder buttons (switch tabs), grips = triggers
-- pressing the left stick = Start: in gameplay it opens the pause menu, on loading screens it cycles the tips. In menus
-  it does nothing, since the game would read it as "confirm".
+- A + X together = Start: in gameplay it opens the pause menu, on loading screens it cycles the tips. In menus it is
+  just A and X, since the game would read Start as "confirm".
 
-There is no View button and no D-pad; the left menu button stays with Virtual Desktop. In gameplay only the left stick
-press reaches the game.
+There is no View button and no D-pad; the left menu button stays with Virtual Desktop. In gameplay only A + X
+reaches the game.
 
 ## Uninstall
 Delete `winhttp.dll` from the game folder (disables all BepInEx mods). For a full removal also delete `BepInEx\`,
