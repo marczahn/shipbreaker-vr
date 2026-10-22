@@ -12,9 +12,10 @@ namespace ShipbreakerVR
     // actions (Confirm = Action1, Decline = Action2, navigation = left stick or D-pad, scrolling = right stick, tabs =
     // bumpers, pause = Menu). So both controllers together are presented to InControl as one more gamepad and the game
     // does the rest, including its gamepad button prompts. The mapping follows the buttons' places, as Marc asked:
-    //   sticks = sticks (pressed: L3/R3), A/B/X/Y = A/B/X/Y, triggers = bumpers, grips = triggers, left menu button =
-    //   Menu (Start). There is no View button (the right controller's system button belongs to the runtime) and no D-pad.
-    // In gameplay only the menu button counts (it opens the pause menu); the rest belongs to controller flying.
+    //   sticks = sticks, A/B/X/Y = A/B/X/Y, triggers = bumpers, grips = triggers, right stick pressed = R3.
+    //   Pressing the left stick is Menu (Start, the pause menu): the left menu button belongs to Virtual Desktop, and the
+    //   menus do not use L3. There is no View button (Back; B does the same in menus) and no D-pad.
+    // In gameplay only the left stick press counts (it opens the pause menu); the rest belongs to controller flying.
     // The actions read only InControl's active device, and another device kept that role (see ActiveDevicePatch).
     internal class VrMenuInput : InControl.InputDevice
     {
@@ -23,7 +24,7 @@ namespace ShipbreakerVR
         private static readonly InputControlType[] Buttons =
         {
             InputControlType.Action1, InputControlType.Action2, InputControlType.Action3, InputControlType.Action4,
-            InputControlType.LeftBumper, InputControlType.RightBumper, InputControlType.LeftStickButton,
+            InputControlType.LeftBumper, InputControlType.RightBumper,
             InputControlType.RightStickButton, InputControlType.Menu,
         };
 
@@ -95,10 +96,10 @@ namespace ShipbreakerVR
             {
                 var state = GameSession.CurrentGameState;
                 var gameplay = state == GameSession.GameState.Gameplay;
-                var menu = Button(left, CommonUsages.menuButton);
+                var menu = Button(left, CommonUsages.primary2DAxisClick);
                 if (gameplay)
                 {
-                    pressed[8] = menu;
+                    pressed[7] = menu;
                 }
                 else
                 {
@@ -112,9 +113,8 @@ namespace ShipbreakerVR
                     pressed[3] = Button(left, CommonUsages.secondaryButton);
                     pressed[4] = Trigger(left);
                     pressed[5] = Trigger(right);
-                    pressed[6] = Button(left, CommonUsages.primary2DAxisClick);
-                    pressed[7] = Button(right, CommonUsages.primary2DAxisClick);
-                    pressed[8] = menu;
+                    pressed[6] = Button(right, CommonUsages.primary2DAxisClick);
+                    pressed[7] = menu;
                 }
 
                 // A press that opened or closed a menu is still held when the next state starts; it must not act there

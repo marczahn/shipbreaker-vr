@@ -172,9 +172,10 @@ Actions read `InputManager.ActiveDevice`, the device with the most recent input.
 updated from `LynxControls.Update`.
 `VrMenuInput` is an InControl `InputDevice` (class Controller, style XboxOne, so the prompts show Xbox glyphs) attached
 with `InputManager.AttachDevice` once InControl is set up. In its `Update` it reads both XR controllers and maps them
-by place: sticks = sticks (pressed: L3/R3), A/B/X/Y = A/B/X/Y, triggers = bumpers, grips = analog triggers, left menu
-button = Menu. No View button (the right system button belongs to the runtime) and no D-pad. In `Gameplay` it reports
-only the menu button, which opens the pause menu; everything else stays with controller flying, and `VrControls` keeps
+by place: sticks = sticks, A/B/X/Y = A/B/X/Y, triggers = bumpers, grips = analog triggers, right stick pressed =
+R3. Pressing the left stick is Menu (Start): the left menu button belongs to Virtual Desktop, and the menus have no use
+for L3. No View button (Back; `BackButtonService` treats Decline/B the same, so B covers Esc in menus) and no D-pad. In
+`Gameplay` it reports only the left stick press, which opens the pause menu; everything else stays with controller flying, and `VrControls` keeps
 snap turning (outside gameplay it pauses). A press held across a game state change is ignored until released, so the
 press that opens the pause menu does not close it again. Pressed buttons are logged as `Menu control: ...`.
 InControl makes a device active only when its last input is strictly newer than the active one's. An "Unknown
