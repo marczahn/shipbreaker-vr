@@ -104,24 +104,24 @@ namespace ShipbreakerVR
             // Without any camera (intro, loading screen) the rig still exists and shows the UI on black.
             // In the Hab the game shows the station through its own camera; back in gameplay the main camera takes over again.
             var vr = VrCamera.Instance;
-            if (VrXr.IsRunning && Time.unscaledTime >= nextCameraSearch)
+            if (!VrXr.IsRunning) return;
+            // Every frame: the game switches to the Hab first and hides its load screen afterwards; by then the rig
+            // should be on the Hab camera instead of showing the bay from the switched-off main camera.
+            var hab = VrHab.Camera;
+            if (hab != null)
+            {
+                if (vr == null || vr.GameCamera != hab)
+                {
+                    Log.LogInfo($"VR camera attached to the Hab camera '{hab.name}'");
+                    VrCamera.Attach(hab);
+                }
+            }
+            else if (Time.unscaledTime >= nextCameraSearch && (vr == null || vr.GameCamera == null || vr.FollowsHab))
             {
                 nextCameraSearch = Time.unscaledTime + 0.25f;
-                var hab = VrHab.Camera;
-                if (hab != null)
-                {
-                    if (vr == null || vr.GameCamera != hab)
-                    {
-                        Log.LogInfo($"VR camera attached to the Hab camera '{hab.name}'");
-                        VrCamera.Attach(hab);
-                    }
-                }
-                else if (vr == null || vr.GameCamera == null || vr.FollowsHab)
-                {
-                    var cam = LynxCameraController.MainCamera != null ? LynxCameraController.MainCamera : FindMenuCamera();
-                    if (cam != null) Log.LogInfo($"VR camera attached to '{cam.name}'");
-                    if (cam != null || vr == null || vr.GameCamera != null) VrCamera.Attach(cam);
-                }
+                var cam = LynxCameraController.MainCamera != null ? LynxCameraController.MainCamera : FindMenuCamera();
+                if (cam != null) Log.LogInfo($"VR camera attached to '{cam.name}'");
+                if (cam != null || vr == null || vr.GameCamera != null) VrCamera.Attach(cam);
             }
         }
     }

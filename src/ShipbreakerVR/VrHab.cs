@@ -15,6 +15,7 @@ namespace ShipbreakerVR
     internal static class VrHab
     {
         private static Hab3DController controller;
+        private static float nextControllerSearch;
 
         // Original amplitude of each sway (Perlin noise) we silenced; the game itself toggles their enabled flag.
         private static readonly Dictionary<CinemachineBasicMultiChannelPerlin, float> calmed = new Dictionary<CinemachineBasicMultiChannelPerlin, float>();
@@ -31,7 +32,12 @@ namespace ShipbreakerVR
             {
                 // The Hab is only shown next to a loaded bay; without its main camera there is nothing to look for.
                 if (!MainCameraOff || LynxCameraController.MainCamera == null) return null;
-                if (controller == null) controller = Object.FindObjectOfType<Hab3DController>();
+                // Asked every frame; searching all objects is only worth it now and then (e.g. while the Hab unloads).
+                if (controller == null && Time.unscaledTime >= nextControllerSearch)
+                {
+                    nextControllerSearch = Time.unscaledTime + 0.25f;
+                    controller = Object.FindObjectOfType<Hab3DController>();
+                }
                 if (controller == null || !controller.isActiveAndEnabled || controller.CinemachineBrain == null) return null;
                 var camera = controller.CinemachineBrain.OutputCamera;
                 return camera != null && camera.gameObject.activeInHierarchy ? camera : null;

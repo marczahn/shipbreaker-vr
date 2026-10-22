@@ -225,7 +225,7 @@ namespace ShipbreakerVR
                 shrinkAt = Time.unscaledTime + 2f;
             }
             wasRunning = running;
-            SilenceUiCameras(running);
+            SilenceOtherCameras(running);
             VrHab.Calm(running && FollowsHab);
             ShrinkRenderTargets(running);
 
@@ -252,8 +252,10 @@ namespace ShipbreakerVR
         // Every active game camera without a target texture also renders into the headset (HDRP's XRSystem only checks
         // that and xrRendering). The load screen's camera (depth 10, after ours) thus covered our image with its grey
         // background and its CRT and scanline effects, which are not made for VR. In VR its canvas is on our UI canvas,
-        // so UI-only cameras stay off while VR runs.
-        private void SilenceUiCameras(bool running)
+        // so UI-only cameras stay off while VR runs. So does the Hab's camera (depth 2) while the rig follows another
+        // one: the Hab scene is loaded behind the load screen, and its camera painted the Hab over the load screen and
+        // its "press a key" prompt, fixed to the face as if the game had frozen.
+        private void SilenceOtherCameras(bool running)
         {
             if (!running)
             {
@@ -269,13 +271,15 @@ namespace ShipbreakerVR
             {
                 var camera = cameraBuffer[i];
                 cameraBuffer[i] = null;
-                if (camera == vrCamera || camera.cameraType != CameraType.Game || camera.targetTexture != null || !IsUiOnly(camera)) continue;
+                if (camera == vrCamera || camera == gameCamera || camera.cameraType != CameraType.Game || camera.targetTexture != null) continue;
                 if (camera.CompareTag("UI_Camera") || camera.name.StartsWith("ShipbreakerVR")) continue;
+                var uiOnly = IsUiOnly(camera);
+                if (!uiOnly && !VrHab.IsHabCamera(camera)) continue;
                 var hd = camera.GetComponent<HDAdditionalCameraData>();
                 if (hd != null && !hd.xrRendering) continue;
                 camera.enabled = false;
                 silenced.RemoveWhere(c => c == null);
-                if (silenced.Add(camera)) Plugin.Log.LogInfo($"Camera '{camera.name}' (UI only, depth {camera.depth}) switched off while VR runs");
+                if (silenced.Add(camera)) Plugin.Log.LogInfo($"Camera '{camera.name}' ({(uiOnly ? "UI only" : "Hab")}, depth {camera.depth}) switched off while VR runs");
             }
         }
 
@@ -470,6 +474,9 @@ namespace ShipbreakerVR
             // vertical axis: its pitch would tilt the room. Looking up or down is up to the head.
             if (FollowsHab) Playspace = Yaw(cam.rotation) * recenterRotation;
             else if (!BodyFollowsHead) Playspace = cam.rotation * recenterRotation;
+            // Cinemachine sets the lens every frame: in the Hab the rooms reach 500 m, the view out of the window
+            // 5000 m (ship and dock). Copied only once, the ship stayed cut off at 500 m.
+            vrCamera.farClipPlane = gameCamera.farClipPlane;
             var scale = WorldScale;
             rig.localScale = new Vector3(scale, scale, scale);
             rig.rotation = Playspace;

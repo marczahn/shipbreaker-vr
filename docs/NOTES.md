@@ -159,6 +159,20 @@ to 0 while VR runs (the game itself toggles their enabled flag), and the helmet 
 is on the main camera (it would otherwise come along from the bay). The Hab's overlay and screen-space canvases
 (3D navigation prompts, the terminal `Hab ScreenStack` at 0.25 m) go onto the UI canvas like other menus.
 
+The Hab scene is loaded while the load screen still shows (a career load starts in the Hab), and everything in it is
+active, so `Unity_Camera` already renders then. In the flat game the load screen camera (depth 10) covers it. In VR
+that camera is off and the Hab camera (depth 2) drew the Hab over our black image and the UI pass, without head
+tracking: the headset seemed frozen while the game waited for a key. `VrCamera` therefore switches the Hab camera off
+like the UI-only cameras whenever the rig follows another camera. `GameState.Hab` is posted on that key press and
+the load screen hides afterwards (`SceneLoader.EndProcess`), so the Hab camera is checked every frame and the rig is
+already on it when the Hab appears.
+
+Cinemachine applies each virtual camera's lens to `Unity_Camera` every frame. Most Hab views have a far clip plane of
+500 m, the window view 5000 m (the ship and the dock below), the comms view 5000 m and the Hab screen 2555 m. The VR
+camera copied it only when attaching, so the window view was cut off at 500 m: the ship showed only in part, and only
+near the edge of the view (the far plane is a distance along the view direction). The far clip plane is now copied
+every frame.
+
 ## Roadmap
 1. Inventory – done
 2. Foundation (BepInEx, plugin, camera hook) – done
