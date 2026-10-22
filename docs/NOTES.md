@@ -162,7 +162,7 @@ Config `Steuerung/Controllersteuerung` (Aus/Vtol; the earlier "point and twist" 
 The grip stays free for grabbing later. The left controller's name and features are logged once. OpenXR only reports
 controllers because `VrXr` enables the Oculus Touch interaction profile, which the AssetBundle's settings carry disabled.
 
-## Menu control with the right controller
+## Menu control with the motion controllers
 The game's menus are fully usable with a gamepad. Each selected control has a `UIInControlBridge` that reads the
 navigation composite of the action set for the current game state (`FrontEnd` in the main menu and the Hab, `Paused` in
 the pause menu, `NIS` in cutscenes; `LynxControls.AdjustControlsForGameState` loads only that one). Default gamepad
@@ -171,11 +171,16 @@ right stick, tabs bumpers, Start/Pause `GenericStart` (= Menu, Start or Options)
 Actions read `InputManager.ActiveDevice`, the device with the most recent input. InControl runs in manual mode and is
 updated from `LynxControls.Update`.
 `VrMenuInput` is an InControl `InputDevice` (class Controller, style XboxOne, so the prompts show Xbox glyphs) attached
-with `InputManager.AttachDevice` once InControl is set up. In its `Update` it reads the right XR controller: stick =
-left stick, grip + stick left/right = bumpers, grip + stick up/down = right stick, A or trigger = Action1, B = Action2,
-stick press = Menu. In `Gameplay` it reports only the stick press, which opens the pause menu, and `VrControls` keeps
-snap turning; outside gameplay snap turning pauses. A press held across a game state change is ignored until released,
-so the press that opens the pause menu does not close it again. Pressed buttons are logged as `Menu control: ...`.
+with `InputManager.AttachDevice` once InControl is set up. In its `Update` it reads both XR controllers and maps them
+by place: sticks = sticks (pressed: L3/R3), A/B/X/Y = A/B/X/Y, triggers = bumpers, grips = analog triggers, left menu
+button = Menu. No View button (the right system button belongs to the runtime) and no D-pad. In `Gameplay` it reports
+only the menu button, which opens the pause menu; everything else stays with controller flying, and `VrControls` keeps
+snap turning (outside gameplay it pauses). A press held across a game state change is ignored until released, so the
+press that opens the pause menu does not close it again. Pressed buttons are logged as `Menu control: ...`.
+InControl makes a device active only when its last input is strictly newer than the active one's. An "Unknown
+Device" (probably a joystick exposed by the runtime) had input every frame and kept the role, so the first version's
+presses never reached the game. A postfix on `InputManager.UpdateActiveDevice` gives our device the role while it has
+input. The device list is logged on attach and on the first presses.
 
 ## Hab (the station between shifts)
 The Hab is an extra scene (`Hab Container`, loaded additively next to the bay after a shift or at the start of a
