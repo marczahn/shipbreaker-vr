@@ -67,9 +67,6 @@ namespace ShipbreakerVR
 
         public static bool HasInput => instance != null && instance.IsActive;
 
-        // True while the controllers work the menus, i.e. outside gameplay. Snap turning pauses meanwhile.
-        public static bool InMenus => VrXr.IsRunning && GameSession.CurrentGameState != GameSession.GameState.Gameplay;
-
         // Attaches the device once InControl is set up, and again if InControl was reset. Called every frame.
         public static void EnsureAttached()
         {

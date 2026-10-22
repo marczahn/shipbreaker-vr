@@ -8,16 +8,18 @@ namespace ShipbreakerVR
 {
     // Flying with the motion controllers (VTOL): holding the left trigger stores the left controller pose as a reference.
     // Moving the controller away from it thrusts in that direction; tilting it sideways rolls, around the body's own axis
-    // and faster the further the hand is tilted. Back at the reference (or trigger released) nothing happens. The left
-    // stick turns (left/right) and pitches (up/down) in gameplay, faster the further it is pushed; Y brakes, the right
-    // stick left/right snap-turns. The grips stay free for grabbing.
+    // and faster the further the hand is tilted. Back at the reference (or trigger released) nothing happens. In gameplay
+    // the left stick turns (left/right; smoothly or in snap steps, see Turning) and pitches (up/down), faster the further
+    // it is pushed, and Y brakes. The grips stay free for grabbing.
     // Thrust and brake go through the game's own actions (ThrustController reads them via LynxControls), so fuel, forces and
     // HUD stay the game's. Rotation is applied in VrBody: to the playspace with "body follows head", to the body without.
     internal static class VrControls
     {
         public enum Scheme { Aus, Vtol }
 
-        private const float SnapAngle = 30f;
+        // Turning with the left stick: smoothly, or one fixed step per flick.
+        public enum Turning { Fliessend, Snap30, Snap45, Snap90 }
+
         private const float SnapPress = 0.7f;
         private const float SnapRelease = 0.3f;
         private const float TriggerPress = 0.5f;
@@ -34,7 +36,6 @@ namespace ShipbreakerVR
         private static readonly InputFeatureUsage<Quaternion> PointerRotation = new InputFeatureUsage<Quaternion>("PointerRotation");
 
         private static InputDevice left;
-        private static InputDevice right;
         private static bool loggedDevice;
         private static float nextDeviceLog;
         private static int deviceLogs;
@@ -68,8 +69,6 @@ namespace ShipbreakerVR
             if (Active == Scheme.Aus) { held = false; return; }
             // Controller poses are in tracking space, i.e. relative to the rig whose rotation is the playspace.
             var playspace = VrCamera.Instance.Playspace;
-            // Outside gameplay the right stick works the menus (VrMenuInput).
-            if (!VrMenuInput.InMenus && GetRight() && right.TryGetFeatureValue(CommonUsages.primary2DAxis, out var rightStick)) SnapTurn(rightStick.x, playspace);
 
             if (!GetLeft()) { held = false; return; }
             // Outside gameplay the sticks and buttons work the menus as a gamepad; turning there would swing the menus.
@@ -113,12 +112,13 @@ namespace ShipbreakerVR
             if (roll != 0f) turn = Quaternion.AngleAxis(roll, playspace * VrCamera.Instance.HeadRotation * Vector3.forward) * turn;
         }
 
-        // Left stick left/right turns around the body's up axis, up/down pitches around its right axis (stick up looks
-        // up, like the mouse), each faster the further the stick is pushed.
+        // Left stick left/right turns around the body's up axis (smoothly or in snap steps), up/down pitches around its
+        // right axis (stick up looks up, like the mouse), smoothly turning faster the further the stick is pushed.
         private static void TurnFromStick(Vector2 stick, Quaternion playspace)
         {
             var body = playspace * VrCamera.Instance.HeadRotation;
-            var yaw = StickRate(stick.x);
+            var snap = SnapAngle(Plugin.TurnMode.Value);
+            var yaw = snap > 0f ? SnapTurn(stick.x, snap) : StickRate(stick.x);
             var pitch = -StickRate(stick.y);
             if (yaw != 0f) turn = Quaternion.AngleAxis(yaw, body * Vector3.up) * turn;
             if (pitch != 0f) turn = Quaternion.AngleAxis(pitch, body * Vector3.right) * turn;
@@ -134,21 +134,16 @@ namespace ShipbreakerVR
             return Ramp(Mathf.Abs(angle), TurnDeadzone, TurnFull) * Mathf.Sign(angle) * TurnSpeed * Time.deltaTime;
         }
 
-        // One fixed turn per stick flick around the head's up axis (the playspace can be tilted in any way after rolling);
-        // the stick has to come back before the next one.
-        private static void SnapTurn(float x, Quaternion playspace)
-        {
-            if (Mathf.Abs(x) < SnapRelease) { snapped = false; return; }
-            if (snapped || Mathf.Abs(x) < SnapPress) return;
-            snapped = true;
-            var up = playspace * VrCamera.Instance.HeadRotation * Vector3.up;
-            turn = Quaternion.AngleAxis(Mathf.Sign(x) * SnapAngle, up) * turn;
-        }
+        private static float SnapAngle(Turning mode) =>
+            mode == Turning.Snap30 ? 30f : mode == Turning.Snap45 ? 45f : mode == Turning.Snap90 ? 90f : 0f;
 
-        private static bool GetRight()
+        // Degrees for one fixed turn per stick flick; the stick has to come back before the next one.
+        private static float SnapTurn(float x, float angle)
         {
-            if (!right.isValid) right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
-            return right.isValid;
+            if (Mathf.Abs(x) < SnapRelease) { snapped = false; return 0f; }
+            if (snapped || Mathf.Abs(x) < SnapPress) return 0f;
+            snapped = true;
+            return Mathf.Sign(x) * angle;
         }
 
         private static bool GetLeft()

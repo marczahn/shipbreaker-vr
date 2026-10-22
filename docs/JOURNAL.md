@@ -281,3 +281,6 @@ brake by accident, and since [the menus](#menu-controller) the left stick press 
 pausing with one press was not a feature. Pausing by accident while steering wasn't either, so Marc moved the pause to
 A and X pressed together, which other VR games have made the habit anyway. The left stick press now does nothing at
 all, and that is its best feature.
+
+With turning on the left stick, the old snap turn on the right stick was a second way to do the same thing, and Marc
+dropped it. Instead the VR tab now asks how you like to turn: smoothly, or in steps of 30, 45 or 90 degrees per flick.

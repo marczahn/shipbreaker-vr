@@ -34,6 +34,7 @@ namespace ShipbreakerVR
         internal static ConfigEntry<float> WorldScale;
         internal static ConfigEntry<VrPerformance.Occlusion> AmbientOcclusion;
         internal static ConfigEntry<VrControls.Scheme> ControlScheme;
+        internal static ConfigEntry<VrControls.Turning> TurnMode;
 
         private void Awake()
         {
@@ -49,7 +50,9 @@ namespace ShipbreakerVR
             AmbientOcclusion = Config.Bind("Bild", "Umgebungsverdeckung", VrPerformance.Occlusion.Niedrig,
                 "Ambient occlusion (shading in corners and creases) in VR. Niedrig: half resolution and few steps, as the game uses it in the bay. The station asks for full resolution and 16 steps, which at VR resolution costs so much GPU time that it stutters. Aus: off. Spiel: as the game sets it.");
             ControlScheme = Config.Bind("Steuerung", "Controllersteuerung", VrControls.Scheme.Vtol,
-                "Flying with the motion controllers. Vtol: hold the left trigger and move the controller away from where it was when pressed to thrust that way, tilt it sideways to roll. Left stick: turn (left/right) and pitch (up/down). Right stick left/right snap-turns 30 degrees, Y brakes. Aus: off.");
+                "Flying with the motion controllers. Vtol: hold the left trigger and move the controller away from where it was when pressed to thrust that way, tilt it sideways to roll. Left stick: turn (left/right, see Drehen) and pitch (up/down). Y brakes. Aus: off.");
+            TurnMode = Config.Bind("Steuerung", "Drehen", VrControls.Turning.Fliessend,
+                "Turning with the left stick (controller flying). Fliessend: smooth, faster the further the stick is pushed. Snap30/Snap45/Snap90: one step of that many degrees per flick.");
             UiInVr = Config.Bind("Anzeige", "UiImRaum", true,
                 "Show HUD and menus on a canvas in the world instead of flat over the image.");
             HudDistance = Config.Bind("Anzeige", "HudAbstand", 1.5f, "Distance of the visor display in front of the eyes, in meters.");
