@@ -136,10 +136,12 @@ the eye textures were recreated a second after VR started (1.0, then 0.95); a lo
 `ThrustController.Update` reads the thrust axes via `LynxControls.GetOneAxisInputControlValue` (`ThrustMove...Composite`)
 and thrusts along its orientation transform (the body, or a steering transform). A postfix on that extension method adds
 the controller thrust, converted into that transform's axes, so fuel, forces and the thrust HUD stay the game's.
-Rotation from the controllers (roll, VTOL turns) is applied to the playspace in `VrBody`, so it needs body-follows-head.
+Rotation from the controllers is applied in `VrBody`: to the playspace with body-follows-head, otherwise to the body
+(`turn * gameTarget` in the redirected `MoveRotation`), which the camera follows.
 Config `Steuerung/Controllersteuerung` (Aus/Vtol; the earlier "point and twist" Pavlov scheme was removed for now):
 - Hold the left trigger; moving the controller away from where it was when pressed thrusts that way (2 cm deadzone,
-  full at 15 cm). Rotation uses the aim pose (`PointerRotation`; the `deviceRotation` grip pose runs along the handle).
+  full at 15 cm), measured at an estimated wrist point 8 cm behind the grip pose: measured at the controller, tilting
+  the hand to turn swung it past the deadzone and added thrust in a direction nobody asked for. Rotation uses the aim pose (`PointerRotation`; the `deviceRotation` grip pose runs along the handle).
   The hand's rotation away from the reference is split via `eulerAngles` into turn (controller up), pitch (right) and
   roll (forward); each turns the body around the head's matching axis (8 degree deadzone, full 45 degrees/s at 45).
 - Right stick left/right snap-turns 30 degrees around the head's up axis (the playspace's up axis tilted the view after

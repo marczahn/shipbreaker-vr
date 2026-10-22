@@ -12,7 +12,7 @@ namespace ShipbreakerVR
     // is turned. Back at the reference (or trigger released) nothing happens. Pressing the left stick brakes, the right
     // stick left/right snap-turns. The grips stay free for grabbing.
     // Thrust and brake go through the game's own actions (ThrustController reads them via LynxControls), so fuel, forces and
-    // HUD stay the game's. Rotation is applied to the playspace in VrBody, so it needs "body follows head".
+    // HUD stay the game's. Rotation is applied in VrBody: to the playspace with "body follows head", to the body without.
     internal static class VrControls
     {
         public enum Scheme { Aus, Vtol }
@@ -23,6 +23,8 @@ namespace ShipbreakerVR
         private const float TriggerPress = 0.5f;
         private const float MoveDeadzone = 0.02f;
         private const float MoveFull = 0.15f;
+        // The wrist relative to the grip pose (which runs along the handle): an estimate, about 8 cm behind the grip.
+        private static readonly Vector3 WristOffset = new Vector3(0f, 0f, -0.08f);
         private const float TurnDeadzone = 8f;
         private const float TurnFull = 45f;
         private const float TurnSpeed = 45f;
@@ -68,8 +70,11 @@ namespace ShipbreakerVR
             if (GetRight() && right.TryGetFeatureValue(CommonUsages.primary2DAxis, out var rightStick)) SnapTurn(rightStick.x, playspace);
 
             if (!GetLeft()) { held = false; return; }
-            if (!left.TryGetFeatureValue(CommonUsages.devicePosition, out var position)
+            if (!left.TryGetFeatureValue(CommonUsages.devicePosition, out var grip)
                 || !left.TryGetFeatureValue(CommonUsages.deviceRotation, out var rotation)) { held = false; return; }
+            // Thrust follows the wrist, not the controller: tilting the hand swings the controller around the wrist, and
+            // measured at the controller that swing alone moved it past the deadzone, adding thrust nobody asked for.
+            var position = grip + rotation * WristOffset;
             if (left.TryGetFeatureValue(PointerRotation, out var aim)) rotation = aim;
             left.TryGetFeatureValue(CommonUsages.trigger, out var trigger);
             left.TryGetFeatureValue(CommonUsages.primary2DAxisClick, out braking);
@@ -159,7 +164,7 @@ namespace ShipbreakerVR
 
         private static float Ramp(float value, float start, float full) => Mathf.Clamp01((value - start) / (full - start));
 
-        // Rotation to apply to the playspace this frame (world space). Called by VrBody once per body update.
+        // Rotation to apply to the playspace (or the body) this frame, in world space. Called by VrBody once per body update.
         public static Quaternion TakeTurn()
         {
             Update();

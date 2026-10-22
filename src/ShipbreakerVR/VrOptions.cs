@@ -70,8 +70,8 @@ namespace ShipbreakerVR
                 new BoolRow
                 {
                     Label = L("Body follows head", "Körper folgt Kopf"), Entry = Plugin.BodyFollowsHead,
-                    Hint = L("The body and the tools' aim turn with your head; mouse and stick turn on top. Turn it off to look around without turning the body. Controller flying needs it on.",
-                        "Körper und Zielrichtung der Werkzeuge drehen sich mit dem Kopf, Maus und Stick drehen zusätzlich. Aus, um dich umzusehen, ohne den Körper zu drehen. Die Controllersteuerung braucht es an."),
+                    Hint = L("The body and the tools' aim turn with your head; mouse and stick turn on top. Turn it off to look around without turning the body.",
+                        "Körper und Zielrichtung der Werkzeuge drehen sich mit dem Kopf, Maus und Stick drehen zusätzlich. Aus, um dich umzusehen, ohne den Körper zu drehen."),
                 },
                 EnumRow(L("Controller flying", "Controllersteuerung"), Plugin.ControlScheme, new[] { L("Off", "Aus"), L("VTOL (trigger)", "VTOL (Trigger)") },
                     L("Hold the left trigger: moving the controller thrusts that way, turning or tilting it turns, rolls and pitches. Right stick: snap turn, press the left stick: brake. Off if you fly with mouse and keyboard or a gamepad.",

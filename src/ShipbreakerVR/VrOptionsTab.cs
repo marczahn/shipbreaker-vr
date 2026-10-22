@@ -94,7 +94,7 @@ namespace ShipbreakerVR
             // Everything in the list goes, including headings between the rows.
             foreach (Transform child in list.Cast<Transform>().ToList()) UnityEngine.Object.DestroyImmediate(child.gameObject);
 
-            var (_, count) = VrOptions.AddRows(list, unified.transform, true);
+            var (_, count) = VrOptions.AddRows(list, source.transform.parent != null ? source.transform.parent : unified.transform, true);
             if (count == 0) throw new InvalidOperationException("no option row to copy");
             FitContent(list as RectTransform);
             list.gameObject.AddComponent<VrOptionsNavigation>();
