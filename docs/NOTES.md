@@ -89,16 +89,21 @@ that is still the fallback if the tab cannot be built.
 The tab (`VrOptionsTab`): `UnifiedOptionsScreen` holds parallel arrays of screen controllers, Doozy `UIView`s and
 `GenericTab` buttons and switches tabs by index (`ShowTab`, `Next/PreviousOptionTab`). On its first `OnEnable` the
 video view is copied (controller and rows removed, `VrOptionsScreen` and the VR rows added, list height fitted, view
-renamed so Doozy's lookups by category/name don't hit it; a `UIView` shows and hides its child views by
-its own category/name a frame later, so the copy's child views with the video name are renamed too, otherwise the list
-stayed hidden while the tab could be selected), the last tab button is copied with its click redirected to
+renamed so Doozy's lookups by category/name don't hit it; a `UIView` also shows and hides its child views by
+its own category/name, so child views with the video name would be renamed too, though the video view has none), the last tab button is copied with its click redirected to
 `ShowTab(new index)`, and both are appended to the arrays. `UIView.Show` does not hide other views and the game's way
 of hiding the previous tab does not know the copy, so after every tab switch all other views are hidden.
-The video tab's display quality description (`m_DisplayPerformanceDescription`) lies outside the video view, so it is
-copied into the VR view at the same place and shows the hint of the selected VR row (`VrOptionsScreen.Update`, from the
-EventSystem selection, which the mouse pointer also sets); the original is hidden while the VR tab shows. The first
-template lookup searched under the `UnifiedOptionsScreen` object, which holds no rows; the templates come from the
-views' container ("Options Body Container").
+The video tab's description field (`m_DisplayPerformanceDescription`) is not assigned in the game, so the VR view gets
+its own text strip at the bottom (the list's viewport is shortened for it) showing the hint of the selected VR row
+(`VrOptionsScreen.Update`, from the EventSystem selection, which the mouse pointer also sets). The first template
+lookup searched under the `UnifiedOptionsScreen` object, which holds no rows; the templates come from the views'
+container ("Options Body Container", a VerticalLayoutGroup that lays out the active views).
+
+Empty VR page: the video view is copied before it was ever shown, so its `Visibility` still holds the default
+`Visible`. `UIView.Show` returns early for a visible view and never enables its canvas, and its first `Start` would apply
+`BehaviorAtStart` on top. The copy starts as `NotVisible` with `BehaviorAtStart = DoNothing`. While invisible but active
+it also took space in the container's layout. A tab switch logs every view's state (active, visibility, canvas, alpha,
+rect, list rows).
 Labels, values and hints are German when the game's language (`LynxGameUserOptions.Language`) starts with "de",
 otherwise English.
 
