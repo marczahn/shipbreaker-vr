@@ -76,6 +76,23 @@ namespace ShipbreakerVR
         private const float HabResolution = 1f;
         private bool habLimited;
 
+        // The Hab still costs the GPU more than the bay: at 1.0x it ran at 45 fps, at 0.75x at the headset's 90. Below
+        // the headset's rate Virtual Desktop halves it and synthesizes every second frame, which wobbles close to the
+        // monitors. While VR shows the Hab and it misses the rate, the station resolution ([Bild] AufloesungStation)
+        // goes down in steps, measured anew after each change has settled. It never goes up by itself.
+        private const float HabStep = 0.05f;
+        private const float HabMinimum = 0.6f;
+        private const float HabSettle = 3f;
+        private const float HabMeasure = 2f;
+        private readonly List<float> habFrames = new List<float>();
+        private float habMeasureFrom = -1f;
+        private float habEyeScale = -1f;
+        private float habBestRate;
+        private bool habLowered;
+
+        // Render resolution in the Hab: the station setting, at most HabResolution.
+        private static float HabScale => Mathf.Clamp(Plugin.StationResolution.Value, 0.5f, HabResolution);
+
         public bool BodyFollowsHead => VrXr.IsRunning && Plugin.BodyFollowsHead.Value;
 
         // True while loading (no game camera, or the game's load screen covers the image): only the UI canvas on black.
@@ -256,6 +273,7 @@ namespace ShipbreakerVR
             if (running)
             {
                 ApplyQuality();
+                AdaptHabResolution();
                 LogEyeSeparation();
             }
             vrCamera.enabled = running;
@@ -334,13 +352,13 @@ namespace ShipbreakerVR
                 VrOptions.Refresh(Plugin.ResolutionScale);
             }
             var scale = Mathf.Clamp(Plugin.ResolutionScale.Value, 0.5f, max > 0f ? max : 1f);
-            var limited = FollowsHab && scale > HabResolution;
+            var limited = FollowsHab && scale > HabScale;
             if (limited != habLimited)
             {
                 habLimited = limited;
-                if (limited) Plugin.Log.LogInfo($"Render resolution in the Hab limited to {HabResolution:0.00}x (setting {scale:0.00}x): the bay stays in video memory next to it");
+                if (limited) Plugin.Log.LogInfo($"Render resolution in the Hab: {HabScale:0.00}x (setting {scale:0.00}x; station setting, at most {HabResolution:0.00}x since the bay stays in video memory next to it)");
             }
-            if (limited) scale = HabResolution;
+            if (limited) scale = HabScale;
             if (!Mathf.Approximately(scale, pendingResolution))
             {
                 pendingResolution = scale;
@@ -364,6 +382,44 @@ namespace ShipbreakerVR
                 Plugin.Log.LogInfo($"Render resolution per eye: {scale:0.00}x");
                 if (scale < current) shrinkAt = Time.unscaledTime + 1f;
             }
+        }
+
+        private void AdaptHabResolution()
+        {
+            var now = Time.unscaledTime;
+            var refresh = UnityEngine.XR.XRDevice.refreshRate;
+            habBestRate = Mathf.Max(habBestRate, refresh);
+            var eyeScale = UnityEngine.XR.XRSettings.eyeTextureResolutionScale;
+            // Only at the resolution asked for, once a change (or entering the Hab) has settled.
+            if (!FollowsHab || worldHidden || !Plugin.StationResolutionAuto.Value || !Mathf.Approximately(eyeScale, pendingResolution)
+                || !Mathf.Approximately(eyeScale, habEyeScale) || habMeasureFrom < 0f)
+            {
+                habEyeScale = eyeScale;
+                habMeasureFrom = FollowsHab ? now + HabSettle : -1f;
+                habFrames.Clear();
+                if (!FollowsHab) habLowered = false;
+                return;
+            }
+            if (now < habMeasureFrom) return;
+            habFrames.Add(Time.unscaledDeltaTime);
+            if (now < habMeasureFrom + HabMeasure) return;
+            habFrames.Sort();
+            var median = habFrames[habFrames.Count / 2];
+            habFrames.Clear();
+            habMeasureFrom = now;
+            // A frame takes the headset's interval; at half rate two of them. The best rate seen is the headset's own.
+            var slow = median > 1.3f / Mathf.Max(habBestRate, 60f);
+            if (!slow)
+            {
+                if (habLowered) Plugin.Log.LogInfo($"Hab at full rate with {eyeScale:0.00}x (median frame {median * 1000f:0.0} ms, headset {refresh:0} Hz)");
+                habLowered = false;
+                return;
+            }
+            if (eyeScale <= HabMinimum + 0.001f) return;
+            Plugin.StationResolution.Value = Mathf.Max(HabMinimum, Mathf.Round((eyeScale - HabStep) * 20f) / 20f);
+            VrOptions.Refresh(Plugin.StationResolution);
+            habLowered = true;
+            Plugin.Log.LogInfo($"Hab misses the headset's rate (median frame {median * 1000f:0.0} ms, headset {refresh:0} Hz): station resolution lowered to {Plugin.StationResolution.Value:0.00}x");
         }
 
         // When VR starts the eye textures are created at 1.0 and, a second later, again at the configured scale.

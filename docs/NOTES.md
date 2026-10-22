@@ -279,6 +279,25 @@ the runtime reports it, the app's GPU time (`XRDisplaySubsystem.TryGetAppGPUTime
 `FrameTimingManager` reports nothing in this build, and a main thread time from `Update` to the end of rendering
 came out at the full frame time, because the wait for the headset falls inside it.
 
+The next log (22.10., Hab at 1.0x and 0.75x) settled it. The runtime reports no GPU time either, and the wait for the
+headset falls between `Update` and the start of rendering: at 45 Hz "game logic" read about 15 ms, at 90 Hz 3.5 to
+3.9 ms, with rendering on the main thread at 6 ms in both. At 0.75x the Hab ran at 90 Hz (11.2 ms per frame, slowest
+5 % from 12.3 ms) and the wobble at the monitors was gone; at 1.0x it fell back to 45 Hz. So the GPU sets the limit,
+and the main thread (about 10 ms at 90 Hz) has little room left.
+
+The frame settings the game gives the bay's main camera (`GameCameras/Main Camera`, override mask in the scene data)
+switch off, among others, contact shadows, shadowmask, transmission, subsurface scattering, depth of field and sky
+reflection; the Hab camera uses the HDRP defaults. Most of those cost little where nothing uses them, and shadowmask
+and sky reflection change the Hab's baked lighting, so they were left alone.
+
+Instead the Hab's render resolution adapts (`[Bild] AufloesungStation`, also in the options menu as "VR: Station
+resolution", and `[Bild] StationAutomatisch`). In the Hab the resolution is the lowest of the general setting, the
+station setting and 1.0x. While VR shows the Hab, `VrCamera.AdaptHabResolution` waits 3 s after each change (or after
+entering), takes the median frame time over 2 s and, if it is above 1.3 headset intervals (the highest refresh rate
+seen this session is the headset's own), lowers the station setting by 0.05, down to 0.6. Each change applies after
+the usual second and reallocates the render targets. It never goes up by itself; the setting keeps the value, so the
+search happens once. Setting it back to 1 starts it again.
+
 ## Diagnostics
 F8 (`VrDiagnostics`) is for things only seen in the headset. It writes into the log: game state, head pose, the camera
 the rig follows, where the UI canvas hangs, every active root canvas (render mode, camera, layer, whether `VrCanvases`

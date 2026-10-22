@@ -66,6 +66,7 @@ namespace ShipbreakerVR
                 EnumRow("VR: Controller flying", Plugin.ControlScheme, new[] { "Off", "Point and twist", "VTOL (trigger)" }),
                 EnumRow("VR: Anti-aliasing", Plugin.AntiAliasing, new[] { "TAA", "SMAA", "FXAA", "None", "Game default" }),
                 new SliderRow { Label = "VR: Render resolution", Entry = Plugin.ResolutionScale, Min = 0.5f, Max = VrCamera.ResolutionSliderMax, Format = "0.00" },
+                new SliderRow { Label = "VR: Station resolution", Entry = Plugin.StationResolution, Min = 0.5f, Max = 1f, Format = "0.00" },
                 new SliderRow { Label = "VR: World scale", Entry = Plugin.WorldScale, Min = 0.5f, Max = 3f, Format = "0.00" },
                 EnumRow("VR: Ambient occlusion", Plugin.AmbientOcclusion, new[] { "Low", "Off", "Game default" }),
                 EnumRow("VR: Helmet", Plugin.Helmet, new[] { "Follows head", "Hidden", "Game default" }),
