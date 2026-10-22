@@ -84,6 +84,8 @@ namespace ShipbreakerVR
             foreach (var cam in Camera.allCameras)
             {
                 if (cam.targetTexture != null || cam.CompareTag("UI_Camera") || cam.name.StartsWith("ShipbreakerVR") || VrCamera.IsUiOnly(cam)) continue;
+                // Only while the game shows the Hab (VrHab.Camera); a leftover Hab camera during a load is not a menu.
+                if (VrHab.IsHabCamera(cam)) continue;
                 if (best == null || cam.depth > best.depth) best = cam;
             }
             return best;
@@ -100,13 +102,26 @@ namespace ShipbreakerVR
 
             // The main menu has no LynxCameraController yet; the VR camera then attaches to the menu camera.
             // Without any camera (intro, loading screen) the rig still exists and shows the UI on black.
+            // In the Hab the game shows the station through its own camera; back in gameplay the main camera takes over again.
             var vr = VrCamera.Instance;
-            if (VrXr.IsRunning && (vr == null || vr.GameCamera == null) && Time.unscaledTime >= nextCameraSearch)
+            if (VrXr.IsRunning && Time.unscaledTime >= nextCameraSearch)
             {
                 nextCameraSearch = Time.unscaledTime + 0.25f;
-                var cam = LynxCameraController.MainCamera != null ? LynxCameraController.MainCamera : FindMenuCamera();
-                if (cam != null) Log.LogInfo($"VR camera attached to '{cam.name}'");
-                if (cam != null || vr == null) VrCamera.Attach(cam);
+                var hab = VrHab.Camera;
+                if (hab != null)
+                {
+                    if (vr == null || vr.GameCamera != hab)
+                    {
+                        Log.LogInfo($"VR camera attached to the Hab camera '{hab.name}'");
+                        VrCamera.Attach(hab);
+                    }
+                }
+                else if (vr == null || vr.GameCamera == null || vr.FollowsHab)
+                {
+                    var cam = LynxCameraController.MainCamera != null ? LynxCameraController.MainCamera : FindMenuCamera();
+                    if (cam != null) Log.LogInfo($"VR camera attached to '{cam.name}'");
+                    if (cam != null || vr == null || vr.GameCamera != null) VrCamera.Attach(cam);
+                }
             }
         }
     }
@@ -121,6 +136,8 @@ namespace ShipbreakerVR
             Plugin.Log.LogInfo(cam == null
                 ? "LynxCameraController started, but MainCamera is null"
                 : $"Game camera found: '{cam.name}', FOV {cam.fieldOfView}, resolution {LynxCameraController.ScreenWidth}x{LynxCameraController.ScreenHeight}");
+            // A new main camera starts switched on; the game turns it off again when it shows the Hab.
+            VrHab.MainCameraOff = false;
             if (cam == null) return;
             if (VrCamera.Instance == null || VrCamera.Instance.GameCamera != cam) VrCamera.Attach(cam);
         }

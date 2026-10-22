@@ -44,6 +44,9 @@ namespace ShipbreakerVR
 
         public Camera GameCamera => gameCamera;
 
+        // True while the rig follows the Hab's own camera instead of the player's.
+        public bool FollowsHab { get; private set; }
+
         // Player size relative to the world. Scaling the rig also scales eye distance and tracked head movement.
         public static float WorldScale => Mathf.Clamp(Plugin.WorldScale.Value, 0.5f, 3f);
 
@@ -118,9 +121,10 @@ namespace ShipbreakerVR
 
         private void Retarget(Camera camera)
         {
-            // Hand the screen back to the previous camera if it still exists.
-            if (gameCamera != null && gameCamera != camera) gameCamera.enabled = true;
+            // Hand the screen back to the previous camera if it still exists and the game wants it on.
+            if (gameCamera != null && gameCamera != camera) gameCamera.enabled = GameWantsEnabled(gameCamera);
             gameCamera = camera;
+            FollowsHab = VrHab.IsHabCamera(camera);
             if (camera == null)
             {
                 HideWorld();
@@ -217,12 +221,12 @@ namespace ShipbreakerVR
             // Don't blindly re-enable on stop: in the Hab the game disabled its camera itself.
             if (!running && wasRunning)
             {
-                if (gameCamera != null)
-                    gameCamera.enabled = gameCamera != LynxCameraController.MainCamera || GameSession.CurrentGameState != GameSession.GameState.Hab;
+                if (gameCamera != null) gameCamera.enabled = GameWantsEnabled(gameCamera);
                 shrinkAt = Time.unscaledTime + 2f;
             }
             wasRunning = running;
             SilenceUiCameras(running);
+            VrHab.Calm(running && FollowsHab);
             ShrinkRenderTargets(running);
 
             if (running)
@@ -241,6 +245,9 @@ namespace ShipbreakerVR
 
             FollowGameCamera();
         }
+
+        // Whether the game itself has this camera on. It switches the main camera off while it shows the Hab with its own.
+        private static bool GameWantsEnabled(Camera camera) => camera != LynxCameraController.MainCamera || !VrHab.MainCameraOff;
 
         // Every active game camera without a target texture also renders into the headset (HDRP's XRSystem only checks
         // that and xrRendering). The load screen's camera (depth 10, after ours) thus covered our image with its grey
@@ -459,11 +466,27 @@ namespace ShipbreakerVR
         {
             if (gameCamera == null || rig == null) return;
             var cam = gameCamera.transform;
-            if (!BodyFollowsHead) Playspace = cam.rotation * recenterRotation;
+            // The Hab camera swings between bed, kitchen and terminal; the playspace turns along, but only around the
+            // vertical axis: its pitch would tilt the room. Looking up or down is up to the head.
+            if (FollowsHab) Playspace = Yaw(cam.rotation) * recenterRotation;
+            else if (!BodyFollowsHead) Playspace = cam.rotation * recenterRotation;
             var scale = WorldScale;
             rig.localScale = new Vector3(scale, scale, scale);
             rig.rotation = Playspace;
             rig.position = cam.position - Playspace * (recenterPosition * scale);
+        }
+
+        // Heading of a rotation (turn around the world's up axis), from where it looks or, looking straight down or up, where its top points.
+        private static Quaternion Yaw(Quaternion rotation)
+        {
+            var forward = rotation * Vector3.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 1e-4f)
+            {
+                forward = rotation * Vector3.up;
+                forward.y = 0f;
+            }
+            return forward.sqrMagnitude < 1e-8f ? Quaternion.identity : Quaternion.LookRotation(forward, Vector3.up);
         }
 
         // Puts the current head position on the game camera; without body-follows-head also the view direction (yaw only).

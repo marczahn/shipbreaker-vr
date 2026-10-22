@@ -137,6 +137,28 @@ Config `Steuerung/Controllersteuerung`, left controller only:
 The grip stays free for grabbing later. The left controller's name and features are logged once. OpenXR only reports
 controllers because `VrXr` enables the Oculus Touch interaction profile, which the AssetBundle's settings carry disabled.
 
+## Hab (the station between shifts)
+The Hab is an extra scene (`Hab Container`, loaded additively next to the bay after a shift or at the start of a
+career session). It has its own camera, `PRF_HAB_Camera_Navigation/Unity_Camera` (depth 2, all layers, sky clear,
+`xrRendering` on), driven by `Hab3DController.CinemachineBrain`, which blends between about 20 virtual cameras (bed,
+kitchen, terminal, suit, ...), each with Cinemachine Perlin noise as camera sway. On `GameState.Hab`,
+`LynxCameraController.OnGameStateChangedEvent` switches the bay's main camera off (on again in `Gameplay`).
+
+The VR rig used to stay on the main camera. In the Hab the headset then got two full stereo HDRP renders per frame:
+our camera drew the whole bay with the ship from the player's position (invisible), then the Hab camera drew the Hab
+on top. That doubled GPU time and render targets (at 1.25x the log showed `Failed to create RenderTexture ...
+0x8007000e` after re-entering VR in the Hab), the visible image came from a camera without head tracking (the room
+stuck to the head and swayed with the noise), and it painted over our UI pass, so the prompts of
+`PRF_HAB_3DNav_UI_Canvas` (an overlay canvas: R, Tab, location markers) never showed.
+
+Now a postfix on `OnGameStateChangedEvent` records whether the game has the main camera off (`VrHab.MainCameraOff`).
+While it is off and a `Hab3DController` exists, the rig follows the Hab camera and switches it off like any game
+camera; switching back never re-enables the main camera while the game wants it off. The playspace follows only the
+Hab camera's heading (its pitch would tilt the room), the Perlin noise amplitude of the Hab's virtual cameras is set
+to 0 while VR runs (the game itself toggles their enabled flag), and the helmet only follows the head while the rig
+is on the main camera (it would otherwise come along from the bay). The Hab's overlay and screen-space canvases
+(3D navigation prompts, the terminal `Hab ScreenStack` at 0.25 m) go onto the UI canvas like other menus.
+
 ## Roadmap
 1. Inventory – done
 2. Foundation (BepInEx, plugin, camera hook) – done

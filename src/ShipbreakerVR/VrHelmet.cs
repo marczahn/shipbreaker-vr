@@ -57,7 +57,7 @@ namespace ShipbreakerVR
                 Plugin.Log.LogInfo($"Helmet found: '{Path(container)}', relative to camera {relativePosition} / {relativeRotation.eulerAngles}");
             }
 
-            var mode = VrXr.IsRunning ? Plugin.Helmet.Value : Mode.Spiel;
+            var mode = CurrentMode;
             SetHidden(mode == Mode.Aus);
             if (mode == Mode.Kopf) Follow();
             else if (moved && container != null)
@@ -72,8 +72,14 @@ namespace ShipbreakerVR
         // Once more right before the VR camera renders, so the helmet has the latest head pose.
         private void OnBeginCamera(ScriptableRenderContext context, Camera camera)
         {
-            if (vr != null && camera == vr.Camera && VrXr.IsRunning && Plugin.Helmet.Value == Mode.Kopf) Follow();
+            if (vr != null && camera == vr.Camera && CurrentMode == Mode.Kopf) Follow();
         }
+
+        // Only while the VR camera is the player's: in the Hab the helmet would otherwise come along from the bay
+        // and hang around the head in the player's quarters.
+        private Mode CurrentMode => VrXr.IsRunning && vr != null && vr.GameCamera != null && vr.GameCamera == LynxCameraController.MainCamera
+            ? Plugin.Helmet.Value
+            : Mode.Spiel;
 
         private void Follow()
         {
