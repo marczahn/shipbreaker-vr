@@ -184,8 +184,9 @@ the bed looking up at it). A postfix on `Navigate` resets `FadeOut` while the UI
 screensaver. A screen opened in the flat game before switching VR on stays dark until it is left.
 
 After loading into the Hab (and when waking up), a black area about the size of the menu canvas hung in the room
-in VR, as if a piece of the world were missing. The F8 dumps show what it was: the game's full-screen fades to black
-(`FadeScreen`, `HAB_General_Fade`, `WakeUpFade`, `QuitFromHabFade`), which in VR land on the UI texture like any other
+in VR, as if a piece of the world were missing, and was gone a few seconds later. Most likely it was the game's
+full-screen fades to black (`FadeScreen`, `HAB_General_Fade`, `WakeUpFade`, `QuitFromHabFade`; the dump 6 s after
+entering showed them done and nothing else dark around the player), which in VR land on the UI texture like any other
 canvas. On the visor in gameplay that covers the view as meant; on the menu canvas fixed in the room it is a black
 rectangle with the room around it. In menu mode `VrCanvases` puts these canvases on our pass layer (which neither the UI
 camera nor the VR camera draws) and reports how dark they would make the screen; `VrUi` darkens the whole view by that
