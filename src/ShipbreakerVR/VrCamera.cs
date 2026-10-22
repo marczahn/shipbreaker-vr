@@ -144,6 +144,8 @@ namespace ShipbreakerVR
             Playspace = Quaternion.Euler(0f, camera.transform.eulerAngles.y, 0f);
 
             vrCamera.CopyFrom(camera);
+            // Nothing of the game is on our pass layer, but the screen fades hidden from the menu canvas are (VrCanvases).
+            vrCamera.cullingMask &= ~(1 << VrUi.PassLayer);
             vrCamera.ResetProjectionMatrix();
             vrCamera.ResetWorldToCameraMatrix();
             vrCamera.nearClipPlane = 0.05f;

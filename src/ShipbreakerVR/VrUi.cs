@@ -32,6 +32,9 @@ namespace ShipbreakerVR
         private RenderTexture texture;
         private Material material;
         private Material fadeMaterial;
+        private Material gameFadeMaterial;
+        private float gameFade;
+        private bool loggedGameFade;
         private Mesh quad;
         private int renderedFrame = -1;
         private int loggedEyes;
@@ -153,7 +156,14 @@ namespace ShipbreakerVR
             uiCamera.pixelRect = new Rect(0, 0, width, height);
             uiCamera.aspect = (float)width / height;
 
+            canvases.HideFades = menuMode;
             canvases.Update(uiCamera);
+            gameFade = canvases.FadeAlpha();
+            if (gameFade > 0.5f && !loggedGameFade)
+            {
+                loggedGameFade = true;
+                Plugin.Log.LogInfo("Game fade to black drawn over the whole view instead of on the menu canvas");
+            }
         }
 
         // Own UI camera for scenes without the game's; renders only the UI layer and never on its own.
@@ -270,6 +280,15 @@ namespace ShipbreakerVR
 
             cmd.SetRenderTarget(context.cameraColorBuffer, 0, CubemapFace.Unknown, -1);
             cmd.SetViewport(new Rect(0, 0, context.hdCamera.actualWidth, context.hdCamera.actualHeight));
+            // The game's fades to black, kept off the menu canvas (VrCanvases): over the whole room, under the canvas,
+            // as in the flat game, where subtitles and prompts stay on top of them.
+            if (gameFade > 0f)
+            {
+                if (gameFadeMaterial == null) gameFadeMaterial = BlackMaterial();
+                gameFadeMaterial.color = new Color(0f, 0f, 0f, gameFade);
+                cmd.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
+                cmd.DrawMesh(quad, Matrix4x4.Scale(new Vector3(2f, 2f, 1f)), gameFadeMaterial, 0, 0);
+            }
             cmd.SetViewProjectionMatrices(view, proj);
             cmd.DrawMesh(quad, screenMatrix, material, 0, 0);
             renderContext.ExecuteCommandBuffer(cmd);
@@ -288,11 +307,7 @@ namespace ShipbreakerVR
         {
             var fade = VrHab.Fade;
             if (fade <= 0f || !VrXr.IsRunning || vr == null || context.hdCamera.camera != vr.Camera) return;
-            if (fadeMaterial == null)
-            {
-                fadeMaterial = new Material(Shader.Find("UI/Default"));
-                fadeMaterial.SetInt("unity_GUIZTestMode", (int)CompareFunction.Always);
-            }
+            if (fadeMaterial == null) fadeMaterial = BlackMaterial();
             if (quad == null) quad = CreateQuad();
             fadeMaterial.color = new Color(0f, 0f, 0f, fade);
 
@@ -305,6 +320,14 @@ namespace ShipbreakerVR
             context.renderContext.ExecuteCommandBuffer(cmd);
             cmd.Clear();
             context.renderContext.SetupCameraProperties(context.hdCamera.camera, true);
+        }
+
+        // Its color sets how dark; drawn on a quad with identity matrices, whose corners at +-1 are the corners of the view.
+        private static Material BlackMaterial()
+        {
+            var black = new Material(Shader.Find("UI/Default"));
+            black.SetInt("unity_GUIZTestMode", (int)CompareFunction.Always);
+            return black;
         }
 
         // Like the game's HUDCustomPass, but into our texture and with a fixed aspect ratio.

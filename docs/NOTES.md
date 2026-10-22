@@ -183,13 +183,22 @@ of the player, so the dark monitor stayed visible in the room, above the player 
 the bed looking up at it). A postfix on `Navigate` resets `FadeOut` while the UI is in VR, so the monitor keeps its
 screensaver. A screen opened in the flat game before switching VR on stays dark until it is left.
 
-Open: after waking up, a black area about the size of the menu canvas hung above the player in VR; it was gone after
-switching VR off and on again (the monitor above was a first guess and is not it). Toggling VR restores and re-attaches
-all canvases, so one suspect is a fade canvas of the Hab (`WakeUpFade`, `QuitFromHabFade`: Screen Space Camera, 0.25 m
-in front of `Unity_Camera`, black images) that ended up back on the Hab camera: the VR camera, which renders all layers
-in the Hab, then sees it in the room, filling the Hab camera's view up there. `VrCanvases` now checks the canvases it
-attached on every scan and attaches one again if it left the UI camera (logged as a warning). F8 writes what is drawn
-around the player into the log, see Diagnostics.
+After loading into the Hab (and when waking up), a black area about the size of the menu canvas hung in the room
+in VR, as if a piece of the world were missing. The F8 dumps show what it was: the game's full-screen fades to black
+(`FadeScreen`, `HAB_General_Fade`, `WakeUpFade`, `QuitFromHabFade`), which in VR land on the UI texture like any other
+canvas. On the visor in gameplay that covers the view as meant; on the menu canvas fixed in the room it is a black
+rectangle with the room around it. In menu mode `VrCanvases` puts these canvases on our pass layer (which neither the UI
+camera nor the VR camera draws) and reports how dark they would make the screen; `VrUi` darkens the whole view by that
+under the canvas, so subtitles and prompts stay on top as in the flat game. `VrCanvases` also scans inactive canvases
+now: a canvas the game switches on later used to show for up to half a second where the game put it, which for the
+Hab's fades is 25 cm in front of the Hab camera, in the room in front of the VR camera.
+
+The prompt to answer a call at the terminal (`Comms_UI/Comms Interact Button`) never showed in VR. Its
+`UITrackTransform` sets the prompt's world position to `WorldToScreenPoint` of the spot it tracks, which only works on
+an overlay canvas (one unit per pixel). On the canvas attached to the UI camera the prompt landed far off it. A postfix
+turns the screen point into the matching point on the canvas (`RectTransformUtility.ScreenPointToWorldPointInRectangle`
+with the UI camera). The other Hab prompts are placed by `Hab3DLocationNavigation` through `localPosition` scaled to the
+canvas and work as they are.
 
 ## Performance in the Hab
 The Hab stuttered in VR while the bay ran smoothly at the same settings (Ultra, 1.25x, 3360x3600 per eye). What the
