@@ -37,6 +37,7 @@ cp "$BUILD/ShipbreakerVR.dll" "$PLUGIN/"
 cp "$ROOT"/licenses/* "$PLUGIN/licenses/"
 cp "$ROOT/LICENSE" "$ROOT/DISCLAIMER.md" "$PLUGIN/licenses/"
 cp "$ROOT/docs/INSTALL.md" "$ROOT/THIRD-PARTY-NOTICES.md" "$ROOT/DISCLAIMER.md" "$STAGE/"
+mkdir -p "$STAGE/images" && cp "$ROOT"/docs/images/* "$STAGE/images/"  # INSTALL.md links its images relative to itself
 
 mkdir -p "$OUT"
 ZIP="$(cd "$OUT" && pwd)/ShipbreakerVR-$VERSION.zip"
