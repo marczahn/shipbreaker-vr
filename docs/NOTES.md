@@ -124,14 +124,13 @@ the eye textures were recreated a second after VR started (1.0, then 0.95); a lo
 and thrusts along its orientation transform (the body, or a steering transform). A postfix on that extension method adds
 the controller thrust, converted into that transform's axes, so fuel, forces and the thrust HUD stay the game's.
 Rotation from the controllers (roll, VTOL turns) is applied to the playspace in `VrBody`, so it needs body-follows-head.
-Config `Steuerung/Controllersteuerung`, left controller only:
-- Pavlov (point and twist): stick forward/back thrusts along the controller's aim pose (`PointerRotation`; the
-  `deviceRotation` grip pose runs along the handle and pointed thrust upward). Holding the trigger stores the hand's
-  orientation; twisting or tilting away from it rolls, pitches or yaws (8 degree deadzone, full 45 degrees/s at 45).
-- Vtol: hold the trigger; moving the controller away from where it was when pressed thrusts that way (2 cm deadzone,
-  full at 15 cm), turning it turns the body as above.
-- Both: stick left/right snap-turns 30 degrees around the head's up axis (the playspace's up axis tilted the view after
-  rolling). Pressing the stick presses the game's brake actions (`ThrustBrakeLeft/Right`). A postfix on
+Config `Steuerung/Controllersteuerung` (Aus/Vtol; the earlier "point and twist" Pavlov scheme was removed for now):
+- Hold the left trigger; moving the controller away from where it was when pressed thrusts that way (2 cm deadzone,
+  full at 15 cm). Rotation uses the aim pose (`PointerRotation`; the `deviceRotation` grip pose runs along the handle).
+  The hand's rotation away from the reference is split via `eulerAngles` into turn (controller up), pitch (right) and
+  roll (forward); each turns the body around the head's matching axis (8 degree deadzone, full 45 degrees/s at 45).
+- Right stick left/right snap-turns 30 degrees around the head's up axis (the playspace's up axis tilted the view after
+  rolling). Pressing the left stick presses the game's brake actions (`ThrustBrakeLeft/Right`). A postfix on
   `LynxControlExtensions.GetInputIsPressed` never ran because Mono inlines it, so a transpiler redirects the calls in
   `ThrustController.Update`.
 The grip stays free for grabbing later. The left controller's name and features are logged once. OpenXR only reports

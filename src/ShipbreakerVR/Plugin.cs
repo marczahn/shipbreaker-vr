@@ -43,8 +43,8 @@ namespace ShipbreakerVR
                 "Start VR as soon as the game launches, so the intro and loading screens already show in the headset. Off: start VR with F3.");
             BodyFollowsHead = Config.Bind("Steuerung", "KoerperFolgtKopf", true,
                 "The body, and with it the tools' aim, turns with the head. Mouse and stick add extra rotation. Off: the head looks around freely, only the mouse turns the body.");
-            ControlScheme = Config.Bind("Steuerung", "Controllersteuerung", VrControls.Scheme.Pavlov,
-                "Flying with the left motion controller. Pavlov (point and twist): stick forward/back thrusts where the controller points; hold the trigger and twist or tilt the hand to roll, pitch or turn. Vtol: hold the trigger and move or turn the controller away from where it was when pressed to thrust or turn that way. Both: stick left/right snap-turns 30 degrees, pressing the stick brakes. Aus: off. Rolling and turning need KoerperFolgtKopf.");
+            ControlScheme = Config.Bind("Steuerung", "Controllersteuerung", VrControls.Scheme.Vtol,
+                "Flying with the motion controllers. Vtol: hold the left trigger and move the controller away from where it was when pressed to thrust that way; turn it left/right to turn, tilt it sideways to roll, tilt it forward/back to pitch. Right stick left/right snap-turns 30 degrees, pressing the left stick brakes. Aus: off. Turning needs KoerperFolgtKopf.");
             UiInVr = Config.Bind("Anzeige", "UiImRaum", true,
                 "Show HUD and menus on a canvas in the world instead of flat over the image.");
             HudDistance = Config.Bind("Anzeige", "HudAbstand", 1.5f, "Distance of the visor display in front of the eyes, in meters.");

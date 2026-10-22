@@ -17,13 +17,12 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
 - Settings: in the game's options (Video tab, rows starting with "VR:" at the bottom) or in
   `BepInEx\config\de.marczahn.shipbreakervr.cfg`.
 
-### Flying with the left controller
-Pick the scheme in the options row "VR: Controller flying" (needs "VR: Body follows head"):
-- **Point and twist** (default): point the controller and push the stick forward to fly that way, pull it back to fly
-  backwards. Hold the trigger and twist or tilt your hand to roll, pitch or turn; the further you turn it, the faster.
-- **VTOL**: hold the trigger and move the controller away from where it was when you pressed it to fly that way;
-  turn it to roll, pitch or turn.
-- Both: stick left/right snap-turns 30 degrees, pressing the stick brakes. Mouse, keyboard and gamepad keep working.
+### Flying with the controllers
+Switch it in the options row "VR: Controller flying" (needs "VR: Body follows head"). Hold the left trigger, then:
+- move the controller away from where it was when you pressed it to fly that way,
+- turn it left/right to turn, tilt it sideways to roll, tilt it forward/back to pitch; the further, the faster.
+
+The right stick left/right snap-turns 30 degrees, pressing the left stick brakes. Mouse, keyboard and gamepad keep working.
 
 ## Uninstall
 Delete `winhttp.dll` from the game folder (disables all BepInEx mods). For a full removal also delete `BepInEx\`,
