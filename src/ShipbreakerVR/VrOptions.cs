@@ -10,8 +10,8 @@ using UnityEngine.UI;
 
 namespace ShipbreakerVR
 {
-    // Appends the VR settings as extra rows to the video options (that list already scrolls; the Gameplay one does not).
-    // The rows are copies of real game option rows so that look, selection and mouse handling are right.
+    // The VR settings as option rows, shown in their own "VR" tab (VrOptionsTab) or, if that cannot be built, appended to
+    // the video options. The rows are copies of real game option rows so that look, selection and mouse handling are right.
     // We intercept the copies' game logic (fixed enums for game options) via Harmony and read/write
     // the BepInEx config instead. Values take effect and are saved immediately.
     internal static class VrOptions
@@ -19,13 +19,15 @@ namespace ShipbreakerVR
         private abstract class Row
         {
             public string Label;
+            // What the setting is for and when to change it, shown below the list in the VR tab.
+            public string Hint;
             public abstract string ValueText { get; }
         }
 
         private class BoolRow : Row
         {
             public ConfigEntry<bool> Entry;
-            public override string ValueText => Entry.Value ? "On" : "Off";
+            public override string ValueText => Entry.Value ? L("On", "An") : L("Off", "Aus");
         }
 
         private class SliderRow : Row
@@ -41,6 +43,7 @@ namespace ShipbreakerVR
             public Func<int> Get;
             public Action<int> Set;
             public string[] Names;
+            public Action Reset;
             public override string ValueText => Names[Mathf.Clamp(Get(), 0, Names.Length - 1)];
         }
 
@@ -48,50 +51,121 @@ namespace ShipbreakerVR
 
         private static Row[] CreateRows()
         {
-            ListRow EnumRow<T>(string label, ConfigEntry<T> entry, string[] names) where T : Enum
+            ListRow EnumRow<T>(string label, ConfigEntry<T> entry, string[] names, string hint) where T : Enum
             {
                 var values = (T[])Enum.GetValues(typeof(T));
                 return new ListRow
                 {
                     Label = label,
+                    Hint = hint,
                     Names = names,
                     Get = () => Array.IndexOf(values, entry.Value),
                     Set = i => entry.Value = values[(i % values.Length + values.Length) % values.Length],
+                    Reset = () => entry.Value = (T)entry.DefaultValue,
                 };
             }
 
             return new Row[]
             {
-                new BoolRow { Label = "VR: Body follows head", Entry = Plugin.BodyFollowsHead },
-                EnumRow("VR: Controller flying", Plugin.ControlScheme, new[] { "Off", "Point and twist", "VTOL (trigger)" }),
-                EnumRow("VR: Anti-aliasing", Plugin.AntiAliasing, new[] { "TAA", "SMAA", "FXAA", "None", "Game default" }),
-                new SliderRow { Label = "VR: Render resolution", Entry = Plugin.ResolutionScale, Min = 0.5f, Max = VrCamera.ResolutionSliderMax, Format = "0.00" },
-                new SliderRow { Label = "VR: Station resolution", Entry = Plugin.StationResolution, Min = 0.5f, Max = 1f, Format = "0.00" },
-                new SliderRow { Label = "VR: World scale", Entry = Plugin.WorldScale, Min = 0.5f, Max = 3f, Format = "0.00" },
-                EnumRow("VR: Ambient occlusion", Plugin.AmbientOcclusion, new[] { "Low", "Off", "Game default" }),
-                EnumRow("VR: Helmet", Plugin.Helmet, new[] { "Follows head", "Hidden", "Game default" }),
-                new BoolRow { Label = "VR: HUD and menus in world", Entry = Plugin.UiInVr },
-                EnumRow("VR: Visor steadying", Plugin.HudSteadying, new[] { "Off", "Light", "Strong" }),
-                new SliderRow { Label = "VR: Visor size", Entry = Plugin.HudScale, Min = 0.3f, Max = 1f, Format = "0.00" },
-                new SliderRow { Label = "VR: Visor distance (m)", Entry = Plugin.HudDistance, Min = 0.5f, Max = 3f, Format = "0.0" },
-                new SliderRow { Label = "VR: Menu distance (m)", Entry = Plugin.MenuDistance, Min = 1f, Max = 4f, Format = "0.0" },
-                new SliderRow { Label = "VR: Menu width (m)", Entry = Plugin.MenuWidth, Min = 1f, Max = 4f, Format = "0.0" },
+                new BoolRow
+                {
+                    Label = L("Body follows head", "Körper folgt Kopf"), Entry = Plugin.BodyFollowsHead,
+                    Hint = L("The body and the tools' aim turn with your head; mouse and stick turn on top. Turn it off to look around without turning the body.",
+                        "Körper und Zielrichtung der Werkzeuge drehen sich mit dem Kopf, Maus und Stick drehen zusätzlich. Aus, um dich umzusehen, ohne den Körper zu drehen."),
+                },
+                EnumRow(L("Controller flying", "Controllersteuerung"), Plugin.ControlScheme, new[] { L("Off", "Aus"), L("VTOL (trigger)", "VTOL (Trigger)") },
+                    L("Hold the left trigger: moving the controller thrusts that way, turning or tilting it turns, rolls and pitches. Right stick: snap turn, press the left stick: brake. Off if you fly with mouse and keyboard or a gamepad.",
+                        "Linken Trigger halten: Controller verschieben gibt Schub in diese Richtung, Drehen und Kippen dreht, rollt und neigt. Rechter Stick: Snap-Turn, linken Stick drücken: Bremse. Aus, wenn du mit Maus und Tastatur oder Gamepad fliegst.")),
+                EnumRow(L("Anti-aliasing", "Kantenglättung"), Plugin.AntiAliasing, new[] { "TAA", "SMAA", "FXAA", L("None", "Keine"), L("Game default", "Spielstandard") },
+                    L("Smooths jagged edges. SMAA stays sharp and is the best choice in VR. TAA looks blurry in VR and makes objects jitter, FXAA is cheap but soft.",
+                        "Glättet treppige Kanten. SMAA bleibt scharf und ist in VR die beste Wahl. TAA wirkt in VR unscharf und lässt Objekte zittern, FXAA ist günstig, aber weich.")),
+                new SliderRow
+                {
+                    Label = L("Render resolution", "Renderauflösung"), Entry = Plugin.ResolutionScale, Min = 0.5f, Max = VrCamera.ResolutionSliderMax, Format = "0.00",
+                    Hint = L("Resolution per eye relative to the headset's default. Higher is sharper but costs a lot of performance and video memory. Lower it if the game stutters.",
+                        "Auflösung pro Auge im Verhältnis zum Standard des Headsets. Höher ist schärfer, kostet aber viel Leistung und Grafikspeicher. Senken, wenn das Spiel ruckelt."),
+                },
+                new SliderRow
+                {
+                    Label = L("Station resolution", "Auflösung Station"), Entry = Plugin.StationResolution, Min = 0.5f, Max = 1f, Format = "0.00",
+                    Hint = L("Own resolution for the station between shifts, which is harder on the graphics card. If the view wobbles at the monitors when you move your head, lower it step by step until that stops.",
+                        "Eigene Auflösung für die Station zwischen den Schichten, die die Grafikkarte stärker fordert. Wackelt das Bild an den Monitoren, wenn du den Kopf bewegst, schrittweise senken, bis es aufhört."),
+                },
+                new SliderRow
+                {
+                    Label = L("World scale", "Weltmaßstab"), Entry = Plugin.WorldScale, Min = 0.5f, Max = 3f, Format = "0.00",
+                    Hint = L("Your size relative to the world. Above 1, distant objects keep more depth and are easier to judge, but the world looks smaller; below 1 the opposite. 1 is true to scale.",
+                        "Deine Größe im Verhältnis zur Welt. Über 1 behalten ferne Objekte mehr Tiefe und lassen sich besser einschätzen, die Welt wirkt aber kleiner; unter 1 umgekehrt. 1 ist maßstabsgetreu."),
+                },
+                EnumRow(L("Ambient occlusion", "Umgebungsverdeckung"), Plugin.AmbientOcclusion, new[] { L("Low", "Niedrig"), L("Off", "Aus"), L("Game default", "Spielstandard") },
+                    L("Shading in corners and creases. Low looks nearly the same and saves a lot of performance; the game default can stutter on the station. Off for the most performance.",
+                        "Schattierung in Ecken und Fugen. Niedrig sieht fast gleich aus und spart viel Leistung; der Spielstandard kann auf der Station ruckeln. Aus für die meiste Leistung.")),
+                EnumRow(L("Helmet", "Helm"), Plugin.Helmet, new[] { L("Follows head", "Folgt dem Kopf"), L("Hidden", "Ausgeblendet"), L("Game default", "Spielstandard") },
+                    L("Follows head: the helmet frame moves with the headset. Hidden: a clear view without the frame. Game default: the helmet stays on the body.",
+                        "Folgt dem Kopf: der Helmrahmen bewegt sich mit dem Headset. Ausgeblendet: freie Sicht ohne Rahmen. Spielstandard: der Helm bleibt am Körper.")),
+                new BoolRow
+                {
+                    Label = L("HUD and menus in world", "HUD und Menüs im Raum"), Entry = Plugin.UiInVr,
+                    Hint = L("Shows the HUD and the menus on a surface in the room instead of flat over the image. Leave it on; off is only for troubleshooting.",
+                        "Zeigt HUD und Menüs auf einer Fläche im Raum statt flach über dem Bild. An lassen; aus nur zur Fehlersuche."),
+                },
+                EnumRow(L("Visor steadying", "Visierberuhigung"), Plugin.HudSteadying, new[] { L("Off", "Aus"), L("Light", "Leicht"), L("Strong", "Stark") },
+                    L("Keeps the visor display still instead of copying every small head movement. Light follows your gaze quickly, Strong stays put longer. Off: fixed to the head.",
+                        "Hält die Visieranzeige ruhig, statt jede kleine Kopfbewegung mitzumachen. Leicht folgt dem Blick schnell, Stark bleibt länger stehen. Aus: fest am Kopf.")),
+                new SliderRow
+                {
+                    Label = L("Visor size", "Visiergröße"), Entry = Plugin.HudScale, Min = 0.3f, Max = 1f, Format = "0.00",
+                    Hint = L("Size of the visor display. At 1 markers sit exactly on their objects, but the corners are outside your view. Smaller: everything in view, markers slightly offset.",
+                        "Größe der Visieranzeige. Bei 1 sitzen Markierungen genau auf den Objekten, die Ecken liegen aber außerhalb des Blickfelds. Kleiner: alles im Blick, Markierungen leicht versetzt."),
+                },
+                new SliderRow
+                {
+                    Label = L("Visor distance (m)", "Visierabstand (m)"), Entry = Plugin.HudDistance, Min = 0.5f, Max = 3f, Format = "0.0",
+                    Hint = L("How far in front of your eyes the visor display floats. Change it if reading the display or switching focus between it and the world is uncomfortable.",
+                        "Wie weit die Visieranzeige vor den Augen schwebt. Anpassen, wenn das Lesen der Anzeige oder der Blickwechsel zwischen ihr und der Welt unangenehm ist."),
+                },
+                new SliderRow
+                {
+                    Label = L("Menu distance (m)", "Menüabstand (m)"), Entry = Plugin.MenuDistance, Min = 1f, Max = 4f, Format = "0.0",
+                    Hint = L("How far away the menus appear. Together with the width it sets how large the text looks; adjust until it reads comfortably.",
+                        "Wie weit entfernt die Menüs erscheinen. Bestimmt zusammen mit der Breite, wie groß der Text wirkt; anpassen, bis er sich bequem lesen lässt."),
+                },
+                new SliderRow
+                {
+                    Label = L("Menu width (m)", "Menübreite (m)"), Entry = Plugin.MenuWidth, Min = 1f, Max = 4f, Format = "0.0",
+                    Hint = L("Width of the menus. Wider makes the text larger but needs more head movement to see everything.",
+                        "Breite der Menüs. Breiter macht den Text größer, braucht aber mehr Kopfbewegung, um alles zu sehen."),
+                },
             };
         }
 
-        public static void Inject(OptionsScreenController screen)
+        // Texts follow the game's language: German, otherwise English.
+        public static string L(string english, string german) =>
+            (LynxGameUserOptions.Language ?? "").StartsWith("de", StringComparison.OrdinalIgnoreCase) ? german : english;
+
+        public static string HintFor(OptionEntry entry) => entry != null && Rows.TryGetValue(entry, out var row) ? row.Hint : null;
+
+        // Fallback when the VR tab cannot be built: append the rows to the video options like before.
+        public static void AppendTo(OptionsScreenController screen)
         {
             var entries = screen.GetComponentsInChildren<OptionEntry>(true);
             if (entries.Length == 0) return;
-            // Take templates from all tabs of the options menu, so every row type is available.
-            var root = screen.transform.parent != null ? screen.transform.parent : screen.transform;
-            var all = root.GetComponentsInChildren<OptionEntry>(true);
+            var parent = entries.Last().transform.parent;
+            var (height, added) = AddRows(parent, screen.transform.parent != null ? screen.transform.parent : screen.transform, false);
+            GrowContent(parent as RectTransform, height, added);
+            if (added > 0) parent.gameObject.AddComponent<VrOptionsNavigation>();
+        }
+
+        // Adds a copy of a game option row for each VR setting to parent. The templates come from all option rows under
+        // templateRoot, so every row type is available. Returns the height of the added rows and their number.
+        public static (float height, int count) AddRows(Transform parent, Transform templateRoot, bool firstIsTop)
+        {
+            var all = templateRoot.GetComponentsInChildren<OptionEntry>(true);
             var boolTemplate = PickTemplate<OptionEntryBool>(all);
             var sliderTemplate = PickTemplate<OptionEntrySlider>(all);
             var listTemplate = PickTemplate<OptionEntryList>(all);
-            Plugin.Log.LogInfo($"Options '{Path(screen.transform)}': {entries.Length} rows, templates from '{root.name}': toggle {Describe(boolTemplate)}, slider {Describe(sliderTemplate)}, list {Describe(listTemplate)}");
+            Plugin.Log.LogInfo($"Options '{Path(parent)}': templates from '{templateRoot.name}': toggle {Describe(boolTemplate)}, slider {Describe(sliderTemplate)}, list {Describe(listTemplate)}");
 
-            var parent = entries.Last().transform.parent;
             var addedHeight = 0f;
             var added = 0;
             foreach (var row in CreateRows())
@@ -111,15 +185,29 @@ namespace ShipbreakerVR
                 clone.name = "ShipbreakerVR " + row.Label;
                 var entry = clone.GetComponent<OptionEntry>();
                 // Only the list's first row resets the scroll position when selected.
-                Traverse.Create(entry).Field("m_IsTopItem").SetValue(false);
+                Traverse.Create(entry).Field("m_IsTopItem").SetValue(firstIsTop && added == 0);
                 Rows[entry] = row;
                 SetText(Traverse.Create(entry).Field("m_OptionNameText").GetValue<TextMeshProUGUI>(), row.Label);
                 clone.SetActive(true);
                 addedHeight += ((RectTransform)template.transform).rect.height;
                 added++;
             }
-            GrowContent(parent as RectTransform, addedHeight, added);
-            if (added > 0) parent.gameObject.AddComponent<VrOptionsNavigation>();
+            return (addedHeight, added);
+        }
+
+        // Puts every VR setting back to its default and shows it.
+        public static void ResetToDefaults()
+        {
+            foreach (var pair in Rows)
+            {
+                switch (pair.Value)
+                {
+                    case BoolRow b: b.Entry.Value = (bool)b.Entry.DefaultValue; break;
+                    case SliderRow s: s.Entry.Value = (float)s.Entry.DefaultValue; break;
+                    case ListRow l: l.Reset(); break;
+                }
+                if (pair.Key != null) TryRefresh(pair.Key);
+            }
         }
 
         public static bool IsOurs(OptionEntry entry) => entry != null && Rows.ContainsKey(entry);
@@ -152,7 +240,7 @@ namespace ShipbreakerVR
                 !e.name.StartsWith("ShipbreakerVR"));
         }
 
-        private static void SetText(TextMeshProUGUI text, string value)
+        public static void SetText(TextMeshProUGUI text, string value)
         {
             if (text == null) return;
             // Otherwise localized text would overwrite ours again on activation.
@@ -221,15 +309,6 @@ namespace ShipbreakerVR
         private static string Describe(OptionEntry e) => e == null ? "none" : $"'{e.name}'";
 
         private static string Path(Transform t) => t.parent == null ? t.name : Path(t.parent) + "/" + t.name;
-    }
-
-    [HarmonyPatch(typeof(OptionsScreenController), "Awake")]
-    internal static class OptionsScreenAwakePatch
-    {
-        private static void Postfix(OptionsScreenController __instance)
-        {
-            if (__instance is VideoOptionsScreenController) VrOptions.Inject(__instance);
-        }
     }
 
     [HarmonyPatch]

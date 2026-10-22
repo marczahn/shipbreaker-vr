@@ -32,7 +32,8 @@ namespace ShipbreakerVR
             if (vr == null || !vr.BodyFollowsHead)
             {
                 synced = false;
-                body.MoveRotation(gameTarget);
+                // Turns from the motion controllers act on the body directly; the camera follows it.
+                body.MoveRotation(vr != null ? VrControls.TakeTurn() * gameTarget : gameTarget);
                 return;
             }
 

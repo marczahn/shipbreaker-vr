@@ -373,3 +373,19 @@ pressing it put the menu at a slant below you. Marc wanted menus at eye height, 
 after recentering but always, with a dead zone of 30 cm so they do not drift with every movement. That was his design,
 and it is what the mod does now: the menu opens upright at eye height in the direction the head faces, and if the eyes
 end up more than 30 cm above or below its center, from standing up or sitting down, it glides back to their height.
+
+<a id="vtol-and-vr-tab"></a>
+## 2026-10-22 · One way to fly, and a tab of its own
+
+Marc settled the controller question from [the controllers](#controllers) for now: point and twist goes, VTOL stays,
+with the turning reworked. Turning the hand used to turn the body around whatever axis the hand happened to turn
+around. Marc wanted the three apart: turn the controller to turn, tilt it sideways to roll, tilt it forward to pitch.
+His first test found that tilting also pushed him forward: the controller swings around the wrist, and that swing alone
+moved it far enough to count as thrust. Thrust now starts at the wrist.
+
+He also wanted the VR settings out of the Video tab, where they had hung since [the settings menu](#settings-menu),
+into a tab of their own. I copy the video page and its tab button and swap in our rows. The tab appeared on the second
+try; the page stayed empty for three more. My guesses went from hidden sub-pages to the container's layout, both wrong,
+until a log of every page's state on each tab switch showed it: the copy still believed it was visible, because the
+video page had never been shown when I copied it, so the menu never bothered to draw it. Starting the copy as hidden
+was the whole fix. Each setting now explains itself in a line below the list, in German or English like the game.
