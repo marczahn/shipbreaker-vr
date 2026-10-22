@@ -14,6 +14,7 @@ Tested with Meta Quest via Virtual Desktop.
 - HUD as a visor in front of the eyes, menus on a canvas in the room, helmet follows the head
 - VR settings in their own "VR" tab of the game's options
 - Flying with the left motion controller (two schemes, see [docs/INSTALL.md](docs/INSTALL.md#flying-with-the-left-controller))
+- Menus with the motion controllers (both controllers act as one gamepad)
 - Not yet: tools in the hands, laser pointer for menus, comfort options
 
 Notes on how the game works and why the mod does what it does: [docs/NOTES.md](docs/NOTES.md).
