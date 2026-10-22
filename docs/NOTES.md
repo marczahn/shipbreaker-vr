@@ -156,11 +156,12 @@ Config `Steuerung/Controllersteuerung` (Aus/Vtol; the earlier "point and twist" 
   The hand's roll away from the reference (`eulerAngles.z`) rolls the body around the head's forward axis (8 degree
   deadzone, full 45 degrees/s at 45). Turning and pitching by twisting the hand worked, but holding the trigger and the
   hand angle at the same time was tiring, so both moved to the stick.
-- Left stick (no trigger needed, gameplay only; in menus it works them as a gamepad): left/right turns around the head's up axis, up/down pitches around its right axis
-  (stick up looks up), 15% deadzone, full 45 degrees/s at full deflection.
-- Config `Steuerung/Drehen` (Fliessend/Snap30/Snap45/Snap90) makes the left stick's turn one step per flick (press at
+- Right stick (no trigger needed, gameplay only; in menus it works them as a gamepad): left/right turns around the head's up axis, up/down pitches around its right axis
+  (stick up looks up), 15% deadzone, full 45 degrees/s at full deflection. It was the left stick until the flight
+  globe; it moved to the right one so the left hand only flies (thrust, roll, brake) and the right hand only steers.
+- Config `Steuerung/Drehen` (Fliessend/Snap30/Snap45/Snap90) makes the right stick's turn one step per flick (press at
   0.7, release below 0.3), around the head's up axis like the smooth turn (the playspace's up axis tilted the view after
-  rolling). The fixed 30 degree snap turn on the right stick is gone. Y (left `secondaryButton`) presses the game's brake actions (`ThrustBrakeLeft/Right`); it used to be the
+  rolling). An earlier fixed 30 degree snap turn on the right stick was dropped when turning moved to the left stick. Y (left `secondaryButton`) presses the game's brake actions (`ThrustBrakeLeft/Right`); it used to be the
   left stick press. A postfix on
   `LynxControlExtensions.GetInputIsPressed` never ran because Mono inlines it, so a transpiler redirects the calls in
   `ThrustController.Update`.

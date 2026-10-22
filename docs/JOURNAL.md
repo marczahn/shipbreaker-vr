@@ -306,3 +306,8 @@ the eyes reach it without a detour.
 The globe turns with the playspace rather than with your head, because that is the frame the hand is measured in: turn
 your head, and the axes still point where the thrust goes. The plugin brings no shaders and no models, so the globe, the
 axes and the block are thin tubes and boxes built from code.
+
+While at it, Marc moved turning and pitching from the left stick to the right one. Since [steering with the
+stick](#stick-steering) the left hand did everything at once: trigger, hand position, tilt, stick and Y. Now the left
+hand flies and the right hand steers, and the right stick, idle in gameplay since the old snap turn went away, has a
+job again.
