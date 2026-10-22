@@ -35,6 +35,10 @@ namespace ShipbreakerVR
         internal static ConfigEntry<VrPerformance.Occlusion> AmbientOcclusion;
         internal static ConfigEntry<VrControls.Scheme> ControlScheme;
         internal static ConfigEntry<VrControls.Turning> TurnMode;
+        internal static ConfigEntry<VrFlightGlobe.Mode> FlightGlobe;
+        internal static ConfigEntry<float> FlightGlobeSize;
+        internal static ConfigEntry<float> FlightGlobeX;
+        internal static ConfigEntry<float> FlightGlobeY;
 
         private void Awake()
         {
@@ -53,6 +57,11 @@ namespace ShipbreakerVR
                 "Flying with the motion controllers. Vtol: hold the left trigger and move the controller away from where it was when pressed to thrust that way, tilt it sideways to roll. Left stick: turn (left/right, see Drehen) and pitch (up/down). Y brakes. Aus: off.");
             TurnMode = Config.Bind("Steuerung", "Drehen", VrControls.Turning.Fliessend,
                 "Turning with the left stick (controller flying). Fliessend: smooth, faster the further the stick is pushed. Snap30/Snap45/Snap90: one step of that many degrees per flick.");
+            FlightGlobe = Config.Bind("Anzeige", "Flugkugel", VrFlightGlobe.Mode.Immer,
+                "A small globe in the visor that shows where the left controller is relative to where the trigger was pressed (controller flying): its surface is full thrust, the small inner globe the deadzone. Immer: always in gameplay. BeimFliegen: only while the trigger is held. Aus: off.");
+            FlightGlobeSize = Config.Bind("Anzeige", "FlugkugelGroesse", 0.08f, "Radius of the flight globe relative to the visor height.");
+            FlightGlobeX = Config.Bind("Anzeige", "FlugkugelX", -0.36f, "Horizontal position of the flight globe on the visor, from -0.5 (left edge) to 0.5 (right edge).");
+            FlightGlobeY = Config.Bind("Anzeige", "FlugkugelY", -0.3f, "Vertical position of the flight globe on the visor, from -0.5 (bottom edge) to 0.5 (top edge).");
             UiInVr = Config.Bind("Anzeige", "UiImRaum", true,
                 "Show HUD and menus on a canvas in the world instead of flat over the image.");
             HudDistance = Config.Bind("Anzeige", "HudAbstand", 1.5f, "Distance of the visor display in front of the eyes, in meters.");

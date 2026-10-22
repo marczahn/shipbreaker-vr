@@ -52,6 +52,9 @@ namespace ShipbreakerVR
         private static bool held;
         private static Vector3 heldPosition;
         private static Quaternion heldRotation;
+        // The hand this frame, for the flight globe.
+        private static Vector3 handPosition;
+        private static Quaternion handRotation;
 
         private static bool snapped;
         private static bool braking;
@@ -84,6 +87,8 @@ namespace ShipbreakerVR
             var position = grip + rotation * WristOffset;
             if (left.TryGetFeatureValue(PointerRotation, out var aim)) rotation = aim;
             left.TryGetFeatureValue(CommonUsages.trigger, out var trigger);
+            handPosition = position;
+            handRotation = rotation;
 
             if (!Hold(trigger >= TriggerPress, position, rotation)) return;
             var offset = position - heldPosition;
@@ -180,6 +185,27 @@ namespace ShipbreakerVR
             var result = turn;
             turn = Quaternion.identity;
             return result;
+        }
+
+        // For the flight globe (VrFlightGlobe): the hand offset that gives full thrust, and the share of it that is deadzone.
+        public const float FullOffset = MoveFull;
+        public const float DeadzoneShare = MoveDeadzone / MoveFull;
+
+        public static bool Flying => Active == Scheme.Vtol && GameSession.CurrentGameState == GameSession.GameState.Gameplay;
+
+        public static bool Holding
+        {
+            get { Update(); return held; }
+        }
+
+        // While the trigger is held: the hand's offset from the reference in tracking space (meters), and its rotation
+        // relative to the reference, in the controller's own frame (z is the roll the controls read).
+        public static bool TryGetHand(out Vector3 offset, out Quaternion rotation)
+        {
+            Update();
+            offset = held ? handPosition - heldPosition : Vector3.zero;
+            rotation = held ? Quaternion.Inverse(heldRotation) * handRotation : Quaternion.identity;
+            return held;
         }
 
         public static void SetThrustFrame(Transform frame) => thrustFrame = frame;

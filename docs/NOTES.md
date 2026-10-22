@@ -167,6 +167,17 @@ Config `Steuerung/Controllersteuerung` (Aus/Vtol; the earlier "point and twist" 
 The grip stays free for grabbing later. The left controller's name and features are logged once. OpenXR only reports
 controllers because `VrXr` enables the Oculus Touch interaction profile, which the AssetBundle's settings carry disabled.
 
+### Flight globe
+`VrFlightGlobe` draws a small globe in the lower left of the visor (config `Anzeige/Flugkugel`: Immer/BeimFliegen/Aus;
+`FlugkugelGroesse` = radius relative to the visor height, `FlugkugelX/Y` = position on the visor from -0.5 to 0.5).
+Its radius is the full-thrust offset (15 cm), the small inner globe the deadzone (2 cm). A stylized controller sits at
+the hand's offset from the reference (tracking space) and turns by the hand's rotation relative to the reference in the
+controller's own frame, the same rotation whose `z` is the roll. The globe is aligned with the playspace, the frame the
+offset is measured in, not with the visor, so its axes are the directions the hand thrusts in even with the head turned.
+After the trigger is released the controller eases back to the center. Drawn per eye right after the visor quad, with
+`Hidden/Internal-Colored` (vertex colors, `_Cull` Back, `_ZTest` Always; `UI/Default` without culling as fallback) on
+meshes built at runtime. The first draw logs `Flight globe drawn (<shader>, radius ...)`.
+
 ## Menu control with the motion controllers
 The game's menus are fully usable with a gamepad. Each selected control has a `UIInControlBridge` that reads the
 navigation composite of the action set for the current game state (`FrontEnd` in the main menu and the Hab, `Paused` in

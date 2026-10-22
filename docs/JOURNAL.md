@@ -284,3 +284,21 @@ all, and that is its best feature.
 
 With turning on the left stick, the old snap turn on the right stick was a second way to do the same thing, and Marc
 dropped it. Instead the VR tab now asks how you like to turn: smoothly, or in steps of 30, 45 or 90 degrees per flick.
+
+<a id="flight-globe"></a>
+## 2026-10-22 · A globe for the zero point
+
+[Steering with the stick](#stick-steering) made VTOL flying pleasant, with one catch Marc kept running into: the zero
+point is invisible. You press the trigger somewhere in the air, and from then on that spot is the place where nothing
+happens. Ten seconds later your hand has drifted, the ship creeps sideways, and you have no idea which way to correct.
+
+Marc's idea was a little globe in the HUD with a tiny controller in the middle. Hold the trigger and move your hand, and
+the tiny controller moves away from the center the same way; tilt your hand, and it tilts. Three axes run through the
+globe so you can tell where it is, and when you let go it glides back home.
+
+I made the globe's surface mean full thrust and put a small inner globe in it for the deadzone, so it doubles as a
+throttle gauge. A line from the center to the controller turns orange the harder you push. The globe turns with the
+playspace rather than with your head, because that is the frame the hand is measured in: turn your head, and the axes
+still point where the thrust goes. The plugin brings no shaders and no models, so the globe, the axes and the
+controller are thin tubes and boxes built from code.
+
