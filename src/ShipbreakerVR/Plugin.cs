@@ -31,7 +31,6 @@ namespace ShipbreakerVR
         internal static ConfigEntry<VrCamera.AntiAliasing> AntiAliasing;
         internal static ConfigEntry<float> ResolutionScale;
         internal static ConfigEntry<float> StationResolution;
-        internal static ConfigEntry<bool> StationResolutionAuto;
         internal static ConfigEntry<float> WorldScale;
         internal static ConfigEntry<VrPerformance.Occlusion> AmbientOcclusion;
         internal static ConfigEntry<VrControls.Scheme> ControlScheme;
@@ -69,10 +68,8 @@ namespace ShipbreakerVR
                 "SMAA: smooths edges, stays sharp. TAA: looks blurry in VR and makes objects jitter. FXAA: cheap and soft. Keine: none. Spiel: use the game's setting.");
             ResolutionScale = Config.Bind("Bild", "Aufloesung", 1.0f,
                 "Render resolution per eye relative to the headset's default (0.5 to 2). Above 1 smooths further but costs significant performance and video memory; it is limited to what should fit into the graphics card's memory. Applied one second after the last change.");
-            StationResolution = Config.Bind("Bild", "AufloesungStation", 1.0f,
-                "Render resolution per eye in the station between shifts (0.5 to 1), at most the one above. The station costs the graphics card more than the bay; while it misses the headset's frame rate it is lowered here in steps of 0.05 (see StationAutomatisch). Set it back to 1 to let it search again.");
-            StationResolutionAuto = Config.Bind("Bild", "StationAutomatisch", true,
-                "Lower AufloesungStation automatically while the station misses the headset's frame rate. Below it Virtual Desktop and other runtimes halve the rate and compute every second frame, which wobbles close to objects.");
+            StationResolution = Config.Bind("Bild", "AufloesungStation", 0.75f,
+                "Render resolution per eye in the station between shifts (0.5 to 1), instead of Aufloesung. The station costs the graphics card more than the bay. If it misses the headset's frame rate, Virtual Desktop and other runtimes compute frames in between, which makes the view wobble close to the monitors; lower it until that stops (an RTX 4070 Ti at 2688x2880 per eye needed 0.7).");
             WorldScale = Config.Bind("Bild", "Weltmassstab", 1.0f,
                 "Size of the player relative to the world (0.5 to 3). Above 1 widens eye distance and head movement: distant objects keep more depth and their size is easier to judge, but the world looks smaller. Below 1 the opposite.");
             Log.LogInfo($"{Name} {Version} loaded. Unity {Application.unityVersion}, game {Application.version}");

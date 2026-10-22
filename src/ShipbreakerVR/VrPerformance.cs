@@ -31,6 +31,7 @@ namespace ShipbreakerVR
         private static readonly List<float> frames = new List<float>(4096);
         private static string statsLabel;
         private static float statsStart;
+        private static float bestRefresh;
         // What the current label was made from, so it is only rebuilt when something changes.
         private static Camera labelCamera;
         private static Occlusion labelOcclusion;
@@ -156,9 +157,12 @@ namespace ShipbreakerVR
                 var average = sum / frames.Count;
                 var slow = frames[(int)(frames.Count * 0.95f)];
                 var refresh = UnityEngine.XR.XRDevice.refreshRate;
+                bestRefresh = Mathf.Max(bestRefresh, refresh);
+                // Missed frames are counted against the best rate seen, the headset's own: at half rate it reports half.
+                var missed = bestRefresh > 0f ? MissedShare(bestRefresh) : 0f;
                 var text = new StringBuilder($"Frame time ({statsLabel}): average {average * 1000f:0.0} ms ({1f / average:0} fps), ");
                 text.Append($"slowest 5 % from {slow * 1000f:0.0} ms, slowest {frames[frames.Count - 1] * 1000f:0} ms, {frames.Count} frames");
-                if (refresh > 0f) text.Append($", headset {refresh:0} Hz ({1000f / refresh:0.0} ms)");
+                if (refresh > 0f) text.Append($", headset {refresh:0} Hz ({1000f / refresh:0.0} ms), {missed * 100f:0.0} % missed at {bestRefresh:0} Hz");
                 // Whether the main thread or the GPU sets the pace.
                 if (logicCount > 0) text.Append($", game logic {logicSum / logicCount * 1000.0:0.0} ms");
                 if (renderCount > 0) text.Append($", rendering with waiting {renderSum / renderCount * 1000.0:0.0} ms");
@@ -171,6 +175,17 @@ namespace ShipbreakerVR
             frames.Clear();
             logicSum = renderSum = gpuSum = 0.0;
             logicCount = renderCount = gpuCount = 0;
+        }
+
+        // Share of frames that took 1.4 to 4 intervals of the given refresh rate: missed by the GPU, which the runtime
+        // fills with a synthesized frame. Longer ones are hitches (loading, a camera cut).
+        private static float MissedShare(float rate)
+        {
+            var interval = 1f / rate;
+            var missed = 0;
+            foreach (var frame in frames)
+                if (frame >= 1.4f * interval && frame < 4f * interval) missed++;
+            return (float)missed / frames.Count;
         }
 
         private static void PauseTruckCamera(bool pause)

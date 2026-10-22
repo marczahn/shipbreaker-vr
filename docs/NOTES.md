@@ -292,13 +292,14 @@ switch off, among others, contact shadows, shadowmask, transmission, subsurface 
 reflection; the Hab camera uses the HDRP defaults. Most of those cost little where nothing uses them, and shadowmask
 and sky reflection change the Hab's baked lighting, so they were left alone.
 
-Instead the Hab's render resolution adapts (`[Bild] AufloesungStation`, also in the options menu as "VR: Station
-resolution", and `[Bild] StationAutomatisch`). In the Hab the resolution is the lowest of the general setting, the
-station setting and 1.0x. While VR shows the Hab, `VrCamera.AdaptHabResolution` waits 3 s after each change (or after
-entering), takes the median frame time over 2 s and, if it is above 1.3 headset intervals (the highest refresh rate
-seen this session is the headset's own), lowers the station setting by 0.05, down to 0.6. Each change applies after
-the usual second and reallocates the render targets. It never goes up by itself; the setting keeps the value, so the
-search happens once. Setting it back to 1 starts it again.
+Instead the Hab has its own render resolution (`[Bild] AufloesungStation`, in the options menu as "VR: Station
+resolution", 0.75 by default, at most 1.0x), independent of the one for everywhere else (`[Bild] Aufloesung`).
+A first version lowered it automatically by 0.05 while the median frame time was above 1.3 headset intervals. It
+stopped at 0.8x, where the view still wobbled: the Hab ran at 90 Hz on average (11.4 ms per frame) but missed about
+3 % of the frames, and each of those is synthesized. At 0.7x it was steady. Rather than tuning a threshold that
+depends on the runtime and the scene, the setting is now set by hand. The frame time line gives the share of missed
+frames (1.4 to 4 intervals of the highest refresh rate seen, the headset's own; longer ones are hitches) to help with
+that.
 
 ## Diagnostics
 F8 (`VrDiagnostics`) is for things only seen in the headset. It writes into the log: game state, head pose, the camera
