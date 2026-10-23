@@ -5,10 +5,12 @@ using UnityEngine.Rendering;
 namespace ShipbreakerVR
 {
     // A small globe at the bottom of the visor that shows where the left controller is while flying (VrControls):
-    // three axes through its center, and an upright block that moves away from the center as the hand moves away from
-    // the reference pose and tilts as the hand tilts. The globe's surface is full thrust, the small inner globe the
-    // deadzone; the line from the center to the block brightens with thrust. Kept plain and in one color to fit the game's HUD. The globe is aligned with the playspace, the frame the hand offset is measured in, so its axes are the
-    // directions the hand thrusts in. When the trigger is released the block glides back to the center.
+    // three axes through its center, and a 3D cross that moves away from the center as the hand moves away from the
+    // reference pose and turns as the hand turns. The cross's arms are the hand's own axes; the upper one is longer and
+    // capped, so up stays recognizable however far the hand rolls. The globe's surface is full thrust, the small inner
+    // globe the deadzone; the line from the center to the cross brightens with thrust. Kept plain and in one color to fit
+    // the game's HUD. The globe is aligned with the playspace, the frame the hand offset is measured in, so its axes are
+    // the directions the hand thrusts in. When the trigger is released the cross glides back to the center.
     // Drawn in 3D for each eye after the visor (VrUi.Draw), from meshes built here, since the plugin brings no shaders.
     internal static class VrFlightGlobe
     {
@@ -21,15 +23,15 @@ namespace ShipbreakerVR
         private static readonly Color RingColor = new Color(0.8f, 0.92f, 1f, 0.18f);
         private static readonly Color DeadzoneColor = new Color(0.8f, 0.92f, 1f, 0.35f);
         private static readonly Color AxisColor = new Color(0.8f, 0.92f, 1f, 0.4f);
-        private static readonly Color BlockColor = new Color(0.85f, 0.95f, 1f, 0.8f);
+        private static readonly Color MarkerColor = new Color(0.92f, 0.97f, 1f, 0.95f);
         private static readonly Color IdleTether = new Color(0.8f, 0.92f, 1f, 0.25f);
         private static readonly Color FullTether = new Color(1f, 1f, 1f, 0.9f);
 
         private static Mesh globe;
-        private static Mesh block;
+        private static Mesh marker;
         private static Mesh tether;
         private static Material globeMaterial;
-        private static Material blockMaterial;
+        private static Material markerMaterial;
         private static Material tetherMaterial;
         private static bool logged;
 
@@ -72,8 +74,8 @@ namespace ShipbreakerVR
                 cmd.DrawMesh(tether, frame * along, tetherMaterial, 0, 0);
             }
 
-            blockMaterial.color = new Color(1f, 1f, 1f, alpha * (VrControls.Holding ? 1f : 0.55f));
-            cmd.DrawMesh(block, frame * Matrix4x4.TRS(shownOffset, shownTurn, Vector3.one), blockMaterial, 0, 0);
+            markerMaterial.color = new Color(1f, 1f, 1f, alpha * (VrControls.Holding ? 1f : 0.55f));
+            cmd.DrawMesh(marker, frame * Matrix4x4.TRS(shownOffset, shownTurn, Vector3.one), markerMaterial, 0, 0);
 
             if (!logged)
             {
@@ -96,7 +98,7 @@ namespace ShipbreakerVR
                 shownOffset = Vector3.Lerp(shownOffset, Vector3.zero, ease);
                 shownTurn = Quaternion.Slerp(shownTurn, Quaternion.identity, ease);
             }
-            // BeimFliegen: only while the trigger is held, and until the block is back in the center.
+            // BeimFliegen: only while the trigger is held, and until the cross is back in the center.
             var visible = mode == Mode.Immer || VrControls.Holding || shownOffset.magnitude > 0.02f || Quaternion.Angle(shownTurn, Quaternion.identity) > 2f;
             alpha = Mathf.MoveTowards(alpha, visible ? 1f : 0f, FadeSpeed * dt);
         }
@@ -116,22 +118,26 @@ namespace ShipbreakerVR
                 builder.Tube(new[] { -axis, axis }, 0.007f, AxisColor);
             globe = builder.Mesh("Globe");
 
-            // An upright block, so rolling the hand tilts it visibly sideways; in globe radii.
+            // The hand's axes as a cross, the upper arm longer and capped; in globe radii.
             builder = new Builder();
-            builder.Box(Vector3.zero, new Vector3(0.14f, 0.4f, 0.07f), BlockColor);
-            block = builder.Mesh("Block");
+            builder.Tube(new[] { new Vector3(-0.22f, 0f, 0f), new Vector3(0.22f, 0f, 0f) }, 0.015f, MarkerColor);
+            builder.Tube(new[] { new Vector3(0f, -0.22f, 0f), new Vector3(0f, 0.32f, 0f) }, 0.015f, MarkerColor);
+            builder.Tube(new[] { new Vector3(0f, 0f, -0.22f), new Vector3(0f, 0f, 0.22f) }, 0.015f, MarkerColor);
+            builder.Tube(new[] { new Vector3(-0.06f, 0.32f, 0f), new Vector3(0.06f, 0.32f, 0f) }, 0.015f, MarkerColor);
+            builder.Box(Vector3.zero, Vector3.one * 0.05f, MarkerColor);
+            marker = builder.Mesh("Cross");
 
             builder = new Builder();
             builder.Tube(new[] { Vector3.zero, Vector3.forward }, 0.007f, Color.white);
             tether = builder.Mesh("Tether");
 
             globeMaterial = CreateMaterial();
-            blockMaterial = CreateMaterial();
+            markerMaterial = CreateMaterial();
             tetherMaterial = CreateMaterial();
         }
 
         // Unlit with vertex colors, drawn over the world like the visor, but culling back faces so the
-        // block looks solid. Hidden/Internal-Colored offers that; UI/Default (no culling) is the fallback.
+        // cross's center looks solid. Hidden/Internal-Colored offers that; UI/Default (no culling) is the fallback.
         private static Material CreateMaterial()
         {
             var shader = Shader.Find("Hidden/Internal-Colored");

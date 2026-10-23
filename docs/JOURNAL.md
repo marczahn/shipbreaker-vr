@@ -300,10 +300,12 @@ I made the globe's surface mean full thrust, so it doubles as a throttle gauge, 
 red, green and blue axes, a small inner globe for the deadzone, a tiny controller with a nose and a thumbstick, and a
 line to it that glowed orange under thrust. Marc found that it worked, but wanted it plainer so it would blend into the
 HUD, closer to the middle, and upright: a flat-lying controller makes rolling hard to see. The second version is plain:
-one pale HUD color, thin lines, and an upright block instead of the controller, which tilts sideways unmistakably. The
-inner deadzone globe went too, and came back one round later, because Marc missed it. The globe moved to the bottom of
-the visor, in the middle, and promptly overlapped the game's own gauges there. I had only ever dumped the HUD in the
-station, so Marc took a snapshot in the bay, and now the globe sits between the gauges and the distance readout.
+one pale HUD color, thin lines, and an upright block instead of the controller. The inner deadzone globe went too, and
+came back one round later, because Marc missed it. The globe moved to the bottom of the visor, in the middle, and
+promptly overlapped the game's own gauges there. I had only ever dumped the HUD in the station, so Marc took a snapshot
+in the bay, and now the globe sits between the gauges and the distance readout. The block did not last either. Marc
+wanted something that matched the thin axes and suggested a 3D cross. I drew him a few variants on his snapshot, and he
+picked the one whose upper arm is longer and capped, so that up stays obvious even when the hand is rolled far over.
 
 The globe turns with the playspace rather than with your head, because that is the frame the hand is measured in: turn
 your head, and the axes still point where the thrust goes. The plugin brings no shaders and no models, so the globe, the
