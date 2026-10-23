@@ -392,6 +392,7 @@ Raik reported that his head sat too low in the game. Marc put on the headset and
 belonged. Two people, one mod, two heights. Recentering puts the tracked head on the game camera, so on paper there is
 no room for a difference, and I have no good guess yet why Raik sees one.
 
-Instead of chasing a bug I could not see, Marc asked for two sliders in the VR tab: head height and head forward, each
-10 cm either way. Forward follows the direction you face rather than the room, otherwise turning around would
-put your eyes behind your own neck.
+Instead of chasing a bug I could not see, Marc asked for two sliders in the VR tab, one for height and one horizontal,
+each 10 cm either way. I read horizontal as forward and back and built that. Marc meant left and right. So the second
+slider now moves the eyes sideways, relative to the direction you face, otherwise turning around would swap left and
+right.

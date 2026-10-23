@@ -33,7 +33,7 @@ namespace ShipbreakerVR
         internal static ConfigEntry<float> StationResolution;
         internal static ConfigEntry<float> WorldScale;
         internal static ConfigEntry<float> HeadHeight;
-        internal static ConfigEntry<float> HeadForward;
+        internal static ConfigEntry<float> HeadSideways;
         internal static ConfigEntry<VrPerformance.Occlusion> AmbientOcclusion;
         internal static ConfigEntry<VrControls.Scheme> ControlScheme;
         internal static ConfigEntry<VrControls.Turning> TurnMode;
@@ -88,15 +88,15 @@ namespace ShipbreakerVR
                 "Size of the player relative to the world (0.5 to 3). Above 1 widens eye distance and head movement: distant objects keep more depth and their size is easier to judge, but the world looks smaller. Below 1 the opposite.");
             HeadHeight = Config.Bind("Bild", "KopfHoehe", 0f,
                 "Moves the eyes up (positive) or down (negative) against the game's head position, in centimeters (-10 to 10).");
-            HeadForward = Config.Bind("Bild", "KopfVorne", 0f,
-                "Moves the eyes forward (positive) or back (negative) against the game's head position, in centimeters (-10 to 10).");
+            HeadSideways = Config.Bind("Bild", "KopfSeitlich", 0f,
+                "Moves the eyes right (positive) or left (negative) against the game's head position, in centimeters (-10 to 10).");
             // Loaded again by ScriptEngine (F6) while the game runs: OpenXR and the Hab state carry over from the
             // previous instance, and VR must not be toggled off by the start-at-launch below.
             var reloaded = VrXr.Adopt();
             launched = reloaded;
             if (reloaded) VrHab.Adopt();
             Log.LogInfo($"{Name} {Version} loaded{(reloaded ? $" again (VR {(VrXr.IsRunning ? "running" : "off")})" : "")}. Unity {Application.unityVersion}, game {Application.version}");
-            if (HeadHeight.Value != 0f || HeadForward.Value != 0f) Log.LogInfo($"Head offset: {HeadHeight.Value:0} cm up, {HeadForward.Value:0} cm forward");
+            if (HeadHeight.Value != 0f || HeadSideways.Value != 0f) Log.LogInfo($"Head offset: {HeadHeight.Value:0} cm up, {HeadSideways.Value:0} cm right");
             // Apply each patch separately so one failing patch doesn't take down all the others (and F3).
             // ScriptEngine renames the assembly on every load; with that name in the ID, unloading an old instance
             // only removes its own patches.

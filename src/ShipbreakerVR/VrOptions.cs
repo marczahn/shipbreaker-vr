@@ -126,9 +126,9 @@ namespace ShipbreakerVR
                 },
                 new SliderRow
                 {
-                    Label = L("Head forward (cm)", "Kopf vorne (cm)"), Entry = Plugin.HeadForward, Min = -VrCamera.HeadOffsetRange, Max = VrCamera.HeadOffsetRange, Format = "0", Step = 1f,
-                    Hint = L("Moves your eyes forward or back against the game's head position, in the direction you face.",
-                        "Verschiebt die Augen gegenüber der Kopfposition des Spiels nach vorne oder hinten, in Blickrichtung."),
+                    Label = L("Head sideways (cm)", "Kopf seitlich (cm)"), Entry = Plugin.HeadSideways, Min = -VrCamera.HeadOffsetRange, Max = VrCamera.HeadOffsetRange, Format = "0", Step = 1f,
+                    Hint = L("Moves your eyes right (positive) or left (negative) against the game's head position, relative to the direction you face.",
+                        "Verschiebt die Augen gegenüber der Kopfposition des Spiels nach rechts (positiv) oder links (negativ), bezogen auf die Blickrichtung."),
                 },
                 EnumRow(L("Ambient occlusion", "Umgebungsverdeckung"), Plugin.AmbientOcclusion, new[] { L("Low", "Niedrig"), L("Off", "Aus"), L("Game default", "Spielstandard") },
                     L("Shading in corners and creases. Low looks nearly the same and saves a lot of performance; the game default can stutter on the station. Off for the most performance.",

@@ -140,9 +140,9 @@ menu canvas and helmet are scaled along so they keep their felt size. The log li
 shows whether the scale actually reaches the stereo rendering (about 63 mm times the scale is expected).
 
 ## Head offset
-Configs `Bild/KopfHoehe` and `Bild/KopfVorne` (also in the VR tab, -10 to 10 cm each) shift the eyes against the
-game camera after recentering. Height runs along the playspace's up axis, forward along the head's heading within the
-playspace, so the offset stays in front of the body when the player turns. Both are in the player's own centimeters and
+Configs `Bild/KopfHoehe` and `Bild/KopfSeitlich` (also in the VR tab, -10 to 10 cm each) shift the eyes against the
+game camera after recentering. Height runs along the playspace's up axis, sideways (positive is right) along the head's
+heading within the playspace, so the offset stays on the same side of the body when the player turns. Both are in the player's own centimeters and
 scale with the world scale like the tracked head movement. Background: Raik's head sat too low in the game, which Marc
 could not reproduce; the cause is unknown, the offset lets each player correct it.
 
