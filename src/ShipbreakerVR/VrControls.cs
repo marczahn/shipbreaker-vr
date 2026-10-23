@@ -9,7 +9,7 @@ namespace ShipbreakerVR
     // Flying with the motion controllers (VTOL): holding the left trigger stores the left controller pose as a reference.
     // Moving the controller away from it thrusts in that direction; tilting it sideways rolls, around the body's own axis
     // and faster the further the hand is tilted. Back at the reference (or trigger released) nothing happens. In gameplay
-    // the left stick turns (left/right; smoothly or in snap steps, see Turning) and pitches (up/down), faster the further
+    // the right stick turns (left/right; smoothly or in snap steps, see Turning) and pitches (up/down), faster the further
     // it is pushed, and Y brakes. The grips stay free for grabbing.
     // Thrust and brake go through the game's own actions (ThrustController reads them via LynxControls), so fuel, forces and
     // HUD stay the game's. Rotation is applied in VrBody: to the playspace with "body follows head", to the body without.
@@ -17,7 +17,7 @@ namespace ShipbreakerVR
     {
         public enum Scheme { Aus, Vtol }
 
-        // Turning with the left stick: smoothly, or one fixed step per flick.
+        // Turning with the right stick: smoothly, or one fixed step per flick.
         public enum Turning { Fliessend, Snap30, Snap45, Snap90 }
 
         private const float SnapPress = 0.7f;
@@ -36,6 +36,7 @@ namespace ShipbreakerVR
         private static readonly InputFeatureUsage<Quaternion> PointerRotation = new InputFeatureUsage<Quaternion>("PointerRotation");
 
         private static InputDevice left;
+        private static InputDevice right;
         private static bool loggedDevice;
         private static float nextDeviceLog;
         private static int deviceLogs;
@@ -52,6 +53,9 @@ namespace ShipbreakerVR
         private static bool held;
         private static Vector3 heldPosition;
         private static Quaternion heldRotation;
+        // The hand this frame, for the flight globe.
+        private static Vector3 handPosition;
+        private static Quaternion handRotation;
 
         private static bool snapped;
         private static bool braking;
@@ -75,7 +79,7 @@ namespace ShipbreakerVR
             if (GameSession.CurrentGameState == GameSession.GameState.Gameplay)
             {
                 left.TryGetFeatureValue(CommonUsages.secondaryButton, out braking);
-                if (left.TryGetFeatureValue(CommonUsages.primary2DAxis, out var leftStick)) TurnFromStick(leftStick, playspace);
+                if (GetRight() && right.TryGetFeatureValue(CommonUsages.primary2DAxis, out var rightStick)) TurnFromStick(rightStick, playspace);
             }
             if (!left.TryGetFeatureValue(CommonUsages.devicePosition, out var grip)
                 || !left.TryGetFeatureValue(CommonUsages.deviceRotation, out var rotation)) { held = false; return; }
@@ -84,6 +88,8 @@ namespace ShipbreakerVR
             var position = grip + rotation * WristOffset;
             if (left.TryGetFeatureValue(PointerRotation, out var aim)) rotation = aim;
             left.TryGetFeatureValue(CommonUsages.trigger, out var trigger);
+            handPosition = position;
+            handRotation = rotation;
 
             if (!Hold(trigger >= TriggerPress, position, rotation)) return;
             var offset = position - heldPosition;
@@ -112,7 +118,7 @@ namespace ShipbreakerVR
             if (roll != 0f) turn = Quaternion.AngleAxis(roll, playspace * VrCamera.Instance.HeadRotation * Vector3.forward) * turn;
         }
 
-        // Left stick left/right turns around the body's up axis (smoothly or in snap steps), up/down pitches around its
+        // Right stick left/right turns around the body's up axis (smoothly or in snap steps), up/down pitches around its
         // right axis (stick up looks up, like the mouse), smoothly turning faster the further the stick is pushed.
         private static void TurnFromStick(Vector2 stick, Quaternion playspace)
         {
@@ -171,6 +177,12 @@ namespace ShipbreakerVR
             return true;
         }
 
+        private static bool GetRight()
+        {
+            if (!right.isValid) right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
+            return right.isValid;
+        }
+
         private static float Ramp(float value, float start, float full) => Mathf.Clamp01((value - start) / (full - start));
 
         // Rotation to apply to the playspace (or the body) this frame, in world space. Called by VrBody once per body update.
@@ -180,6 +192,27 @@ namespace ShipbreakerVR
             var result = turn;
             turn = Quaternion.identity;
             return result;
+        }
+
+        // For the flight globe (VrFlightGlobe): the hand offset that gives full thrust, and the share of it that is deadzone.
+        public const float FullOffset = MoveFull;
+        public const float DeadzoneShare = MoveDeadzone / MoveFull;
+
+        public static bool Flying => Active == Scheme.Vtol && GameSession.CurrentGameState == GameSession.GameState.Gameplay;
+
+        public static bool Holding
+        {
+            get { Update(); return held; }
+        }
+
+        // While the trigger is held: the hand's offset from the reference in tracking space (meters), and its rotation
+        // relative to the reference, in the controller's own frame (z is the roll the controls read).
+        public static bool TryGetHand(out Vector3 offset, out Quaternion rotation)
+        {
+            Update();
+            offset = held ? handPosition - heldPosition : Vector3.zero;
+            rotation = held ? Quaternion.Inverse(heldRotation) * handRotation : Quaternion.identity;
+            return held;
         }
 
         public static void SetThrustFrame(Transform frame) => thrustFrame = frame;

@@ -342,6 +342,7 @@ namespace ShipbreakerVR
             var look = onMonitor && Plugin.MonitorLook.Value && shadeMaterial != null;
             if (look) cmd.DrawMesh(quad, glowMatrix, glowMaterial, 0, 0);
             cmd.DrawMesh(quad, screenMatrix, material, 0, 0);
+            if (!menuMode) VrFlightGlobe.Draw(cmd, screenMatrix);
             if (look)
             {
                 cmd.DrawMesh(quad, screenMatrix, shadeMaterial, 0, 0);

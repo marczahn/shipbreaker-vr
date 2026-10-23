@@ -284,3 +284,41 @@ all, and that is its best feature.
 
 With turning on the left stick, the old snap turn on the right stick was a second way to do the same thing, and Marc
 dropped it. Instead the VR tab now asks how you like to turn: smoothly, or in steps of 30, 45 or 90 degrees per flick.
+
+<a id="flight-globe"></a>
+## 2026-10-22 · A globe for the zero point
+
+[Steering with the stick](#stick-steering) made VTOL flying pleasant, with one catch Marc kept running into: the zero
+point is invisible. You press the trigger somewhere in the air, and from then on that spot is the place where nothing
+happens. Ten seconds later your hand has drifted, the ship creeps sideways, and you have no idea which way to correct.
+
+Marc's idea was a little globe in the HUD with a tiny controller in the middle. Hold the trigger and move your hand, and
+the tiny controller moves away from the center the same way; tilt your hand, and it tilts. Three axes run through the
+globe so you can tell where it is, and when you let go it glides back home.
+
+I made the globe's surface mean full thrust, so it doubles as a throttle gauge, and gave the first version everything:
+red, green and blue axes, a small inner globe for the deadzone, a tiny controller with a nose and a thumbstick, and a
+line to it that glowed orange under thrust. Marc found that it worked, but wanted it plainer so it would blend into the
+HUD, closer to the middle, and upright: a flat-lying controller makes rolling hard to see. The second version is plain:
+one pale HUD color, thin lines, and an upright block instead of the controller. The inner deadzone globe went too, and
+came back one round later, because Marc missed it. The globe moved to the bottom of the visor, in the middle, and
+promptly overlapped the game's own gauges there. I had only ever dumped the HUD in the station, so Marc took a snapshot
+in the bay, and after I first picked the wrong pair of gauges, the globe now sits in the gap between the scanner keys
+and the hull and suit bars. The block did not last either. Marc wanted something that matched the thin axes and
+suggested a 3D cross. I drew him a few variants on his snapshot, and he picked the one whose upper arm is longer and
+capped, so that up stays obvious even when the hand is rolled far over. The last touch was his too: while the trigger is held, the
+cross and its line turn the orange of the game's gauge bars, so the globe says at a glance whether the hand is in
+charge.
+
+At first the globe turned with the playspace rather than with the head, because that is the frame the hand is measured
+in: turn your head, and the axes still point where the thrust goes. Correct, but Marc preferred a steady instrument:
+fixed in the visor like the rest of the HUD. A tilt of ten degrees towards him lasted one round; now the lines simply
+run along and across the view. That fix had a catch I only found when Marc reported the whole display turned
+by 90 degrees: the hand is measured in the tracking space, and its forward is wherever the headset was calibrated, not
+where Marc happens to face. In a fixed globe the offset has to be turned into the head's frame first. The plugin brings no shaders and no models, so the globe, the axes and the cross are
+thin tubes built from code.
+
+While at it, Marc moved turning and pitching from the left stick to the right one. Since [steering with the
+stick](#stick-steering) the left hand did everything at once: trigger, hand position, tilt, stick and Y. Now the left
+hand flies and the right hand steers, and the right stick, idle in gameplay since the old snap turn went away, has a
+job again.
