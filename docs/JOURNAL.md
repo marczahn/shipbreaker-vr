@@ -307,8 +307,9 @@ in the bay, and now the globe sits between the gauges and the distance readout. 
 wanted something that matched the thin axes and suggested a 3D cross. I drew him a few variants on his snapshot, and he
 picked the one whose upper arm is longer and capped, so that up stays obvious even when the hand is rolled far over.
 
-The globe turns with the playspace rather than with your head, because that is the frame the hand is measured in: turn
-your head, and the axes still point where the thrust goes. The plugin brings no shaders and no models, so the globe, the
+At first the globe turned with the playspace rather than with the head, because that is the frame the hand is measured
+in: turn your head, and the axes still point where the thrust goes. Correct, but Marc preferred a steady instrument:
+fixed in the visor like the rest of the HUD, tipped about ten degrees towards him, so forward and back read as depth. The plugin brings no shaders and no models, so the globe, the
 axes and the block are thin tubes and boxes built from code.
 
 While at it, Marc moved turning and pitching from the left stick to the right one. Since [steering with the

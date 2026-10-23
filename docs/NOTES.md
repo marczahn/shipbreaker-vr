@@ -177,8 +177,9 @@ gameplay HUD.
 Its radius is the full-thrust offset (15 cm), a small inner globe the deadzone (2 cm). A 3D cross (the hand's axes; the upper arm longer and capped so up stays clear at any roll) sits at
 the hand's offset from the reference (tracking space) and turns by the hand's rotation relative to the reference in the
 controller's own frame, the same rotation whose `z` is the roll. The line from the center to the cross brightens once
-the offset leaves the deadzone. Everything is one light HUD color, so it fits the game's HUD. The globe is aligned with the playspace, the frame the
-offset is measured in, not with the visor, so its axes are the directions the hand thrusts in even with the head turned.
+the offset leaves the deadzone. Everything is one light HUD color, so it fits the game's HUD. The globe is fixed to the visor (Marc wanted a steady instrument) with its
+top tipped 10 degrees towards the eyes; the offset is shown in playspace axes, which match the visor's while looking
+straight ahead. A first version kept the globe aligned with the playspace, so it swung around when the head turned.
 After the trigger is released the cross eases back to the center. Drawn per eye right after the visor quad, with
 `Hidden/Internal-Colored` (vertex colors, `_Cull` Back, `_ZTest` Always; `UI/Default` without culling as fallback) on
 meshes built at runtime. The first draw logs `Flight globe drawn (<shader>, radius ...)`.
