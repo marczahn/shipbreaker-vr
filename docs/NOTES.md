@@ -360,6 +360,34 @@ enters the Hab, for things that show right after waking up. Directions are relat
 is 10 degrees right of where the head points and 60 degrees above the horizon. It also saves the UI texture and the
 game window as PNG files to `BepInEx\ShipbreakerVR-F8`.
 
+## Reloading without restarting the game
+For development the plugin can be reloaded while the game runs, with BepInEx's ScriptEngine (BepInEx.Debug, release
+r11: `ScriptEngine.dll` into `BepInEx\plugins`). The plugin DLL then lives in `BepInEx\scripts` instead of
+`BepInEx\plugins\ShipbreakerVR` (both at once and ScriptEngine refuses the second copy); the OpenXR DLLs and the
+AssetBundle stay where they are. Settings in `BepInEx\config\com.bepis.bepinex.scriptengine.cfg`: `LoadOnStart = true`
+(otherwise the mod only loads with the first F6) and, for reloading on every copy of a new DLL,
+`EnableFileSystemWatcher = true` (reload `AutoReloadDelay` seconds after the file changed). F6 reloads by hand.
+
+How a reload goes: ScriptEngine destroys its object with the plugin on it, then a frame later loads the DLL from memory
+under a new assembly name (`ShipbreakerVR-<ticks>`) and adds the new plugin.
+- `Plugin.OnDestroy` hands everything back to the game, as stopping VR does: the VR tab and the VR rows leave the
+  options screen (`VrOptionsTab.RemoveAll`), the InControl device is detached, the game cameras and the silenced ones are
+  switched on as the game wants them, the Hab's sway and blends come back, the truck viewer renders again, the canvases
+  return to their render modes and layers, the helmet goes back onto the body, the rig is destroyed right away (with
+  the UI pass and the quality volume), the render pipeline events are removed, and the Harmony patches are undone. Not
+  when the game quits.
+- The Harmony ID contains the assembly name, so the old instance's `UnpatchSelf` only removes its own patches.
+- OpenXR keeps running. The AssetBundle with the XR settings cannot be loaded twice, and `XRGeneralSettings.Instance`
+  survives the reload, so the new instance takes both over (`VrXr.Adopt`) and does not toggle VR at launch (that would
+  stop it). Its rig then starts like at VR start: recentered on the current head pose.
+- `VrHab.MainCameraOff` came from game state events that are long past; after the old instance gave the main camera
+  back to the game, its enabled flag tells whether the game shows the Hab (`VrHab.Adopt`).
+
+What a reload cannot change: the OpenXR setup (`VrXr.LoadSettings`: render mode, controller profile), which runs once
+per game session; that needs a restart. Reload with the options menu closed; an options screen open on
+the VR tab falls back to the first tab. Mono never unloads assemblies, so every reload leaves the old code in memory
+(about 140 KB each), which is harmless for a test session.
+
 ## Roadmap
 1. Inventory – done
 2. Foundation (BepInEx, plugin, camera hook) – done

@@ -101,7 +101,22 @@ namespace ShipbreakerVR
         private void OnDestroy()
         {
             if (Instance == this) Instance = null;
-            if (texture != null) texture.Release();
+            // Unloading (ScriptEngine reload): the canvases go back to the game, and its UI camera no longer draws into
+            // our texture, which goes away now.
+            canvases.Restore();
+            if (uiCamera != null && uiCamera != ownUiCamera) uiCamera.targetTexture = null;
+            if (texture != null)
+            {
+                texture.Release();
+                Destroy(texture);
+            }
+            foreach (var m in new[] { material, fadeMaterial, gameFadeMaterial, shadeMaterial, glareMaterial, glowMaterial })
+            {
+                if (m == null) continue;
+                if (m.mainTexture != null && m.mainTexture != texture) Destroy(m.mainTexture);
+                Destroy(m);
+            }
+            if (quad != null) Destroy(quad);
         }
 
         public bool Active => VrXr.IsRunning && Plugin.UiInVr.Value && vr != null;

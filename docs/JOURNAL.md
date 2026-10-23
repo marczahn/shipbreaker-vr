@@ -284,3 +284,24 @@ all, and that is its best feature.
 
 With turning on the left stick, the old snap turn on the right stick was a second way to do the same thing, and Marc
 dropped it. Instead the VR tab now asks how you like to turn: smoothly, or in steps of 30, 45 or 90 degrees per flick.
+
+<a id="hot-reload"></a>
+## 2026-10-23 · Reloading without restarting
+
+Every change so far went the same way: I build, Marc quits the game, copies the DLL, starts the game, waits through the
+intro and the loading screen, puts the headset on and flies to the spot where the change matters. For a slider that
+moved by a few centimetres. Marc asked whether some of that could be automated. Of the
+options, unit tests, a check of the patch targets, a smoke test without a headset, the biggest saving was to not
+restart at all.
+
+BepInEx has a tool for that, the ScriptEngine: it loads the plugin from a folder of its own, and on F6, or whenever the
+file changes, it throws the plugin away and loads the new build. The catch is the "throws away". Unity cannot unload
+code, and the mod has its fingers everywhere: it switches game cameras off, moves canvases, hides the helmet, cuts the
+Hab's camera moves, adds a tab to the options and a gamepad to InControl. Left alone, the old instance would keep all
+of that, and the new one would add its own on top, two VR tabs included.
+
+So the mod now cleans up after itself when it is unloaded and hands everything back to the game, the same way stopping
+VR does. OpenXR is the one thing it keeps running, because its settings can only be loaded once per game session
+anyway. The new instance takes over the running VR session instead of starting a second
+one. One detail would have been nasty: the patches of both instances carried the same name, and the old one, on its
+way out, would have removed the new one's patches too.

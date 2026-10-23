@@ -210,6 +210,21 @@ namespace ShipbreakerVR
             if (Instance == this) Instance = null;
         }
 
+        // Before the plugin unloads (ScriptEngine reload): gives the cameras, the Hab and the truck viewer back to the
+        // game, as when VR stops, and removes the rig with everything on it (UI, helmet, passes, volumes). Right away,
+        // so nothing of it is left when the new instance starts.
+        public static void Unload()
+        {
+            var vr = Instance;
+            if (vr == null) return;
+            if (vr.gameCamera != null) vr.gameCamera.enabled = GameWantsEnabled(vr.gameCamera);
+            vr.SilenceOtherCameras(false);
+            VrHab.Calm(false);
+            VrHab.CutBlends(false);
+            VrPerformance.Update(false, null, false, true);
+            DestroyImmediate(vr.rig.gameObject);
+        }
+
         private void Update()
         {
             VrPerformance.FrameStart();

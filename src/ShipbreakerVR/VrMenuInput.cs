@@ -78,6 +78,15 @@ namespace ShipbreakerVR
             LogDevices("attached");
         }
 
+        // Unloading (ScriptEngine reload): InControl would otherwise keep a device of the old instance next to the new one.
+        public static void Detach()
+        {
+            if (instance == null) return;
+            if (InputManager.IsSetup && InputManager.Devices.Contains(instance)) InputManager.DetachDevice(instance);
+            instance = null;
+            Plugin.Log.LogInfo("Menu control: controllers detached from InControl");
+        }
+
         public static void LogDevices(string when)
         {
             var devices = InputManager.Devices.Select(d => $"'{d.Name}' ({d.DeviceClass}, {d.DeviceStyle}, last input {d.LastInputTick}{(d.Passive ? ", passive" : "")})");

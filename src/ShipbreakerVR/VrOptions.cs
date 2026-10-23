@@ -229,6 +229,21 @@ namespace ShipbreakerVR
 
         public static bool IsOurs(OptionEntry entry) => entry != null && Rows.ContainsKey(entry);
 
+        // Unloading: destroys the VR rows still left (those appended to the video options when the tab could not be
+        // built; the tab's rows went with its view). Returns how many.
+        public static int RemoveRows()
+        {
+            var count = 0;
+            foreach (var entry in Rows.Keys)
+            {
+                if (entry == null) continue;
+                UnityEngine.Object.DestroyImmediate(entry.gameObject);
+                count++;
+            }
+            Rows.Clear();
+            return count;
+        }
+
         // The scroll content has a fixed height in the game's prefab, so the extra rows would hang outside the
         // viewport, invisible and not clickable. Grow it by the height of the added rows.
         private static void GrowContent(RectTransform content, float rowsHeight, int rowCount)

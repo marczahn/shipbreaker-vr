@@ -75,14 +75,50 @@ namespace ShipbreakerVR
                 "Render resolution per eye in the station between shifts (0.5 to 1), instead of Aufloesung. The station costs the graphics card more than the bay. If it misses the headset's frame rate, Virtual Desktop and other runtimes compute frames in between, which makes the view wobble close to the monitors; lower it until that stops (an RTX 4070 Ti at 2688x2880 per eye needed 0.7).");
             WorldScale = Config.Bind("Bild", "Weltmassstab", 1.0f,
                 "Size of the player relative to the world (0.5 to 3). Above 1 widens eye distance and head movement: distant objects keep more depth and their size is easier to judge, but the world looks smaller. Below 1 the opposite.");
-            Log.LogInfo($"{Name} {Version} loaded. Unity {Application.unityVersion}, game {Application.version}");
+            // Loaded again by ScriptEngine (F6) while the game runs: OpenXR and the Hab state carry over from the
+            // previous instance, and VR must not be toggled off by the start-at-launch below.
+            var reloaded = VrXr.Adopt();
+            launched = reloaded;
+            if (reloaded) VrHab.Adopt();
+            Log.LogInfo($"{Name} {Version} loaded{(reloaded ? $" again (VR {(VrXr.IsRunning ? "running" : "off")})" : "")}. Unity {Application.unityVersion}, game {Application.version}");
             // Apply each patch separately so one failing patch doesn't take down all the others (and F3).
-            var harmony = new Harmony(Guid);
+            // ScriptEngine renames the assembly on every load; with that name in the ID, unloading an old instance
+            // only removes its own patches.
+            harmony = new Harmony($"{Guid}/{typeof(Plugin).Assembly.GetName().Name}");
             foreach (var type in AccessTools.GetTypesFromAssembly(typeof(Plugin).Assembly))
             {
                 try { harmony.CreateClassProcessor(type).Patch(); }
                 catch (System.Exception e) { Log.LogError($"Patch {type.Name} failed: {e}"); }
             }
+            Application.quitting += OnQuitting;
+        }
+
+        private Harmony harmony;
+        private bool quitting;
+
+        private void OnQuitting() => quitting = true;
+
+        // ScriptEngine destroys the plugin before loading the new build. Everything the mod changed in the game goes
+        // back to how the game had it, as when VR stops, so the new instance starts from the game's own state. OpenXR
+        // keeps running; the new instance takes it over (VrXr.Adopt).
+        private void OnDestroy()
+        {
+            Application.quitting -= OnQuitting;
+            if (quitting) return;
+            Log.LogInfo($"{Name} unloading");
+            Unload("options tab", VrOptionsTab.RemoveAll);
+            Unload("menu control", VrMenuInput.Detach);
+            Unload("VR camera", VrCamera.Unload);
+            Unload("frame statistics", VrPerformance.Detach);
+            Unload("patches", () => harmony?.UnpatchSelf());
+            Log.LogInfo($"{Name} unloaded");
+            BepInEx.Logging.Logger.Sources.Remove(Log);
+        }
+
+        private static void Unload(string what, System.Action action)
+        {
+            try { action(); }
+            catch (System.Exception e) { Log.LogError($"Unloading the {what} failed: {e}"); }
         }
 
         private float nextCameraSearch;

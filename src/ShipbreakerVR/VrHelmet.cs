@@ -33,6 +33,16 @@ namespace ShipbreakerVR
 
         private void OnDisable() => RenderPipelineManager.beginCameraRendering -= OnBeginCamera;
 
+        // Unloading (ScriptEngine reload): the helmet goes back onto the body and shows again.
+        private void OnDestroy()
+        {
+            SetHidden(false);
+            if (!moved || container == null) return;
+            container.localPosition = originalLocalPosition;
+            container.localRotation = originalLocalRotation;
+            container.localScale = originalLocalScale;
+        }
+
         private void LateUpdate()
         {
             if (controller == null)

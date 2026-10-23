@@ -25,6 +25,7 @@ namespace ShipbreakerVR
         public enum Occlusion { Niedrig, Aus, Spiel }
 
         private static AmbientOcclusion ambientOcclusion;
+        private static VolumeProfile profile;
 
         private const float StatsPeriod = 30f;
         private const float StatsSettle = 1f;
@@ -60,16 +61,31 @@ namespace ShipbreakerVR
             volume.isGlobal = true;
             // Above every volume of the game (the Hab's is 15).
             volume.priority = 1000f;
-            var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+            profile = ScriptableObject.CreateInstance<VolumeProfile>();
             profile.name = "ShipbreakerVR Quality";
             ambientOcclusion = profile.Add<AmbientOcclusion>();
             ambientOcclusion.quality.value = (int)ScalableSettingLevelParameter.Level.Low;
             ambientOcclusion.intensity.value = 0f;
             volume.sharedProfile = profile;
             go.SetActive(true);
-            RenderPipelineManager.beginFrameRendering += (context, cameras) => StartOfRendering();
-            RenderPipelineManager.endFrameRendering += (context, cameras) => EndOfRendering();
+            RenderPipelineManager.beginFrameRendering += OnBeginFrame;
+            RenderPipelineManager.endFrameRendering += OnEndFrame;
         }
+
+        // Unity's events would otherwise keep calling into an unloaded instance after a reload.
+        public static void Detach()
+        {
+            RenderPipelineManager.beginFrameRendering -= OnBeginFrame;
+            RenderPipelineManager.endFrameRendering -= OnEndFrame;
+            // The volume went with the rig; its profile is not part of it.
+            if (profile == null) return;
+            foreach (var component in profile.components) Object.Destroy(component);
+            Object.Destroy(profile);
+        }
+
+        private static void OnBeginFrame(ScriptableRenderContext context, Camera[] cameras) => StartOfRendering();
+
+        private static void OnEndFrame(ScriptableRenderContext context, Camera[] cameras) => EndOfRendering();
 
         // Called from the VR camera's Update.
         public static void FrameStart() => updateStart = Time.realtimeSinceStartup;
