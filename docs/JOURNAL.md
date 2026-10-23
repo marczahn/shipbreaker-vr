@@ -320,3 +320,7 @@ While at it, Marc moved turning and pitching from the left stick to the right on
 stick](#stick-steering) the left hand did everything at once: trigger, hand position, tilt, stick and Y. Now the left
 hand flies and the right hand steers, and the right stick, idle in gameplay since the old snap turn went away, has a
 job again.
+
+Just before the merge, Marc asked whether the deadzone and the full deflection could be set. They could not: 2 cm, 15 cm,
+8 and 45 degrees had been fixed numbers since the first VTOL test. They are sliders in the VR tab now, and the globe
+follows along, since its edge and its inner globe are those very distances.

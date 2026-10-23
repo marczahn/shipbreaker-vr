@@ -150,11 +150,11 @@ the controller thrust, converted into that transform's axes, so fuel, forces and
 Rotation from the controllers is applied in `VrBody`: to the playspace with body-follows-head, otherwise to the body
 (`turn * gameTarget` in the redirected `MoveRotation`), which the camera follows.
 Config `Steuerung/Controllersteuerung` (Aus/Vtol; the earlier "point and twist" Pavlov scheme was removed for now):
-- Hold the left trigger; moving the controller away from where it was when pressed thrusts that way (2 cm deadzone,
-  full at 15 cm), measured at an estimated wrist point 8 cm behind the grip pose: measured at the controller, tilting
+- Hold the left trigger; moving the controller away from where it was when pressed thrusts that way (deadzone 2 cm and
+  full at 15 cm by default, config `Steuerung/Totzone` and `Vollausschlag` in cm), measured at an estimated wrist point 8 cm behind the grip pose: measured at the controller, tilting
   the hand to turn swung it past the deadzone and added thrust in a direction nobody asked for. Rotation uses the aim pose (`PointerRotation`; the `deviceRotation` grip pose runs along the handle).
   The hand's roll away from the reference (`eulerAngles.z`) rolls the body around the head's forward axis (8 degree
-  deadzone, full 45 degrees/s at 45). Turning and pitching by twisting the hand worked, but holding the trigger and the
+  deadzone, full 45 degrees/s at 45 by default, config `Steuerung/RollTotzone` and `RollVollausschlag` in degrees). Turning and pitching by twisting the hand worked, but holding the trigger and the
   hand angle at the same time was tiring, so both moved to the stick.
 - Right stick (no trigger needed, gameplay only; in menus it works them as a gamepad): left/right turns around the head's up axis, up/down pitches around its right axis
   (stick up looks up), 15% deadzone, full 45 degrees/s at full deflection. It was the left stick until the flight
@@ -173,8 +173,8 @@ controllers because `VrXr` enables the Oculus Touch interaction profile, which t
 `FlugkugelGroesse` = radius relative to the visor height, `FlugkugelX/Y` = position on the visor from -0.5 to 0.5). The
 defaults (radius 0.06, X -0.159, Y -0.38) put it in the gap between the scanner/helmet lamp keys and the hull/suit bars,
 its lowest point on the baseline of the lower row, measured on an F8 dump of the gameplay HUD (2560x1440: the gap runs
-from x 774 to 971, the baseline is at y 1354). Its radius is the full-thrust offset (15 cm), a small inner globe the
-deadzone (2 cm). A 3D cross (the hand's axes; the upper arm longer and capped so up stays clear at any roll) sits at the
+from x 774 to 971, the baseline is at y 1354). Its radius is the full-thrust offset (`Vollausschlag`), a small inner globe the
+deadzone (`Totzone`, rebuilt when either changes). A 3D cross (the hand's axes; the upper arm longer and capped so up stays clear at any roll) sits at the
 hand's offset from the reference (tracking space) and turns by the hand's rotation relative to the reference in the
 controller's own frame, the same rotation whose `z` is the roll. Everything is one light HUD color; while the trigger is
 held, the cross and the line from the center to it take the orange of the game's gauge bars (255, 139, 0), the line

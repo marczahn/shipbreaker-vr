@@ -30,6 +30,8 @@ namespace ShipbreakerVR
         private static readonly Color IdleTether = new Color(0.8f, 0.92f, 1f, 0.25f);
 
         private static Mesh globe;
+        private static Mesh deadzone;
+        private static float deadzoneShare;
         private static Mesh marker;
         private static Mesh tether;
         private static Material globeMaterial;
@@ -64,6 +66,8 @@ namespace ShipbreakerVR
 
             globeMaterial.color = new Color(1f, 1f, 1f, alpha);
             cmd.DrawMesh(globe, frame, globeMaterial, 0, 0);
+            if (!Mathf.Approximately(deadzoneShare, VrControls.DeadzoneShare)) CreateDeadzone();
+            cmd.DrawMesh(deadzone, frame, globeMaterial, 0, 0);
 
             var length = shownOffset.magnitude;
             if (length > 0.01f)
@@ -114,11 +118,6 @@ namespace ShipbreakerVR
             builder.Ring(Vector3.right, Vector3.up, 1f, 0.005f, RingColor);
             builder.Ring(Vector3.right, Vector3.forward, 1f, 0.005f, RingColor);
             builder.Ring(Vector3.up, Vector3.forward, 1f, 0.005f, RingColor);
-            // The deadzone: a small globe of its own around the center.
-            var deadzone = VrControls.DeadzoneShare;
-            builder.Ring(Vector3.right, Vector3.up, deadzone, 0.004f, DeadzoneColor);
-            builder.Ring(Vector3.right, Vector3.forward, deadzone, 0.004f, DeadzoneColor);
-            builder.Ring(Vector3.up, Vector3.forward, deadzone, 0.004f, DeadzoneColor);
             foreach (var axis in new[] { Vector3.right, Vector3.up, Vector3.forward })
                 builder.Tube(new[] { -axis, axis }, 0.007f, AxisColor);
             globe = builder.Mesh("Globe");
@@ -140,6 +139,18 @@ namespace ShipbreakerVR
             globeMaterial = CreateMaterial();
             markerMaterial = CreateMaterial();
             tetherMaterial = CreateMaterial();
+        }
+
+        // The deadzone: a small globe of its own around the center, rebuilt when the deadzone or full deflection changes.
+        private static void CreateDeadzone()
+        {
+            deadzoneShare = VrControls.DeadzoneShare;
+            var builder = new Builder();
+            builder.Ring(Vector3.right, Vector3.up, deadzoneShare, 0.004f, DeadzoneColor);
+            builder.Ring(Vector3.right, Vector3.forward, deadzoneShare, 0.004f, DeadzoneColor);
+            builder.Ring(Vector3.up, Vector3.forward, deadzoneShare, 0.004f, DeadzoneColor);
+            if (deadzone != null) Object.Destroy(deadzone);
+            deadzone = builder.Mesh("Deadzone");
         }
 
         // Unlit with vertex colors, drawn over the world like the visor, but culling back faces so the
