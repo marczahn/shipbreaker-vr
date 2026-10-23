@@ -97,7 +97,8 @@ namespace ShipbreakerVR
             var head = vr.transform;
             moved = true;
             // TransformPoint already includes the world scale; the helmet itself grows with it so it stays the same size around the head.
-            container.SetPositionAndRotation(head.TransformPoint(relativePosition), head.rotation * relativeRotation);
+            // The head offset (Kopfhoehe/KopfSeitlich) moves only the eyes, inside the helmet; the helmet stays where the game's head is.
+            container.SetPositionAndRotation(head.TransformPoint(relativePosition) - vr.WorldHeadOffset, head.rotation * relativeRotation);
             container.localScale = originalLocalScale * VrCamera.WorldScale;
         }
 

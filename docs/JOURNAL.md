@@ -316,7 +316,8 @@ fixed in the visor like the rest of the HUD. A tilt of ten degrees towards him l
 run along and across the view. That fix had a catch I only found when Marc reported the whole display turned
 by 90 degrees: the hand is measured in the tracking space, and its forward is wherever the headset was calibrated, not
 where Marc happens to face. In a fixed globe the offset has to be turned into the head's frame first. The plugin brings no shaders and no models, so the globe, the axes and the cross are
-thin tubes built from code.
+thin tubes built from code. For a few minutes the globe also had rows for its deadzone and the point of full thrust;
+Marc decided they were not needed for now, and the rows went again.
 
 While at it, Marc moved turning and pitching from the left stick to the right one. Since [steering with the
 stick](#stick-steering) the left hand did everything at once: trigger, hand position, tilt, stick and Y. Now the left
@@ -384,3 +385,22 @@ and only gets its say back when VR stops. Whether that was the whole flash, Marc
 The blink left nothing I could pin down. So the mod now keeps a frame-by-frame record during every load screen: which
 cameras drew, whether the canvas was drawn, what the load screen was doing. The next blink should end up in the log,
 whether or not anyone sees it.
+
+<a id="head-offset"></a>
+## 2026-10-23 · Raising the head
+
+Raik reported that his head sat too low in the game. Marc put on the headset and found his own head exactly where it
+belonged. Two people, one mod, two heights. Recentering puts the tracked head on the game camera, so on paper there is
+no room for a difference, and I have no good guess yet why Raik sees one.
+
+Instead of chasing a bug I could not see, Marc asked for two sliders in the VR tab, one for height and one horizontal,
+each 10 cm either way. I read horizontal as forward and back and built that. Marc meant left and right. So the second
+slider now moves the eyes sideways, relative to the direction you face, otherwise turning around would swap left and
+right.
+
+Marc's first test turned up three things. The sliders moved in fractions of a centimeter that changed nothing you could
+see, so they now jump one whole centimeter per push. Adjusting a slider with the stick kept hopping to the row above or
+below, because no thumb pushes perfectly sideways; in menus only the stronger axis of the left stick counts now.
+
+And the helmet frame follows the head, so it had moved along with the eyes and the view inside it looked exactly the
+same as before. Now the helmet stays where the game puts the head, and only the eyes move inside it.

@@ -12,7 +12,7 @@ namespace ShipbreakerVR
     {
         public const string Guid = "de.marczahn.shipbreakervr";
         public const string Name = "ShipbreakerVR";
-        public const string Version = "0.13.0";
+        public const string Version = "0.14.0";
 
         internal static ManualLogSource Log;
         internal static ConfigEntry<bool> MultiPass;
@@ -32,6 +32,8 @@ namespace ShipbreakerVR
         internal static ConfigEntry<float> ResolutionScale;
         internal static ConfigEntry<float> StationResolution;
         internal static ConfigEntry<float> WorldScale;
+        internal static ConfigEntry<float> HeadHeight;
+        internal static ConfigEntry<float> HeadSideways;
         internal static ConfigEntry<VrPerformance.Occlusion> AmbientOcclusion;
         internal static ConfigEntry<VrControls.Scheme> ControlScheme;
         internal static ConfigEntry<VrControls.Turning> TurnMode;
@@ -84,12 +86,17 @@ namespace ShipbreakerVR
                 "Render resolution per eye in the station between shifts (0.5 to 1), instead of Aufloesung. The station costs the graphics card more than the bay. If it misses the headset's frame rate, Virtual Desktop and other runtimes compute frames in between, which makes the view wobble close to the monitors; lower it until that stops (an RTX 4070 Ti at 2688x2880 per eye needed 0.7).");
             WorldScale = Config.Bind("Bild", "Weltmassstab", 1.0f,
                 "Size of the player relative to the world (0.5 to 3). Above 1 widens eye distance and head movement: distant objects keep more depth and their size is easier to judge, but the world looks smaller. Below 1 the opposite.");
+            HeadHeight = Config.Bind("Bild", "KopfHoehe", 0f,
+                "Moves the eyes up (positive) or down (negative) against the game's head position, in centimeters (-10 to 10).");
+            HeadSideways = Config.Bind("Bild", "KopfSeitlich", 0f,
+                "Moves the eyes right (positive) or left (negative) against the game's head position, in centimeters (-10 to 10).");
             // Loaded again by ScriptEngine (F6) while the game runs: OpenXR and the Hab state carry over from the
             // previous instance, and VR must not be toggled off by the start-at-launch below.
             var reloaded = VrXr.Adopt();
             launched = reloaded;
             if (reloaded) VrHab.Adopt();
             Log.LogInfo($"{Name} {Version} loaded{(reloaded ? $" again (VR {(VrXr.IsRunning ? "running" : "off")})" : "")}. Unity {Application.unityVersion}, game {Application.version}");
+            if (HeadHeight.Value != 0f || HeadSideways.Value != 0f) Log.LogInfo($"Head offset: {HeadHeight.Value:0} cm up, {HeadSideways.Value:0} cm right");
             // Apply each patch separately so one failing patch doesn't take down all the others (and F3).
             // ScriptEngine renames the assembly on every load; with that name in the ID, unloading an old instance
             // only removes its own patches.

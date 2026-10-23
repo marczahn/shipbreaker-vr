@@ -21,6 +21,8 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
 - The station between shifts has its own render resolution, the row "Station resolution" in the VR tab. If the view wobbles
   slightly at the monitors when you move your head, the graphics card misses the headset's frame rate there; lower it
   until that stops.
+- If your view sits too low or off to one side in the suit, move it with the rows "Head height" and "Head sideways" in
+  the VR tab (up to 10 cm each way). The helmet stays put; only your eyes move inside it.
 - Settings: in the game's options (tab "VR") or in
   `BepInEx\config\de.marczahn.shipbreakervr.cfg`.
 
