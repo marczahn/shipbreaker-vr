@@ -52,6 +52,7 @@ namespace ShipbreakerVR
                 text.AppendLine($"  following '{Path(game.transform)}' at {Direction(head, game.transform.position)} {Vector3.Distance(head.position, game.transform.position):0.00} m, its view {Direction(head, head.position + game.transform.forward)}, fov {game.fieldOfView:0}, pixels {game.pixelWidth}x{game.pixelHeight}, stereo {game.stereoEnabled}, mask {game.cullingMask}, far {game.farClipPlane:0}, Hab {vr.FollowsHab}, fade {VrHab.Fade:0.00}");
             var ui = VrUi.Instance;
             if (ui != null) text.AppendLine("  " + ui.Describe(head));
+            text.AppendLine("  " + VrAim.Describe(head));
 
             text.AppendLine("  Canvases (active, enabled, root):");
             var canvases = Resources.FindObjectsOfTypeAll<Canvas>()

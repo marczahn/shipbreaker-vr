@@ -19,11 +19,14 @@ namespace ShipbreakerVR
     //   Confirm on the selected button, which set off things Marc never chose, so there the combo sends nothing.
     //   B + Y together centers the view (VrCamera, like F4) and sends nothing.
     //   There is no View button (Back; B does the same in menus) and no D-pad.
-    // In gameplay only A + X counts (it opens the pause menu); the rest belongs to controller flying.
+    // In gameplay A + X opens the pause menu, and with aiming by hand (VrAim) the right trigger is the gamepad's right
+    // trigger (it fires every tool) and B its D-pad right (tool mode). The rest belongs to controller flying.
     // The actions read only InControl's active device, and another device kept that role (see ActiveDevicePatch).
     internal class VrMenuInput : InControl.InputDevice
     {
         private const float TriggerPress = 0.5f;
+        // Below this the resting trigger counts as released, so it doesn't keep the active device role.
+        private const float TriggerRest = 0.05f;
 
         private static readonly InputControlType[] Buttons =
         {
@@ -100,6 +103,7 @@ namespace ShipbreakerVR
             var leftStick = Vector2.zero;
             var rightStick = Vector2.zero;
             float leftGrip = 0f, rightGrip = 0f;
+            var toolMode = false;
             for (var i = 0; i < pressed.Length; i++) pressed[i] = false;
 
             if (VrXr.IsRunning && (Get(ref left, XRNode.LeftHand) | Get(ref right, XRNode.RightHand)))
@@ -111,6 +115,14 @@ namespace ShipbreakerVR
                 if (gameplay)
                 {
                     pressed[7] = menu;
+                    // With aiming by hand the trigger becomes the gamepad's right trigger (in menus that is the grip).
+                    if (VrAim.Active)
+                    {
+                        right.TryGetFeatureValue(CommonUsages.trigger, out rightGrip);
+                        if (rightGrip < TriggerRest) rightGrip = 0f;
+                        // B + Y centers the view (VrCamera), so B counts only without Y.
+                        toolMode = Button(right, CommonUsages.secondaryButton) && !Button(left, CommonUsages.secondaryButton);
+                    }
                 }
                 else
                 {
@@ -135,7 +147,7 @@ namespace ShipbreakerVR
 
                 // A press that opened or closed a menu is still held when the next state starts; it must not act there
                 // too (the press that opens the pause menu would close it again at once).
-                var any = pressed.Any(p => p);
+                var any = pressed.Any(p => p) || toolMode || rightGrip > 0f;
                 if (state != lastState)
                 {
                     lastState = state;
@@ -143,14 +155,19 @@ namespace ShipbreakerVR
                 }
                 if (waitForRelease && !any) waitForRelease = false;
                 if (waitForRelease)
+                {
                     for (var i = 0; i < pressed.Length; i++) pressed[i] = false;
-                LogPresses(state);
+                    toolMode = false;
+                    if (gameplay) rightGrip = 0f;
+                }
+                LogPresses(state, (rightGrip >= TriggerPress && gameplay ? " RightTrigger" : "") + (toolMode ? " DPadRight" : ""));
             }
 
             UpdateLeftStickWithValue(leftStick, updateTick, deltaTime);
             UpdateRightStickWithValue(rightStick, updateTick, deltaTime);
             UpdateWithValue(InputControlType.LeftTrigger, leftGrip, updateTick, deltaTime);
             UpdateWithValue(InputControlType.RightTrigger, rightGrip, updateTick, deltaTime);
+            UpdateWithState(InputControlType.DPadRight, toolMode, updateTick, deltaTime);
             for (var i = 0; i < Buttons.Length; i++) UpdateWithState(Buttons[i], pressed[i], updateTick, deltaTime);
         }
 
@@ -171,9 +188,9 @@ namespace ShipbreakerVR
         private static bool Trigger(XrDevice device) =>
             device.isValid && device.TryGetFeatureValue(CommonUsages.trigger, out var value) && value >= TriggerPress;
 
-        private void LogPresses(GameSession.GameState state)
+        private void LogPresses(GameSession.GameState state, string extra)
         {
-            var names = string.Concat(Buttons.Where((b, i) => pressed[i]).Select(b => " " + b));
+            var names = string.Concat(Buttons.Where((b, i) => pressed[i]).Select(b => " " + b)) + extra;
             if (names == lastPressed) return;
             lastPressed = names;
             if (names.Length > 0 && pressLogs++ < 50)
