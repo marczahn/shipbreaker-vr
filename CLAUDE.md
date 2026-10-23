@@ -44,7 +44,8 @@ The game logic lives in `BBI.Unity.Game.dll`, `Assembly-CSharp` is nearly empty.
   has silently delivered a stale DLL before.
 - Most changes can be tested without restarting the game: with BepInEx's ScriptEngine installed, the plugin DLL lives
   in `BepInEx\scripts` and reloads on F6 or when the file changes (see `docs/NOTES.md`, "Reloading without restarting
-  the game"). Changes to the OpenXR setup (`VrXr.LoadSettings`) still need a restart, and so does a reload that misbehaves.
+  the game"). Once that is set up, install test builds there (DLL and PDB), not into `BepInEx\plugins`. Changes to
+  the OpenXR setup (`VrXr.LoadSettings`) still need a restart, and so does a reload that misbehaves.
 - Investigate from the logs and the game's behavior before changing things. State guesses as guesses.
 - Video memory is tight (RTX 4070 Ti, 12 GB). Changes that allocate render targets need to consider it.
 

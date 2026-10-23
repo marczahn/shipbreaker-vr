@@ -362,8 +362,9 @@ game window as PNG files to `BepInEx\ShipbreakerVR-F8`.
 
 ## Reloading without restarting the game
 For development the plugin can be reloaded while the game runs, with BepInEx's ScriptEngine (BepInEx.Debug, release
-r11: `ScriptEngine.dll` into `BepInEx\plugins`). The plugin DLL then lives in `BepInEx\scripts` instead of
-`BepInEx\plugins\ShipbreakerVR` (both at once and ScriptEngine refuses the second copy); the OpenXR DLLs and the
+r11: `ScriptEngine.dll` into `BepInEx\plugins`). The plugin DLL and its PDB then live in `BepInEx\scripts` instead of
+`BepInEx\plugins\ShipbreakerVR` (both at once and ScriptEngine refuses the second copy). ScriptEngine reads the
+assembly with symbols, and Mono.Cecil most likely throws without the PDB, so it goes along. The OpenXR DLLs and the
 AssetBundle stay where they are. Settings in `BepInEx\config\com.bepis.bepinex.scriptengine.cfg`: `LoadOnStart = true`
 (otherwise the mod only loads with the first F6) and, for reloading on every copy of a new DLL,
 `EnableFileSystemWatcher = true` (reload `AutoReloadDelay` seconds after the file changed). F6 reloads by hand.
