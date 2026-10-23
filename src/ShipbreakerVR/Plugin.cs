@@ -41,6 +41,7 @@ namespace ShipbreakerVR
         internal static ConfigEntry<float> FlightGlobeSize;
         internal static ConfigEntry<float> FlightGlobeX;
         internal static ConfigEntry<float> FlightGlobeY;
+        internal static ConfigEntry<bool> AimWithHand;
 
         private void Awake()
         {
@@ -52,7 +53,7 @@ namespace ShipbreakerVR
             StartVrAtLaunch = Config.Bind("Rendering", "VrBeimStart", true,
                 "Start VR as soon as the game launches, so the intro and loading screens already show in the headset. Off: start VR with F3.");
             BodyFollowsHead = Config.Bind("Steuerung", "KoerperFolgtKopf", true,
-                "The body, and with it the tools' aim, turns with the head. Mouse and stick add extra rotation. Off: the head looks around freely, only the mouse turns the body.");
+                "The body turns with the head (and with it the tools' aim, unless they aim with the hand, see ZielenMitHand). Mouse and stick add extra rotation. Off: the head looks around freely, only the mouse turns the body.");
             AmbientOcclusion = Config.Bind("Bild", "Umgebungsverdeckung", VrPerformance.Occlusion.Niedrig,
                 "Ambient occlusion (shading in corners and creases) in VR. Niedrig: half resolution and few steps, as the game uses it in the bay. The station asks for full resolution and 16 steps, which at VR resolution costs so much GPU time that it stutters. Aus: off. Spiel: as the game sets it.");
             ControlScheme = Config.Bind("Steuerung", "Controllersteuerung", VrControls.Scheme.Vtol,
@@ -64,6 +65,8 @@ namespace ShipbreakerVR
             FlightGlobeSize = Config.Bind("Anzeige", "FlugkugelGroesse", 0.06f, "Radius of the flight globe relative to the visor height.");
             FlightGlobeX = Config.Bind("Anzeige", "FlugkugelX", -0.159f, "Horizontal position of the flight globe on the visor, from -0.5 (left edge) to 0.5 (right edge).");
             FlightGlobeY = Config.Bind("Anzeige", "FlugkugelY", -0.38f, "Vertical position of the flight globe on the visor, from -0.5 (bottom edge) to 0.5 (top edge).");
+            AimWithHand = Config.Bind("Steuerung", "ZielenMitHand", true,
+                "The tools (cutter, grapple, scanner, demo charges), grabbing and interacting aim where the right controller points instead of at the center of the view. A beam shows where. The right trigger fires, B switches the tool mode.");
             UiInVr = Config.Bind("Anzeige", "UiImRaum", true,
                 "Show HUD and menus on a canvas in the world instead of flat over the image.");
             HudDistance = Config.Bind("Anzeige", "HudAbstand", 1.5f, "Distance of the visor display in front of the eyes, in meters.");
@@ -127,6 +130,7 @@ namespace ShipbreakerVR
             Unload("VR camera", VrCamera.Unload);
             Unload("frame statistics", VrPerformance.Detach);
             Unload("flight globe", VrFlightGlobe.Release);
+            Unload("aim camera", VrAim.Release);
             Unload("patches", () => harmony?.UnpatchSelf());
             Log.LogInfo($"{Name} unloaded");
             BepInEx.Logging.Logger.Sources.Remove(Log);

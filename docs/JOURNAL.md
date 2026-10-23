@@ -404,3 +404,19 @@ below, because no thumb pushes perfectly sideways; in menus only the stronger ax
 
 And the helmet frame follows the head, so it had moved along with the eyes and the view inside it looked exactly the
 same as before. Now the helmet stays where the game puts the head, and only the eyes move inside it.
+
+<a id="hand-aiming"></a>
+## 2026-10-23 · Aiming with the hand
+
+Marc wanted to stop picking tools from the flat game's wheel and grab them off the body instead: the grapple from the
+hip, the cutter from over the shoulder, like in some VR shooters. A nice picture, with one catch. Every tool still aimed
+where the eyes looked. Drawing a cutter over your shoulder and then pointing it with your forehead would have felt
+wrong, so we agreed to teach the tools to aim with the hand first.
+
+The game makes this easier than I feared. Cutter, grapple, scanner, demo charges, grabbing and even pressing buttons all
+ask one camera where they are looking. So the mod hangs a second camera on the right controller, one that never renders
+anything, gives it the main camera's lens, and quietly hands it to the tools whenever they ask. The cutter's fan of rays
+now spreads from the hand, and rolling the wrist rolls the cut line, which the flat game never offered.
+
+A thin beam from the hand with a dot at its end shows where things will land, the right trigger fires and B switches
+the tool mode. The tools themselves still float in front of the helmet for now. Moving them into the hand comes next.

@@ -24,7 +24,33 @@ All tools raycast through `LynxCameraController.MainCamera.ScreenPointToRay(...)
 With XR enabled, `LynxCameraController.UpdateScreenDimensions` takes the eye texture size (e.g. 2688x2880) as
 `ScreenWidth/ScreenCenter`, while the rays go through the flat camera (e.g. 2560x1440), so the cutter fired upwards.
 `ScreenSizePatch` always uses the flat camera's pixel size.
-Idea for controllers: an aiming camera on the hand that receives these calls.
+
+### Aiming with the right hand (`VrAim`, config `Steuerung/ZielenMitHand`)
+Besides `ScreenPointToRay`, the tools use `MainCameraTransform.position/forward` (tether, grapple throw, magnet, demo
+charge placement, throwing, the cutter's single ray and cut distance), `WorldToViewportPoint`/`WorldToScreenPoint`
+(tether and grapple pick the hit closest to the screen center), and `RaycastSystem.OnUpdate` passes the camera's
+matrices into jobs (`PrepareScreenDualRaycastCommandsJob`, `ScoreRaycastHits`); its subclasses feed grabbing,
+interacting, the grapple and the "entity of interest".
+- A disabled camera (`ShipbreakerVR Aim`, never renders, `stereoTargetEye` None) sits on the right controller's aim
+  pose (`PointerPosition`/`PointerRotation`, grip pose as fallback) in the rig's space, with the main camera's field of
+  view, rect, aspect and clip planes, so screen points map to the same angles as from the eye.
+- `AimPatch` is a transpiler over every method of `CuttingController`, `CuttingFXController`, `TetherController`,
+  `GrapplingHook`, `MagnetController`, `Scanner`, `ThrowController`, `DemoChargeController` and `RaycastSystem` (and
+  nested types) that calls `get_MainCamera` or `get_MainCameraTransform`; the calls go to `VrAim.Camera` /
+  `VrAim.CameraTransform`, which return the aim camera only in gameplay with VR, the option on and the controller
+  tracked. `PushOff` keeps the head: it moves the body.
+- `CuttingFXController.StartCutLine` places the beam ends at `this.transform.position + aimRay.direction *
+  LastMinCutLength`, and `LastMinCutLength` is now measured from the hand; `this.transform` there is redirected to the
+  aim camera too. The beam itself still starts at `m_CutOriginTransform` on the tool model in front of the head. The
+  beam's line colliders (`m_CuttingBeamColliderA/B`) may take part in the cut, so the ends matter.
+- The cut pattern is defined in screen space around `ScreenCenter`, so rolling the hand rolls the cut line.
+- Pointer: a beam (4 mm, fading) from the hand to the first hit of a plain raycast (default layers minus layers whose
+  name contains "Player", "UI" and our pass layer), with a dot of about 0.7 degrees on the hit, 5 m long without a hit.
+  Drawn with `UI/Default` in our after-post-process pass (`VrUiPass`) per eye, without depth, under the UI.
+- Firing: in gameplay with hand aiming, `VrMenuInput` reports the right trigger as the gamepad's right trigger (the
+  default gamepad binding for cutting, grapple hold and demo charges) and B as D-pad right (tool mode).
+- F8 logs the aim state, what the beam hits and the parent chain of the cutter model (`CuttingFXController.m_CuttingTool`)
+  for moving the tool models into the hand later.
 
 ## Body follows head
 - The body rotates in `OrientationController.HandleAxisRotation` via `Rigidbody.MoveRotation(rotation * mouseDelta)`.
@@ -463,6 +489,6 @@ the VR tab falls back to the first tab. Mono never unloads assemblies, so every 
 1. Inventory – done
 2. Foundation (BepInEx, plugin, camera hook) – done
 3. Seeing VR (stereo, head tracking) – working
-4. Playing VR: controllers, tools in hand, bindings
+4. Playing VR: controllers, tools in hand, bindings – flying done, aiming with the hand in progress
 5. Using VR: HUD as visor, menus with the right controller (no pointer yet) – in progress
 6. Comfort and performance
