@@ -322,3 +322,17 @@ While at it, Marc moved turning and pitching from the left stick to the right on
 stick](#stick-steering) the left hand did everything at once: trigger, hand position, tilt, stick and Y. Now the left
 hand flies and the right hand steers, and the right stick, idle in gameplay since the old snap turn went away, has a
 job again.
+
+<a id="play-area"></a>
+## 2026-10-23 · More room in the bay
+
+In VR the bay's structure is the best view in the game, and Marc wanted to fly around all of it: the huge frame around
+the ship and the space outside. The game had other plans. A bit away from the ship the visor starts warning, a little
+further a countdown runs, and then the suit starts hurting.
+
+The boundary turned out to be refreshingly simple: a handful of points around the ship and three radii, one where the
+warnings start, one where the countdown starts, and one beyond which drifting parts are quietly destroyed. Nothing
+clever to outwit, just numbers to change. My first version came with a menu row to pick the game's limit, three times
+as far, or none, plus a guess that three times would cover the structure. Marc didn't want a choice; in VR the bay
+should simply be open. So now it is: while VR runs, the limit is gone, for parts too, so a panel towed out to the far
+side of the frame does not vanish behind your back. Without VR the game's limit is back.

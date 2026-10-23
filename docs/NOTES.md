@@ -370,6 +370,21 @@ depends on the runtime and the scene, the setting is now set by hand. The frame 
 frames (1.4 to 4 intervals of the highest refresh rate seen, the headset's own; longer ones are hitches) to help with
 that.
 
+## Play area in the bay
+
+The bay's boundary is `PlayableArea` (a MonoBehaviour in the bay scene, `GameSession.PlayableArea`): a list of node
+transforms and three radii, serialized defaults 100/125/130 m (the scene may override them).
+- Player: `PlayableAreaUIController.Update` calls `GetPlayableAreaState(player position)` every frame. Within the
+  warning radius of any node: Safe; within the danger radius of the nearest node: Warning (visor message, speech);
+  beyond: Danger, a 10 s countdown, then damage (or a teleport back when invulnerable). `OutOfBoundsChangedEvent`
+  drives the visor distortion (`DigitalDistortionController`).
+- Objects: `PlayableAreaSystem` (ECS, time sliced) gives every hierarchy member further than `ObjectDangerRadius` from
+  all nodes an `OutOfBounds` component; `OutOfBoundsSystem` destroys it after `SalvageSettings.OutOfBoundsDestructionDelay`.
+  The node positions are copied into an ECS buffer in `Awake`; the radius is read from the instance on every update.
+
+`VrPlayArea` lifts all three radii after `PlayableArea.Awake` while VR runs (and restores them when VR stops),
+objects included so parts carried along are not destroyed. It logs the node extent and the game's radii on load.
+
 ## Diagnostics
 F8 (`VrDiagnostics`) is for things only seen in the headset. It writes into the log: game state, head pose, the camera
 the rig follows, where the UI canvas hangs, every active root canvas (render mode, camera, layer, whether `VrCanvases`
