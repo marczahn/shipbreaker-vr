@@ -146,6 +146,14 @@ heading within the playspace, so the offset stays on the same side of the body w
 scale with the world scale like the tracked head movement. Background: Raik's head sat too low in the game, which Marc
 could not reproduce; the cause is unknown, the offset lets each player correct it.
 
+Their slider rows use whole steps (`SliderRow.Step = 1`): `Slider.wholeNumbers` for dragging, and the game's
+`OptionEntrySlider` fields `m_ControllerSliderStep`/`mSpeed` set to the step with `m_AccelerateWhenHeld` off, because
+by default the stick moves the value by a small fraction per tick and speeds up while held.
+
+## Menu stick
+In menus `VrMenuInput` passes only the stronger axis of the left stick on to InControl. The game navigates rows with
+the stick's up/down, so a sideways push that was slightly tilted jumped to the next row while adjusting a slider.
+
 ## Render resolution and video memory
 `XRSettings.eyeTextureResolutionScale` reallocates every HDRP render target. At 2.0 (5376x5760 per eye) a 12 GB
 RTX 4070 Ti ran out of memory (D3D11 error 0x8007000e in Player.log); after that even 1.0 failed and the image

@@ -115,6 +115,7 @@ namespace ShipbreakerVR
                 else
                 {
                     left.TryGetFeatureValue(CommonUsages.primary2DAxis, out leftStick);
+                    leftStick = DominantAxis(leftStick);
                     right.TryGetFeatureValue(CommonUsages.primary2DAxis, out rightStick);
                     left.TryGetFeatureValue(CommonUsages.grip, out leftGrip);
                     right.TryGetFeatureValue(CommonUsages.grip, out rightGrip);
@@ -158,6 +159,11 @@ namespace ShipbreakerVR
             if (!device.isValid) device = InputDevices.GetDeviceAtXRNode(node);
             return device.isValid;
         }
+
+        // Menus move one row per up/down and change a value per left/right. A thumb pushed sideways is rarely level, and
+        // its vertical part jumped to the row above or below in the middle of adjusting a slider. Only the stronger axis counts.
+        private static Vector2 DominantAxis(Vector2 stick) =>
+            Mathf.Abs(stick.x) >= Mathf.Abs(stick.y) ? new Vector2(stick.x, 0f) : new Vector2(0f, stick.y);
 
         private static bool Button(XrDevice device, InputFeatureUsage<bool> usage) =>
             device.isValid && device.TryGetFeatureValue(usage, out var value) && value;

@@ -314,6 +314,15 @@ namespace ShipbreakerVR
                     slider.SetValueWithoutNotify(Mathf.Clamp(s.Entry.Value, s.Min, s.Max));
                     slider.minValue = s.Min;
                     slider.maxValue = s.Max;
+                    // Whole steps (centimeters): the stick moves by exactly one step, without the game's acceleration,
+                    // and dragging snaps to whole values.
+                    if (s.Step >= 1f)
+                    {
+                        slider.wholeNumbers = true;
+                        t.Field("m_ControllerSliderStep").SetValue(s.Step);
+                        t.Field("mSpeed").SetValue(s.Step);
+                        t.Field("m_AccelerateWhenHeld").SetValue(false);
+                    }
                     slider.SetValueWithoutNotify(Mathf.Clamp(s.Entry.Value, s.Min, s.Max));
                     SetText(t.Field("m_ValueText").GetValue<TextMeshProUGUI>(), row.ValueText);
                     break;

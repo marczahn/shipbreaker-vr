@@ -396,3 +396,7 @@ Instead of chasing a bug I could not see, Marc asked for two sliders in the VR t
 each 10 cm either way. I read horizontal as forward and back and built that. Marc meant left and right. So the second
 slider now moves the eyes sideways, relative to the direction you face, otherwise turning around would swap left and
 right.
+
+Two things came up in the first test. The sliders moved in fractions of a centimeter that changed nothing you could
+see, so they now jump one whole centimeter per push. And adjusting a slider with the stick kept hopping to the row above
+or below, because no thumb pushes perfectly sideways. In menus only the stronger axis of the left stick counts now.
