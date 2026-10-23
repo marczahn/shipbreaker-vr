@@ -35,10 +35,6 @@ namespace ShipbreakerVR
         internal static ConfigEntry<VrPerformance.Occlusion> AmbientOcclusion;
         internal static ConfigEntry<VrControls.Scheme> ControlScheme;
         internal static ConfigEntry<VrControls.Turning> TurnMode;
-        internal static ConfigEntry<float> MoveDeadzone;
-        internal static ConfigEntry<float> MoveFull;
-        internal static ConfigEntry<float> RollDeadzone;
-        internal static ConfigEntry<float> RollFull;
         internal static ConfigEntry<VrFlightGlobe.Mode> FlightGlobe;
         internal static ConfigEntry<float> FlightGlobeSize;
         internal static ConfigEntry<float> FlightGlobeX;
@@ -61,14 +57,6 @@ namespace ShipbreakerVR
                 "Flying with the motion controllers. Vtol: hold the left trigger and move the controller away from where it was when pressed to thrust that way, tilt it sideways to roll. Right stick: turn (left/right, see Drehen) and pitch (up/down). Y brakes. Aus: off.");
             TurnMode = Config.Bind("Steuerung", "Drehen", VrControls.Turning.Fliessend,
                 "Turning with the right stick (controller flying). Fliessend: smooth, faster the further the stick is pushed. Snap30/Snap45/Snap90: one step of that many degrees per flick.");
-            MoveDeadzone = Config.Bind("Steuerung", "Totzone", 2f,
-                "Controller flying: how far (cm) the hand may move from where the trigger was pressed before it thrusts.");
-            MoveFull = Config.Bind("Steuerung", "Vollausschlag", 15f,
-                "Controller flying: how far (cm) the hand has to move for full thrust. Also the flight globe's radius.");
-            RollDeadzone = Config.Bind("Steuerung", "RollTotzone", 8f,
-                "Controller flying: how far (degrees) the hand may tilt sideways before it rolls.");
-            RollFull = Config.Bind("Steuerung", "RollVollausschlag", 45f,
-                "Controller flying: how far (degrees) the hand has to tilt for full roll speed.");
             FlightGlobe = Config.Bind("Anzeige", "Flugkugel", VrFlightGlobe.Mode.Immer,
                 "A small globe in the visor that shows where the left controller is relative to where the trigger was pressed (controller flying): its surface is full thrust, the small inner globe the deadzone. Immer: always in gameplay. BeimFliegen: only while the trigger is held. Aus: off.");
             FlightGlobeSize = Config.Bind("Anzeige", "FlugkugelGroesse", 0.06f, "Radius of the flight globe relative to the visor height.");

@@ -23,13 +23,12 @@ namespace ShipbreakerVR
         private const float SnapPress = 0.7f;
         private const float SnapRelease = 0.3f;
         private const float TriggerPress = 0.5f;
-        // Deadzones and full deflection from the config (cm and degrees there), with full always a little past the deadzone.
-        private static float MoveDeadzone => Mathf.Clamp(Plugin.MoveDeadzone.Value, 0f, 10f) * 0.01f;
-        private static float MoveFull => Mathf.Max(Plugin.MoveFull.Value * 0.01f, MoveDeadzone + 0.01f);
+        private const float MoveDeadzone = 0.02f;
+        private const float MoveFull = 0.15f;
         // The wrist relative to the grip pose (which runs along the handle): an estimate, about 8 cm behind the grip.
         private static readonly Vector3 WristOffset = new Vector3(0f, 0f, -0.08f);
-        private static float TurnDeadzone => Mathf.Clamp(Plugin.RollDeadzone.Value, 0f, 45f);
-        private static float TurnFull => Mathf.Max(Plugin.RollFull.Value, TurnDeadzone + 1f);
+        private const float TurnDeadzone = 8f;
+        private const float TurnFull = 45f;
         private const float TurnSpeed = 45f;
         private const float StickDeadzone = 0.15f;
 
@@ -196,8 +195,8 @@ namespace ShipbreakerVR
         }
 
         // For the flight globe (VrFlightGlobe): the hand offset that gives full thrust, and the share of it that is deadzone.
-        public static float FullOffset => MoveFull;
-        public static float DeadzoneShare => MoveDeadzone / MoveFull;
+        public const float FullOffset = MoveFull;
+        public const float DeadzoneShare = MoveDeadzone / MoveFull;
 
         public static bool Flying => Active == Scheme.Vtol && GameSession.CurrentGameState == GameSession.GameState.Gameplay;
 

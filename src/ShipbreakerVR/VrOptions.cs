@@ -92,30 +92,6 @@ namespace ShipbreakerVR
                 EnumRow(L("Turning", "Drehen"), Plugin.TurnMode, new[] { L("Smooth", "Fließend"), "30°", "45°", "90°" },
                     L("How the right stick turns you when flying with the controllers: smoothly, or in steps of 30, 45 or 90 degrees per flick. Steps are easier on the stomach.",
                         "Wie der rechte Stick dich beim Fliegen mit den Controllern dreht: fließend oder in Schritten von 30, 45 oder 90 Grad pro Antippen. Schritte sind magenfreundlicher.")),
-                new SliderRow
-                {
-                    Label = L("Deadzone (cm)", "Totzone (cm)"), Entry = Plugin.MoveDeadzone, Min = 0f, Max = 6f, Format = "0.0",
-                    Hint = L("How far your hand may drift from where you pressed the trigger before it thrusts. Raise it if the ship creeps although you hold still.",
-                        "Wie weit deine Hand von dort abweichen darf, wo du den Trigger gedrückt hast, bevor sie Schub gibt. Erhöhen, wenn das Schiff kriecht, obwohl du stillhältst."),
-                },
-                new SliderRow
-                {
-                    Label = L("Full thrust at (cm)", "Vollausschlag (cm)"), Entry = Plugin.MoveFull, Min = 5f, Max = 30f, Format = "0",
-                    Hint = L("How far you move your hand for full thrust. Smaller reacts sharper, larger allows finer control. The flight globe's edge is this distance.",
-                        "Wie weit du die Hand für vollen Schub bewegst. Kleiner reagiert schärfer, größer erlaubt feinere Dosierung. Der Rand der Flugkugel entspricht diesem Weg."),
-                },
-                new SliderRow
-                {
-                    Label = L("Roll deadzone (°)", "Roll-Totzone (°)"), Entry = Plugin.RollDeadzone, Min = 0f, Max = 30f, Format = "0",
-                    Hint = L("How far you may tilt the controller sideways before you roll. Raise it if you roll without meaning to.",
-                        "Wie weit du den Controller seitlich kippen darfst, bevor du rollst. Erhöhen, wenn du ungewollt rollst."),
-                },
-                new SliderRow
-                {
-                    Label = L("Full roll at (°)", "Roll-Vollausschlag (°)"), Entry = Plugin.RollFull, Min = 15f, Max = 90f, Format = "0",
-                    Hint = L("How far you tilt the controller for full roll speed.",
-                        "Wie weit du den Controller für volle Rollgeschwindigkeit kippst."),
-                },
                 EnumRow(L("Flight globe", "Flugkugel"), Plugin.FlightGlobe, new[] { L("Off", "Aus"), L("Always", "Immer"), L("While flying", "Beim Fliegen") },
                     L("A small globe in the visor shows where your left controller is while you hold the trigger: the center is where you pressed it, the surface full thrust. Helps to find the zero point again.",
                         "Eine kleine Kugel im Visier zeigt, wo dein linker Controller ist, während du den Trigger hältst: die Mitte ist, wo du gedrückt hast, die Oberfläche voller Schub. Hilft, den Nullpunkt wiederzufinden.")),

@@ -36,8 +36,7 @@ switches turning to steps of 30, 45 or 90 degrees per flick. Y brakes. Mouse, ke
 
 A small globe at the bottom of the visor shows where the left controller is while you hold the trigger: its center is
 where you pressed it, its surface full thrust, the small inner globe the deadzone, and a small cross in it moves and turns with your hand. The row
-"Flight globe" shows it always, only while flying, or never. The rows "Deadzone", "Full thrust at", "Roll deadzone" and
-"Full roll at" set how far you move or tilt the hand before anything happens and for full effect.
+"Flight globe" shows it always, only while flying, or never.
 
 ### Menus with the controllers
 In menus both controllers act as one Xbox gamepad, each button where its counterpart sits, so the game shows gamepad
