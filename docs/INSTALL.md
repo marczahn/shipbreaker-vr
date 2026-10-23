@@ -31,8 +31,12 @@ Switch it in the options row "Controller flying" in the VR tab. Hold the left tr
 - move the controller away from where it was when you pressed it to fly that way,
 - tilt it sideways to roll; the further, the faster.
 
-The left stick turns (left/right) and pitches (up/down), the further, the faster; it needs no trigger. The row "Turning"
+The right stick turns (left/right) and pitches (up/down), the further, the faster; it needs no trigger. The row "Turning"
 switches turning to steps of 30, 45 or 90 degrees per flick. Y brakes. Mouse, keyboard and gamepad keep working.
+
+A small globe at the bottom of the visor shows where the left controller is while you hold the trigger: its center is
+where you pressed it, its surface full thrust, the small inner globe the deadzone, and a small cross in it moves and turns with your hand. The row
+"Flight globe" shows it always, only while flying, or never.
 
 ### Menus with the controllers
 In menus both controllers act as one Xbox gamepad, each button where its counterpart sits, so the game shows gamepad

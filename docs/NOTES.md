@@ -156,16 +156,36 @@ Config `Steuerung/Controllersteuerung` (Aus/Vtol; the earlier "point and twist" 
   The hand's roll away from the reference (`eulerAngles.z`) rolls the body around the head's forward axis (8 degree
   deadzone, full 45 degrees/s at 45). Turning and pitching by twisting the hand worked, but holding the trigger and the
   hand angle at the same time was tiring, so both moved to the stick.
-- Left stick (no trigger needed, gameplay only; in menus it works them as a gamepad): left/right turns around the head's up axis, up/down pitches around its right axis
-  (stick up looks up), 15% deadzone, full 45 degrees/s at full deflection.
-- Config `Steuerung/Drehen` (Fliessend/Snap30/Snap45/Snap90) makes the left stick's turn one step per flick (press at
+- Right stick (no trigger needed, gameplay only; in menus it works them as a gamepad): left/right turns around the head's up axis, up/down pitches around its right axis
+  (stick up looks up), 15% deadzone, full 45 degrees/s at full deflection. It was the left stick until the flight
+  globe; it moved to the right one so the left hand only flies (thrust, roll, brake) and the right hand only steers.
+- Config `Steuerung/Drehen` (Fliessend/Snap30/Snap45/Snap90) makes the right stick's turn one step per flick (press at
   0.7, release below 0.3), around the head's up axis like the smooth turn (the playspace's up axis tilted the view after
-  rolling). The fixed 30 degree snap turn on the right stick is gone. Y (left `secondaryButton`) presses the game's brake actions (`ThrustBrakeLeft/Right`); it used to be the
+  rolling). An earlier fixed 30 degree snap turn on the right stick was dropped when turning moved to the left stick. Y (left `secondaryButton`) presses the game's brake actions (`ThrustBrakeLeft/Right`); it used to be the
   left stick press. A postfix on
   `LynxControlExtensions.GetInputIsPressed` never ran because Mono inlines it, so a transpiler redirects the calls in
   `ThrustController.Update`.
 The grip stays free for grabbing later. The left controller's name and features are logged once. OpenXR only reports
 controllers because `VrXr` enables the Oculus Touch interaction profile, which the AssetBundle's settings carry disabled.
+
+### Flight globe
+`VrFlightGlobe` draws a small globe at the bottom of the visor (config `Anzeige/Flugkugel`: Immer/BeimFliegen/Aus;
+`FlugkugelGroesse` = radius relative to the visor height, `FlugkugelX/Y` = position on the visor from -0.5 to 0.5). The
+defaults (radius 0.06, X -0.159, Y -0.38) put it in the gap between the scanner/helmet lamp keys and the hull/suit bars,
+its lowest point on the baseline of the lower row, measured on an F8 dump of the gameplay HUD (2560x1440: the gap runs
+from x 774 to 971, the baseline is at y 1354). Its radius is the full-thrust offset (15 cm), a small inner globe the
+deadzone (2 cm). A 3D cross (the hand's axes; the upper arm longer and capped so up stays clear at any roll) sits at the
+hand's offset from the reference (tracking space) and turns by the hand's rotation relative to the reference in the
+controller's own frame, the same rotation whose `z` is the roll. Everything is one light HUD color; while the trigger is
+held, the cross and the line from the center to it take the orange of the game's gauge bars (255, 139, 0), the line
+faint at the deadzone and solid at full thrust. The globe is fixed to the visor (Marc wanted a steady instrument), its
+axes along and across the view; the offset (tracking space) is turned into the head's frame
+(`Inverse(HeadRotation)`). Shown in raw tracking axes it was off by the head's yaw against the tracking space's
+forward: facing 90 degrees away from it, the cross moved 90 degrees off. A first version kept the globe aligned with the playspace, so it swung around when the head turned; a 10 degree
+tilt towards the eyes was tried and dropped. After the trigger is released the cross eases back to the center. Drawn per
+eye right after the visor quad, with `Hidden/Internal-Colored` (vertex colors, `_Cull` Back, `_ZTest` Always;
+`UI/Default` without culling as fallback) on meshes built at runtime. The first draw logs `Flight globe drawn (<shader>,
+radius ...)`.
 
 ## Menu control with the motion controllers
 The game's menus are fully usable with a gamepad. Each selected control has a `UIInControlBridge` that reads the
