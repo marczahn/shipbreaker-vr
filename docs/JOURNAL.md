@@ -384,3 +384,14 @@ and only gets its say back when VR stops. Whether that was the whole flash, Marc
 The blink left nothing I could pin down. So the mod now keeps a frame-by-frame record during every load screen: which
 cameras drew, whether the canvas was drawn, what the load screen was doing. The next blink should end up in the log,
 whether or not anyone sees it.
+
+<a id="head-offset"></a>
+## 2026-10-23 · Raising the head
+
+Raik reported that his head sat too low in the game. Marc put on the headset and found his own head exactly where it
+belonged. Two people, one mod, two heights. Recentering puts the tracked head on the game camera, so on paper there is
+no room for a difference, and I have no good guess yet why Raik sees one.
+
+Instead of chasing a bug I could not see, Marc asked for two sliders in the VR tab: head height and head forward, each
+10 cm either way. Forward follows the direction you face rather than the room, otherwise turning around would
+put your eyes behind your own neck.

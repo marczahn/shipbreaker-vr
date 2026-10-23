@@ -139,6 +139,13 @@ objects keep more stereo depth (hyperstereo) and sizes are easier to judge, but 
 menu canvas and helmet are scaled along so they keep their felt size. The log line "eye separation in the world"
 shows whether the scale actually reaches the stereo rendering (about 63 mm times the scale is expected).
 
+## Head offset
+Configs `Bild/KopfHoehe` and `Bild/KopfVorne` (also in the VR tab, -10 to 10 cm each) shift the eyes against the
+game camera after recentering. Height runs along the playspace's up axis, forward along the head's heading within the
+playspace, so the offset stays in front of the body when the player turns. Both are in the player's own centimeters and
+scale with the world scale like the tracked head movement. Background: Raik's head sat too low in the game, which Marc
+could not reproduce; the cause is unknown, the offset lets each player correct it.
+
 ## Render resolution and video memory
 `XRSettings.eyeTextureResolutionScale` reallocates every HDRP render target. At 2.0 (5376x5760 per eye) a 12 GB
 RTX 4070 Ti ran out of memory (D3D11 error 0x8007000e in Player.log); after that even 1.0 failed and the image

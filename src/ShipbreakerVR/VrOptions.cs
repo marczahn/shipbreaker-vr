@@ -42,6 +42,8 @@ namespace ShipbreakerVR
             public ConfigEntry<float> Entry;
             public float Min, Max;
             public string Format;
+            // Values snap to multiples of this.
+            public float Step = 0.01f;
             public override string ValueText => Entry.Value.ToString(Format, System.Globalization.CultureInfo.InvariantCulture);
         }
 
@@ -115,6 +117,18 @@ namespace ShipbreakerVR
                     Label = L("World scale", "Weltmaßstab"), Entry = Plugin.WorldScale, Min = 0.5f, Max = 3f, Format = "0.00",
                     Hint = L("Your size relative to the world. Above 1, distant objects keep more depth and are easier to judge, but the world looks smaller; below 1 the opposite. 1 is true to scale.",
                         "Deine Größe im Verhältnis zur Welt. Über 1 behalten ferne Objekte mehr Tiefe und lassen sich besser einschätzen, die Welt wirkt aber kleiner; unter 1 umgekehrt. 1 ist maßstabsgetreu."),
+                },
+                new SliderRow
+                {
+                    Label = L("Head height (cm)", "Kopfhöhe (cm)"), Entry = Plugin.HeadHeight, Min = -VrCamera.HeadOffsetRange, Max = VrCamera.HeadOffsetRange, Format = "0", Step = 1f,
+                    Hint = L("Moves your eyes up or down against the game's head position. Raise it if your view seems to sit too low in the suit.",
+                        "Verschiebt die Augen gegenüber der Kopfposition des Spiels nach oben oder unten. Erhöhen, wenn du zu tief im Anzug zu sitzen scheinst."),
+                },
+                new SliderRow
+                {
+                    Label = L("Head forward (cm)", "Kopf vorne (cm)"), Entry = Plugin.HeadForward, Min = -VrCamera.HeadOffsetRange, Max = VrCamera.HeadOffsetRange, Format = "0", Step = 1f,
+                    Hint = L("Moves your eyes forward or back against the game's head position, in the direction you face.",
+                        "Verschiebt die Augen gegenüber der Kopfposition des Spiels nach vorne oder hinten, in Blickrichtung."),
                 },
                 EnumRow(L("Ambient occlusion", "Umgebungsverdeckung"), Plugin.AmbientOcclusion, new[] { L("Low", "Niedrig"), L("Off", "Aus"), L("Game default", "Spielstandard") },
                     L("Shading in corners and creases. Low looks nearly the same and saves a lot of performance; the game default can stutter on the station. Off for the most performance.",
@@ -339,7 +353,7 @@ namespace ShipbreakerVR
         public static bool TrySlide(OptionEntry entry, float value)
         {
             if (!Rows.TryGetValue(entry, out var row) || !(row is SliderRow s)) return false;
-            s.Entry.Value = Mathf.Round(value * 100f) / 100f;
+            s.Entry.Value = Mathf.Round(value / s.Step) * s.Step;
             SetText(Traverse.Create(entry).Field("m_ValueText").GetValue<TextMeshProUGUI>(), row.ValueText);
             return true;
         }
