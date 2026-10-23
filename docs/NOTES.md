@@ -373,7 +373,8 @@ that.
 ## Play area in the bay
 
 The bay's boundary is `PlayableArea` (a MonoBehaviour in the bay scene, `GameSession.PlayableArea`): a list of node
-transforms and three radii, serialized defaults 100/125/130 m (the scene may override them).
+transforms and three radii, class defaults 100/125/130 m. The bay scene (`PRF_Playable_Area`, log of 23.10.) has
+83 nodes spanning 96 x 94 x 176 m with radii 40/55/55 m.
 - Player: `PlayableAreaUIController.Update` calls `GetPlayableAreaState(player position)` every frame. Within the
   warning radius of any node: Safe; within the danger radius of the nearest node: Warning (visor message, speech);
   beyond: Danger, a 10 s countdown, then damage (or a teleport back when invulnerable). `OutOfBoundsChangedEvent`
