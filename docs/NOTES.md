@@ -171,15 +171,15 @@ controllers because `VrXr` enables the Oculus Touch interaction profile, which t
 ### Flight globe
 `VrFlightGlobe` draws a small globe at the bottom center of the visor (config `Anzeige/Flugkugel`: Immer/BeimFliegen/Aus;
 `FlugkugelGroesse` = radius relative to the visor height, `FlugkugelX/Y` = position on the visor from -0.5 to 0.5).
-The defaults (radius 0.065, X 0, Y -0.32) put it above the gap between the game's two bar pairs at the bottom (hull and
-suit on the left, thruster fuel and O2 on the right) and below the distance readout, measured on an F8 dump of the
-gameplay HUD.
+The defaults (radius 0.06, X -0.159, Y -0.42) put it in the gap between the scanner/helmet lamp keys and the hull/suit
+bars at the bottom, measured on an F8 dump of the gameplay HUD (2560x1440: the gap runs from x 774 to 971).
 Its radius is the full-thrust offset (15 cm), a small inner globe the deadzone (2 cm). A 3D cross (the hand's axes; the upper arm longer and capped so up stays clear at any roll) sits at
 the hand's offset from the reference (tracking space) and turns by the hand's rotation relative to the reference in the
 controller's own frame, the same rotation whose `z` is the roll. The line from the center to the cross brightens once
-the offset leaves the deadzone. Everything is one light HUD color, so it fits the game's HUD. The globe is fixed to the visor (Marc wanted a steady instrument) with its
-top tipped 10 degrees towards the eyes; the offset is shown in playspace axes, which match the visor's while looking
-straight ahead. A first version kept the globe aligned with the playspace, so it swung around when the head turned.
+the offset leaves the deadzone. Everything is one light HUD color, so it fits the game's HUD. The globe is fixed to the visor (Marc wanted a steady instrument), its axes
+along and across the view; the offset is shown in playspace axes, which match the visor's while looking straight
+ahead. A first version kept the globe aligned with the playspace, so it swung around when the head turned; a 10 degree
+tilt towards the eyes was tried and dropped.
 After the trigger is released the cross eases back to the center. Drawn per eye right after the visor quad, with
 `Hidden/Internal-Colored` (vertex colors, `_Cull` Back, `_ZTest` Always; `UI/Default` without culling as fallback) on
 meshes built at runtime. The first draw logs `Flight globe drawn (<shader>, radius ...)`.

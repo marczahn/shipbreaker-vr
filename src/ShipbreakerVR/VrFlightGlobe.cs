@@ -9,8 +9,8 @@ namespace ShipbreakerVR
     // reference pose and turns as the hand turns. The cross's arms are the hand's own axes; the upper one is longer and
     // capped, so up stays recognizable however far the hand rolls. The globe's surface is full thrust, the small inner
     // globe the deadzone; the line from the center to the cross brightens with thrust. Kept plain and in one color to fit
-    // the game's HUD. The globe is fixed to the visor like the rest of the HUD, its top tipped a little towards the eyes so
-    // forward and back read as depth; its axes are those of the playspace, the frame the hand offset is measured in.
+    // the game's HUD. The globe is fixed to the visor like the rest of the HUD, its axes along and across the view; they
+    // stand for those of the playspace, the frame the hand offset is measured in.
     // When the trigger is released the cross glides back to the center.
     // Drawn in 3D for each eye after the visor (VrUi.Draw), from meshes built here, since the plugin brings no shaders.
     internal static class VrFlightGlobe
@@ -19,8 +19,6 @@ namespace ShipbreakerVR
 
         private const float ReturnSpeed = 12f;
         private const float FadeSpeed = 6f;
-        // Degrees the globe's top is tipped towards the eyes.
-        private const float Tilt = 10f;
 
         // One light, slightly blue tint like the game's HUD lines; only the brightness tells the parts apart.
         private static readonly Color RingColor = new Color(0.8f, 0.92f, 1f, 0.18f);
@@ -60,7 +58,7 @@ namespace ShipbreakerVR
             var height = ((Vector3)visor.GetColumn(1)).magnitude;
             var radius = Plugin.FlightGlobeSize.Value * height;
             var center = visor.MultiplyPoint(new Vector3(Plugin.FlightGlobeX.Value, Plugin.FlightGlobeY.Value, 0f));
-            var facing = Quaternion.LookRotation(visor.GetColumn(2), visor.GetColumn(1)) * Quaternion.Euler(-Tilt, 0f, 0f);
+            var facing = Quaternion.LookRotation(visor.GetColumn(2), visor.GetColumn(1));
             var frame = Matrix4x4.TRS(center, facing, Vector3.one * radius);
 
             globeMaterial.color = new Color(1f, 1f, 1f, alpha);

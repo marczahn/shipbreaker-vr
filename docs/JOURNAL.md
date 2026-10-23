@@ -303,14 +303,16 @@ HUD, closer to the middle, and upright: a flat-lying controller makes rolling ha
 one pale HUD color, thin lines, and an upright block instead of the controller. The inner deadzone globe went too, and
 came back one round later, because Marc missed it. The globe moved to the bottom of the visor, in the middle, and
 promptly overlapped the game's own gauges there. I had only ever dumped the HUD in the station, so Marc took a snapshot
-in the bay, and now the globe sits between the gauges and the distance readout. The block did not last either. Marc
-wanted something that matched the thin axes and suggested a 3D cross. I drew him a few variants on his snapshot, and he
-picked the one whose upper arm is longer and capped, so that up stays obvious even when the hand is rolled far over.
+in the bay, and after I first picked the wrong pair of gauges, the globe now sits in the gap between the scanner keys
+and the hull and suit bars. The block did not last either. Marc wanted something that matched the thin axes and
+suggested a 3D cross. I drew him a few variants on his snapshot, and he picked the one whose upper arm is longer and
+capped, so that up stays obvious even when the hand is rolled far over.
 
 At first the globe turned with the playspace rather than with the head, because that is the frame the hand is measured
 in: turn your head, and the axes still point where the thrust goes. Correct, but Marc preferred a steady instrument:
-fixed in the visor like the rest of the HUD, tipped about ten degrees towards him, so forward and back read as depth. The plugin brings no shaders and no models, so the globe, the
-axes and the block are thin tubes and boxes built from code.
+fixed in the visor like the rest of the HUD. A tilt of ten degrees towards him lasted one round; now the lines simply
+run along and across the view. The plugin brings no shaders and no models, so the globe, the axes and the cross are
+thin tubes built from code.
 
 While at it, Marc moved turning and pitching from the left stick to the right one. Since [steering with the
 stick](#stick-steering) the left hand did everything at once: trigger, hand position, tilt, stick and Y. Now the left
