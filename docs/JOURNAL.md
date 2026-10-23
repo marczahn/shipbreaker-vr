@@ -351,3 +351,36 @@ F4 centers the view, which is handy right up to the moment you wear a headset an
 Marc wanted it on the controllers: B and Y pressed together. Y alone brakes and B alone goes back in menus, so while
 both are held, and until both are let go again, neither does its own job. Otherwise centering the view in a menu would
 also have closed it.
+
+<a id="play-area"></a>
+## 2026-10-23 · More room in the bay, parked
+
+In VR the bay's structure is the best view in the game, and Marc wanted to fly around all of it, the huge frame
+around the ship and the space outside, without the visor nagging him to turn back. The boundary turned out to be
+refreshingly simple: a few dozen points around the ship and three radii, one for the warning, one for the countdown
+and one beyond which drifting parts are quietly destroyed. Smaller than I had guessed, too. I had assumed a hundred
+metres, the bay settles for forty.
+
+My first version came with a menu row and a guess at how far "far enough" was. Marc didn't want a choice; in VR the
+bay should simply be open. So the second version lifted the limit whenever VR runs. Then the game ran noticeably
+worse, with textures that never quite loaded. Marc suspected the game loads its world by the boundary. I found nothing
+in the code that would, but the log of that run had run out of video memory, and it had also loaded a good deal more
+than the run it was compared with, before the boundary could have changed a thing. Probably a bigger ship. Probably.
+Marc parked the change for a performance audit later, which is the right place for a "probably".
+
+<a id="load-screen-flash"></a>
+## 2026-10-23 · Something behind the load screen
+
+Marc noticed that about two thirds into every load screen a view of the station flashed up, too fast to make out, and
+at another point the view went dark for a blink. Things that last a frame are hard to chase in a headset, so I chased
+them in the logs first.
+
+The flash had left a trace there. While the bay loads, the mod switches cameras twice: first to a camera the new scene
+brings along, then, a moment later, to the game's real main camera. On the second switch it politely handed the first
+camera back to the game and switched it on again. Every active camera also renders into the headset, and the very
+next log line listed it doing exactly that, next to our black load screen. Now the old camera stays off while VR runs
+and only gets its say back when VR stops. Whether that was the whole flash, Marc will see on the next load.
+
+The blink left nothing I could pin down. So the mod now keeps a frame-by-frame record during every load screen: which
+cameras drew, whether the canvas was drawn, what the load screen was doing. The next blink should end up in the log,
+whether or not anyone sees it.
