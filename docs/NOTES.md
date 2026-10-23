@@ -81,6 +81,16 @@ At 1.25x per eye (RTX 4070 Ti, 12 GB, 2688x2880 native) the level start ran out 
 world is hidden the eye resolution drops to 1.0x (native, still sharp; 0.5x made the load screen blurry) and the
 shared HDRP targets shrink; afterwards `ApplyQuality` raises it again through the memory probe.
 
+Loading the bay, the rig switches cameras twice behind the load screen: first to a `Main Camera` that `Plugin.Update`
+finds while `LynxCameraController.MainCamera` is not set yet, then, from the `LynxCameraController.Start` postfix, to
+the controller's main camera. `Retarget` used to switch the previously followed camera back on (as the game had it),
+and the next line in every bay load read `Other cameras rendering next to 'Main Camera': 'Main Camera' (depth -1,
+screen)`: a second world camera rendering into the headset next to the rig's black. Marc saw a view of the station
+flash up about two thirds into the load screen. While VR runs the previous camera now stays off and joins the
+cameras `SilenceOtherCameras` restores when VR stops (each as far as `GameWantsEnabled` says). Not yet confirmed in
+the headset. A second effect, the view going dark for a blink at another point of the load, is still open; see the
+load trace under Diagnostics.
+
 ## Settings menu
 The VR rows are clones of real option rows (bool, slider, list) in their own "VR" tab. The game's logic for those
 clones is intercepted via Harmony and redirected to the BepInEx config. Templates are taken from all tabs of the
@@ -371,6 +381,22 @@ depends on the runtime and the scene, the setting is now set by hand. The frame 
 frames (1.4 to 4 intervals of the highest refresh rate seen, the headset's own; longer ones are hitches) to help with
 that.
 
+## Play area in the bay
+
+The bay's boundary is `PlayableArea` (`GameSession.PlayableArea`, in the bay scene `PRF_Playable_Area`): node
+transforms and three radii, class defaults 100/125/130 m; the bay sets 40/55/55 m around 83 nodes spanning
+96 x 94 x 176 m. `PlayableAreaUIController.Update` checks the player against the first two every frame (within 40 m
+of any node: safe; up to 55 m from the nearest: visor warning; beyond: a 10 s countdown, then damage).
+`PlayableAreaSystem` gives every object further than the third radius from all nodes an `OutOfBounds` component, and
+`OutOfBoundsSystem` destroys it after `SalvageSettings.OutOfBoundsDestructionDelay`. Nothing else in the game's
+assemblies reads the radii.
+
+Lifting all three while VR runs (PR #24, a postfix on `PlayableArea.Awake` writing the private fields) worked, but the
+test run missed frames and ran out of video memory (`Failed to create RenderTexture ... 0x8007000e` right after the
+session started), with about 50,000 more loaded objects at the bay load than the comparison run. Those were counted
+before the boundary could change anything, so a different ship is the likelier cause, but it was not settled. Marc
+parked the change for a later performance audit; the PR is closed, its commits stay under `refs/pull/24/head`.
+
 ## Diagnostics
 F8 (`VrDiagnostics`) is for things only seen in the headset. It writes into the log: game state, head pose, the camera
 the rig follows, where the UI canvas hangs, every active root canvas (render mode, camera, layer, whether `VrCanvases`
@@ -380,6 +406,13 @@ shows up), and the visible renderers within 4 m that reach above eye height. It 
 enters the Hab, for things that show right after waking up. Directions are relative to the gaze: "ahead 10, up 60"
 is 10 degrees right of where the head points and 60 degrees above the horizon. It also saves the UI texture and the
 game window as PNG files to `BepInEx\ShipbreakerVR-F8`.
+
+`VrLoadTrace` covers what happens too fast to see. While the rig hides the world (load screens, intro) and for 3 s
+after, it logs every frame in which the picture changes (`Load trace frame N: ...`): the cameras that rendered (from
+`RenderPipelineManager.beginCameraRendering`, the rig's own as `VR`, others with their path and depth), whether our UI
+pass drew the canvas, the eye texture size, whether the load screen is on, whether the world is hidden and which
+camera the rig follows. Frames more than 50 ms after the previous one get a line of their own. At most 400 lines per
+load.
 
 ## Reloading without restarting the game
 For development the plugin can be reloaded while the game runs, with BepInEx's ScriptEngine (BepInEx.Debug, release
