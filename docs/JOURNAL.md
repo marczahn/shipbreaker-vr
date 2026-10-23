@@ -316,7 +316,8 @@ fixed in the visor like the rest of the HUD. A tilt of ten degrees towards him l
 run along and across the view. That fix had a catch I only found when Marc reported the whole display turned
 by 90 degrees: the hand is measured in the tracking space, and its forward is wherever the headset was calibrated, not
 where Marc happens to face. In a fixed globe the offset has to be turned into the head's frame first. The plugin brings no shaders and no models, so the globe, the axes and the cross are
-thin tubes built from code.
+thin tubes built from code. For a few minutes the globe also had rows for its deadzone and the point of full thrust;
+Marc decided they were not needed for now, and the rows went again.
 
 While at it, Marc moved turning and pitching from the left stick to the right one. Since [steering with the
 stick](#stick-steering) the left hand did everything at once: trigger, hand position, tilt, stick and Y. Now the left
