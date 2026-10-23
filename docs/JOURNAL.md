@@ -418,5 +418,13 @@ ask one camera where they are looking. So the mod hangs a second camera on the r
 anything, gives it the main camera's lens, and quietly hands it to the tools whenever they ask. The cutter's fan of rays
 now spreads from the hand, and rolling the wrist rolls the cut line, which the flat game never offered.
 
-A thin beam from the hand with a dot at its end shows where things will land, the right trigger fires and B switches
-the tool mode. The tools themselves still float in front of the helmet for now. Moving them into the hand comes next.
+A thin beam from the hand with a dot at its end shows where things will land. The tools themselves still float in front
+of the helmet for now. Moving them into the hand comes later.
+
+Then came the buttons. The flat game spreads the tools over a dozen keys, and the controllers have far fewer. My first
+layout put reeling on the right stick while the grapple holds something, throwing on the stick press and the scanner on
+the left hand. Marc took it apart piece by piece: the right stick belongs to turning, always; a stick press is
+imprecise and wears out; and the tools should stay on one hand, or the controls fall apart into fragments. A throwing
+gesture was on the table for a minute too, until Marc pointed out that an accidental throw would look exactly like a
+bug. What is left is small: the trigger fires, A uses things or, with the trigger held, throws, the grip reels in while
+the trigger holds, and B switches the mode or, held down, strings a tether from where you point to where you let go.
