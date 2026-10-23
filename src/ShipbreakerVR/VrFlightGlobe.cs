@@ -6,8 +6,8 @@ namespace ShipbreakerVR
 {
     // A small globe at the bottom of the visor that shows where the left controller is while flying (VrControls):
     // three axes through its center, and an upright block that moves away from the center as the hand moves away from
-    // the reference pose and tilts as the hand tilts. The globe's surface is full thrust; the line from the center to the
-    // block brightens with thrust. Kept plain and in one color to fit the game's HUD. The globe is aligned with the playspace, the frame the hand offset is measured in, so its axes are the
+    // the reference pose and tilts as the hand tilts. The globe's surface is full thrust, the small inner globe the
+    // deadzone; the line from the center to the block brightens with thrust. Kept plain and in one color to fit the game's HUD. The globe is aligned with the playspace, the frame the hand offset is measured in, so its axes are the
     // directions the hand thrusts in. When the trigger is released the block glides back to the center.
     // Drawn in 3D for each eye after the visor (VrUi.Draw), from meshes built here, since the plugin brings no shaders.
     internal static class VrFlightGlobe
@@ -19,6 +19,7 @@ namespace ShipbreakerVR
 
         // One light, slightly blue tint like the game's HUD lines; only the brightness tells the parts apart.
         private static readonly Color RingColor = new Color(0.8f, 0.92f, 1f, 0.18f);
+        private static readonly Color DeadzoneColor = new Color(0.8f, 0.92f, 1f, 0.35f);
         private static readonly Color AxisColor = new Color(0.8f, 0.92f, 1f, 0.4f);
         private static readonly Color BlockColor = new Color(0.85f, 0.95f, 1f, 0.8f);
         private static readonly Color IdleTether = new Color(0.8f, 0.92f, 1f, 0.25f);
@@ -106,6 +107,11 @@ namespace ShipbreakerVR
             builder.Ring(Vector3.right, Vector3.up, 1f, 0.005f, RingColor);
             builder.Ring(Vector3.right, Vector3.forward, 1f, 0.005f, RingColor);
             builder.Ring(Vector3.up, Vector3.forward, 1f, 0.005f, RingColor);
+            // The deadzone: a small globe of its own around the center.
+            var deadzone = VrControls.DeadzoneShare;
+            builder.Ring(Vector3.right, Vector3.up, deadzone, 0.004f, DeadzoneColor);
+            builder.Ring(Vector3.right, Vector3.forward, deadzone, 0.004f, DeadzoneColor);
+            builder.Ring(Vector3.up, Vector3.forward, deadzone, 0.004f, DeadzoneColor);
             foreach (var axis in new[] { Vector3.right, Vector3.up, Vector3.forward })
                 builder.Tube(new[] { -axis, axis }, 0.007f, AxisColor);
             globe = builder.Mesh("Globe");

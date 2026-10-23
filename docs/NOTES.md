@@ -171,10 +171,13 @@ controllers because `VrXr` enables the Oculus Touch interaction profile, which t
 ### Flight globe
 `VrFlightGlobe` draws a small globe at the bottom center of the visor (config `Anzeige/Flugkugel`: Immer/BeimFliegen/Aus;
 `FlugkugelGroesse` = radius relative to the visor height, `FlugkugelX/Y` = position on the visor from -0.5 to 0.5).
-Its radius is the full-thrust offset (15 cm). An upright block (rolling shows best on something tall) sits at
+The defaults (radius 0.065, X 0, Y -0.32) put it above the gap between the game's two bar pairs at the bottom (hull and
+suit on the left, thruster fuel and O2 on the right) and below the distance readout, measured on an F8 dump of the
+gameplay HUD.
+Its radius is the full-thrust offset (15 cm), a small inner globe the deadzone (2 cm). An upright block (rolling shows best on something tall) sits at
 the hand's offset from the reference (tracking space) and turns by the hand's rotation relative to the reference in the
 controller's own frame, the same rotation whose `z` is the roll. The line from the center to the block brightens once
-the offset leaves the deadzone (2 cm). Everything is one light HUD color, so it fits the game's HUD. The globe is aligned with the playspace, the frame the
+the offset leaves the deadzone. Everything is one light HUD color, so it fits the game's HUD. The globe is aligned with the playspace, the frame the
 offset is measured in, not with the visor, so its axes are the directions the hand thrusts in even with the head turned.
 After the trigger is released the block eases back to the center. Drawn per eye right after the visor quad, with
 `Hidden/Internal-Colored` (vertex colors, `_Cull` Back, `_ZTest` Always; `UI/Default` without culling as fallback) on

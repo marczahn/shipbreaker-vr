@@ -35,7 +35,7 @@ The right stick turns (left/right) and pitches (up/down), the further, the faste
 switches turning to steps of 30, 45 or 90 degrees per flick. Y brakes. Mouse, keyboard and gamepad keep working.
 
 A small globe at the bottom of the visor shows where the left controller is while you hold the trigger: its center is
-where you pressed it, its surface full thrust, and an upright block in it moves and tilts with your hand. The row
+where you pressed it, its surface full thrust, the small inner globe the deadzone, and an upright block in it moves and tilts with your hand. The row
 "Flight globe" shows it always, only while flying, or never.
 
 ### Menus with the controllers
