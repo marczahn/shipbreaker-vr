@@ -17,6 +17,7 @@ namespace ShipbreakerVR
     // main camera's place in the tools' code (AimPatch). The screen-space patterns (the cutter's line, the grapple's
     // search grid) then fan out from the hand as they did from the eye, and rolling the hand rolls the cutter's line.
     // A beam from the hand to what it points at shows where that is; the visor's crosshair still marks the head's center.
+    // The buttons of the right controller work the tools while aiming with the hand (VrToolInput).
     // The tool models stay where the game puts them, in front of the head.
     internal static class VrAim
     {
@@ -171,6 +172,14 @@ namespace ShipbreakerVR
             beamHit = Physics.Raycast(beamStart, forward, out var hit, BeamRange * VrCamera.WorldScale, pointerMask, QueryTriggerInteraction.Ignore);
             beamEnd = beamHit ? hit.point : beamStart + forward * BeamMiss * VrCamera.WorldScale;
             beamTarget = beamHit ? $"'{hit.collider.name}' (layer {LayerMask.LayerToName(hit.collider.gameObject.layer)}) at {hit.distance:0.00} m" : "nothing";
+        }
+
+        // Whether the hand points at anything within the beam's range (VrToolInput: B held without a target recalls the tethers).
+        public static bool PointsAtSomething()
+        {
+            if (!Active) return false;
+            if (pointerMask == 0) pointerMask = PointerMask();
+            return Physics.Raycast(aim.transform.position, aim.transform.forward, BeamRange * VrCamera.WorldScale, pointerMask, QueryTriggerInteraction.Ignore);
         }
 
         // Everything a ray hits by default, except the player's own layers and the UI.

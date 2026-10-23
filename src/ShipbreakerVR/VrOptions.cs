@@ -91,8 +91,8 @@ namespace ShipbreakerVR
                 new BoolRow
                 {
                     Label = L("Aim with right hand", "Zielen mit rechter Hand"), Entry = Plugin.AimWithHand,
-                    Hint = L("Tools, grabbing and interacting aim where the right controller points; a beam shows where. Right trigger: fire, B: tool mode. Off: they aim at the center of your view.",
-                        "Werkzeuge, Greifen und Benutzen zielen dorthin, wohin der rechte Controller zeigt; ein Strahl zeigt die Stelle. Rechter Trigger: feuern, B: Werkzeugmodus. Aus: sie zielen auf die Mitte deines Blicks."),
+                    Hint = L("Tools, grabbing and interacting aim where the right controller points; a beam shows where. Trigger: fire or grapple, A: use (with the trigger held: throw), grip with the trigger held: reel in, B: tool mode, B held: tether. Off: aim at the center of your view.",
+                        "Werkzeuge, Greifen und Benutzen zielen dorthin, wohin der rechte Controller zeigt; ein Strahl zeigt die Stelle. Trigger: feuern oder greifen, A: benutzen (mit Trigger: werfen), Grip mit Trigger: einholen, B: Werkzeugmodus, B halten: Tether. Aus: Ziel ist die Blickmitte."),
                 },
                 EnumRow(L("Controller flying", "Controllersteuerung"), Plugin.ControlScheme, new[] { L("Off", "Aus"), L("VTOL (trigger)", "VTOL (Trigger)") },
                     L("Hold the left trigger: moving the controller thrusts that way, tilting it sideways rolls. Right stick: turn and pitch. Y: brake. Off if you fly with mouse and keyboard or a gamepad.",

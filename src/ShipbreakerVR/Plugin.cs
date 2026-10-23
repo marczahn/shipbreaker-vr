@@ -66,7 +66,7 @@ namespace ShipbreakerVR
             FlightGlobeX = Config.Bind("Anzeige", "FlugkugelX", -0.159f, "Horizontal position of the flight globe on the visor, from -0.5 (left edge) to 0.5 (right edge).");
             FlightGlobeY = Config.Bind("Anzeige", "FlugkugelY", -0.38f, "Vertical position of the flight globe on the visor, from -0.5 (bottom edge) to 0.5 (top edge).");
             AimWithHand = Config.Bind("Steuerung", "ZielenMitHand", true,
-                "The tools (cutter, grapple, scanner, demo charges), grabbing and interacting aim where the right controller points instead of at the center of the view. A beam shows where. The right trigger fires, B switches the tool mode.");
+                "The tools (cutter, grapple, scanner, demo charges), grabbing and interacting aim where the right controller points instead of at the center of the view. A beam shows where. The right controller works the tools: trigger fires or grapples, A interacts (with the trigger held: throws), grip with the trigger held reels in, B switches the tool mode (held: places a tether, held while pointing at nothing: recalls the tethers).");
             UiInVr = Config.Bind("Anzeige", "UiImRaum", true,
                 "Show HUD and menus on a canvas in the world instead of flat over the image.");
             HudDistance = Config.Bind("Anzeige", "HudAbstand", 1.5f, "Distance of the visor display in front of the eyes, in meters.");

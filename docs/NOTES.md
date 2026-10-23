@@ -47,8 +47,20 @@ interacting, the grapple and the "entity of interest".
 - Pointer: a beam (4 mm, fading) from the hand to the first hit of a plain raycast (default layers minus layers whose
   name contains "Player", "UI" and our pass layer), with a dot of about 0.7 degrees on the hit, 5 m long without a hit.
   Drawn with `UI/Default` in our after-post-process pass (`VrUiPass`) per eye, without depth, under the UI.
-- Firing: in gameplay with hand aiming, `VrMenuInput` reports the right trigger as the gamepad's right trigger (the
-  default gamepad binding for cutting, grapple hold and demo charges) and B as D-pad right (tool mode).
+- Tool buttons (`VrToolInput`, only while hand aiming is active): all on the right controller, the right stick stays
+  with turning. Trigger = `GrappleFire`/`CutterFire`/`DemoChargeFire`; A = `Interact`, or `Throw` if the trigger was
+  held when A went down (the grapple charges while `Throw` is held and throws on release); grip with the trigger held =
+  `RetractionModifier` (reel in; the game only knows reeling in at a fixed speed, there is no reeling out); B tap =
+  `ToolMode` (sent on release); B held 0.4 s = `PlaceTether` held until B is released (the tether runs from where the
+  hand points at the start to where it points at the release), or one `RecallTethers` press if the hand points at
+  nothing. A and B count only without X and Y (pause and centering combos). The throwing gesture was considered and
+  dropped: an accidental throw would look like a bug. The stick press was dropped too: it is imprecise and wears out.
+- The game polls actions through `LynxControlExtensions.GetInputWasPressed/IsPressed/IsHolding/WasReleased`, which
+  Mono inlines; `ToolInputPatch` redirects those calls in the tool classes (grapple, tether, magnet, cutter, demo charge,
+  scanner, interaction, throw, hand grab) to versions that OR in the virtual presses. Earlier the trigger went through
+  the InControl gamepad (right trigger), but several tool actions share gamepad bindings (tether and reel are both the
+  left trigger), so the presses go straight to the actions now. `CuttingToolController` also reacts to input events for
+  `CutterFire`/`ToolMode` (animations, prompts); virtual presses post none.
 - F8 logs the aim state, what the beam hits and the parent chain of the cutter model (`CuttingFXController.m_CuttingTool`)
   for moving the tool models into the hand later.
 
