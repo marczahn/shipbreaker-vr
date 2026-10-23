@@ -44,6 +44,8 @@ namespace ShipbreakerVR
 
         public Camera GameCamera => gameCamera;
 
+        public bool WorldHidden => worldHidden;
+
         // True while the rig follows the Hab's own camera instead of the player's.
         public bool FollowsHab { get; private set; }
 
@@ -134,8 +136,21 @@ namespace ShipbreakerVR
 
         private void Retarget(Camera camera)
         {
-            // Hand the screen back to the previous camera if it still exists and the game wants it on.
-            if (gameCamera != null && gameCamera != camera) gameCamera.enabled = GameWantsEnabled(gameCamera);
+            // Hand the screen back to the previous camera if it still exists and the game wants it on. While VR runs it
+            // stays off until VR stops, like the cameras SilenceOtherCameras switches off: every active camera without a
+            // target texture also renders into the headset. Loading the bay, the rig first follows a 'Main Camera' the
+            // scene brings along, then LynxCameraController's; the first one, switched back on, rendered next to the
+            // rig behind the load screen (log: Other cameras rendering next to 'Main Camera': 'Main Camera').
+            if (gameCamera != null && gameCamera != camera)
+            {
+                if (VrXr.IsRunning)
+                {
+                    gameCamera.enabled = false;
+                    silenced.RemoveWhere(c => c == null);
+                    silenced.Add(gameCamera);
+                }
+                else gameCamera.enabled = GameWantsEnabled(gameCamera);
+            }
             gameCamera = camera;
             FollowsHab = VrHab.IsHabCamera(camera);
             if (camera == null)
@@ -201,9 +216,17 @@ namespace ShipbreakerVR
             }
         }
 
-        private void OnEnable() => Application.onBeforeRender += FollowGameCamera;
+        private void OnEnable()
+        {
+            Application.onBeforeRender += FollowGameCamera;
+            RenderPipelineManager.beginCameraRendering += VrLoadTrace.OnBeginCamera;
+        }
 
-        private void OnDisable() => Application.onBeforeRender -= FollowGameCamera;
+        private void OnDisable()
+        {
+            Application.onBeforeRender -= FollowGameCamera;
+            RenderPipelineManager.beginCameraRendering -= VrLoadTrace.OnBeginCamera;
+        }
 
         private void OnDestroy()
         {
@@ -228,6 +251,7 @@ namespace ShipbreakerVR
         private void Update()
         {
             VrPerformance.FrameStart();
+            VrLoadTrace.EndFrame(this);
             if (VrXr.IsRunning && Input.GetKeyDown(KeyCode.F4)) Recenter(true);
             UpdateCenterCombo();
             VrDiagnostics.Update(this);
@@ -254,6 +278,7 @@ namespace ShipbreakerVR
                 if (hideWorld) HideWorld();
                 else Retarget(gameCamera);
             }
+            VrLoadTrace.Track(running && hideWorld);
 
             if (running && !wasRunning)
             {
@@ -307,7 +332,7 @@ namespace ShipbreakerVR
             {
                 if (silenced.Count == 0) return;
                 foreach (var camera in silenced)
-                    if (camera != null) camera.enabled = true;
+                    if (camera != null) camera.enabled = GameWantsEnabled(camera);
                 silenced.Clear();
                 return;
             }

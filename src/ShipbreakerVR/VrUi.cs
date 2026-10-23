@@ -367,6 +367,7 @@ namespace ShipbreakerVR
             cmd.Clear();
             renderContext.SetupCameraProperties(context.hdCamera.camera, true);
 
+            VrLoadTrace.UiDrawn();
             if ((loggedEyes & (1 << eye)) == 0)
             {
                 loggedEyes |= 1 << eye;

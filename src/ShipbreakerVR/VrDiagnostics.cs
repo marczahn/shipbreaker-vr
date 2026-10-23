@@ -191,6 +191,6 @@ namespace ShipbreakerVR
             }
         }
 
-        private static string Path(Transform t) => t.parent == null ? t.name : Path(t.parent) + "/" + t.name;
+        public static string Path(Transform t) => t.parent == null ? t.name : Path(t.parent) + "/" + t.name;
     }
 }
