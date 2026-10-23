@@ -17,6 +17,7 @@ namespace ShipbreakerVR
     //   tips): the left menu button belongs to Virtual Desktop, and A + X is the usual VR pause combo. It used to be the
     //   left stick press, which is too easy to hit while steering with that stick. In menus the game reads Start like
     //   Confirm on the selected button, which set off things Marc never chose, so there the combo sends nothing.
+    //   B + Y together centers the view (VrCamera, like F4) and sends nothing.
     //   There is no View button (Back; B does the same in menus) and no D-pad.
     // In gameplay only A + X counts (it opens the pause menu); the rest belongs to controller flying.
     // The actions read only InControl's active device, and another device kept that role (see ActiveDevicePatch).
@@ -78,6 +79,15 @@ namespace ShipbreakerVR
             LogDevices("attached");
         }
 
+        // Unloading (ScriptEngine reload): InControl would otherwise keep a device of the old instance next to the new one.
+        public static void Detach()
+        {
+            if (instance == null) return;
+            if (InputManager.IsSetup && InputManager.Devices.Contains(instance)) InputManager.DetachDevice(instance);
+            instance = null;
+            Plugin.Log.LogInfo("Menu control: controllers detached from InControl");
+        }
+
         public static void LogDevices(string when)
         {
             var devices = InputManager.Devices.Select(d => $"'{d.Name}' ({d.DeviceClass}, {d.DeviceStyle}, last input {d.LastInputTick}{(d.Passive ? ", passive" : "")})");
@@ -118,6 +128,8 @@ namespace ShipbreakerVR
                     pressed[7] = menu;
                     // A and X are the combo here, not Confirm and Action3.
                     if (menu) pressed[0] = pressed[2] = false;
+                    // B and Y together center the view (VrCamera), not Back and Action4.
+                    if (VrCamera.CenterComboHeld) pressed[1] = pressed[3] = false;
                 }
 
                 // A press that opened or closed a menu is still held when the next state starts; it must not act there

@@ -46,6 +46,12 @@ namespace ShipbreakerVR
 
         private void OnEnable() => nextLink = 0f;
 
+        // Unloading (ScriptEngine reload): the game row above ours gets its own navigation back.
+        private void OnDestroy()
+        {
+            if (boundary != null && original.TryGetValue(boundary, out var restore)) boundary.navigation = restore;
+        }
+
         private void LateUpdate()
         {
             TrackSelection();

@@ -44,7 +44,7 @@ Idea for controllers: an aiming camera on the hand that receives these calls.
   (`UI/Default`, ZTest Always, eye matrices via reflection from `HDCamera.xr`). In gameplay the quad is a visor in
   front of the head; elsewhere it is a canvas fixed in the playspace, upright at eye height in the direction the head
   faces. It follows the eye height once the eyes are more than 30 cm above or below its center (standing up, sitting
-  down). F4 places it in front of the head again and, in menus, turns the playspace to the gaze. The VR tab row "Center view" (`VrOptions.ActionRow`, a toggle row
+  down). F4 (or B + Y on the controllers, `VrCamera.UpdateCenterCombo`) places it in front of the head again and, in menus, turns the playspace to the gaze. The VR tab row "Center view" (`VrOptions.ActionRow`, a toggle row
   without the toggle) does the same.
 - The game switches its custom pass volumes off outside gameplay (e.g. pause), so the mod uses its own
   `CustomPassVolume` (AfterPostProcess) and only disables the game's UI passes for the VR camera.
@@ -203,7 +203,8 @@ send nothing else): the left menu button belongs to Virtual Desktop, the left st
 to hit while steering with the left stick, and in menus the Doozy button bridges read Start like Confirm on the
 selected button. No View button (Back; `BackButtonService` treats Decline/B the same, so B covers Esc in menus) and no D-pad. In
 `Gameplay` it reports only A + X, which opens the pause menu; everything else stays with controller flying. A press held across a game state change is ignored until released, so the
-press that opens the pause menu does not close it again. Pressed buttons are logged as `Menu control: ...`.
+press that opens the pause menu does not close it again. B + Y together centers the view (`VrCamera.CenterComboHeld`,
+from the press until both are up again): then B and Y send nothing and Y does not brake. Pressed buttons are logged as `Menu control: ...`.
 InControl makes a device active only when its last input is strictly newer than the active one's. An "Unknown
 Device" (probably a joystick exposed by the runtime) had input every frame and kept the role, so the first version's
 presses never reached the game. A postfix on `InputManager.UpdateActiveDevice` gives our device the role while it has
@@ -379,6 +380,35 @@ shows up), and the visible renderers within 4 m that reach above eye height. It 
 enters the Hab, for things that show right after waking up. Directions are relative to the gaze: "ahead 10, up 60"
 is 10 degrees right of where the head points and 60 degrees above the horizon. It also saves the UI texture and the
 game window as PNG files to `BepInEx\ShipbreakerVR-F8`.
+
+## Reloading without restarting the game
+For development the plugin can be reloaded while the game runs, with BepInEx's ScriptEngine (BepInEx.Debug, release
+r11: `ScriptEngine.dll` into `BepInEx\plugins`). The plugin DLL and its PDB then live in `BepInEx\scripts` instead of
+`BepInEx\plugins\ShipbreakerVR` (both at once and ScriptEngine refuses the second copy). ScriptEngine reads the
+assembly with symbols, and Mono.Cecil most likely throws without the PDB, so it goes along. The OpenXR DLLs and the
+AssetBundle stay where they are. Settings in `BepInEx\config\com.bepis.bepinex.scriptengine.cfg`: `LoadOnStart = true`
+(otherwise the mod only loads with the first F6) and, for reloading on every copy of a new DLL,
+`EnableFileSystemWatcher = true` (reload `AutoReloadDelay` seconds after the file changed). F6 reloads by hand.
+
+How a reload goes: ScriptEngine destroys its object with the plugin on it, then a frame later loads the DLL from memory
+under a new assembly name (`ShipbreakerVR-<ticks>`) and adds the new plugin.
+- `Plugin.OnDestroy` hands everything back to the game, as stopping VR does: the VR tab and the VR rows leave the
+  options screen (`VrOptionsTab.RemoveAll`), the InControl device is detached, the game cameras and the silenced ones are
+  switched on as the game wants them, the Hab's sway and blends come back, the truck viewer renders again, the canvases
+  return to their render modes and layers, the helmet goes back onto the body, the rig is destroyed right away (with
+  the UI pass and the quality volume), the render pipeline events are removed, and the Harmony patches are undone. Not
+  when the game quits.
+- The Harmony ID contains the assembly name, so the old instance's `UnpatchSelf` only removes its own patches.
+- OpenXR keeps running. The AssetBundle with the XR settings cannot be loaded twice, and `XRGeneralSettings.Instance`
+  survives the reload, so the new instance takes both over (`VrXr.Adopt`) and does not toggle VR at launch (that would
+  stop it). Its rig then starts like at VR start: recentered on the current head pose.
+- `VrHab.MainCameraOff` came from game state events that are long past; after the old instance gave the main camera
+  back to the game, its enabled flag tells whether the game shows the Hab (`VrHab.Adopt`).
+
+What a reload cannot change: the OpenXR setup (`VrXr.LoadSettings`: render mode, controller profile), which runs once
+per game session; that needs a restart. Reload with the options menu closed; an options screen open on
+the VR tab falls back to the first tab. Mono never unloads assemblies, so every reload leaves the old code in memory
+(about 140 KB each), which is harmless for a test session.
 
 ## Roadmap
 1. Inventory – done

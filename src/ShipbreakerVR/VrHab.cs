@@ -139,6 +139,15 @@ namespace ShipbreakerVR
         // enabled flag doesn't tell, because the VR camera keeps the camera it follows switched off.
         public static bool MainCameraOff { get; set; }
 
+        // After a reload the game state events that set MainCameraOff are long past. The previous instance gave the main
+        // camera back to the game when it unloaded, so its enabled flag tells again.
+        public static void Adopt()
+        {
+            var main = LynxCameraController.MainCamera;
+            MainCameraOff = main != null && !main.enabled;
+            if (MainCameraOff) Plugin.Log.LogInfo("Main camera is off: in the Hab");
+        }
+
         // The camera the game shows the Hab with, or null outside the Hab.
         public static Camera Camera
         {

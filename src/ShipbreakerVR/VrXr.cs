@@ -19,6 +19,19 @@ namespace ShipbreakerVR
 
         public static bool IsRunning { get; private set; }
 
+        // After a reload (ScriptEngine, F6) the XR settings from the AssetBundle are still loaded, and OpenXR may still run
+        // for the previous instance; the AssetBundle cannot be loaded a second time. Takes both over. True if the
+        // settings were already loaded, i.e. this is not the first instance in this game session.
+        public static bool Adopt()
+        {
+            var settings = XRGeneralSettings.Instance;
+            if (settings == null) return false;
+            settingsLoaded = true;
+            IsRunning = settings.Manager != null && settings.Manager.activeLoader != null;
+            if (IsRunning) Plugin.Log.LogInfo($"VR still running with {settings.Manager.activeLoader.name}, taken over");
+            return true;
+        }
+
         public static void Toggle()
         {
             if (IsRunning) Stop();

@@ -79,6 +79,8 @@ namespace ShipbreakerVR
             if (GameSession.CurrentGameState == GameSession.GameState.Gameplay)
             {
                 left.TryGetFeatureValue(CommonUsages.secondaryButton, out braking);
+                // Y together with B centers the view (VrCamera) and does not brake.
+                if (VrCamera.CenterComboHeld) braking = false;
                 if (GetRight() && right.TryGetFeatureValue(CommonUsages.primary2DAxis, out var rightStick)) TurnFromStick(rightStick, playspace);
             }
             if (!left.TryGetFeatureValue(CommonUsages.devicePosition, out var grip)

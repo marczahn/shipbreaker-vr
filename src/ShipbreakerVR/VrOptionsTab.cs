@@ -33,6 +33,16 @@ namespace ShipbreakerVR
 
         private static readonly HashSet<UnifiedOptionsScreen> Done = new HashSet<UnifiedOptionsScreen>();
 
+        // What was added to each options screen, to take it out again when the plugin unloads.
+        private struct Added
+        {
+            public OptionsScreenController Screen;
+            public UIView View;
+            public GenericTab Tab;
+        }
+
+        private static readonly Dictionary<UnifiedOptionsScreen, Added> added = new Dictionary<UnifiedOptionsScreen, Added>();
+
         public static void Create(UnifiedOptionsScreen unified)
         {
             if (!Done.Add(unified)) return;
@@ -54,6 +64,7 @@ namespace ShipbreakerVR
                 Screens(unified) = screens.Append(screen).ToArray();
                 Views(unified) = views.Append(view).ToArray();
                 Tabs(unified) = tabs.Append(tab).ToArray();
+                added[unified] = new Added { Screen = screen, View = view, Tab = tab };
                 // The game's own lists get the scroll and hover fixes too.
                 foreach (var scroll in views.Where(v => v != null).SelectMany(v => v.GetComponentsInChildren<ScrollRect>(true)))
                     if (scroll.content != null && scroll.content.GetComponent<VrOptionsList>() == null) scroll.content.gameObject.AddComponent<VrOptionsList>();
@@ -65,6 +76,37 @@ namespace ShipbreakerVR
                 if (viewObject != null) UnityEngine.Object.Destroy(viewObject);
                 VrOptions.AppendTo(screens[index]);
             }
+        }
+
+        // Unloading (ScriptEngine reload): takes the VR tab out of every options screen again, and removes the VR rows,
+        // the navigation and the list markers, so the new instance builds them anew without doubling them. Best done with
+        // the options closed; an options screen open on the VR tab goes back to the first tab.
+        public static void RemoveAll()
+        {
+            foreach (var pair in added)
+            {
+                var unified = pair.Key;
+                var tab = pair.Value;
+                if (unified == null) continue;
+                Screens(unified) = Screens(unified).Where(s => s != tab.Screen).ToArray();
+                Views(unified) = Views(unified).Where(v => v != tab.View).ToArray();
+                Tabs(unified) = Tabs(unified).Where(t => t != tab.Tab).ToArray();
+                if (Active(unified) >= Screens(unified).Length) Active(unified) = 0;
+                if (tab.View != null) UnityEngine.Object.DestroyImmediate(tab.View.gameObject);
+                if (tab.Tab != null) UnityEngine.Object.DestroyImmediate(tab.Tab.gameObject);
+            }
+            added.Clear();
+            Done.Clear();
+            var rows = VrOptions.RemoveRows();
+            var marks = 0;
+            foreach (var component in Resources.FindObjectsOfTypeAll<MonoBehaviour>())
+            {
+                if (!(component is VrOptionsNavigation) && !(component is VrOptionsList)) continue;
+                if (!component.gameObject.scene.IsValid()) continue;
+                UnityEngine.Object.DestroyImmediate(component);
+                marks++;
+            }
+            Plugin.Log.LogInfo($"Options: VR tab removed, {rows} row(s) and {marks} list helper(s) removed");
         }
 
         // A copy of the video tab's view with the VR rows instead of the video rows.

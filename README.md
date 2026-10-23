@@ -25,7 +25,7 @@ How the mod came about, including the dead ends: [docs/JOURNAL.md](docs/JOURNAL.
 ![Controls overview](docs/images/controls.svg)
 
 - VR starts with the game (config `VrBeimStart`), so intro and loading screens already show in the headset
-- **F3** toggles VR, **F4** recenters the view, **F7** switches the screen look on the station's monitors, **F8** writes what is drawn around the player into the log (for bug reports)
+- **F3** toggles VR, **F4** or **B + Y** recenters the view, **F7** switches the screen look on the station's monitors, **F8** writes what is drawn around the player into the log (for bug reports)
 - Settings: in-game options or `BepInEx\config\de.marczahn.shipbreakervr.cfg`
 
 Installing a release: [docs/INSTALL.md](docs/INSTALL.md).

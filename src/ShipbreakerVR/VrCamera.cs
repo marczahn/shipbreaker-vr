@@ -210,10 +210,26 @@ namespace ShipbreakerVR
             if (Instance == this) Instance = null;
         }
 
+        // Before the plugin unloads (ScriptEngine reload): gives the cameras, the Hab and the truck viewer back to the
+        // game, as when VR stops, and removes the rig with everything on it (UI, helmet, passes, volumes). Right away,
+        // so nothing of it is left when the new instance starts.
+        public static void Unload()
+        {
+            var vr = Instance;
+            if (vr == null) return;
+            if (vr.gameCamera != null) vr.gameCamera.enabled = GameWantsEnabled(vr.gameCamera);
+            vr.SilenceOtherCameras(false);
+            VrHab.Calm(false);
+            VrHab.CutBlends(false);
+            VrPerformance.Update(false, null, false, true);
+            DestroyImmediate(vr.rig.gameObject);
+        }
+
         private void Update()
         {
             VrPerformance.FrameStart();
             if (VrXr.IsRunning && Input.GetKeyDown(KeyCode.F4)) Recenter(true);
+            UpdateCenterCombo();
             VrDiagnostics.Update(this);
         }
 
@@ -551,6 +567,36 @@ namespace ShipbreakerVR
             return forward.sqrMagnitude < 1e-8f ? Quaternion.identity : Quaternion.LookRotation(forward, Vector3.up);
         }
 
+        // B + Y together on the controllers: the same as F4. From the press until both buttons are up again they count as
+        // the combo, so neither acts on its own meanwhile (Y brakes, B is Back in menus; VrControls, VrMenuInput).
+        public static bool CenterComboHeld { get; private set; }
+        private static InputDevice comboLeft;
+        private static InputDevice comboRight;
+
+        private void UpdateCenterCombo()
+        {
+            if (!VrXr.IsRunning)
+            {
+                CenterComboHeld = false;
+                return;
+            }
+            var y = Pressed(ref comboLeft, XRNode.LeftHand);
+            var b = Pressed(ref comboRight, XRNode.RightHand);
+            if (y && b && !CenterComboHeld)
+            {
+                CenterComboHeld = true;
+                Plugin.Log.LogInfo("B + Y pressed: centering the view");
+                Recenter(true);
+            }
+            else if (!y && !b) CenterComboHeld = false;
+        }
+
+        private static bool Pressed(ref InputDevice device, XRNode node)
+        {
+            if (!device.isValid) device = InputDevices.GetDeviceAtXRNode(node);
+            return device.isValid && device.TryGetFeatureValue(CommonUsages.secondaryButton, out var pressed) && pressed;
+        }
+
         // "Center view" in the VR options: the same as F4.
         public static void RecenterView()
         {
@@ -574,7 +620,7 @@ namespace ShipbreakerVR
                 VrBody.Resync();
             }
             if (VrUi.Instance != null) VrUi.Instance.Recenter();
-            Plugin.Log.LogInfo($"Head recentered{(toGaze ? " (F4 or options)" : "")} (tracked head position {head.localPosition})");
+            Plugin.Log.LogInfo($"Head recentered{(toGaze ? " (F4, B + Y or options)" : "")} (tracked head position {head.localPosition})");
         }
     }
 }

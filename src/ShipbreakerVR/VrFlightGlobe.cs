@@ -144,6 +144,15 @@ namespace ShipbreakerVR
             tetherMaterial = CreateMaterial();
         }
 
+        // Unloading (ScriptEngine reload): meshes and materials are not part of any scene and would stay behind.
+        public static void Release()
+        {
+            foreach (var o in new Object[] { globe, marker, tether, globeMaterial, markerMaterial, tetherMaterial })
+                if (o != null) Object.Destroy(o);
+            globe = marker = tether = null;
+            globeMaterial = markerMaterial = tetherMaterial = null;
+        }
+
         // Unlit with vertex colors, drawn over the world like the visor, but culling back faces so the
         // cross's center looks solid. Hidden/Internal-Colored offers that; UI/Default (no culling) is the fallback.
         private static Material CreateMaterial()

@@ -13,7 +13,7 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
 
 ## Use
 - Connect the headset and start the game; VR starts right away. **F3** toggles VR.
-- **F4** recenters the view on the headset: position, and in menus also view direction and the menu canvas.
+- **F4** (or **B + Y** on the controllers) recenters the view on the headset: position, and in menus also view direction and the menu canvas.
   Menus always appear at eye height, also when you look up or down.
   The row "Center view" at the top of the VR tab does the same.
 - **F7** at one of the station's monitors switches its screen look. **F8** writes what is drawn around you into the log,
@@ -46,6 +46,7 @@ button prompts:
 - triggers = shoulder buttons (switch tabs), grips = triggers
 - A + X together = Start: in gameplay it opens the pause menu, on loading screens it cycles the tips. In menus it is
   just A and X, since the game would read Start as "confirm".
+- B + Y together recenters the view, like F4, everywhere (also in gameplay, where Y alone brakes).
 
 There is no View button and no D-pad; the left menu button stays with Virtual Desktop. In gameplay only A + X
 reaches the game.
