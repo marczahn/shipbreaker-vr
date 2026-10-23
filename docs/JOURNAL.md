@@ -306,7 +306,9 @@ promptly overlapped the game's own gauges there. I had only ever dumped the HUD 
 in the bay, and after I first picked the wrong pair of gauges, the globe now sits in the gap between the scanner keys
 and the hull and suit bars. The block did not last either. Marc wanted something that matched the thin axes and
 suggested a 3D cross. I drew him a few variants on his snapshot, and he picked the one whose upper arm is longer and
-capped, so that up stays obvious even when the hand is rolled far over.
+capped, so that up stays obvious even when the hand is rolled far over. The last touch was his too: while the trigger is held, the
+cross and its line turn the orange of the game's gauge bars, so the globe says at a glance whether the hand is in
+charge.
 
 At first the globe turned with the playspace rather than with the head, because that is the frame the hand is measured
 in: turn your head, and the axes still point where the thrust goes. Correct, but Marc preferred a steady instrument:

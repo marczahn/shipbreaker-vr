@@ -169,20 +169,22 @@ The grip stays free for grabbing later. The left controller's name and features 
 controllers because `VrXr` enables the Oculus Touch interaction profile, which the AssetBundle's settings carry disabled.
 
 ### Flight globe
-`VrFlightGlobe` draws a small globe at the bottom center of the visor (config `Anzeige/Flugkugel`: Immer/BeimFliegen/Aus;
-`FlugkugelGroesse` = radius relative to the visor height, `FlugkugelX/Y` = position on the visor from -0.5 to 0.5).
-The defaults (radius 0.06, X -0.159, Y -0.42) put it in the gap between the scanner/helmet lamp keys and the hull/suit
-bars at the bottom, measured on an F8 dump of the gameplay HUD (2560x1440: the gap runs from x 774 to 971).
-Its radius is the full-thrust offset (15 cm), a small inner globe the deadzone (2 cm). A 3D cross (the hand's axes; the upper arm longer and capped so up stays clear at any roll) sits at
-the hand's offset from the reference (tracking space) and turns by the hand's rotation relative to the reference in the
-controller's own frame, the same rotation whose `z` is the roll. The line from the center to the cross brightens once
-the offset leaves the deadzone. Everything is one light HUD color, so it fits the game's HUD. The globe is fixed to the visor (Marc wanted a steady instrument), its axes
-along and across the view; the offset is shown in playspace axes, which match the visor's while looking straight
+`VrFlightGlobe` draws a small globe at the bottom of the visor (config `Anzeige/Flugkugel`: Immer/BeimFliegen/Aus;
+`FlugkugelGroesse` = radius relative to the visor height, `FlugkugelX/Y` = position on the visor from -0.5 to 0.5). The
+defaults (radius 0.06, X -0.159, Y -0.38) put it in the gap between the scanner/helmet lamp keys and the hull/suit bars,
+its lowest point on the baseline of the lower row, measured on an F8 dump of the gameplay HUD (2560x1440: the gap runs
+from x 774 to 971, the baseline is at y 1354). Its radius is the full-thrust offset (15 cm), a small inner globe the
+deadzone (2 cm). A 3D cross (the hand's axes; the upper arm longer and capped so up stays clear at any roll) sits at the
+hand's offset from the reference (tracking space) and turns by the hand's rotation relative to the reference in the
+controller's own frame, the same rotation whose `z` is the roll. Everything is one light HUD color; while the trigger is
+held, the cross and the line from the center to it take the orange of the game's gauge bars (255, 139, 0), the line
+faint at the deadzone and solid at full thrust. The globe is fixed to the visor (Marc wanted a steady instrument), its
+axes along and across the view; the offset is shown in playspace axes, which match the visor's while looking straight
 ahead. A first version kept the globe aligned with the playspace, so it swung around when the head turned; a 10 degree
-tilt towards the eyes was tried and dropped.
-After the trigger is released the cross eases back to the center. Drawn per eye right after the visor quad, with
-`Hidden/Internal-Colored` (vertex colors, `_Cull` Back, `_ZTest` Always; `UI/Default` without culling as fallback) on
-meshes built at runtime. The first draw logs `Flight globe drawn (<shader>, radius ...)`.
+tilt towards the eyes was tried and dropped. After the trigger is released the cross eases back to the center. Drawn per
+eye right after the visor quad, with `Hidden/Internal-Colored` (vertex colors, `_Cull` Back, `_ZTest` Always;
+`UI/Default` without culling as fallback) on meshes built at runtime. The first draw logs `Flight globe drawn (<shader>,
+radius ...)`.
 
 ## Menu control with the motion controllers
 The game's menus are fully usable with a gamepad. Each selected control has a `UIInControlBridge` that reads the

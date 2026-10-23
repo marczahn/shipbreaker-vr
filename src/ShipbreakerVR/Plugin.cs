@@ -61,7 +61,7 @@ namespace ShipbreakerVR
                 "A small globe in the visor that shows where the left controller is relative to where the trigger was pressed (controller flying): its surface is full thrust, the small inner globe the deadzone. Immer: always in gameplay. BeimFliegen: only while the trigger is held. Aus: off.");
             FlightGlobeSize = Config.Bind("Anzeige", "FlugkugelGroesse", 0.06f, "Radius of the flight globe relative to the visor height.");
             FlightGlobeX = Config.Bind("Anzeige", "FlugkugelX", -0.159f, "Horizontal position of the flight globe on the visor, from -0.5 (left edge) to 0.5 (right edge).");
-            FlightGlobeY = Config.Bind("Anzeige", "FlugkugelY", -0.42f, "Vertical position of the flight globe on the visor, from -0.5 (bottom edge) to 0.5 (top edge).");
+            FlightGlobeY = Config.Bind("Anzeige", "FlugkugelY", -0.38f, "Vertical position of the flight globe on the visor, from -0.5 (bottom edge) to 0.5 (top edge).");
             UiInVr = Config.Bind("Anzeige", "UiImRaum", true,
                 "Show HUD and menus on a canvas in the world instead of flat over the image.");
             HudDistance = Config.Bind("Anzeige", "HudAbstand", 1.5f, "Distance of the visor display in front of the eyes, in meters.");

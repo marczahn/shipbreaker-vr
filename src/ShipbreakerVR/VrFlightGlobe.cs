@@ -8,8 +8,8 @@ namespace ShipbreakerVR
     // three axes through its center, and a 3D cross that moves away from the center as the hand moves away from the
     // reference pose and turns as the hand turns. The cross's arms are the hand's own axes; the upper one is longer and
     // capped, so up stays recognizable however far the hand rolls. The globe's surface is full thrust, the small inner
-    // globe the deadzone; the line from the center to the cross brightens with thrust. Kept plain and in one color to fit
-    // the game's HUD. The globe is fixed to the visor like the rest of the HUD, its axes along and across the view; they
+    // globe the deadzone; the line from the center to the cross grows stronger with thrust. Kept plain and in one color
+    // to fit the game's HUD, except for the orange while the trigger is held. The globe is fixed to the visor like the rest of the HUD, its axes along and across the view; they
     // stand for those of the playspace, the frame the hand offset is measured in.
     // When the trigger is released the cross glides back to the center.
     // Drawn in 3D for each eye after the visor (VrUi.Draw), from meshes built here, since the plugin brings no shaders.
@@ -20,13 +20,14 @@ namespace ShipbreakerVR
         private const float ReturnSpeed = 12f;
         private const float FadeSpeed = 6f;
 
-        // One light, slightly blue tint like the game's HUD lines; only the brightness tells the parts apart.
+        // One light, slightly blue tint like the game's HUD lines; only the brightness tells the parts apart. While the
+        // trigger is held, the cross and its line take the orange of the game's gauge bars: the hand is in control.
         private static readonly Color RingColor = new Color(0.8f, 0.92f, 1f, 0.18f);
         private static readonly Color DeadzoneColor = new Color(0.8f, 0.92f, 1f, 0.35f);
         private static readonly Color AxisColor = new Color(0.8f, 0.92f, 1f, 0.4f);
-        private static readonly Color MarkerColor = new Color(0.92f, 0.97f, 1f, 0.95f);
+        private static readonly Color MarkerColor = new Color(0.92f, 0.97f, 1f, 0.55f);
+        private static readonly Color ActiveColor = new Color(1f, 139f / 255f, 0f, 1f);
         private static readonly Color IdleTether = new Color(0.8f, 0.92f, 1f, 0.25f);
-        private static readonly Color FullTether = new Color(1f, 1f, 1f, 0.9f);
 
         private static Mesh globe;
         private static Mesh marker;
@@ -67,15 +68,18 @@ namespace ShipbreakerVR
             var length = shownOffset.magnitude;
             if (length > 0.01f)
             {
+                // Faint inside the deadzone, solid at full thrust.
                 var strength = Mathf.Clamp01((length - VrControls.DeadzoneShare) / (1f - VrControls.DeadzoneShare));
-                var color = strength > 0f ? Color.Lerp(IdleTether, FullTether, strength) : IdleTether;
-                color.a *= alpha;
+                var color = VrControls.Holding ? ActiveColor : IdleTether;
+                color.a *= alpha * (VrControls.Holding ? Mathf.Lerp(0.45f, 1f, strength) : 1f);
                 tetherMaterial.color = color;
                 var along = Matrix4x4.TRS(Vector3.zero, Quaternion.LookRotation(shownOffset), new Vector3(1f, 1f, length));
                 cmd.DrawMesh(tether, frame * along, tetherMaterial, 0, 0);
             }
 
-            markerMaterial.color = new Color(1f, 1f, 1f, alpha * (VrControls.Holding ? 1f : 0.55f));
+            var tint = VrControls.Holding ? ActiveColor : MarkerColor;
+            tint.a *= alpha;
+            markerMaterial.color = tint;
             cmd.DrawMesh(marker, frame * Matrix4x4.TRS(shownOffset, shownTurn, Vector3.one), markerMaterial, 0, 0);
 
             if (!logged)
@@ -121,11 +125,12 @@ namespace ShipbreakerVR
 
             // The hand's axes as a cross, the upper arm longer and capped; in globe radii.
             builder = new Builder();
-            builder.Tube(new[] { new Vector3(-0.22f, 0f, 0f), new Vector3(0.22f, 0f, 0f) }, 0.015f, MarkerColor);
-            builder.Tube(new[] { new Vector3(0f, -0.22f, 0f), new Vector3(0f, 0.32f, 0f) }, 0.015f, MarkerColor);
-            builder.Tube(new[] { new Vector3(0f, 0f, -0.22f), new Vector3(0f, 0f, 0.22f) }, 0.015f, MarkerColor);
-            builder.Tube(new[] { new Vector3(-0.06f, 0.32f, 0f), new Vector3(0.06f, 0.32f, 0f) }, 0.015f, MarkerColor);
-            builder.Box(Vector3.zero, Vector3.one * 0.05f, MarkerColor);
+            // White: the material color tints it (MarkerColor, or ActiveColor while the trigger is held).
+            builder.Tube(new[] { new Vector3(-0.22f, 0f, 0f), new Vector3(0.22f, 0f, 0f) }, 0.015f, Color.white);
+            builder.Tube(new[] { new Vector3(0f, -0.22f, 0f), new Vector3(0f, 0.32f, 0f) }, 0.015f, Color.white);
+            builder.Tube(new[] { new Vector3(0f, 0f, -0.22f), new Vector3(0f, 0f, 0.22f) }, 0.015f, Color.white);
+            builder.Tube(new[] { new Vector3(-0.06f, 0.32f, 0f), new Vector3(0.06f, 0.32f, 0f) }, 0.015f, Color.white);
+            builder.Box(Vector3.zero, Vector3.one * 0.05f, Color.white);
             marker = builder.Mesh("Cross");
 
             builder = new Builder();
