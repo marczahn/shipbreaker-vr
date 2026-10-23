@@ -305,3 +305,11 @@ VR does. OpenXR is the one thing it keeps running, because its settings can only
 anyway. The new instance takes over the running VR session instead of starting a second
 one. One detail would have been nasty: the patches of both instances carried the same name, and the old one, on its
 way out, would have removed the new one's patches too.
+
+<a id="center-combo"></a>
+## 2026-10-23 · Centering without a keyboard
+
+F4 centers the view, which is handy right up to the moment you wear a headset and the keyboard is somewhere below you.
+Marc wanted it on the controllers: B and Y pressed together. Y alone brakes and B alone goes back in menus, so while
+both are held, and until both are let go again, neither does its own job. Otherwise centering the view in a menu would
+also have closed it.

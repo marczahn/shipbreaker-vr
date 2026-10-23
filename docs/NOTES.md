@@ -44,7 +44,7 @@ Idea for controllers: an aiming camera on the hand that receives these calls.
   (`UI/Default`, ZTest Always, eye matrices via reflection from `HDCamera.xr`). In gameplay the quad is a visor in
   front of the head; elsewhere it is a canvas fixed in the playspace, upright at eye height in the direction the head
   faces. It follows the eye height once the eyes are more than 30 cm above or below its center (standing up, sitting
-  down). F4 places it in front of the head again and, in menus, turns the playspace to the gaze. The VR tab row "Center view" (`VrOptions.ActionRow`, a toggle row
+  down). F4 (or B + Y on the controllers, `VrCamera.UpdateCenterCombo`) places it in front of the head again and, in menus, turns the playspace to the gaze. The VR tab row "Center view" (`VrOptions.ActionRow`, a toggle row
   without the toggle) does the same.
 - The game switches its custom pass volumes off outside gameplay (e.g. pause), so the mod uses its own
   `CustomPassVolume` (AfterPostProcess) and only disables the game's UI passes for the VR camera.
@@ -183,7 +183,8 @@ send nothing else): the left menu button belongs to Virtual Desktop, the left st
 to hit while steering with the left stick, and in menus the Doozy button bridges read Start like Confirm on the
 selected button. No View button (Back; `BackButtonService` treats Decline/B the same, so B covers Esc in menus) and no D-pad. In
 `Gameplay` it reports only A + X, which opens the pause menu; everything else stays with controller flying. A press held across a game state change is ignored until released, so the
-press that opens the pause menu does not close it again. Pressed buttons are logged as `Menu control: ...`.
+press that opens the pause menu does not close it again. B + Y together centers the view (`VrCamera.CenterComboHeld`,
+from the press until both are up again): then B and Y send nothing and Y does not brake. Pressed buttons are logged as `Menu control: ...`.
 InControl makes a device active only when its last input is strictly newer than the active one's. An "Unknown
 Device" (probably a joystick exposed by the runtime) had input every frame and kept the role, so the first version's
 presses never reached the game. A postfix on `InputManager.UpdateActiveDevice` gives our device the role while it has

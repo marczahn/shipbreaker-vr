@@ -77,8 +77,8 @@ namespace ShipbreakerVR
                 new ActionRow
                 {
                     Label = L("Center view", "Ansicht zentrieren"), Run = VrCamera.RecenterView,
-                    Hint = L("Puts the view and the menus in front of you again, like F4. Use it after you turned around or moved away from your spot.",
-                        "Richtet Blick und Menüs wieder vor dir aus, wie F4. Nutzen, wenn du dich umgedreht oder von deinem Platz entfernt hast."),
+                    Hint = L("Puts the view and the menus in front of you again, like F4 or B + Y. Use it after you turned around or moved away from your spot.",
+                        "Richtet Blick und Menüs wieder vor dir aus, wie F4 oder B + Y. Nutzen, wenn du dich umgedreht oder von deinem Platz entfernt hast."),
                 },
                 new BoolRow
                 {
