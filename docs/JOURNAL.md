@@ -397,6 +397,9 @@ each 10 cm either way. I read horizontal as forward and back and built that. Mar
 slider now moves the eyes sideways, relative to the direction you face, otherwise turning around would swap left and
 right.
 
-Two things came up in the first test. The sliders moved in fractions of a centimeter that changed nothing you could
-see, so they now jump one whole centimeter per push. And adjusting a slider with the stick kept hopping to the row above
-or below, because no thumb pushes perfectly sideways. In menus only the stronger axis of the left stick counts now.
+Marc's first test turned up three things. The sliders moved in fractions of a centimeter that changed nothing you could
+see, so they now jump one whole centimeter per push. Adjusting a slider with the stick kept hopping to the row above or
+below, because no thumb pushes perfectly sideways; in menus only the stronger axis of the left stick counts now.
+
+And the helmet frame follows the head, so it had moved along with the eyes and the view inside it looked exactly the
+same as before. Now the helmet stays where the game puts the head, and only the eyes move inside it.

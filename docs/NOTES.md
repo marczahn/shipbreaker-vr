@@ -143,8 +143,9 @@ shows whether the scale actually reaches the stereo rendering (about 63 mm times
 Configs `Bild/KopfHoehe` and `Bild/KopfSeitlich` (also in the VR tab, -10 to 10 cm each) shift the eyes against the
 game camera after recentering. Height runs along the playspace's up axis, sideways (positive is right) along the head's
 heading within the playspace, so the offset stays on the same side of the body when the player turns. Both are in the player's own centimeters and
-scale with the world scale like the tracked head movement. Background: Raik's head sat too low in the game, which Marc
-could not reproduce; the cause is unknown, the offset lets each player correct it.
+scale with the world scale like the tracked head movement. With the helmet following the head, `VrHelmet` subtracts
+the offset again, so the eyes move inside the helmet instead of taking it along. Background: Raik's head sat too low
+in the game, which Marc could not reproduce; the cause is unknown, the offset lets each player correct it.
 
 Their slider rows use whole steps (`SliderRow.Step = 1`): `Slider.wholeNumbers` for dragging, and the game's
 `OptionEntrySlider` fields `m_ControllerSliderStep`/`mSpeed` set to the step with `m_AccelerateWhenHeld` off, because

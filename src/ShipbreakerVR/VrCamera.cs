@@ -60,6 +60,9 @@ namespace ShipbreakerVR
 
         public const float HeadOffsetRange = 10f;
 
+        // The head offset in the world: how far the eyes sit from where the game puts them (the helmet stays there).
+        public Vector3 WorldHeadOffset => Playspace * (Yaw(HeadRotation) * HeadOffset) * WorldScale;
+
         private float loggedScale = -1f;
 
         // Rough estimate: HDRP needs about 250 bytes of render targets per pixel and eye (G-buffer, depth, color,
@@ -573,7 +576,7 @@ namespace ShipbreakerVR
             var scale = WorldScale;
             rig.localScale = new Vector3(scale, scale, scale);
             rig.rotation = Playspace;
-            rig.position = position + Playspace * ((Yaw(HeadRotation) * HeadOffset - recenterPosition) * scale);
+            rig.position = position - Playspace * (recenterPosition * scale) + WorldHeadOffset;
         }
 
         // Lying in bed (waking up, the monitor above the bed) the Hab camera looks up at the ceiling. There the playspace
