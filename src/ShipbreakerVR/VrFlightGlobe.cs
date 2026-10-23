@@ -9,9 +9,9 @@ namespace ShipbreakerVR
     // reference pose and turns as the hand turns. The cross's arms are the hand's own axes; the upper one is longer and
     // capped, so up stays recognizable however far the hand rolls. The globe's surface is full thrust, the small inner
     // globe the deadzone; the line from the center to the cross grows stronger with thrust. Kept plain and in one color
-    // to fit the game's HUD, except for the orange while the trigger is held. The globe is fixed to the visor like the rest of the HUD, its axes along and across the view; they
-    // stand for those of the playspace, the frame the hand offset is measured in.
-    // When the trigger is released the cross glides back to the center.
+    // to fit the game's HUD, except for the orange while the trigger is held. The globe is fixed to the visor like the
+    // rest of the HUD, its axes along and across the view, and shows the hand offset in the head's frame: moving the hand
+    // to the right moves the cross to the right. When the trigger is released the cross glides back to the center.
     // Drawn in 3D for each eye after the visor (VrUi.Draw), from meshes built here, since the plugin brings no shaders.
     internal static class VrFlightGlobe
     {
@@ -94,7 +94,9 @@ namespace ShipbreakerVR
             var dt = Time.unscaledDeltaTime;
             if (VrControls.TryGetHand(out var offset, out var turn))
             {
-                shownOffset = Vector3.ClampMagnitude(offset / VrControls.FullOffset, 1f);
+                // The offset is in tracking space, the globe faces like the visor: turn it into the head's frame, or a head
+                // turned away from the tracking space's forward shows the offset turned by as much.
+                shownOffset = Vector3.ClampMagnitude(Quaternion.Inverse(VrCamera.Instance.HeadRotation) * offset / VrControls.FullOffset, 1f);
                 shownTurn = turn;
             }
             else

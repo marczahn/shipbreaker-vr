@@ -179,8 +179,9 @@ hand's offset from the reference (tracking space) and turns by the hand's rotati
 controller's own frame, the same rotation whose `z` is the roll. Everything is one light HUD color; while the trigger is
 held, the cross and the line from the center to it take the orange of the game's gauge bars (255, 139, 0), the line
 faint at the deadzone and solid at full thrust. The globe is fixed to the visor (Marc wanted a steady instrument), its
-axes along and across the view; the offset is shown in playspace axes, which match the visor's while looking straight
-ahead. A first version kept the globe aligned with the playspace, so it swung around when the head turned; a 10 degree
+axes along and across the view; the offset (tracking space) is turned into the head's frame
+(`Inverse(HeadRotation)`). Shown in raw tracking axes it was off by the head's yaw against the tracking space's
+forward: facing 90 degrees away from it, the cross moved 90 degrees off. A first version kept the globe aligned with the playspace, so it swung around when the head turned; a 10 degree
 tilt towards the eyes was tried and dropped. After the trigger is released the cross eases back to the center. Drawn per
 eye right after the visor quad, with `Hidden/Internal-Colored` (vertex colors, `_Cull` Back, `_ZTest` Always;
 `UI/Default` without culling as fallback) on meshes built at runtime. The first draw logs `Flight globe drawn (<shader>,

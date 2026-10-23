@@ -313,7 +313,9 @@ charge.
 At first the globe turned with the playspace rather than with the head, because that is the frame the hand is measured
 in: turn your head, and the axes still point where the thrust goes. Correct, but Marc preferred a steady instrument:
 fixed in the visor like the rest of the HUD. A tilt of ten degrees towards him lasted one round; now the lines simply
-run along and across the view. The plugin brings no shaders and no models, so the globe, the axes and the cross are
+run along and across the view. That fix had a catch I only found when Marc reported the whole display turned
+by 90 degrees: the hand is measured in the tracking space, and its forward is wherever the headset was calibrated, not
+where Marc happens to face. In a fixed globe the offset has to be turned into the head's frame first. The plugin brings no shaders and no models, so the globe, the axes and the cross are
 thin tubes built from code.
 
 While at it, Marc moved turning and pitching from the left stick to the right one. Since [steering with the
