@@ -1,48 +1,184 @@
 # ShipbreakerVR
 
-A VR mod for **Hardspace: Shipbreaker** (Unity 2020.3, HDRP), built on BepInEx 5 and OpenXR.
-Tested with Meta Quest via Virtual Desktop.
+Play **Hardspace: Shipbreaker** in VR: look around your cutting bay with your own head, fly with your hand and use the
+menus with your motion controllers.
 
-> **Alpha:** everything here is still alpha and far from ready for regular use. Features are added step by step.
-> Releases are tagged with an `alpha-` prefix (e.g. `alpha-v0.8.0`).
+**[Download the latest version](https://github.com/marczahn/shipbreaker-vr/releases/latest)**
 
-> Unofficial fan project, use at your own risk. See the [disclaimer](DISCLAIMER.md) (liability, VR health notes).
+> **Early test version (alpha).** The mod is playable, but expect rough edges and missing pieces. This is an
+> unofficial fan project, not made or supported by the game's developers. Use it at your own risk, see the
+> [disclaimer](DISCLAIMER.md).
 
-## Status
-- Stereo rendering (MultiPass) and head tracking
-- Body and tools follow the head; mouse/stick turning is added on top
-- HUD as a visor in front of the eyes, menus on a canvas in the room, helmet follows the head
-- VR settings in their own "VR" tab of the game's options
-- Flying with the left motion controller: trigger and hand movement thrust, the right stick turns and pitches, Y brakes
-  (see [docs/INSTALL.md](docs/INSTALL.md#flying-with-the-controllers))
-- Menus with the motion controllers (both controllers act as one gamepad)
-- Not yet: tools in the hands, laser pointer for menus, comfort options
+- [What you get](#what-you-get)
+- [What you need](#what-you-need)
+- [Installing](#installing)
+- [Playing](#playing)
+- [Settings](#settings)
+- [Something is wrong](#something-is-wrong)
+- [Questions](#questions)
+- [What does not work yet](#what-does-not-work-yet)
+- [Getting help and reporting bugs](#getting-help-and-reporting-bugs)
+- [Uninstalling](#uninstalling)
+- [Thanks](#thanks)
 
-Notes on how the game works and why the mod does what it does: [docs/NOTES.md](docs/NOTES.md).
-How the mod came about, including the dead ends: [docs/JOURNAL.md](docs/JOURNAL.md).
+## What you get
 
-## Usage
+- **Real VR from the first second.** The game starts in your headset, intro and loading screens included. Look around
+  freely; your body and your tools turn with your head.
+- **Fly with your hand.** Hold the trigger on the left controller and move your hand where you want to go. The right
+  stick turns you, Y brakes.
+- **Menus with the controllers.** No need to reach for the mouse: your controllers work like a gamepad in all menus.
+- **Your HUD inside the helmet.** The game's display sits in your visor, menus float in the room in front of you, and
+  the helmet frame moves with your head.
+- **All VR settings in the game.** A new "VR" tab in the game's options, with a short explanation for every setting.
+- **Mouse, keyboard and gamepad still work**, if you prefer them for some things.
+
+## What you need
+
+- **Hardspace: Shipbreaker on Steam** (Windows). Other store versions have not been tested.
+- **A gaming PC that can run VR.** The mod runs on the PC, not on the headset itself. It is tested with an
+  RTX 4070 Ti; on weaker graphics cards you will likely need lower settings.
+- **A PC VR headset**, for example:
+  - Meta Quest 2, 3 or Pro connected through Virtual Desktop (this is what the mod is tested with), Quest Link or
+    Air Link
+  - Valve Index, HTC Vive and other SteamVR headsets (not tested yet, but should work)
+- **VR controllers** to fly and use the menus. Without them you can still play with mouse and keyboard or a gamepad
+  and only use the headset to look around.
+- **Good VR legs.** You float in zero gravity and turn in every direction. If VR easily makes you feel sick, start
+  with short sessions.
+
+The game does not run in a standalone headset (a Quest without a PC).
+
+## Installing
+
+Before you start, make a copy of your save games, just in case.
+
+1. **Download** the ZIP file from the [latest release](https://github.com/marczahn/shipbreaker-vr/releases/latest)
+   (the file called `ShipbreakerVR-<version>.zip`).
+2. **Open the game folder:** in your Steam library, right-click Hardspace: Shipbreaker, then choose
+   **Manage → Browse local files**. A folder opens that contains `Shipbreaker.exe`.
+3. **Unpack the ZIP into that folder.** Everything in the ZIP goes right next to `Shipbreaker.exe`. If Windows asks
+   whether to replace files or merge folders, say yes.
+4. **Start the game** as usual from Steam, with your headset connected and your VR app running (for example Virtual
+   Desktop). The first start takes a little longer.
+
+That's it. Updating works the same way: unpack the new ZIP over the old one.
+
+More details and a list of everything the ZIP contains: [installation guide](docs/INSTALL.md).
+
+## Playing
+
 ![Controls overview](docs/images/controls.svg)
 
-- VR starts with the game (config `VrBeimStart`), so intro and loading screens already show in the headset
-- **F3** toggles VR, **F4** or **B + Y** recenters the view, **F7** switches the screen look on the station's monitors, **F8** writes what is drawn around the player into the log (for bug reports)
-- Settings: in-game options or `BepInEx\config\de.marczahn.shipbreakervr.cfg`
+**Flying (left hand flies, right hand steers):**
 
-Installing a release: [docs/INSTALL.md](docs/INSTALL.md).
+| I want to … | How |
+|---|---|
+| Fly in a direction | Hold the left trigger and move the controller that way. The farther you move it, the faster you go. |
+| Roll | Keep the left trigger held and tilt the controller sideways. |
+| Turn left or right | Push the right stick left or right. |
+| Look up or down | Push the right stick up or down. |
+| Brake | Press Y. |
+| Open the pause menu | Press X and A together. |
+| Put the view back in front of me | Press B and Y together (or F4 on the keyboard). |
 
-## Layout
-- `src/ShipbreakerVR/` – the BepInEx plugin (C#, net48)
-- `unity/ShipbreakerVRUnity/` – helper project (Unity 2020.3.35f1). Builds the `xrmanager` AssetBundle with the
-  XR/OpenXR settings and collects the OpenXR DLLs (menu *ShipbreakerVR → Build for the game*).
-  The XR settings are derived from [ShipbreakerVR by Raicuparta](licenses/ShipbreakerVr-Raicuparta-MIT.txt) (MIT).
+**In menus** both controllers act together like one Xbox gamepad: left stick to move around, A to confirm, B to go
+back, the triggers switch tabs.
 
-## Building
-```
-dotnet build src/ShipbreakerVR -c Release -p:GameDir="C:\path\to\Hardspace Shipbreaker"
-```
-Expects BepInEx and the Unity XR DLLs in the game folder (`BepInEx\core`, `BepInEx\plugins\ShipbreakerVR`).
-Copy the resulting `ShipbreakerVR.dll` to `BepInEx\plugins\ShipbreakerVR\`.
+**Keyboard:** F3 turns VR on and off, F4 puts the view back in front of you.
 
-## License
-MIT, see [LICENSE](LICENSE). Third-party components keep their own licenses, see [licenses/](licenses) and [docs/INSTALL.md](docs/INSTALL.md).
-Use at your own risk, see the [disclaimer](DISCLAIMER.md).
+## Settings
+
+Open the game's options and choose the **VR** tab. Every row explains itself when you select it. The ones you are most
+likely to need:
+
+- **Center view:** puts the view and the menus in front of you again.
+- **Render resolution:** how sharp the picture is. Lower it if the game stutters.
+- **Station resolution:** the same for the station between shifts, which is harder on the graphics card.
+- **Turning:** smooth turning, or turning in steps, which is easier on the stomach.
+- **Head height** and **Head sideways:** move your view if you seem to sit too low or off to one side in the suit.
+- **Controller flying:** switch it off if you fly with mouse and keyboard or a gamepad.
+
+## Something is wrong
+
+### The game crashes right after loading into a shift
+The render resolution is probably set too high and the graphics card runs out of memory. Set **Render resolution**
+in the VR tab back to 1.0.
+
+### The game stutters or the picture smears when I move
+Lower **Render resolution** in the VR tab, and leave **Ambient occlusion** on Low or switch it off. In the game's own
+graphics settings, a lower quality level helps too.
+
+### The view wobbles at the station's monitors
+The graphics card does not keep up there. Lower **Station resolution** in the VR tab step by step until it stops.
+
+### I sit too low or off to one side in the suit
+Use **Head height** and **Head sideways** in the VR tab.
+
+### The menu or the view is behind me or off to the side
+Press **B and Y** together, or **F4**. This puts everything in front of you again.
+
+### The game starts, but not in the headset
+Make sure the headset is connected and your VR app (Virtual Desktop, the Meta app or SteamVR) is running before you
+start the game. Then restart the game.
+
+### Nothing changed at all, the game looks like before
+The files probably ended up in the wrong place. Check that the game folder now contains a folder called `BepInEx`
+right next to `Shipbreaker.exe`. If the ZIP was unpacked into a subfolder of its own, move its contents up.
+
+## Questions
+
+**Are my save games safe?**
+The mod does not touch your save games. It is still a test version, though, so a backup never hurts.
+
+**Can I switch VR off without uninstalling?**
+Yes, press F3 in the game.
+
+**Can I play with mouse and keyboard or a gamepad?**
+Yes. They keep working while you look around with the headset. Switch off **Controller flying** in the VR tab if you
+don't use the motion controllers.
+
+**Is this the same as the ShipbreakerVr mod by Raicuparta?**
+No. Raicuparta's mod was an earlier, simpler VR mode for the same game without motion controls; this mod builds on
+parts of it. Use only one of the two at a time.
+
+**Does it work with other mods?**
+That has not been tested.
+
+## What does not work yet
+
+- Your tools still aim where you look, not where your hand points.
+- There is no laser pointer for the menus yet; you move through them with the sticks.
+- During loading screens the view can go dark for a moment.
+- Above 1.0, the render resolution can crash the game after loading (see above).
+
+## Getting help and reporting bugs
+
+1. Look through the [existing reports](https://github.com/marczahn/shipbreaker-vr/issues?q=is%3Aissue) first. If
+   your problem is already there, add what you saw.
+2. Otherwise [open a new report](https://github.com/marczahn/shipbreaker-vr/issues/new) (needs a free GitHub
+   account). Describe what you did and what happened.
+3. Please attach the file `LogOutput.log`. You find it in the game folder (see step 2 of
+   [Installing](#installing)), inside the folder `BepInEx`. It is rewritten every time you start the game, so copy it
+   right after the problem happened.
+
+## Uninstalling
+
+To switch off the mod, delete the file `winhttp.dll` in the game folder. To remove it completely, also delete the
+`BepInEx` folder there. The [installation guide](docs/INSTALL.md#uninstall) lists the few remaining files, which do
+nothing on their own.
+
+## Thanks
+
+- **Raicuparta**, whose [ShipbreakerVr](https://github.com/Raicuparta/shipbreaker-vr) mod showed how to get VR into
+  this game; our VR setup builds on it.
+- **[Bobmightypirate](https://github.com/Bobmightypirate)**, for testing and ideas.
+- **BepInEx** and **Unity's OpenXR plugin**, which make the mod possible.
+- **Blackbird Interactive**, for making the game.
+
+Health notes on VR use, liability and the legal details: [disclaimer](DISCLAIMER.md).
+
+---
+
+**For developers:** how to build the mod, how it works and how it came about: [CONTRIBUTING.md](CONTRIBUTING.md).
+License: MIT, see [LICENSE](LICENSE); included third-party components keep their own licenses ([licenses/](licenses)).
