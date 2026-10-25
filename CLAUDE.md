@@ -18,6 +18,7 @@ OpenXR at runtime. Tested with a Meta Quest via Virtual Desktop (VDXR runtime). 
   collects the OpenXR DLLs (menu *ShipbreakerVR → Build for the game*).
 - `docs/NOTES.md` – technical findings about the game and why the mod does what it does.
 - `docs/JOURNAL.md` – the development journal (see below).
+- `README.md` – the players' front page (written for non-technical users); `CONTRIBUTING.md` – building and layout for developers.
 - `docs/INSTALL.md` – user install guide; `docs/releases/<version>.md` – release notes.
 - `tools/build-release.sh` and `.claude/skills/release/` – building a release ZIP.
 - `licenses/`, `THIRD-PARTY-NOTICES.md`, `LICENSE` (MIT), `DISCLAIMER.md`.
