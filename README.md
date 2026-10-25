@@ -172,7 +172,7 @@ nothing on their own.
 
 - **Raicuparta**, whose [ShipbreakerVr](https://github.com/Raicuparta/shipbreaker-vr) mod showed how to get VR into
   this game; our VR setup builds on it.
-- **Raik**, for testing and ideas.
+- **[Bobmightypirate](https://github.com/Bobmightypirate)**, for testing and ideas.
 - **BepInEx** and **Unity's OpenXR plugin**, which make the mod possible.
 - **Blackbird Interactive**, for making the game.
 
