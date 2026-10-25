@@ -478,7 +478,14 @@ the view and cannot be shared (G-buffer, lighting, SSAO, SSR, volumetrics, post-
   second eye's shadow requests (from the culling results and the camera transform both eyes share) are the same as
   the first eye's. With `AugenTeilen` a prefix on `HDShadowAtlas.RenderShadows` skips the second eye for atlases the
   first eye rendered this frame, except blurred ones (EVSM, IM) and the cached atlases. The second eye still builds its
-  own shadow data, so sampling uses its own camera-relative matrices. F10 switches it while the game runs; the frame
+  own shadow data, so sampling uses its own camera-relative matrices. An atlas that anything else renders after the first
+eye (a reflection probe draws its own shadows into the same atlases) is rendered again for the second eye.
+With shared culling HDRP has a bug of its own: it marks the shared result as "don't release" in a set it clears at
+the start of every camera in its culling loop, so a camera after the second eye would make both eyes release the
+same result into the pool. While the eyes share, `VrEyeSharing` moves them to the end of the frame's camera passes.
+`beginCameraRendering` then also fires once per frame for the VR camera instead of once per eye (`VrHelmet` and
+`VrLoadTrace` are fine with that). The shared culling also shares the first eye's cascade fit, so far shadows at the
+outer edge of the right eye could fade a little earlier. F10 switches it while the game runs; the frame
   time line names the state, so before and after land in separate lines.
 
 Single Pass Instanced stays out of reach: HDRP issues every draw twice with `STEREO_INSTANCING_ON`, and a shader
@@ -489,9 +496,11 @@ Texture array slices. HDRP allocates every screen-sized target with `TextureXR.s
 sets it to 2 whenever an XR display exists when the pipeline is created, and nothing lowers it. In MultiPass only
 slice 0 is used. The pipeline is normally created before the plugin starts OpenXR, but one recreated afterwards (for
 example by a quality level with another asset) would carry a second slice in every target, roughly doubling HDRP's
-render target memory. `XrMaxViewsPatch` makes `GetMaxViews` return 1 with MultiPass, and if the slices are 2 anyway,
-`HdrpXrSettings.FixSlices` sets them to 1 while the world is hidden (`HDRP render targets had 2 texture array slices`).
-`Render info: ... texture array slices N` tells which case it is.
+render target memory. `XrMaxViewsPatch` makes `GetMaxViews` return 1 with MultiPass. `XRSystem` takes the larger of that and the current
+value, so this only helps while the slices are still 1; lowering them at runtime would pair existing two-slice
+targets with new one-slice ones in one render target bind, which D3D11 refuses. If they are 2 anyway, the log says so
+(`HDRP render targets have 2 texture array slices ...`), and `Render info: ... texture array slices N` tells which case
+it is.
 
 XR settings in the HDRP asset (`HdrpXrSettings.Update`): the occlusion mesh (the hidden area outside the lenses) is
 only drawn if the asset's `xrSettings.occlusionMesh` is on and the runtime supplies one; the mod switches the flag on.

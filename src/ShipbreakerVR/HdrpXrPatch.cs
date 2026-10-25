@@ -57,7 +57,7 @@ namespace ShipbreakerVR
     internal static class HdrpXrSettings
     {
         private static readonly FieldInfo Settings = AccessTools.Field(typeof(HDRenderPipelineAsset), "m_RenderPipelineSettings");
-        private static bool slicesFixed;
+        private static bool slicesChecked;
         private static bool loggedSettings;
 
         // Every frame while VR runs. The occlusion mesh (the parts of each eye the lenses never show) marks those pixels
@@ -84,15 +84,15 @@ namespace ShipbreakerVR
             Settings.SetValue(asset, settings);
         }
 
-        // While the world is hidden (loading), so the new targets are allocated while little else needs video memory.
-        // Targets already allocated keep their two slices until HDRP frees them; the render graph's pooled ones go
-        // within a few frames.
-        public static void FixSlices()
+        // XRSystem only ever raises the slices (Math.Max with the current value), so XrMaxViewsPatch keeps them at one
+        // only if they are one when a pipeline is created. Lowering them while targets with two slices exist would pair
+        // old and new targets of different array sizes in one render target bind, which D3D11 refuses; so this only
+        // reports it.
+        public static void CheckSlices()
         {
-            if (slicesFixed || !Plugin.MultiPass.Value || TextureXR.slices <= 1) return;
-            slicesFixed = true;
-            Plugin.Log.LogInfo($"HDRP render targets had {TextureXR.slices} texture array slices; MultiPass uses one, set to 1");
-            TextureXR.maxViews = 1;
+            if (slicesChecked || !Plugin.MultiPass.Value || TextureXR.slices <= 1) return;
+            slicesChecked = true;
+            Plugin.Log.LogWarning($"HDRP render targets have {TextureXR.slices} texture array slices although MultiPass uses one: about twice the video memory they need");
         }
     }
 }

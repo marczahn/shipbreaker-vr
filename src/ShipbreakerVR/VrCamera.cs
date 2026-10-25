@@ -319,7 +319,7 @@ namespace ShipbreakerVR
                 ApplyQuality();
                 LogEyeSeparation();
                 HdrpXrSettings.Update(Plugin.AntiAliasing.Value == AntiAliasing.TAA);
-                if (worldHidden) HdrpXrSettings.FixSlices();
+                HdrpXrSettings.CheckSlices();
                 VrRenderInfo.Update(this);
             }
             vrCamera.enabled = running;

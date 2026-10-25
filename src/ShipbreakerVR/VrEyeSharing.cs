@@ -45,8 +45,14 @@ namespace ShipbreakerVR
         // The fields of the (Camera, XRPass) tuples SetupFrame returns.
         private static FieldInfo item1, item2;
 
-        // The culling pass indices the runtime gave the two eyes, logged once.
+        // The culling pass indices the runtime gave the two eyes, logged once; the same for moving the eyes last.
         private static bool loggedPasses;
+        private static bool loggedOrder;
+
+        private static readonly object[] FirstView = { 0 };
+
+        // Per atlas whether it may be reused at all (not blurred, not a cache); they don't change.
+        private static readonly Dictionary<object, bool> reusable = new Dictionary<object, bool>();
 
         // Shadow atlases the first eye rendered this frame.
         private static readonly HashSet<object> renderedAtlases = new HashSet<object>();
@@ -71,8 +77,10 @@ namespace ShipbreakerVR
             var vr = VrCamera.Instance;
             if (vr == null || passes == null) return;
             object first = null, second = null;
-            foreach (var entry in passes)
+            int firstIndex = -1, secondIndex = -1;
+            for (var i = 0; i < passes.Count; i++)
             {
+                var entry = passes[i];
                 if (entry == null) continue;
                 if (item1 == null || item1.DeclaringType != entry.GetType())
                 {
@@ -83,8 +91,16 @@ namespace ShipbreakerVR
                 var pass = item2.GetValue(entry);
                 if (pass == null || XrPassType == null || !XrPassType.IsInstanceOfType(pass)) continue;
                 // In order: the left eye's pass comes first.
-                if (first == null) first = pass;
-                else if (second == null) second = pass;
+                if (first == null)
+                {
+                    first = pass;
+                    firstIndex = i;
+                }
+                else if (second == null)
+                {
+                    second = pass;
+                    secondIndex = i;
+                }
             }
             if (first == null || second == null)
             {
@@ -104,6 +120,25 @@ namespace ShipbreakerVR
                 CullingParams.SetValue(first, combined);
                 CullingPassId.SetValue(second, firstCull);
                 secondCull = firstCull;
+            }
+            // HDRP marks a shared culling result as "don't release" in a set it clears at the start of every camera in
+            // its culling loop. A camera after the second eye (one rendering into a texture, for example) would wipe the
+            // mark, both eyes would release the same result into the pool, and the next frame would hand it out twice.
+            // So when the eyes share, they go last; cameras that render into textures then render before the eyes,
+            // which only means their images are fresh.
+            if (firstCull == secondCull && secondIndex != passes.Count - 1)
+            {
+                var firstEntry = passes[firstIndex];
+                var secondEntry = passes[secondIndex];
+                passes.RemoveAt(secondIndex);
+                passes.RemoveAt(firstIndex);
+                passes.Add(firstEntry);
+                passes.Add(secondEntry);
+                if (!loggedOrder)
+                {
+                    loggedOrder = true;
+                    Plugin.Log.LogInfo($"XR: the VR camera's eyes moved to the end of {passes.Count} camera passes, so HDRP keeps their shared culling");
+                }
             }
             SharedThisFrame = firstCull == secondCull;
             sharedFrame = Time.frameCount;
@@ -144,7 +179,7 @@ namespace ShipbreakerVR
 
         private static Vector3 EyePosition(object pass)
         {
-            var view = (Matrix4x4)GetViewMatrix.Invoke(pass, new object[] { 0 });
+            var view = (Matrix4x4)GetViewMatrix.Invoke(pass, FirstView);
             return view.inverse.GetColumn(3);
         }
 
@@ -162,7 +197,8 @@ namespace ShipbreakerVR
         }
 
         // True if the second eye should keep this atlas as the first eye left it. Records the atlases the first eye renders.
-        public static bool SkipAtlas(object atlas, bool blurred, bool cache)
+        // Cached atlases only render pending updates; blurred ones (EVSM, IM) end in textures that don't survive.
+        public static bool SkipAtlas(object atlas, System.Func<object, bool> isReusable)
         {
             if (atlasFrame != Time.frameCount)
             {
@@ -170,10 +206,20 @@ namespace ShipbreakerVR
                 renderedAtlases.Clear();
                 ReusedAtlases = 0;
             }
-            // Cached atlases only render pending updates; blurred ones (EVSM, IM) end in textures that don't survive.
-            if (blurred || cache) return false;
+            if (!reusable.TryGetValue(atlas, out var canReuse))
+            {
+                canReuse = isReusable(atlas);
+                reusable[atlas] = canReuse;
+            }
+            if (!canReuse) return false;
             var eye = CurrentEye(out var isVr);
-            if (!isVr || eye < 0) return false;
+            // Anything else rendered in between (a reflection probe draws its own shadows into the same atlases) leaves
+            // the atlas with other content than the first eye's.
+            if (!isVr || eye < 0)
+            {
+                renderedAtlases.Remove(atlas);
+                return false;
+            }
             if (eye == firstEye)
             {
                 renderedAtlases.Add(atlas);
@@ -239,8 +285,10 @@ namespace ShipbreakerVR
             return null;
         }
 
-        internal static bool Skip(object atlas) =>
-            VrEyeSharing.SkipAtlas(atlas, System.Convert.ToInt32(Blur.GetValue(atlas)) != 0, (bool)Cache.GetValue(atlas));
+        private static readonly System.Func<object, bool> Reusable = atlas =>
+            System.Convert.ToInt32(Blur.GetValue(atlas)) == 0 && !(bool)Cache.GetValue(atlas);
+
+        internal static bool Skip(object atlas) => VrEyeSharing.SkipAtlas(atlas, Reusable);
 
         private static bool Prefix(object __instance, RenderGraph renderGraph, ref TextureHandle result)
         {
