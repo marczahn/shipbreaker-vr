@@ -18,6 +18,8 @@ namespace ShipbreakerVR
         internal static ConfigEntry<bool> MultiPass;
         internal static ConfigEntry<bool> SeparateEyeTextures;
         internal static ConfigEntry<bool> StartVrAtLaunch;
+        internal static ConfigEntry<bool> EyeSharing;
+        internal static ConfigEntry<bool> NoVrUnfitEffects;
         internal static ConfigEntry<bool> BodyFollowsHead;
         internal static ConfigEntry<bool> UiInVr;
         internal static ConfigEntry<float> HudDistance;
@@ -51,6 +53,10 @@ namespace ShipbreakerVR
                 "A separate texture per eye instead of a Texture2DArray. Experimental, in case MultiPass alone is not enough.");
             StartVrAtLaunch = Config.Bind("Rendering", "VrBeimStart", true,
                 "Start VR as soon as the game launches, so the intro and loading screens already show in the headset. Off: start VR with F3.");
+            EyeSharing = Config.Bind("Rendering", "AugenTeilen", false,
+                "Experimental: cull the scene and render the shadow maps once for both eyes instead of once per eye. Saves CPU and GPU time; if shadows look different between the eyes, switch it off. F10 switches it while the game runs.");
+            NoVrUnfitEffects = Config.Bind("Bild", "VrUnpassendeEffekteAus", true,
+                "Switch off effects that are wrong in a headset: motion blur, depth of field, lens distortion, chromatic aberration and Panini projection.");
             BodyFollowsHead = Config.Bind("Steuerung", "KoerperFolgtKopf", true,
                 "The body, and with it the tools' aim, turns with the head. Mouse and stick add extra rotation. Off: the head looks around freely, only the mouse turns the body.");
             AmbientOcclusion = Config.Bind("Bild", "Umgebungsverdeckung", VrPerformance.Occlusion.Niedrig,
@@ -164,6 +170,7 @@ namespace ShipbreakerVR
                 if (StartVrAtLaunch.Value) VrXr.Toggle();
             }
             if (Input.GetKeyDown(KeyCode.F3)) VrXr.Toggle();
+            if (Input.GetKeyDown(KeyCode.F10)) VrEyeSharing.Toggle();
             VrMenuInput.EnsureAttached();
 
             // The main menu has no LynxCameraController yet; the VR camera then attaches to the menu camera.

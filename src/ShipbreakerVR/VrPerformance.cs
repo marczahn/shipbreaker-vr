@@ -1,7 +1,9 @@
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text;
 using HarmonyLib;
 using UnityEngine;
+using UnityEngine.Profiling;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.HighDefinition;
 using UnityEngine.UI;
@@ -20,11 +22,22 @@ namespace ShipbreakerVR
     // The Hab's space truck viewer (SpaceTruck3DHABController) renders its own camera into a texture every frame, a
     // third HDRP render next to the two eyes, even though only the truck screen at the terminal shows that image. In
     // VR it renders only while the image is on screen.
+    //
+    // Effects that are wrong in a headset, whatever they cost: motion blur (the eyes and the head make their own),
+    // depth of field (focused where the flat camera looks, not where the eyes do), lens distortion, chromatic
+    // aberration and Panini projection (they bend or split the picture against the lenses' own correction). The same
+    // volume switches them off for the VR camera ([Bild] VrUnpassendeEffekteAus); depth of field and motion blur at
+    // full resolution per eye are also among the most expensive post effects.
     internal static class VrPerformance
     {
         public enum Occlusion { Niedrig, Aus, Spiel }
 
         private static AmbientOcclusion ambientOcclusion;
+        private static MotionBlur motionBlur;
+        private static DepthOfField depthOfField;
+        private static LensDistortion lensDistortion;
+        private static ChromaticAberration chromaticAberration;
+        private static PaniniProjection panini;
         private static VolumeProfile profile;
 
         private const float StatsPeriod = 30f;
@@ -37,6 +50,7 @@ namespace ShipbreakerVR
         private static Camera labelCamera;
         private static Occlusion labelOcclusion;
         private static float labelScale;
+        private static bool labelSharing;
 
         // Where a frame's time goes: the main thread from Update until rendering starts (game logic), rendering on the
         // main thread (which also waits for the headset's next frame, so it fills up to the frame time), and the GPU
@@ -46,6 +60,19 @@ namespace ShipbreakerVR
         private static float updateStart = -1f;
         private static float renderStart = -1f;
         private static readonly List<XRDisplaySubsystem> displays = new List<XRDisplaySubsystem>();
+
+        // Physics steps (FixedUpdate runs 0 to several times per frame) and garbage collections during a period.
+        private static int fixedSteps;
+        private static int gcStart;
+        private static int cullFrames;
+
+        // GPU time of the VR camera's render (both eyes, from our BeforeRendering pass to the end of post-processing),
+        // if Unity's GPU recorder works in this player. Release players may not support it; logged once.
+        private static CustomSampler gpuSampler;
+        private static Recorder gpuRecorder;
+        private static bool gpuLogged;
+        private static double gpuEyeSum;
+        private static int gpuEyeCount;
 
         private static Camera truckCamera;
         private static readonly List<RawImage> truckImages = new List<RawImage>();
@@ -66,8 +93,19 @@ namespace ShipbreakerVR
             ambientOcclusion = profile.Add<AmbientOcclusion>();
             ambientOcclusion.quality.value = (int)ScalableSettingLevelParameter.Level.Low;
             ambientOcclusion.intensity.value = 0f;
+            motionBlur = profile.Add<MotionBlur>();
+            motionBlur.intensity.value = 0f;
+            depthOfField = profile.Add<DepthOfField>();
+            depthOfField.focusMode.value = DepthOfFieldMode.Off;
+            lensDistortion = profile.Add<LensDistortion>();
+            lensDistortion.intensity.value = 0f;
+            chromaticAberration = profile.Add<ChromaticAberration>();
+            chromaticAberration.intensity.value = 0f;
+            panini = profile.Add<PaniniProjection>();
+            panini.distance.value = 0f;
             volume.sharedProfile = profile;
             go.SetActive(true);
+            AttachGpuTimer(vr);
             RenderPipelineManager.beginFrameRendering += OnBeginFrame;
             RenderPipelineManager.endFrameRendering += OnEndFrame;
         }
@@ -89,6 +127,53 @@ namespace ShipbreakerVR
 
         // Called from the VR camera's Update.
         public static void FrameStart() => updateStart = Time.realtimeSinceStartup;
+
+        // Called from the VR camera's FixedUpdate.
+        public static void FixedStep() => fixedSteps++;
+
+        // A pass right at the start of the VR camera's render opens the GPU sample, our UI pass after post-processing
+        // closes it (VrUiPass).
+        private static void AttachGpuTimer(VrCamera vr)
+        {
+            gpuSampler = CustomSampler.Create("ShipbreakerVR eye", true);
+            gpuRecorder = gpuSampler != null && gpuSampler.isValid ? gpuSampler.GetRecorder() : null;
+            if (gpuRecorder != null && gpuRecorder.isValid) gpuRecorder.enabled = true;
+            var go = new GameObject("ShipbreakerVR GPU Timer") { layer = VrUi.PassLayer };
+            go.SetActive(false);
+            go.transform.SetParent(vr.transform.parent, false);
+            var volume = go.AddComponent<CustomPassVolume>();
+            volume.isGlobal = true;
+            volume.injectionPoint = CustomPassInjectionPoint.BeforeRendering;
+            volume.AddPassOfType<VrGpuTimerPass>();
+            go.SetActive(true);
+        }
+
+        public static void BeginGpuSample(CustomPassContext context)
+        {
+            if (gpuRecorder == null || !gpuRecorder.isValid || !IsVrCamera(context)) return;
+            context.cmd.BeginSample(gpuSampler);
+        }
+
+        public static void EndGpuSample(CustomPassContext context)
+        {
+            if (gpuRecorder == null || !gpuRecorder.isValid || !IsVrCamera(context)) return;
+            context.cmd.EndSample(gpuSampler);
+        }
+
+        private static bool IsVrCamera(CustomPassContext context)
+        {
+            var vr = VrCamera.Instance;
+            return vr != null && VrXr.IsRunning && context.hdCamera.camera == vr.Camera;
+        }
+
+        // Once, whether Unity's GPU recorder gives numbers in this player.
+        private static void LogGpuTimer()
+        {
+            if (gpuLogged) return;
+            gpuLogged = true;
+            var supports = typeof(SystemInfo).GetProperty("supportsGpuRecorder", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            Plugin.Log.LogInfo($"GPU timer: sampler {(gpuSampler != null && gpuSampler.isValid ? "valid" : "invalid")}, recorder {(gpuRecorder != null && gpuRecorder.isValid ? "valid" : "invalid")}, GPU recorder supported: {supports ?? "unknown"}");
+        }
 
         private static void StartOfRendering()
         {
@@ -116,6 +201,12 @@ namespace ShipbreakerVR
                 var mode = Plugin.AmbientOcclusion.Value;
                 ambientOcclusion.quality.overrideState = running && mode == Occlusion.Niedrig;
                 ambientOcclusion.intensity.overrideState = running && mode == Occlusion.Aus;
+                var off = running && Plugin.NoVrUnfitEffects.Value;
+                motionBlur.intensity.overrideState = off;
+                depthOfField.focusMode.overrideState = off;
+                lensDistortion.intensity.overrideState = off;
+                chromaticAberration.intensity.overrideState = off;
+                panini.distance.overrideState = off;
             }
             RecordFrame(running && !worldHidden ? Label(followed, inHab) : null);
         }
@@ -125,12 +216,14 @@ namespace ShipbreakerVR
             if (followed == null) return null;
             var occlusion = Plugin.AmbientOcclusion.Value;
             var scale = UnityEngine.XR.XRSettings.eyeTextureResolutionScale;
-            if (statsLabel == null || followed != labelCamera || occlusion != labelOcclusion || !Mathf.Approximately(scale, labelScale))
+            var sharing = Plugin.EyeSharing.Value;
+            if (statsLabel == null || followed != labelCamera || occlusion != labelOcclusion || !Mathf.Approximately(scale, labelScale) || sharing != labelSharing)
             {
                 labelCamera = followed;
                 labelOcclusion = occlusion;
                 labelScale = scale;
-                return $"{(inHab ? "Hab" : $"'{followed.name}'")}, occlusion {occlusion}, {scale:0.00}x";
+                labelSharing = sharing;
+                return $"{(inHab ? "Hab" : $"'{followed.name}'")}, occlusion {occlusion}, {scale:0.00}x, eye sharing {(sharing ? "on" : "off")}";
             }
             return statsLabel;
         }
@@ -146,8 +239,25 @@ namespace ShipbreakerVR
                 statsStart = Time.unscaledTime;
             }
             // The switch itself (new camera, new render targets) is not representative.
-            if (statsLabel == null || Time.unscaledTime < statsStart + StatsSettle) return;
+            if (statsLabel == null || Time.unscaledTime < statsStart + StatsSettle)
+            {
+                ResetCounters();
+                return;
+            }
             frames.Add(Time.unscaledDeltaTime);
+            cullFrames++;
+            if (gpuRecorder != null && gpuRecorder.isValid)
+            {
+                LogGpuTimer();
+                // The total of the frame's samples, i.e. both eyes.
+                var nanoseconds = gpuRecorder.gpuElapsedNanoseconds;
+                if (nanoseconds > 0)
+                {
+                    gpuEyeSum += nanoseconds / 1e9;
+                    gpuEyeCount++;
+                }
+            }
+            else LogGpuTimer();
             SubsystemManager.GetInstances(displays);
             foreach (var display in displays)
                 if (display.running && display.TryGetAppGPUTimeLastFrame(out var gpu) && gpu > 0f)
@@ -185,12 +295,33 @@ namespace ShipbreakerVR
                 // Unity doesn't document the unit; runtimes report seconds or milliseconds.
                 var gpu = gpuCount > 0 ? gpuSum / gpuCount : 0.0;
                 text.Append(gpuCount > 0 ? $", app GPU {(gpu < 1.0 ? gpu * 1000.0 : gpu):0.0} ms" : ", GPU time unavailable");
+                if (gpuEyeCount > 0) text.Append($", GPU both eyes {gpuEyeSum / gpuEyeCount * 1000.0:0.0} ms");
                 if (truckCamera != null) text.Append($", truck viewer {(truckPaused ? "paused" : "rendering")}");
+                // CPU side: culling (twice per frame unless the eyes share it), physics steps and garbage collections.
+                if (cullFrames > 0)
+                {
+                    text.Append($", culling {(double)VrEyeSharing.CullCalls / cullFrames:0.0}x per frame, {VrEyeSharing.CullSeconds / cullFrames * 1000.0:0.00} ms");
+                    text.Append($", physics steps {(double)fixedSteps / cullFrames:0.00} per frame");
+                }
+                text.Append($", {System.GC.CollectionCount(0) - gcStart} garbage collections, {System.GC.GetTotalMemory(false) / (1024 * 1024)} MB managed");
+                if (VrEyeSharing.SharedThisFrame && Plugin.EyeSharing.Value) text.Append($", {VrEyeSharing.ReusedAtlases} shadow atlases reused");
                 Plugin.Log.LogInfo(text.ToString());
             }
             frames.Clear();
             logicSum = renderSum = gpuSum = 0.0;
             logicCount = renderCount = gpuCount = 0;
+            ResetCounters();
+        }
+
+        private static void ResetCounters()
+        {
+            fixedSteps = 0;
+            cullFrames = 0;
+            VrEyeSharing.CullCalls = 0;
+            VrEyeSharing.CullSeconds = 0.0;
+            gcStart = System.GC.CollectionCount(0);
+            gpuEyeSum = 0.0;
+            gpuEyeCount = 0;
         }
 
         // Share of frames that took 1.4 to 4 intervals of the given refresh rate: missed by the GPU, which the runtime
@@ -275,5 +406,11 @@ namespace ShipbreakerVR
             }
             Plugin.Log.LogInfo($"Other cameras rendering next to '{followed.name}': {(text.Length > 0 ? text.ToString() : "none")}");
         }
+    }
+
+    // Opens the GPU sample of the VR camera's render (VrPerformance).
+    internal class VrGpuTimerPass : CustomPass
+    {
+        protected override void Execute(CustomPassContext ctx) => VrPerformance.BeginGpuSample(ctx);
     }
 }

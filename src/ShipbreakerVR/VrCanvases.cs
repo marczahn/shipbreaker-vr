@@ -67,8 +67,8 @@ namespace ShipbreakerVR
             var layer = uiLayer = LowestLayer(uiCamera.cullingMask);
             // Inactive ones too: a canvas the game switches on later (the Hab's fades) would otherwise show for up to
             // half a second where the game put it, which for one on the Hab camera is in the room right in front of
-            // the VR camera.
-            var canvases = Resources.FindObjectsOfTypeAll<Canvas>();
+            // the VR camera. Scene objects only: Resources.FindObjectsOfTypeAll also walked every prefab, twice a second.
+            var canvases = Object.FindObjectsOfType<Canvas>(true);
             // Slightly in front of the canvases already on the UI camera. Not too close: TextMeshPro text turns into
             // solid blocks when a canvas ends up extremely small (planeDistance of a few centimetres).
             var nearest = float.MaxValue;
@@ -160,9 +160,14 @@ namespace ShipbreakerVR
         // Scene objects only; FindObjectsOfTypeAll also returns prefabs.
         private static bool InScene(Canvas canvas) => canvas.gameObject.scene.IsValid();
 
-        // isRootCanvas is only kept up to date for active canvases.
-        private static bool IsRoot(Canvas canvas) =>
-            canvas.isActiveAndEnabled ? canvas.isRootCanvas : canvas.GetComponentsInParent<Canvas>(true).Length == 1;
+        // isRootCanvas is only kept up to date for active canvases. Walks up without allocating an array per canvas.
+        private static bool IsRoot(Canvas canvas)
+        {
+            if (canvas.isActiveAndEnabled) return canvas.isRootCanvas;
+            for (var t = canvas.transform.parent; t != null; t = t.parent)
+                if (t.GetComponent<Canvas>() != null) return false;
+            return true;
+        }
 
         public void Restore()
         {

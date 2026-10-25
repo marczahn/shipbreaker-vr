@@ -553,9 +553,13 @@ namespace ShipbreakerVR
     {
         protected override void Execute(CustomPassContext ctx)
         {
-            if (VrUi.Instance == null) return;
-            VrUi.Instance.Draw(ctx);
-            VrUi.Instance.DrawFade(ctx);
+            if (VrUi.Instance != null)
+            {
+                VrUi.Instance.Draw(ctx);
+                VrUi.Instance.DrawFade(ctx);
+            }
+            // Closes the GPU sample our BeforeRendering pass opened (VrPerformance).
+            VrPerformance.EndGpuSample(ctx);
         }
     }
 }

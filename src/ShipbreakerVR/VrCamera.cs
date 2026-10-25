@@ -202,6 +202,7 @@ namespace ShipbreakerVR
 
             Plugin.Log.LogInfo($"VR camera follows '{camera.name}' (HDRP data copied: {gameHd != null})");
             VrPerformance.LogOtherCameras(camera);
+            VrRenderInfo.Schedule();
         }
 
         // Nothing of the (half-loaded) world, only black behind the UI canvas. Retarget restores the camera settings.
@@ -259,6 +260,8 @@ namespace ShipbreakerVR
             DestroyImmediate(vr.rig.gameObject);
         }
 
+        private void FixedUpdate() => VrPerformance.FixedStep();
+
         private void Update()
         {
             VrPerformance.FrameStart();
@@ -315,6 +318,9 @@ namespace ShipbreakerVR
             {
                 ApplyQuality();
                 LogEyeSeparation();
+                HdrpXrSettings.Update(Plugin.AntiAliasing.Value == AntiAliasing.TAA);
+                if (worldHidden) HdrpXrSettings.FixSlices();
+                VrRenderInfo.Update(this);
             }
             vrCamera.enabled = running;
             if (running && gameCamera != null) gameCamera.enabled = false;

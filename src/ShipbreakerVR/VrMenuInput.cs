@@ -41,6 +41,7 @@ namespace ShipbreakerVR
         private bool waitForRelease;
         private readonly bool[] pressed = new bool[Buttons.Length];
         private string lastPressed = "";
+        private int lastMask;
 
         private VrMenuInput() : base("ShipbreakerVR controllers")
         {
@@ -135,7 +136,8 @@ namespace ShipbreakerVR
 
                 // A press that opened or closed a menu is still held when the next state starts; it must not act there
                 // too (the press that opens the pause menu would close it again at once).
-                var any = pressed.Any(p => p);
+                var any = false;
+                foreach (var p in pressed) any |= p;
                 if (state != lastState)
                 {
                     lastState = state;
@@ -173,6 +175,12 @@ namespace ShipbreakerVR
 
         private void LogPresses(GameSession.GameState state)
         {
+            // The names only when the buttons held change, not every frame.
+            var mask = 0;
+            for (var i = 0; i < pressed.Length; i++)
+                if (pressed[i]) mask |= 1 << i;
+            if (mask == lastMask) return;
+            lastMask = mask;
             var names = string.Concat(Buttons.Where((b, i) => pressed[i]).Select(b => " " + b));
             if (names == lastPressed) return;
             lastPressed = names;
