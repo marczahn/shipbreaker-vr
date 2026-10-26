@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Reflection;
 using BBI.Unity.Game;
 using HarmonyLib;
 using UnityEngine;
@@ -13,7 +12,7 @@ namespace ShipbreakerVR
     // pose (the barrels run along the point's forward), and shifted so that the tool's grip lies in the controller's grip.
     // The tools aim from their muzzle (Muzzle), so beam, cut and grapple line leave from the barrel. With hand aiming off
     // the point goes back. Demo charges have no model on the point: the game's hand holds them, animated, so for them the
-    // hand itself goes to the controller (HandTargetPatch).
+    // arm is bent after the animation until the hand reaches the controller (PoseArm).
     internal static class VrToolModels
     {
         private static readonly AccessTools.FieldRef<HandGrab, List<Transform>> HandTargets =
@@ -45,13 +44,18 @@ namespace ShipbreakerVR
         private static readonly AccessTools.FieldRef<GrapplingHook, Transform> GrappleBarrel =
             AccessTools.FieldRefAccess<GrapplingHook, Transform>("m_GrapplingGunBarrel");
         private static readonly HashSet<int> logged = new HashSet<int>();
-        private static bool loggedCharge;
+        // Where the game camera was when the rig last followed it (PoseArm).
+        private static Vector3 lastCameraPosition;
+        private static bool rigKnown;
         private static int logCandidate;
         private static float logCandidateSince;
 
         // From VrCamera.FollowGameCamera, after the rig has moved.
         public static void Place()
         {
+            var camera = VrCamera.Instance != null ? VrCamera.Instance.GameCamera : null;
+            rigKnown = camera != null;
+            if (rigKnown) lastCameraPosition = camera.transform.position;
             var hand = RightHand();
             var target = hand != null ? hand.EquipmentGeoTransform : null;
             if (target != point)
@@ -181,21 +185,103 @@ namespace ShipbreakerVR
             return string.Join(" < ", names);
         }
 
-        // The game's right hand holding a demo charge: its IK target (HandGrab.m_HandTarget) goes to the controller's grip,
-        // keeping the angle to the eye that the game gave it. Called after HandGrab.UpdateHandTarget, before the animation
-        // reads the target.
-        public static void HoldCharge(HandGrab hand, Transform target)
+        // The game's right hand holding a demo charge (or the detonator): the animation poses the arm, with Animation
+        // Rigging's IK (TwoBoneIKConstraint) towards HandGrab.m_HandTarget. Moving that target had no visible effect, so
+        // after the animation, before skinning (from VrCamera.LateUpdate), the arm itself is bent so that the wrist sits
+        // at the controller, the hand keeping the angle to the eye that the animation gave it. The rig only moves to the
+        // game camera right before rendering, so the hand is placed where the rig will be: moved by as much as the game
+        // camera moved since then.
+        public static void PoseArm()
         {
-            if (target == null || hand.Hand != HandGrab.PlayerHand.Right || hand.CurrentHandState != HandGrab.HandState.Equipped
-                || hand.CurrentEquipmentType != EquipmentController.Equipment.DemoCharge) return;
-            var head = LynxCameraController.MainCameraTransform;
-            if (head == null || !VrAim.TryGetHand(out var grip, out var aim)) return;
-            if (!loggedCharge)
+            var vr = VrCamera.Instance;
+            var hand = RightHand();
+            if (vr == null || hand == null || !rigKnown || hand.Hand != HandGrab.PlayerHand.Right
+                || hand.CurrentHandState != HandGrab.HandState.Equipped || hand.CurrentEquipmentType != EquipmentController.Equipment.DemoCharge) return;
+            var camera = vr.GameCamera;
+            if (camera == null || !VrAim.TryGetHandLocal(out var gripLocal, out var aimLocal) || !FindArm(hand)) return;
+            var head = camera.transform;
+            var rig = vr.transform.parent;
+            var rigPosition = rig.position + (head.position - lastCameraPosition);
+            var grip = rigPosition + rig.rotation * Vector3.Scale(rig.localScale, gripLocal);
+            var aim = rig.rotation * aimLocal;
+            var wristRotation = aim * (Quaternion.Inverse(head.rotation) * armTip.rotation);
+            var wrist = grip + aim * (WristBehindGrip * rig.localScale.z);
+            LogArm(hand, head);
+            Bend(armRoot, armMid, armTip, wrist);
+            armTip.rotation = wristRotation;
+        }
+
+        // The wrist relative to the grip pose, along the aim: an estimate, as in VrControls.
+        private static readonly Vector3 WristBehindGrip = new Vector3(0f, 0f, -0.08f);
+
+        // Two-bone IK: the elbow bends until shoulder to wrist is as long as shoulder to target, then the shoulder turns
+        // the arm onto the target. The elbow stays in the plane the animation gave it.
+        private static void Bend(Transform root, Transform mid, Transform tip, Vector3 target)
+        {
+            var a = root.position;
+            var b = mid.position;
+            var upper = Vector3.Distance(a, b);
+            var lower = Vector3.Distance(b, tip.position);
+            if (upper < 0.001f || lower < 0.001f) return;
+            var reach = Mathf.Clamp(Vector3.Distance(a, target), Mathf.Abs(upper - lower) + 0.001f, upper + lower - 0.001f);
+            var toRoot = a - b;
+            var toTip = tip.position - b;
+            var axis = Vector3.Cross(toRoot, toTip);
+            if (axis.sqrMagnitude < 1e-8f) axis = Vector3.Cross(toRoot, root.up);
+            if (axis.sqrMagnitude < 1e-8f) return;
+            var current = Vector3.Angle(toRoot, toTip);
+            var wanted = Mathf.Acos(Mathf.Clamp((upper * upper + lower * lower - reach * reach) / (2f * upper * lower), -1f, 1f)) * Mathf.Rad2Deg;
+            mid.rotation = Quaternion.AngleAxis(wanted - current, axis.normalized) * mid.rotation;
+            root.rotation = Quaternion.FromToRotation(tip.position - a, target - a) * root.rotation;
+        }
+
+        private static Transform armRoot;
+        private static Transform armMid;
+        private static Transform armTip;
+        private static Transform armFor;
+        private static bool loggedArm;
+
+        // The right arm's bones from the IK constraint that aims at the hand target (Unity.Animation.Rigging, read by
+        // reflection; the plugin does not reference that assembly).
+        private static bool FindArm(HandGrab hand)
+        {
+            var target = hand.HandPositionTransform;
+            if (target == armFor) return armTip != null;
+            armFor = target;
+            armRoot = armMid = armTip = null;
+            if (target == null) return false;
+            var player = target.root;
+            var constraints = new List<string>();
+            foreach (var component in player.GetComponentsInChildren<MonoBehaviour>(true))
             {
-                loggedCharge = true;
-                Plugin.Log.LogInfo($"Tool in hand: demo charge held by the game's hand {Chain(target)}, at {head.InverseTransformPoint(target.position)} from the eye");
+                var type = component.GetType();
+                if (type.Namespace != "UnityEngine.Animations.Rigging") continue;
+                var data = type.GetProperty("data")?.GetValue(component);
+                var weight = type.GetProperty("weight")?.GetValue(component);
+                var constrainedTarget = Bone(data, "target");
+                constraints.Add($"{type.Name} on '{component.name}' (weight {weight}{(constrainedTarget != null ? $", target '{constrainedTarget.name}'" : "")})");
+                if (constrainedTarget == null || constrainedTarget != target) continue;
+                armRoot = Bone(data, "root");
+                armMid = Bone(data, "mid");
+                armTip = Bone(data, "tip");
             }
-            target.SetPositionAndRotation(grip, aim * (Quaternion.Inverse(head.rotation) * target.rotation));
+            Plugin.Log.LogInfo($"Tool in hand: arm for the demo charge {(armTip != null ? $"{Chain(armTip)}, from '{armRoot?.name}' over '{armMid?.name}'" : "not found")}; rig constraints: {string.Join("; ", constraints)}");
+            return armRoot != null && armMid != null && armTip != null;
+        }
+
+        private static Transform Bone(object data, string name) => data?.GetType().GetProperty(name)?.GetValue(data) as Transform;
+
+        // Once: what the demo charge's pieces hang on.
+        private static void LogArm(HandGrab hand, Transform head)
+        {
+            if (loggedArm) return;
+            loggedArm = true;
+            var charges = Object.FindObjectOfType<DemoChargeController>();
+            var detonator = charges != null ? Traverse.Create(charges).Field("m_DetonatorMeshRoot").GetValue<GameObject>() : null;
+            var animator = charges != null ? Traverse.Create(charges).Field("m_HandAnimatorController").GetValue<Animator>() : null;
+            Plugin.Log.LogInfo($"Tool in hand: demo charge; wrist '{armTip.name}' at {head.InverseTransformPoint(armTip.position)} from the eye; " +
+                $"detonator {(detonator == null ? "none" : $"{Chain(detonator.transform)}{(detonator.transform.IsChildOf(armTip) ? ", moves with the hand" : ", not on the hand")}")}; " +
+                $"hand animator {(animator == null ? "none" : Chain(animator.transform))}");
         }
 
         // On unload (hot reload): the equipment point goes back to the game.
@@ -209,18 +295,9 @@ namespace ShipbreakerVR
             stinger = null;
             grapple = null;
             logged.Clear();
-            loggedCharge = false;
+            armRoot = armMid = armTip = armFor = null;
+            loggedArm = false;
+            rigKnown = false;
         }
-    }
-
-    // See VrToolModels.HoldCharge.
-    [HarmonyPatch]
-    internal static class HandTargetPatch
-    {
-        private static readonly AccessTools.FieldRef<HandGrab, Transform> Target = AccessTools.FieldRefAccess<HandGrab, Transform>("m_HandTarget");
-
-        private static MethodBase TargetMethod() => AccessTools.Method(AccessTools.TypeByName("BBI.Unity.Game.HandGrab"), "UpdateHandTarget");
-
-        private static void Postfix(HandGrab __instance) => VrToolModels.HoldCharge(__instance, Target(__instance));
     }
 }

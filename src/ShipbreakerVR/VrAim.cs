@@ -143,20 +143,34 @@ namespace ShipbreakerVR
         {
             position = Vector3.zero;
             rotation = Quaternion.identity;
+            if (!TryGetPoseLocal(out var local, out var localRotation)) return false;
+            var rig = VrCamera.Instance.transform.parent;
+            position = rig.TransformPoint(local);
+            rotation = rig.rotation * localRotation;
+            return true;
+        }
+
+        // The grip pose's position and the aim pose's rotation in tracking space (VrToolModels.PoseArm, which runs before
+        // the rig has moved for the frame).
+        public static bool TryGetHandLocal(out Vector3 grip, out Quaternion rotation)
+        {
+            grip = Vector3.zero;
+            return TryGetPoseLocal(out _, out rotation) && right.TryGetFeatureValue(CommonUsages.devicePosition, out grip);
+        }
+
+        private static bool TryGetPoseLocal(out Vector3 local, out Quaternion localRotation)
+        {
+            local = Vector3.zero;
+            localRotation = Quaternion.identity;
             var vr = VrCamera.Instance;
             if (!VrXr.IsRunning || !Plugin.AimWithHand.Value || vr == null || vr.FollowsHab) return false;
             if (GameSession.CurrentGameState != GameSession.GameState.Gameplay) return false;
             if (!right.isValid) right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
             if (!right.isValid) return false;
             if (right.TryGetFeatureValue(CommonUsages.isTracked, out var tracked) && !tracked) return false;
-            var local = Vector3.zero;
-            var localRotation = Quaternion.identity;
             var pointer = right.TryGetFeatureValue(PointerPosition, out local) && right.TryGetFeatureValue(PointerRotation, out localRotation);
             if (!pointer && !(right.TryGetFeatureValue(CommonUsages.devicePosition, out local) && right.TryGetFeatureValue(CommonUsages.deviceRotation, out localRotation)))
                 return false;
-            var rig = vr.transform.parent;
-            position = rig.TransformPoint(local);
-            rotation = rig.rotation * localRotation;
             if (!loggedPose)
             {
                 loggedPose = true;

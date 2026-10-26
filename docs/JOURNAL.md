@@ -461,7 +461,9 @@ to hold the grip to keep the tool, like holding a real one: let go and it goes b
 away from reeling in, which moved to B with the trigger held, next to A for throwing.
 
 The demo charges stayed behind once more. They have no model of their own: the game's hand holds them, animated, so
-there was nothing on the tool point to move. Now the hand itself goes to the controller while it holds a charge.
+there was nothing on the tool point to move. My first idea was to move the point the game's hand reaches for. The log
+said my code ran, and Marc said nothing moved, charge and detonator included. So now the mod waits until the game has
+finished animating the arm and then bends it itself, elbow and shoulder, until the wrist sits at the controller.
 
 One fix from the first round had to go again. Back then I had taught the cutter's rail, floating in front of the
 helmet, to turn along with the wrist. Now that the cutter sits in the hand, the rail turns with it anyway, and my old
