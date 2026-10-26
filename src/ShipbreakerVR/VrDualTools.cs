@@ -46,7 +46,7 @@ namespace ShipbreakerVR
         private static int logs;
 
         // The option, with all the patches it needs (PatchReport).
-        public static bool Enabled => Plugin.TwoTools != null && Plugin.TwoTools.Value && PatchReport.TwoToolsWork;
+        public static bool Enabled => VrSettings.TwoTools != null && VrSettings.TwoTools.Value && PatchReport.TwoToolsWork;
 
         // The family of a game class (GameTools).
         public static Family FamilyOf(System.Type type) => GameTools.FamilyOf(type);
@@ -209,7 +209,7 @@ namespace ShipbreakerVR
         {
             if (Second == EquipmentController.Equipment.None) return;
             var state = GameSession.CurrentGameState;
-            if (!Enabled || !Plugin.AimWithHand.Value || (state != GameSession.GameState.Gameplay && state != GameSession.GameState.Paused))
+            if (!Enabled || !VrSettings.AimWithHand.Value || (state != GameSession.GameState.Gameplay && state != GameSession.GameState.Paused))
             {
                 PutAway(true);
                 return;

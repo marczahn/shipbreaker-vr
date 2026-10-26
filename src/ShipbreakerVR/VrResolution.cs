@@ -20,7 +20,9 @@ namespace ShipbreakerVR
         // 1.55 and 2.0 ran out of memory, 1.0 works; the estimate gives 1.25.
         private const float BytesPerPixelAndEye = 250f;
         private const float VideoMemoryShare = 0.5f;
-        public const float ResolutionSliderMax = 2f;
+        // The range of the render resolution settings ([Bild] Aufloesung, and AufloesungStation up to HabResolution).
+        public const float ResolutionScaleMin = 0.5f;
+        public const float ResolutionScaleMax = 2f;
 
         // Render resolution while only the loading UI shows: the headset's native one, so the load screen stays sharp
         // while the level being loaded gets the video memory (at 1.25x the level start ran out of it and crashed).
@@ -29,13 +31,13 @@ namespace ShipbreakerVR
         // Highest render resolution in the Hab. The bay stays loaded next to it, and at 1.25x the 12 GB card ran out of
         // video memory each time the Hab appeared (Failed to create RenderTexture ... 0x8007000e). It also leaves the
         // Hab more room to reach the headset's frame rate.
-        private const float HabResolution = 1f;
+        public const float HabResolution = 1f;
 
         // The Hab costs the GPU more than the bay: on an RTX 4070 Ti at 2688x2880 per eye it ran at 45 fps at 1.0x and at
         // the headset's 90 at 0.7x. Below the headset's rate Virtual Desktop halves it and synthesizes every second frame,
         // and even a few missed frames (3 % at 0.8x) wobble close to the monitors. So the Hab has its own resolution
         // setting ([Bild] AufloesungStation), independent of the one for everywhere else, at most HabResolution.
-        private static float HabScale => Mathf.Clamp(Plugin.StationResolution.Value, 0.5f, HabResolution);
+        private static float HabScale => VrSettings.StationResolution.Value;
 
         private static float maxResolutionScale = -1f;
         private static float pendingResolution = -1f;
@@ -64,7 +66,7 @@ namespace ShipbreakerVR
         {
             shrinkAt = Time.unscaledTime + 2f;
             var max = MaxResolutionScale();
-            var scale = Mathf.Clamp(Plugin.ResolutionScale.Value, 0.5f, max > 0f ? max : 1f);
+            var scale = Mathf.Clamp(VrSettings.ResolutionScale.Value, ResolutionScaleMin, max > 0f ? max : 1f);
             var current = XRSettings.eyeTextureResolutionScale;
             if (scale >= current || Mathf.Approximately(scale, current)) return;
             XRSettings.eyeTextureResolutionScale = scale;
@@ -83,7 +85,7 @@ namespace ShipbreakerVR
 
         private static void Apply(HDAdditionalCameraData vrHd, bool followsHab, bool worldHidden)
         {
-            var mode = Plugin.AntiAliasing.Value switch
+            var mode = VrSettings.AntiAliasing.Value switch
             {
                 AntiAliasing.TAA => HDAdditionalCameraData.AntialiasingMode.TemporalAntialiasing,
                 AntiAliasing.SMAA => HDAdditionalCameraData.AntialiasingMode.SubpixelMorphologicalAntiAliasing,
@@ -102,12 +104,8 @@ namespace ShipbreakerVR
             // Each change reallocates every render target. Wait until the slider has rested, otherwise dragging it
             // through all steps fragments video memory until allocations fail and the image smears.
             var max = MaxResolutionScale();
-            if (max > 0f && Plugin.ResolutionScale.Value > max)
-            {
-                Plugin.ResolutionScale.Value = max;
-                VrOptions.Refresh(Plugin.ResolutionScale);
-            }
-            var scale = Mathf.Clamp(followsHab ? HabScale : Plugin.ResolutionScale.Value, 0.5f, max > 0f ? max : 1f);
+            if (max > 0f && VrSettings.ResolutionScale.Value > max) VrSettings.ResolutionScale.Value = max;
+            var scale = Mathf.Clamp(followsHab ? HabScale : VrSettings.ResolutionScale.Value, ResolutionScaleMin, max > 0f ? max : 1f);
             if (followsHab != habScaleLogged)
             {
                 habScaleLogged = followsHab;
@@ -127,10 +125,9 @@ namespace ShipbreakerVR
                 if (scale > current && !FitsIntoMemory(scale))
                 {
                     Plugin.Log.LogWarning($"Render resolution {scale:0.00}x does not fit into video memory, staying at {current:0.00}x");
-                    var entry = followsHab ? Plugin.StationResolution : Plugin.ResolutionScale;
+                    var entry = followsHab ? VrSettings.StationResolution : VrSettings.ResolutionScale;
                     entry.Value = current;
                     pendingResolution = current;
-                    VrOptions.Refresh(entry);
                     return;
                 }
                 XRSettings.eyeTextureResolutionScale = scale;
@@ -183,7 +180,7 @@ namespace ShipbreakerVR
             if (width <= 0f || height <= 0f || SystemInfo.graphicsMemorySize <= 0) return -1f;
             var budget = SystemInfo.graphicsMemorySize * 1024f * 1024f * VideoMemoryShare;
             var fit = Mathf.Sqrt(budget / (width * height * 2f * BytesPerPixelAndEye));
-            maxResolutionScale = Mathf.Clamp(Mathf.Floor(fit * 20f) / 20f, 0.5f, ResolutionSliderMax);
+            maxResolutionScale = Mathf.Clamp(Mathf.Floor(fit * 20f) / 20f, ResolutionScaleMin, ResolutionScaleMax);
             Plugin.Log.LogInfo($"{SystemInfo.graphicsDeviceName}, {SystemInfo.graphicsMemorySize} MB video memory, {width:0}x{height:0} per eye: render resolution limited to {maxResolutionScale:0.00}x");
             return maxResolutionScale;
         }

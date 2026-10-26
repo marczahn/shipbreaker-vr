@@ -25,7 +25,7 @@ namespace ShipbreakerVR
 
         private const float SnapPress = 0.7f;
         private const float SnapRelease = 0.3f;
-        // Hand offset for thrust, in centimeters (Plugin.ThrustDeadzone, Plugin.ThrustFull): full thrust needs at least
+        // Hand offset for thrust, in centimeters (VrSettings.ThrustDeadzone, VrSettings.ThrustFull): full thrust needs at least
         // MinThrustRange more than the deadzone, so the ramp between them never shrinks to a switch.
         public const float DeadzoneMax = 10f;
         public const float FullMax = 30f;
@@ -60,7 +60,7 @@ namespace ShipbreakerVR
         // A left trigger still held from working a tool with that hand flies only after it was let go.
         private static bool triggerFromTool;
 
-        private static Scheme Active => VrXr.IsRunning && VrCamera.Instance != null ? Plugin.ControlScheme.Value : Scheme.Aus;
+        private static Scheme Active => VrXr.IsRunning && VrCamera.Instance != null ? VrSettings.ControlScheme.Value : Scheme.Aus;
 
         // From VrFrame, once per frame, after VrToolInput (whether the left hand holds a tool).
         public static void Update()
@@ -128,7 +128,7 @@ namespace ShipbreakerVR
         private static void TurnFromStick(Vector2 stick, Quaternion playspace)
         {
             var body = playspace * VrCamera.Instance.HeadRotation;
-            var snap = SnapAngle(Plugin.TurnMode.Value);
+            var snap = SnapAngle(VrSettings.TurnMode.Value);
             var yaw = snap > 0f ? SnapTurn(stick.x, snap) : StickRate(stick.x);
             var pitch = -StickRate(stick.y);
             if (yaw != 0f) turn = Quaternion.AngleAxis(yaw, body * Vector3.up) * turn;
@@ -193,21 +193,20 @@ namespace ShipbreakerVR
         }
 
         // The hand offset (meters) where thrust starts and where it is full; also used by the flight globe (VrFlightGlobe).
-        // Clamped here as well, in case the config file was edited by hand.
-        private static float MoveDeadzone => Mathf.Clamp(Plugin.ThrustDeadzone.Value, 0f, DeadzoneMax) / 100f;
-        public static float FullOffset => Mathf.Clamp(Plugin.ThrustFull.Value, Mathf.Clamp(Plugin.ThrustDeadzone.Value, 0f, DeadzoneMax) + MinThrustRange, FullMax) / 100f;
+        // The settings' ranges hold even for a hand-edited config file (VrSettings); the gap between them is kept here too.
+        private static float MoveDeadzone => VrSettings.ThrustDeadzone.Value / 100f;
+        public static float FullOffset => Mathf.Max(VrSettings.ThrustFull.Value, VrSettings.ThrustDeadzone.Value + MinThrustRange) / 100f;
         public static float DeadzoneShare => MoveDeadzone / FullOffset;
 
         // Keeps full thrust at least MinThrustRange beyond the deadzone: whichever value was just changed wins and pushes
         // the other one along.
         public static void KeepThrustRange(bool deadzoneChanged)
         {
-            var deadzone = Plugin.ThrustDeadzone;
-            var full = Plugin.ThrustFull;
+            var deadzone = VrSettings.ThrustDeadzone;
+            var full = VrSettings.ThrustFull;
             if (full.Value - deadzone.Value >= MinThrustRange - 0.001f) return;
             if (deadzoneChanged) full.Value = Mathf.Min(deadzone.Value + MinThrustRange, FullMax);
             else deadzone.Value = Mathf.Max(full.Value - MinThrustRange, 0f);
-            VrOptions.Refresh(deadzoneChanged ? full : deadzone);
         }
 
         public static bool Flying => Active == Scheme.Vtol && GameSession.CurrentGameState == GameSession.GameState.Gameplay;

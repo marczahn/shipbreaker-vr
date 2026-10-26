@@ -33,14 +33,13 @@ namespace ShipbreakerVR
 
         public static void Update(VrCamera vr)
         {
-            if (Plugin.ToolExport.Value) VrToolExport.Update();
-            if (!Plugin.Diagnostics.Value)
+            if (VrSettings.ToolExport.Value) VrToolExport.Update();
+            if (!VrSettings.Diagnostics.Value)
             {
                 dueAt = -1f;
                 return;
             }
-            var shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-            if (Input.GetKeyDown(KeyCode.F8) && !shift) Dump(vr, "F8");
+            if (VrSettings.Pressed(VrSettings.DiagnosticsKey)) Dump(vr, VrSettings.DiagnosticsKey.Value.ToString());
             else if (dueAt >= 0f && Time.unscaledTime >= dueAt)
             {
                 dueAt = -1f;

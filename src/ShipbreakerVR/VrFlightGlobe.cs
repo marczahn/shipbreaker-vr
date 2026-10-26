@@ -50,7 +50,7 @@ namespace ShipbreakerVR
         // Draws the globe into the current eye; view and projection are already set. visor: the visor quad's matrix,
         public static void Draw(CommandBuffer cmd, Matrix4x4 visor)
         {
-            var mode = Plugin.FlightGlobe.Value;
+            var mode = VrSettings.FlightGlobe.Value;
             if (mode == Mode.Aus || !VrControls.Flying) { alpha = 0f; return; }
             if (updatedFrame != Time.frameCount)
             {
@@ -62,8 +62,8 @@ namespace ShipbreakerVR
             else if (!Mathf.Approximately(builtDeadzone, VrControls.DeadzoneShare)) RebuildGlobe();
 
             var height = ((Vector3)visor.GetColumn(1)).magnitude;
-            var radius = Plugin.FlightGlobeSize.Value * height;
-            var center = visor.MultiplyPoint(new Vector3(Plugin.FlightGlobeX.Value, Plugin.FlightGlobeY.Value, 0f));
+            var radius = VrSettings.FlightGlobeSize.Value * height;
+            var center = visor.MultiplyPoint(new Vector3(VrSettings.FlightGlobeX.Value, VrSettings.FlightGlobeY.Value, 0f));
             var facing = Quaternion.LookRotation(visor.GetColumn(2), visor.GetColumn(1));
             var frame = Matrix4x4.TRS(center, facing, Vector3.one * radius);
 

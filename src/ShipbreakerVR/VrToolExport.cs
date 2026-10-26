@@ -20,7 +20,7 @@ namespace ShipbreakerVR
 
         public static void Update()
         {
-            if (!Input.GetKeyDown(KeyCode.F8) || !(Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))) return;
+            if (!VrSettings.Pressed(VrSettings.ToolExportKey)) return;
             try
             {
                 Export();

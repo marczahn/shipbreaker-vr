@@ -148,7 +148,7 @@ namespace ShipbreakerVR
 
             if (XRGeneralSettings.Instance == null) throw new Exception("XRGeneralSettings missing from AssetBundle");
             var openXr = OpenXRSettings.Instance;
-            if (openXr != null && Plugin.MultiPass.Value) openXr.renderMode = OpenXRSettings.RenderMode.MultiPass;
+            if (openXr != null && VrSettings.MultiPass.Value) openXr.renderMode = OpenXRSettings.RenderMode.MultiPass;
             Plugin.Log.LogInfo($"XR settings loaded, OpenXR render mode: {openXr?.renderMode}");
             if (openXr != null) EnableControllerProfile(openXr);
             settingsLoaded = true;

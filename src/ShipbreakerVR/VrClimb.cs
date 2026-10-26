@@ -117,7 +117,7 @@ namespace ShipbreakerVR
         private static bool Usable()
         {
             var vr = VrCamera.Instance;
-            if (!VrXr.IsRunning || !Plugin.Climbing.Value || vr == null || vr.FollowsHab
+            if (!VrXr.IsRunning || !VrSettings.Climbing.Value || vr == null || vr.FollowsHab
                 || GameSession.CurrentGameState != GameSession.GameState.Gameplay) return false;
             if ((grab == null || player == null) && Time.unscaledTime >= nextSearch)
             {

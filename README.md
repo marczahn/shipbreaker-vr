@@ -111,7 +111,7 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 **In menus** both controllers act together like one Xbox gamepad: left stick to move around, A to confirm, B to go
 back, the triggers switch tabs.
 
-**Keyboard:** F3 turns VR on and off, F4 puts the view back in front of you.
+**Keyboard:** F3 turns VR on and off, F4 puts the view back in front of you. Both keys can be changed in the config file (section `[Tasten]`).
 
 ## Settings
 

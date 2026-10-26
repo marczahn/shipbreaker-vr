@@ -236,7 +236,7 @@ namespace ShipbreakerVR
         private static bool Usable()
         {
             var vr = VrCamera.Instance;
-            if (!VrXr.IsRunning || !Plugin.AimWithHand.Value || !PatchReport.HandAimWorks || vr == null || vr.FollowsHab) return false;
+            if (!VrXr.IsRunning || !VrSettings.AimWithHand.Value || !PatchReport.HandAimWorks || vr == null || vr.FollowsHab) return false;
             return GameSession.CurrentGameState == GameSession.GameState.Gameplay;
         }
 
@@ -367,7 +367,7 @@ namespace ShipbreakerVR
         // For the F8 dump.
         public static string Describe(Transform head)
         {
-            var text = $"aim with hand: option {Plugin.AimWithHand.Value}{(PatchReport.HandAimWorks ? "" : " (off, patches incomplete)")}, active {Active}, tool {withTool}";
+            var text = $"aim with hand: option {VrSettings.AimWithHand.Value}{(PatchReport.HandAimWorks ? "" : " (off, patches incomplete)")}, active {Active}, tool {withTool}";
             if (active) text += $", hand at {VrDiagnostics.Direction(head, aim.transform.position)} {Vector3.Distance(head.position, aim.transform.position):0.00} m, pointing {VrDiagnostics.Direction(head, head.position + aim.transform.forward)}, beam on {beamTarget}";
             return text + "; " + VrHand.Describe() + "; " + VrDualTools.Describe() + CutterModel();
         }

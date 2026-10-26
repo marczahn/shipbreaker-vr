@@ -47,12 +47,14 @@ namespace ShipbreakerVR
         private static Vector3 grabPosition;
         private static Quaternion grabRotation;
 
-        public static void Bind(ConfigFile config)
+        public static void Bind()
         {
-            Adjusting = config.Bind("Justierung", "WerkzeugeJustieren", false,
-                "For fitting the tools into the hands: while a hand holds the cutter or the grapple, the other hand's grip grabs the tool and moves it; letting go stores its place in the entries below. Delete an entry to get its default back.");
+            Adjusting = VrSettings.Bind("Justierung", "WerkzeugeJustieren", false,
+                ("While one hand holds the cutter or the grapple, squeeze the other hand's grip to grab the tool and move it until it sits in the hand; letting go stores the place for that tool and hand. Switch it off when they fit.",
+                    "Während eine Hand Cutter oder Greifhaken hält: Grip der anderen Hand greift das Werkzeug, bewege es, bis es in der Hand sitzt. Loslassen speichert die Lage für dieses Werkzeug und diese Hand. Danach wieder ausschalten."),
+                "The places are stored in the entries below; delete an entry to get its default back.");
             foreach (var fit in new[] { GrappleRight, GrappleLeft, CutterRight, CutterLeft })
-                fit.Entry = config.Bind("Justierung", fit.Key, fit.Default,
+                fit.Entry = VrSettings.Bind("Justierung", fit.Key, fit.Default,
                     "Where the tool sits in that hand: its mount relative to the wrist in centimeters (x right, y up, z forward along the controller), then its turn in degrees (pitch, yaw, roll), as \"x y z / pitch yaw roll\".");
         }
 
