@@ -132,7 +132,7 @@ namespace ShipbreakerVR
                         "Glättet treppige Kanten. SMAA bleibt scharf und ist in VR die beste Wahl. TAA wirkt in VR unscharf und lässt Objekte zittern, FXAA ist günstig, aber weich.")),
                 new SliderRow
                 {
-                    Label = L("Render resolution", "Renderauflösung"), Entry = Plugin.ResolutionScale, Min = 0.5f, Max = VrCamera.ResolutionSliderMax, Format = "0.00",
+                    Label = L("Render resolution", "Renderauflösung"), Entry = Plugin.ResolutionScale, Min = 0.5f, Max = VrResolution.ResolutionSliderMax, Format = "0.00",
                     Hint = L("Resolution per eye relative to the headset's default. Higher is sharper but costs a lot of performance and video memory. Lower it if the game stutters.",
                         "Auflösung pro Auge im Verhältnis zum Standard des Headsets. Höher ist schärfer, kostet aber viel Leistung und Grafikspeicher. Senken, wenn das Spiel ruckelt."),
                 },

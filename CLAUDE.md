@@ -10,13 +10,13 @@ OpenXR at runtime. Tested with a Meta Quest via Virtual Desktop (VDXR runtime). 
   `Steuerung/Drehen`, ...). Keep them so existing user settings survive.
 
 ## Layout
-- `src/ShipbreakerVR/` – the plugin (C#, net48). One file per concern: `VrSession` (start, F3, attaching the rig, teardown on unload), `VrCamera` (rig, eye resolution, video memory),
+- `src/ShipbreakerVR/` – the plugin (C#, net48). One file per concern: `VrSession` (start, F3, attaching the rig, teardown on unload), `VrCamera` (rig, recentering, following the game and Hab cameras), `VrResolution` (anti-aliasing, eye resolution, video memory), `VrCameraSilencer` (other cameras off while VR runs),
   `VrBody` (body follows head, playspace), `VrUi` / `VrCanvases` (HUD visor and menu canvas), `VrOptions` /
   `VrOptionsNavigation` (rows in the game's options menu), `VrControls` (motion controller flying), `VrXr` (OpenXR
   setup), `VrAim` (aiming with the hand, laser), `VrToolInput` / `VrToolBelt` (tool buttons, taking tools off the
   body), `VrDualTools` (two tools at once, one per hand; the scanner hides the other), `VrToolModels` / `VrToolFit` (tools in the hand, demo charge arm), `VrHands` (the suit's hands follow the
   controllers), `VrClimb` (holding on and climbing with the grip of a free hand), `VrInput` (the controllers, read once per frame), `VrHand` (what each hand does: tool, second tool, hidden tool, holding on),
-  `VrFrame` (the per-frame order of input, tool hands, aim and flying), `VrCrosshair` (hiding the crosshair while aiming), `VrHelmet`, `VrPostProcess`, `ScreenSizePatch`,
+  `VrFrame` (the per-frame order: input, tool hands, aim and flying, then the steps on the VR camera's callbacks), `VrCrosshair` (hiding the crosshair while aiming), `VrHelmet`, `VrPostProcess`, `ScreenSizePatch`,
   `HdrpXrPatch`.
 - `unity/ShipbreakerVRUnity/` – helper project that builds the `xrmanager` AssetBundle with the XR/OpenXR settings and
   collects the OpenXR DLLs (menu *ShipbreakerVR → Build for the game*).
