@@ -23,6 +23,7 @@ namespace ShipbreakerVR
 
         private static GrabController grab;
         private static float nextSearch;
+        private static float nextMirror;
         private static Transform point;
         // The point's own pose under its parent, to put it back, and relative to the game camera, for the angle.
         private static Vector3 restPosition;
@@ -72,6 +73,13 @@ namespace ShipbreakerVR
                     restPosition = point.localPosition;
                     restRotation = point.localRotation;
                 }
+            }
+            // The cutter's plain right side gets its left side's detail (VrToolMirror); checked once a second, since the
+            // game may swap the model.
+            if (point != null && hand.CurrentEquipmentType == EquipmentController.Equipment.CuttingTool && Time.unscaledTime >= nextMirror)
+            {
+                nextMirror = Time.unscaledTime + 1f;
+                VrToolMirror.Apply(point);
             }
             if (point == null || point.parent == null || !VrAim.TryGetHand(out var grip, out var aim))
             {
@@ -523,6 +531,8 @@ namespace ShipbreakerVR
             splitsaw = null;
             stinger = null;
             grapple = null;
+            nextMirror = 0f;
+            VrToolMirror.Release();
             logged.Clear();
             armRoot = armMid = armTip = armFor = null;
             chargePieces.Clear();
