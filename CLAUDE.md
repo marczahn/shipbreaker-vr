@@ -23,6 +23,7 @@ OpenXR at runtime. Tested with a Meta Quest via Virtual Desktop (VDXR runtime). 
 - `docs/NOTES.md` – technical findings about the game and why the mod does what it does.
 - `README.md` – the players' front page (written for non-technical users); `CONTRIBUTING.md` – building and layout for developers.
 - `docs/INSTALL.md` – user install guide; `docs/releases/<version>.md` – release notes.
+- `tests/ShipbreakerVR.Tests/` – tests for the logic that runs without the engine; `tools/check.sh` builds and runs them.
 - `tools/build-release.sh` and `.claude/skills/release/` – building a release ZIP.
 - `licenses/`, `THIRD-PARTY-NOTICES.md`, `LICENSE` (MIT), `DISCLAIMER.md`.
 
@@ -40,6 +41,9 @@ The game logic lives in `BBI.Unity.Game.dll`, `Assembly-CSharp` is nearly empty.
 - Small game methods may be inlined by Mono, so a prefix/postfix on them never runs; patch the caller with a transpiler.
 
 ## Testing workflow
+- Run `tools/check.sh` (build with warnings as errors, then the tests in `tests/ShipbreakerVR.Tests`) before every PR,
+  with the same folder properties as the build. The tests need the game's whole `Managed` folder (see
+  `CONTRIBUTING.md`, "Checks"). Add a test when you change logic that runs without the engine.
 - Only Marc can test, in the headset. Say what to look for and which log line confirms it.
 - Logs: `BepInEx\LogOutput.log` in the game folder and `Player.log` in the game's LocalLow folder. Read them yourself
   when the device is connected instead of asking Marc to paste them.

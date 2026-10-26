@@ -178,11 +178,18 @@ namespace ShipbreakerVR
             var width = XRSettings.eyeTextureWidth / current;
             var height = XRSettings.eyeTextureHeight / current;
             if (width <= 0f || height <= 0f || SystemInfo.graphicsMemorySize <= 0) return -1f;
-            var budget = SystemInfo.graphicsMemorySize * 1024f * 1024f * VideoMemoryShare;
-            var fit = Mathf.Sqrt(budget / (width * height * 2f * BytesPerPixelAndEye));
-            maxResolutionScale = Mathf.Clamp(Mathf.Floor(fit * 20f) / 20f, ResolutionScaleMin, ResolutionScaleMax);
+            maxResolutionScale = FitScale(SystemInfo.graphicsMemorySize, width, height);
             Plugin.Log.LogInfo($"{SystemInfo.graphicsDeviceName}, {SystemInfo.graphicsMemorySize} MB video memory, {width:0}x{height:0} per eye: render resolution limited to {maxResolutionScale:0.00}x");
             return maxResolutionScale;
+        }
+
+        // The render resolution whose targets fit into that much video memory (MB) at that native size per eye, rounded
+        // down to 0.05 and kept within the setting's range.
+        internal static float FitScale(int videoMemory, float width, float height)
+        {
+            var budget = videoMemory * 1024f * 1024f * VideoMemoryShare;
+            var fit = Mathf.Sqrt(budget / (width * height * 2f * BytesPerPixelAndEye));
+            return Mathf.Clamp(Mathf.Floor(fit * 20f) / 20f, ResolutionScaleMin, ResolutionScaleMax);
         }
 
         // Allocates test textures as large as the render targets at this scale would be (about 160 bytes per pixel
