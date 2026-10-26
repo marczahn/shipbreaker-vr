@@ -43,7 +43,7 @@ namespace ShipbreakerVR
             var folder = System.IO.Path.Combine(Paths.BepInExRootPath, "ShipbreakerVR-tools", $"{DateTime.Now:yyyyMMdd-HHmmss}-{equipment}");
             Directory.CreateDirectory(folder);
             var text = new StringBuilder();
-            text.AppendLine($"Tool export: {equipment} on '{VrDiagnostics.Path(point)}' into {folder}");
+            text.AppendLine($"Tool export: {equipment} on '{VrUtil.Path(point)}' into {folder}");
             var saved = new Dictionary<int, string>();
             var index = 0;
             foreach (var renderer in point.GetComponentsInChildren<Renderer>(true))
@@ -56,7 +56,7 @@ namespace ShipbreakerVR
                     if (filter != null) mesh = filter.sharedMesh;
                 }
                 var name = $"{index++:00}-{Safe(renderer.name)}";
-                text.AppendLine($"  '{VrDiagnostics.Path(renderer.transform)}' {renderer.GetType().Name}, {(renderer.enabled && renderer.gameObject.activeInHierarchy ? "shown" : "hidden")}, layer {renderer.gameObject.layer}");
+                text.AppendLine($"  '{VrUtil.Path(renderer.transform)}' {renderer.GetType().Name}, {(renderer.enabled && renderer.gameObject.activeInHierarchy ? "shown" : "hidden")}, layer {renderer.gameObject.layer}");
                 if (mesh == null)
                 {
                     text.AppendLine("    no mesh");

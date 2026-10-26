@@ -55,7 +55,7 @@ namespace ShipbreakerVR
             text.AppendLine($"  head at {head.position}, looking {Direction(head, head.position + head.forward)}, rig scale {head.parent.localScale.x:0.00}");
             var game = vr.GameCamera;
             if (game != null)
-                text.AppendLine($"  following '{Path(game.transform)}' at {Direction(head, game.transform.position)} {Vector3.Distance(head.position, game.transform.position):0.00} m, its view {Direction(head, head.position + game.transform.forward)}, fov {game.fieldOfView:0}, pixels {game.pixelWidth}x{game.pixelHeight}, stereo {game.stereoEnabled}, mask {game.cullingMask}, far {game.farClipPlane:0}, Hab {vr.FollowsHab}, fade {VrHab.Fade:0.00}");
+                text.AppendLine($"  following '{VrUtil.Path(game.transform)}' at {Direction(head, game.transform.position)} {Vector3.Distance(head.position, game.transform.position):0.00} m, its view {Direction(head, head.position + game.transform.forward)}, fov {game.fieldOfView:0}, pixels {game.pixelWidth}x{game.pixelHeight}, stereo {game.stereoEnabled}, mask {game.cullingMask}, far {game.farClipPlane:0}, Hab {vr.FollowsHab}, fade {VrHab.Fade:0.00}");
             var ui = VrUi.Instance;
             if (ui != null) text.AppendLine("  " + ui.Describe(head));
             text.AppendLine("  " + VrAim.Describe(head));
@@ -63,7 +63,7 @@ namespace ShipbreakerVR
             text.AppendLine("  Canvases (active, enabled, root):");
             var canvases = Resources.FindObjectsOfTypeAll<Canvas>()
                 .Where(c => c != null && c.gameObject.scene.IsValid() && c.isActiveAndEnabled && c.isRootCanvas)
-                .OrderBy(c => c.renderMode).ThenBy(c => Path(c.transform));
+                .OrderBy(c => c.renderMode).ThenBy(c => VrUtil.Path(c.transform));
             foreach (var canvas in canvases) DescribeCanvas(text, head, canvas, ui);
 
             text.AppendLine("  Renderers seen last frame within 4 m, above the horizon:");
@@ -76,7 +76,7 @@ namespace ShipbreakerVR
             foreach (var (renderer, distance) in renderers)
             {
                 var material = renderer.sharedMaterial;
-                text.AppendLine($"    '{Path(renderer.transform)}' {renderer.GetType().Name}, {Direction(head, renderer.bounds.center)} {distance:0.00} m, size {renderer.bounds.size}, layer {renderer.gameObject.layer}, material '{(material != null ? material.name : "-")}' ({(material != null && material.shader != null ? material.shader.name : "-")})");
+                text.AppendLine($"    '{VrUtil.Path(renderer.transform)}' {renderer.GetType().Name}, {Direction(head, renderer.bounds.center)} {distance:0.00} m, size {renderer.bounds.size}, layer {renderer.gameObject.layer}, material '{(material != null ? material.name : "-")}' ({(material != null && material.shader != null ? material.shader.name : "-")})");
             }
 
             Plugin.Log.LogInfo(text.ToString());
@@ -86,7 +86,7 @@ namespace ShipbreakerVR
         private static void DescribeCanvas(StringBuilder text, Transform head, Canvas canvas, VrUi ui)
         {
             var camera = canvas.worldCamera;
-            var line = $"    '{Path(canvas.transform)}' {canvas.renderMode}, camera '{(camera != null ? camera.name : "-")}'{(camera != null && !camera.enabled ? " (off)" : "")}, layer {canvas.gameObject.layer}, order {canvas.sortingOrder}, alpha {GroupAlpha(canvas.transform):0.00}";
+            var line = $"    '{VrUtil.Path(canvas.transform)}' {canvas.renderMode}, camera '{(camera != null ? camera.name : "-")}'{(camera != null && !camera.enabled ? " (off)" : "")}, layer {canvas.gameObject.layer}, order {canvas.sortingOrder}, alpha {VrUtil.GroupAlpha(canvas.transform):0.00}";
             if (ui != null && ui.IsConverted(canvas)) line += ", on the VR canvas";
             if (canvas.renderMode != RenderMode.ScreenSpaceOverlay)
                 line += $", at {Direction(head, canvas.transform.position)} {Vector3.Distance(head.position, canvas.transform.position):0.00} m";
@@ -97,7 +97,7 @@ namespace ShipbreakerVR
             foreach (var graphic in canvas.GetComponentsInChildren<Graphic>())
             {
                 if (!graphic.enabled || graphic.canvasRenderer.cull) continue;
-                var alpha = graphic.color.a * graphic.canvasRenderer.GetAlpha() * GroupAlpha(graphic.transform);
+                var alpha = graphic.color.a * graphic.canvasRenderer.GetAlpha() * VrUtil.GroupAlpha(graphic.transform);
                 if (alpha < 0.05f) continue;
                 var c = graphic.color;
                 var dark = Mathf.Max(c.r, Mathf.Max(c.g, c.b)) < 0.15f;
@@ -125,7 +125,7 @@ namespace ShipbreakerVR
             foreach (var label in canvas.GetComponentsInChildren<TMP_Text>())
             {
                 if (!label.enabled || label.canvasRenderer.cull || string.IsNullOrWhiteSpace(label.text)) continue;
-                var alpha = label.color.a * label.canvasRenderer.GetAlpha() * GroupAlpha(label.transform);
+                var alpha = label.color.a * label.canvasRenderer.GetAlpha() * VrUtil.GroupAlpha(label.transform);
                 if (alpha < 0.05f) continue;
                 if (++texts > MaxTextsPerCanvas)
                 {
@@ -140,19 +140,6 @@ namespace ShipbreakerVR
                 if (content.Length > 40) content = content.Substring(0, 40) + "...";
                 text.AppendLine($"      text '{content}' ('{label.name}' under '{label.transform.parent?.parent?.name}'), at {x:0} {y:0}, alpha {alpha:0.00}");
             }
-        }
-
-        private static float GroupAlpha(Transform t)
-        {
-            var alpha = 1f;
-            for (; t != null; t = t.parent)
-            {
-                var group = t.GetComponent<CanvasGroup>();
-                if (group == null || !group.enabled) continue;
-                alpha *= group.alpha;
-                if (group.ignoreParentGroups) break;
-            }
-            return alpha;
         }
 
         // Heading relative to the head's gaze and elevation above the horizon, in degrees.
@@ -198,6 +185,5 @@ namespace ShipbreakerVR
             }
         }
 
-        public static string Path(Transform t) => t.parent == null ? t.name : Path(t.parent) + "/" + t.name;
     }
 }

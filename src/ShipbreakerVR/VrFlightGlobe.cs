@@ -174,12 +174,7 @@ namespace ShipbreakerVR
         private static Material CreateMaterial()
         {
             var shader = Shader.Find("Hidden/Internal-Colored");
-            if (shader == null)
-            {
-                var material = new Material(Shader.Find("UI/Default"));
-                material.SetInt("unity_GUIZTestMode", (int)CompareFunction.Always);
-                return material;
-            }
+            if (shader == null) return VrUtil.OverlayMaterial();
             var colored = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
             colored.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
             colored.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);

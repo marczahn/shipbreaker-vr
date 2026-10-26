@@ -342,14 +342,7 @@ namespace ShipbreakerVR
             beamMesh.vertices = new[] { new Vector3(-0.5f, 0f, 0f), new Vector3(0.5f, 0f, 0f), new Vector3(0.5f, 1f, 0f), new Vector3(-0.5f, 1f, 0f) };
             beamMesh.colors = new[] { near, near, far, far };
             beamMesh.triangles = new[] { 0, 2, 1, 0, 3, 2 };
-            beamMaterial = Overlay(LaserColor);
-        }
-
-        private static Material Overlay(Color color)
-        {
-            var material = new Material(Shader.Find("UI/Default")) { color = color };
-            material.SetInt("unity_GUIZTestMode", (int)CompareFunction.Always);
-            return material;
+            beamMaterial = VrUtil.OverlayMaterial(LaserColor);
         }
 
         // On unload (hot reload): the aim camera and the pointer's meshes and materials go with the old instance.

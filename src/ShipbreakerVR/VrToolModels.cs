@@ -208,18 +208,11 @@ namespace ShipbreakerVR
             var models = new List<string>();
             foreach (Transform child in point) models.Add($"'{child.name}'");
             var gripTarget = GripTarget(hand, equipment);
-            Plugin.Log.LogInfo($"Tool in hand: {equipment}; equipment point {Chain(point)}, rest {restPosition} {restRotation.eulerAngles}; " +
-                $"models on it: {string.Join(", ", models)}; grip target {(gripTarget == null ? "none" : Chain(gripTarget))}, " +
+            Plugin.Log.LogInfo($"Tool in hand: {equipment}; equipment point {VrUtil.Chain(point)}, rest {restPosition} {restRotation.eulerAngles}; " +
+                $"models on it: {string.Join(", ", models)}; grip target {(gripTarget == null ? "none" : VrUtil.Chain(gripTarget))}, " +
                 $"{(gripTarget != null && gripTarget.IsChildOf(point) ? "moves with the tool" : "stays")}; point at {mount} m from the grip pose " +
                 $"({(fitted ? "fitted" : "no fit")}), scale {point.lossyScale}; " +
-                $"muzzle {(muzzle == null ? "none" : $"{Chain(muzzle)} at {muzzleOffset} m, {Vector3.Angle(muzzle.forward, point.forward):0}° off the point's forward")}; hand target {Chain(hand.HandPositionTransform)}");
-        }
-
-        private static string Chain(Transform transform)
-        {
-            var names = new List<string>();
-            for (var t = transform; t != null && names.Count < 8; t = t.parent) names.Add(t.name);
-            return string.Join(" < ", names);
+                $"muzzle {(muzzle == null ? "none" : $"{VrUtil.Chain(muzzle)} at {muzzleOffset} m, {Vector3.Angle(muzzle.forward, point.forward):0}° off the point's forward")}; hand target {VrUtil.Chain(hand.HandPositionTransform)}");
         }
 
         // The game's right hand holding a demo charge (or the detonator): the animation poses the arm, with Animation
@@ -342,7 +335,7 @@ namespace ShipbreakerVR
                 chargePieces.Clear();
                 foreach (var renderer in armTip.GetComponentsInChildren<Renderer>(true))
                     if (OnCharge(renderer.transform)) chargePieces.Add(renderer);
-                Plugin.Log.LogInfo($"Tool in hand: charge pieces on the hand: {string.Join(", ", chargePieces.ConvertAll(r => $"{Chain(r.transform)} ({(r.enabled ? "enabled" : "disabled")}, {(r.gameObject.activeInHierarchy ? "active" : "inactive")})"))}");
+                Plugin.Log.LogInfo($"Tool in hand: charge pieces on the hand: {string.Join(", ", chargePieces.ConvertAll(r => $"{VrUtil.Chain(r.transform)} ({(r.enabled ? "enabled" : "disabled")}, {(r.gameObject.activeInHierarchy ? "active" : "inactive")})"))}");
             }
             var hid = new List<string>();
             foreach (var renderer in chargePieces)
@@ -478,7 +471,7 @@ namespace ShipbreakerVR
                 armRoot = armMid = armTip = null;
             }
             if (armRoot == null || armMid == null) armTip = null;
-            Plugin.Log.LogInfo($"Tool in hand: game arm {(armTip != null ? $"{Chain(armTip)}, from '{armRoot.name}' over '{armMid.name}'" : "not found")}; rig constraints: {string.Join("; ", constraints)}");
+            Plugin.Log.LogInfo($"Tool in hand: game arm {(armTip != null ? $"{VrUtil.Chain(armTip)}, from '{armRoot.name}' over '{armMid.name}'" : "not found")}; rig constraints: {string.Join("; ", constraints)}");
             return armTip != null;
         }
 
@@ -494,8 +487,8 @@ namespace ShipbreakerVR
             var detonator = charges != null ? Traverse.Create(charges).Field("m_DetonatorMeshRoot").GetValue<GameObject>() : null;
             var animator = charges != null ? Traverse.Create(charges).Field("m_HandAnimatorController").GetValue<Animator>() : null;
             Plugin.Log.LogInfo($"Tool in hand: demo charge; wrist '{armTip.name}' at {head.InverseTransformPoint(armTip.position)} from the eye; " +
-                $"detonator {(detonator == null ? "none" : $"{Chain(detonator.transform)}{(detonator.transform.IsChildOf(armTip) ? ", moves with the hand" : ", not on the hand")}")}; " +
-                $"hand animator {(animator == null ? "none" : Chain(animator.transform))}");
+                $"detonator {(detonator == null ? "none" : $"{VrUtil.Chain(detonator.transform)}{(detonator.transform.IsChildOf(armTip) ? ", moves with the hand" : ", not on the hand")}")}; " +
+                $"hand animator {(animator == null ? "none" : VrUtil.Chain(animator.transform))}");
         }
 
         // The game parents a drawn tool to the equipment point keeping its world pose, so it starts where it rested in front
