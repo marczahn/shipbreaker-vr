@@ -104,6 +104,7 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | Switch the tool's mode | Press B (demo charges: switch to the detonator; grapple: switch between grappling and placing tethers). |
 | Place a tether | Hold B while pointing at the start, let go at the end. Or, with the grapple in its tether mode (orange laser), pull the trigger at the start and let go at the end. |
 | Recall the tethers | Hold B while pointing at nothing, or hold B with the grapple in its tether mode. |
+| Remove one tether | With the grapple in its tether mode, point at the tether (it lights up orange) and press A. |
 | Hold on and climb | Squeeze the grip of a hand without a tool close to anything: the hand holds on there. Move the hand to pull yourself along, with both hands hand over hand, or with one while the other works a tool. Light parts come to your hand instead; the station and fixed hulls stay put. Let go while moving the hand to push off. |
 | Work an airlock console or a switch | Look at it and press A or X. The grip only holds on, also there. |
 | Use a tool with the left hand | Take it with the left hand. X and Y then do what A and B do, and flying pauses until you let go. |

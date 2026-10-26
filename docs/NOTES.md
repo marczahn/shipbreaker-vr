@@ -120,7 +120,10 @@ interacting, the grapple and the "entity of interest".
   magnet (`MagnetController`, fixed magnets that hold parts on springs) seems unreleased. B tap no longer sends
   `ToolMode` to the grapple; the first switch logs whether the game's grapple has more than one mode. The mode shows as
   an orange laser, a ring where it hits and a line from the tether's start while the trigger is held (`VrAim`), and
-  one buzz back to grappling, two into the tether mode. (Until pause and centering
+  one buzz back to grappling, two into the tether mode. In the tether mode A lets go of the tether the laser points at
+  (the active tether whose straight line from start to end passes closest to the laser, within about 3°; traced in
+  orange meanwhile): `Tether.DespawnRope`, which recalling calls for each tether (`TetherController.TryDespawnTether`)
+  and which removes it from `mActiveTethers` through `OnTetherDespawned`. Pointing at no tether, A interacts. (Until pause and centering
   moved to the stick presses, a button counted only without its twin on the other controller.) The throwing gesture was considered and dropped: an
   accidental throw would look like a bug. The stick press was dropped too: it is imprecise and wears out.
 - The game polls actions through `LynxControlExtensions.GetInputWasPressed/IsPressed/IsHolding/WasReleased`, which

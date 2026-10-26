@@ -70,6 +70,8 @@ namespace ShipbreakerVR
             // A decides at its press whether it throws (trigger held) or interacts, and keeps that until released.
             public bool ADown;
             public bool AThrows;
+            // A let go of a tether at its press (the grapple's tether mode) and does nothing else until released.
+            public bool ALetsGo;
             public bool BDown;
             public float BDownAt;
             public bool BLong;
@@ -192,9 +194,16 @@ namespace ShipbreakerVR
             now[(int)Action.Fire] = trigger;
 
             var a = hand.Input.Primary.Down;
-            if (a && !hand.ADown) hand.AThrows = trigger;
+            if (a && !hand.ADown)
+            {
+                hand.AThrows = trigger;
+                // In the tether mode A lets go of the tether the hand points at, and then neither throws nor interacts.
+                var target = tethers && !trigger ? VrAim.TetherAt(VrHand.SecondHand == hand.Vr) : null;
+                hand.ALetsGo = target != null;
+                if (hand.ALetsGo) VrTetherMode.LetGo(target);
+            }
             hand.ADown = a;
-            now[(int)(hand.AThrows ? Action.Throw : Action.Interact)] = a;
+            if (!hand.ALetsGo) now[(int)(hand.AThrows ? Action.Throw : Action.Interact)] = a;
 
             var b = hand.Input.Secondary.Down;
             if (b && !hand.BDown)
@@ -233,7 +242,7 @@ namespace ShipbreakerVR
         private static void Interact(Hand hand)
         {
             var a = hand.Input.Primary.Down;
-            hand.AThrows = false;
+            hand.AThrows = hand.ALetsGo = false;
             hand.ADown = a;
             hand.BDown = hand.TriggerDown = false;
             VrTetherMode.End(hand.Node);

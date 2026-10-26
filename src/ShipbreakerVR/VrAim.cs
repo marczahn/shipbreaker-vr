@@ -22,7 +22,8 @@ namespace ShipbreakerVR
     // view is hidden meanwhile (VrCrosshair). With an empty hand there is nothing to aim, as Marc found: no laser
     // then, and interacting aims at the middle of the view as in the flat game, where the game's dot marks it (Aiming).
     // In the grapple's tether mode (VrTetherMode) the laser is orange, a ring marks where it meets something, and while
-    // a tether is being placed a line runs from where it started to where the laser ends.
+    // a tether is being placed a line runs from where it started to where the laser ends; the tether the laser points at,
+    // which A lets go of, is traced in orange.
     // The buttons of the tool hand's controller work the tools while aiming with the hand (VrToolInput).
     // The tool models go into the hand (VrToolModels).
     internal static class VrAim
@@ -39,6 +40,8 @@ namespace ShipbreakerVR
         private const float RingSize = 0.008f;
         private const float RingInner = 0.6f;
         private const int RingSegments = 24;
+        // The traced tether is this many times as wide as the laser.
+        private const float TraceWidth = 4f;
 
         // How far in front of the hand a thrown demo charge starts, clear of the player's collider.
         private const float ThrowAhead = 0.2f;
@@ -59,6 +62,9 @@ namespace ShipbreakerVR
         private static Vector3 beamEnd;
         private static bool secondBeamVisible;
         private static bool secondBeamHit;
+        // In the tether mode: the tether each laser points at (VrTetherMode.Targeted), traced in orange.
+        private static Tether beamTether;
+        private static Tether secondBeamTether;
         private static Vector3 secondBeamStart;
         private static Vector3 secondBeamEnd;
         private static string beamTarget = "-";
@@ -268,21 +274,22 @@ namespace ShipbreakerVR
             cmd.SetViewport(new Rect(0, 0, context.hdCamera.actualWidth, context.hdCamera.actualHeight));
             cmd.SetViewProjectionMatrices(view, proj);
 
-            DrawBeam(cmd, eye, scale, beamStart, beamEnd, beamHit, VrTetherMode.Applies(VrToolModels.Equipped), handNode);
+            DrawBeam(cmd, eye, scale, beamStart, beamEnd, beamHit, VrTetherMode.Applies(VrToolModels.Equipped), handNode, beamTether);
             if (secondBeamVisible)
-                DrawBeam(cmd, eye, scale, secondBeamStart, secondBeamEnd, secondBeamHit, VrTetherMode.Applies(VrDualTools.Second), VrDualTools.SecondNode);
+                DrawBeam(cmd, eye, scale, secondBeamStart, secondBeamEnd, secondBeamHit, VrTetherMode.Applies(VrDualTools.Second), VrDualTools.SecondNode, secondBeamTether);
             context.renderContext.ExecuteCommandBuffer(cmd);
             cmd.Clear();
             context.renderContext.SetupCameraProperties(context.hdCamera.camera, true);
         }
 
-        // One tool's laser; in the tether mode orange, with the ring where it hits and the line of the tether being placed
-        // by that hand.
-        private static void DrawBeam(CommandBuffer cmd, Vector3 eye, float scale, Vector3 start, Vector3 end, bool hit, bool tethers, XRNode node)
+        // One tool's laser; in the tether mode orange, with the ring where it hits, the line of the tether being placed by
+        // that hand and the tether it points at traced.
+        private static void DrawBeam(CommandBuffer cmd, Vector3 eye, float scale, Vector3 start, Vector3 end, bool hit, bool tethers, XRNode node, Tether target)
         {
             var material = tethers ? tetherMaterial : beamMaterial;
             DrawLine(cmd, eye, scale, start, end, material);
             if (!tethers) return;
+            if (target != null) DrawLine(cmd, eye, scale * TraceWidth, target.WorldStartAttachPoint, target.WorldEndAttachPoint, material);
             if (VrTetherMode.TryGetStart(node, out var tetherStart)) DrawLine(cmd, eye, scale, tetherStart, end, material);
             if (!hit) return;
             var size = RingSize * Vector3.Distance(eye, end);
@@ -312,14 +319,19 @@ namespace ShipbreakerVR
             var secondRotation = Quaternion.identity;
             secondBeamVisible = Active && VrDualTools.TryGetAim(out secondBeamStart, out secondRotation);
             if (secondBeamVisible) secondBeamHit = Cast(secondBeamStart, secondRotation, out secondBeamEnd, out _);
+            secondBeamTether = secondBeamVisible && VrTetherMode.Applies(VrDualTools.Second)
+                ? VrTetherMode.Targeted(secondBeamStart, secondRotation * Vector3.forward) : null;
             beamVisible = Aiming && TryGetAim(out beamStart, out rotation);
             if (!beamVisible)
             {
                 beamVisible = secondBeamVisible;
                 beamStart = beamEnd = secondBeamStart;
+                beamHit = false;
+                beamTether = null;
                 return;
             }
             beamHit = Cast(beamStart, rotation, out beamEnd, out var hit);
+            beamTether = VrTetherMode.Applies(VrToolModels.Equipped) ? VrTetherMode.Targeted(beamStart, rotation * Vector3.forward) : null;
             beamTarget = beamHit ? $"'{hit.collider.name}' (layer {LayerMask.LayerToName(hit.collider.gameObject.layer)}) at {hit.distance:0.00} m" : "nothing";
         }
 
@@ -335,6 +347,13 @@ namespace ShipbreakerVR
         // Whether the hand points at anything within the beam's range, with an empty hand the middle of the view (VrToolInput:
         // B held without a target recalls the tethers); second: the second tool's hand (VrDualTools).
         public static bool PointsAtSomething(bool second = false) => PointsAt(second, out _);
+
+        // The tether that hand points at (VrToolInput: A in the tether mode lets go of it); null if none.
+        public static Tether TetherAt(bool second)
+        {
+            var from = second && VrDualTools.AimCamera != null ? VrDualTools.AimCamera.transform : CameraTransform;
+            return Active && from != null ? VrTetherMode.Targeted(from.position, from.forward) : null;
+        }
 
         // The same, with what it points at (VrTetherMode: where a tether placed with the trigger starts).
         public static bool PointsAt(bool second, out RaycastHit hit)
@@ -407,6 +426,7 @@ namespace ShipbreakerVR
             throwOrigin = null;
             beamMesh = null;
             beamMaterial = null;
+            beamTether = secondBeamTether = null;
             ringMesh = null;
             tetherMaterial = null;
         }

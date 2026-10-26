@@ -13,12 +13,14 @@ namespace ShipbreakerVR
         private static GrabController grab;
         private static CuttingToolController cutter;
         private static GunController gun;
-        private static float nextEquipment, nextGrab, nextCutter, nextGun;
+        private static TetherController tethers;
+        private static float nextEquipment, nextGrab, nextCutter, nextGun, nextTethers;
 
         public static EquipmentController Equipment => Find(ref equipment, ref nextEquipment);
         public static GrabController Grab => Find(ref grab, ref nextGrab);
         public static CuttingToolController Cutter => Find(ref cutter, ref nextCutter);
         public static GunController Gun => Find(ref gun, ref nextGun);
+        public static TetherController Tethers => Find(ref tethers, ref nextTethers);
 
         private static T Find<T>(ref T cached, ref float next) where T : Object
         {
