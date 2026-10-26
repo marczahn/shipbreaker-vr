@@ -99,9 +99,10 @@ namespace ShipbreakerVR
             bool closed;
             if (arm.Driven)
             {
-                // The game's right hand with the charge in the left one: its fingers stay with the charge's animation, unless
-                // it holds a second tool (VrDualTools).
-                if (arm.Hand.CurrentEquipmentType == EquipmentController.Equipment.DemoCharge && !VrDualTools.Holds(arm.Node)) return;
+                // The game's right hand with the charge in the left one: its fingers stay with the charge's animation, also
+                // around a second tool (VrDualTools). The grab pose set here would take the arm's animator out of the
+                // charge's states, and the charge vanished from the other hand.
+                if (arm.Hand.CurrentEquipmentType == EquipmentController.Equipment.DemoCharge) return;
                 if (!arm.Device.isValid) arm.Device = InputDevices.GetDeviceAtXRNode(arm.Node);
                 arm.Device.TryGetFeatureValue(CommonUsages.grip, out var grip);
                 arm.Gripping = grip >= (arm.Gripping ? GripRelease : GripPress);

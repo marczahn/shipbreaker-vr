@@ -238,7 +238,10 @@ interacting, the grapple and the "entity of interest".
   animation and pieces hang on the game's right hand. A cutter or grapple drawn next to them is added through its own
   controller (`EquipCutter(false)`/`EquipGun(false)`, onto its own point via `HandPatch`, `VrDualTools.Add`), without
   `SetEquipment`, which would put the charges away; `DemoChargeController` gates on its own copy of the equipped tool
-  from `EquipmentChangedEvent`, hence the suppressed events. The scanner does not pair: it does its raycasts whenever
+  from `EquipmentChangedEvent`, hence the suppressed events. In the first test the charge vanished from its hand as soon as the other hand
+  drew: `VrHands.Fingers` closed the game's right hand around the second tool, and the grab parameters (`RPrepGrab`,
+  `RGrab`) are on the same animator as the charge's states; the right hand's fingers are left to the charge's
+  animation again while the game's right hand holds the charges (a guess from the log, not confirmed). The scanner does not pair: it does its raycasts whenever
   it is activated, but its outlines and info panel follow the game's equipped tool, and with a tool in each hand no hand
   is free to draw it anyway. Drawn while the other hand holds the game's tool, that tool is remembered
   (`VrDualTools.Suspend`) and put away by the game as usual; when the scanner is put away and that hand still holds its
