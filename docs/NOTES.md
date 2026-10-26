@@ -96,8 +96,14 @@ interacting, the grapple and the "entity of interest".
   bends the arm after the animation, from `VrCamera.LateUpdate` (after Animation Rigging, before skinning;
   `onBeforeRender` would be too late for skinned meshes): the bones come from the `TwoBoneIKConstraint` whose target is
   `rig_RHand_Target` (read by reflection from the field `m_Data`: `RigConstraint.data` returns by reference, which
-  reflection cannot call; the first try threw there and never bent anything; humanoid bones of the player's animator as
-  a fallback), a two-bone solve puts the wrist 8 cm behind the grip pose, and the hand keeps
+  reflection cannot call; the first try threw there and never bent anything), or else the humanoid bones of the
+  player's animator. The player has no Animation Rigging constraints: the humanoid fallback found `rig_right_shoulder`
+  > `rig_right_elbow` > `rig_right_hand` on `unit_player`, and the detonator (`PRF_Tool_ExplosiveChargeDetonator`) is a
+  child of `rig_right_hand`. A charge put away with the grip stayed in the animated hand: the game leaves the charge
+  state only by drawing another tool (its grab animation takes over), and the animator's stow triggers
+  (`AnimationParameters.DemoChargeStowParameter`/`DetonatorStowParameter`) are never fired by the game's code. The mod
+  fires the matching one when the right hand goes from demo charge to nothing (log `Tool in hand: demo charge put
+  away`) and resets them when the charge is drawn again. a two-bone solve puts the wrist 8 cm behind the grip pose, and the hand keeps
   the animation's angle to the game camera. The rig only follows the game camera in `onBeforeRender`, so the hand is
   placed relative to the rig shifted by the game camera's movement since. The log line `Tool in hand: arm for the demo
   charge ...` lists all rig constraints, and `Tool in hand: demo charge; wrist ...` whether the detonator hangs on the

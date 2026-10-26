@@ -195,6 +195,10 @@ namespace ShipbreakerVR
         {
             var vr = VrCamera.Instance;
             var hand = RightHand();
+            var holding = hand != null ? hand.CurrentEquipmentType : EquipmentController.Equipment.None;
+            if (heldBefore == EquipmentController.Equipment.DemoCharge && holding == EquipmentController.Equipment.None && VrAim.Active) StowCharge(true);
+            else if (heldBefore != EquipmentController.Equipment.DemoCharge && holding == EquipmentController.Equipment.DemoCharge && stowed) StowCharge(false);
+            heldBefore = holding;
             if (vr == null || hand == null || !rigKnown || hand.Hand != HandGrab.PlayerHand.Right
                 || hand.CurrentHandState != HandGrab.HandState.Equipped || hand.CurrentEquipmentType != EquipmentController.Equipment.DemoCharge) return;
             var camera = vr.GameCamera;
@@ -219,6 +223,44 @@ namespace ShipbreakerVR
             Bend(armRoot, armMid, armTip, wrist);
             armTip.rotation = wristRotation;
         }
+
+        // Put away with the grip (VrToolInput), the demo charge stays in the animated hand: the game only ever leaves it by
+        // drawing another tool, whose grab animation takes over. Its animator has stow triggers that the game's code never
+        // fires (AnimationParameters.DemoChargeStowParameter, DetonatorStowParameter); they are fired here instead, and
+        // reset when the charge is drawn again, in case the animator did not use them.
+        private static void StowCharge(bool stow)
+        {
+            stowed = stow;
+            if (charges == null) charges = Object.FindObjectOfType<DemoChargeController>();
+            if (charges == null) return;
+            var animator = Traverse.Create(charges).Field("m_HandAnimatorController").GetValue<Animator>();
+            var parameters = charges.AnimationParamters;
+            if (!stow)
+            {
+                if (animator == null) return;
+                foreach (var parameter in animator.parameters)
+                    if (parameter.type == AnimatorControllerParameterType.Trigger
+                        && (parameter.name == parameters.DemoChargeStowParameter || parameter.name == parameters.DetonatorStowParameter))
+                        animator.ResetTrigger(parameter.name);
+                return;
+            }
+            var detonator = ChargeState(charges) >= DemoChargeState.Detonation;
+            var trigger = detonator ? parameters.DetonatorStowParameter : parameters.DemoChargeStowParameter;
+            var known = false;
+            if (animator != null && !string.IsNullOrEmpty(trigger))
+                foreach (var parameter in animator.parameters)
+                    known |= parameter.name == trigger && parameter.type == AnimatorControllerParameterType.Trigger;
+            if (known) animator.SetTrigger(trigger);
+            if (stowLogs++ < 5)
+                Plugin.Log.LogInfo($"Tool in hand: demo charge put away ({(detonator ? "detonator" : "charge")}), stow trigger '{trigger}' {(known ? "fired" : "not on the animator")}");
+        }
+
+        private static readonly AccessTools.FieldRef<DemoChargeController, DemoChargeState> ChargeState =
+            AccessTools.FieldRefAccess<DemoChargeController, DemoChargeState>("mState");
+        private static DemoChargeController charges;
+        private static EquipmentController.Equipment heldBefore;
+        private static int stowLogs;
+        private static bool stowed;
 
         // The wrist relative to the grip pose, along the aim: an estimate, as in VrControls.
         private static readonly Vector3 WristBehindGrip = new Vector3(0f, 0f, -0.08f);
@@ -330,6 +372,7 @@ namespace ShipbreakerVR
             grapple = null;
             logged.Clear();
             armRoot = armMid = armTip = armFor = null;
+            charges = null;
             loggedArm = loggedArmSkip = false;
             rigKnown = false;
         }

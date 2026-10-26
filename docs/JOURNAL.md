@@ -465,7 +465,9 @@ there was nothing on the tool point to move. My first idea was to move the point
 said my code ran, and Marc said nothing moved, charge and detonator included. So now the mod waits until the game has
 finished animating the arm and then bends it itself, elbow and shoulder, until the wrist sits at the controller. The
 first build of that did nothing either, without a word in the log: looking up the arm's bones tripped over a property
-that reflection cannot read, and the exception went to the game's own log.
+that reflection cannot read, and the exception went to the game's own log. With that fixed the hand finally followed. Letting go of
+the grip, though, left the charge in the hand. The game never puts a charge away on its own, it only ever swaps it for
+another tool. The animations for stowing exist, nobody calls them, so the mod does.
 
 One fix from the first round had to go again. Back then I had taught the cutter's rail, floating in front of the
 helmet, to turn along with the wrist. Now that the cutter sits in the hand, the rail turns with it anyway, and my old
