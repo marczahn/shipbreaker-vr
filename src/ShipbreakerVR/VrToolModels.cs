@@ -17,6 +17,8 @@ namespace ShipbreakerVR
     // the controller (PoseArm); with them in the left hand VrHands moves them over to that hand.
     internal static class VrToolModels
     {
+        static VrToolModels() => VrSession.OnUnload("tool models", Release);
+
         private static readonly AccessTools.FieldRef<HandGrab, List<Transform>> HandTargets =
             AccessTools.FieldRefAccess<HandGrab, List<Transform>>("m_EquipmentHandTargetTransforms");
 

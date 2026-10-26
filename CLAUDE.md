@@ -10,7 +10,7 @@ OpenXR at runtime. Tested with a Meta Quest via Virtual Desktop (VDXR runtime). 
   `Steuerung/Drehen`, ...). Keep them so existing user settings survive.
 
 ## Layout
-- `src/ShipbreakerVR/` – the plugin (C#, net48). One file per concern: `VrCamera` (rig, eye resolution, video memory),
+- `src/ShipbreakerVR/` – the plugin (C#, net48). One file per concern: `VrSession` (start, F3, attaching the rig, teardown on unload), `VrCamera` (rig, eye resolution, video memory),
   `VrBody` (body follows head, playspace), `VrUi` / `VrCanvases` (HUD visor and menu canvas), `VrOptions` /
   `VrOptionsNavigation` (rows in the game's options menu), `VrControls` (motion controller flying), `VrXr` (OpenXR
   setup), `VrAim` (aiming with the hand, laser), `VrToolInput` / `VrToolBelt` (tool buttons, taking tools off the

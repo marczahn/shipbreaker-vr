@@ -22,6 +22,8 @@ namespace ShipbreakerVR
     // all other views are hidden here.
     internal static class VrOptionsTab
     {
+        static VrOptionsTab() => VrSession.OnUnload("options tab", RemoveAll);
+
         private static readonly AccessTools.FieldRef<UnifiedOptionsScreen, OptionsScreenController[]> Screens =
             AccessTools.FieldRefAccess<UnifiedOptionsScreen, OptionsScreenController[]>("m_OptionScreens");
         private static readonly AccessTools.FieldRef<UnifiedOptionsScreen, UIView[]> Views =

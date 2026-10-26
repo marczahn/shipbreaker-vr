@@ -25,6 +25,8 @@ namespace ShipbreakerVR
     // The tool models go into the hand (VrToolModels).
     internal static class VrAim
     {
+        static VrAim() => VrSession.OnUnload("aim camera", Release);
+
         private const float BeamWidth = 0.002f;
         private const float BeamMiss = 5f;
         private const float BeamRange = 100f;

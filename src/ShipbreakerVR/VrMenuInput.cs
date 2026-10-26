@@ -23,6 +23,8 @@ namespace ShipbreakerVR
     // The actions read only InControl's active device, and another device kept that role (see ActiveDevicePatch).
     internal class VrMenuInput : InControl.InputDevice
     {
+        static VrMenuInput() => VrSession.OnUnload("menu control", Detach);
+
         private static readonly InputControlType[] Buttons =
         {
             InputControlType.Action1, InputControlType.Action2, InputControlType.Action3, InputControlType.Action4,

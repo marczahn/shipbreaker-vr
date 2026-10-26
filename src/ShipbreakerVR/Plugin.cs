@@ -116,115 +116,31 @@ namespace ShipbreakerVR
             HeadSideways = Config.Bind("Bild", "KopfSeitlich", 0f,
                 "Moves the eyes right (positive) or left (negative) against the game's head position, in centimeters (-10 to 10).");
             // Loaded again by ScriptEngine (F6) while the game runs: OpenXR and the Hab state carry over from the
-            // previous instance, and VR must not be toggled off by the start-at-launch below.
+            // previous instance, and VR must not be toggled off by the start-at-launch (VrSession).
             var reloaded = VrXr.Adopt();
-            launched = reloaded;
             if (reloaded) VrHab.Adopt();
             Log.LogInfo($"{Name} {Version} loaded{(reloaded ? $" again (VR {(VrXr.IsRunning ? "running" : "off")})" : "")}. Unity {Application.unityVersion}, game {Application.version}");
             if (HeadHeight.Value != 0f || HeadSideways.Value != 0f) Log.LogInfo($"Head offset: {HeadHeight.Value:0} cm up, {HeadSideways.Value:0} cm right");
-            // Apply each patch separately so one failing patch doesn't take down all the others (and F3).
-            // ScriptEngine renames the assembly on every load; with that name in the ID, unloading an old instance
-            // only removes its own patches.
-            harmony = new Harmony($"{Guid}/{typeof(Plugin).Assembly.GetName().Name}");
-            foreach (var type in AccessTools.GetTypesFromAssembly(typeof(Plugin).Assembly))
-            {
-                try { harmony.CreateClassProcessor(type).Patch(); }
-                catch (System.Exception e) { Log.LogError($"Patch {type.Name} failed: {e}"); }
-            }
-            PatchReport.LogSummary();
-            try { VrFrame.Install(); }
-            catch (System.Exception e) { Log.LogError($"Installing the frame update failed, running it from Update: {e}"); }
+            VrSession.Start(reloaded);
             Application.quitting += OnQuitting;
         }
 
-        private Harmony harmony;
         private bool quitting;
 
         private void OnQuitting() => quitting = true;
 
-        // ScriptEngine destroys the plugin before loading the new build. Everything the mod changed in the game goes
-        // back to how the game had it, as when VR stops, so the new instance starts from the game's own state. OpenXR
-        // keeps running; the new instance takes it over (VrXr.Adopt).
+        // ScriptEngine destroys the plugin before loading the new build (VrSession.Unload).
         private void OnDestroy()
         {
             Application.quitting -= OnQuitting;
             if (quitting) return;
             Log.LogInfo($"{Name} unloading");
-            Unload("frame update", VrFrame.Uninstall);
-            Unload("options tab", VrOptionsTab.RemoveAll);
-            Unload("menu control", VrMenuInput.Detach);
-            Unload("VR camera", VrCamera.Unload);
-            Unload("frame statistics", VrPerformance.Detach);
-            Unload("flight globe", VrFlightGlobe.Release);
-            Unload("second tool", VrDualTools.Release);
-            Unload("tool models", VrToolModels.Release);
-            Unload("hands", VrHands.Release);
-            Unload("climbing", VrClimb.Release);
-            Unload("crosshair", VrCrosshair.Release);
-            Unload("aim camera", VrAim.Release);
-            Unload("patches", () => harmony?.UnpatchSelf());
+            VrSession.Unload();
             Log.LogInfo($"{Name} unloaded");
             BepInEx.Logging.Logger.Sources.Remove(Log);
         }
 
-        private static void Unload(string what, System.Action action)
-        {
-            try { action(); }
-            catch (System.Exception e) { Log.LogError($"Unloading the {what} failed: {e}"); }
-        }
-
-        private float nextCameraSearch;
-        private bool launched;
-
-        // The camera currently producing the image: active, no target texture, highest depth. Not one that only draws
-        // canvases, like the load screen camera: its volume layers hid our UI pass and it shows no world anyway.
-        private static Camera FindMenuCamera()
-        {
-            Camera best = null;
-            foreach (var cam in Camera.allCameras)
-            {
-                if (cam.targetTexture != null || cam.CompareTag("UI_Camera") || cam.name.StartsWith("ShipbreakerVR") || VrCamera.IsUiOnly(cam)) continue;
-                // Only while the game shows the Hab (VrHab.Camera); a leftover Hab camera during a load is not a menu.
-                if (VrHab.IsHabCamera(cam)) continue;
-                if (best == null || cam.depth > best.depth) best = cam;
-            }
-            return best;
-        }
-
-        private void Update()
-        {
-            if (!launched)
-            {
-                launched = true;
-                if (StartVrAtLaunch.Value) VrXr.Toggle();
-            }
-            if (Input.GetKeyDown(KeyCode.F3)) VrXr.Toggle();
-            VrFrame.Check();
-            VrMenuInput.EnsureAttached();
-
-            // The main menu has no LynxCameraController yet; the VR camera then attaches to the menu camera.
-            // Without any camera (intro, loading screen) the rig still exists and shows the UI on black.
-            // In the Hab the game shows the station through its own camera; back in gameplay the main camera takes over again.
-            var vr = VrCamera.Instance;
-            if (!VrXr.IsRunning) return;
-            // The rig moves onto the Hab camera by itself (VrCamera.LateUpdate); here only when VR starts in the Hab.
-            var hab = VrHab.Camera;
-            if (hab != null)
-            {
-                if (vr == null)
-                {
-                    Log.LogInfo($"VR camera attached to the Hab camera '{hab.name}'");
-                    VrCamera.Attach(hab);
-                }
-            }
-            else if (Time.unscaledTime >= nextCameraSearch && (vr == null || vr.GameCamera == null || vr.FollowsHab))
-            {
-                nextCameraSearch = Time.unscaledTime + 0.25f;
-                var cam = LynxCameraController.MainCamera != null ? LynxCameraController.MainCamera : FindMenuCamera();
-                if (cam != null) Log.LogInfo($"VR camera attached to '{cam.name}'");
-                if (cam != null || vr == null || vr.GameCamera != null) VrCamera.Attach(cam);
-            }
-        }
+        private void Update() => VrSession.Update();
     }
 
     // Checks that we find the game camera: all tools aim via LynxCameraController.MainCamera.

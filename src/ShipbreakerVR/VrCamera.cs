@@ -14,6 +14,8 @@ namespace ShipbreakerVR
     // The game camera stays the tools' aiming camera, but does not render while VR is running.
     internal class VrCamera : MonoBehaviour
     {
+        static VrCamera() => VrSession.OnUnload("VR camera", Unload);
+
         private const float RecenterDelay = 0.5f;
 
         public enum AntiAliasing { TAA, SMAA, FXAA, Keine, Spiel }
@@ -250,13 +252,17 @@ namespace ShipbreakerVR
         public static void Unload()
         {
             var vr = Instance;
-            if (vr == null) return;
-            if (vr.gameCamera != null) vr.gameCamera.enabled = GameWantsEnabled(vr.gameCamera);
-            vr.SilenceOtherCameras(false);
-            VrHab.Calm(false);
-            VrHab.CutBlends(false);
-            VrPerformance.Update(false, null, false, true);
-            DestroyImmediate(vr.rig.gameObject);
+            if (vr != null)
+            {
+                if (vr.gameCamera != null) vr.gameCamera.enabled = GameWantsEnabled(vr.gameCamera);
+                vr.SilenceOtherCameras(false);
+                VrHab.Calm(false);
+                VrHab.CutBlends(false);
+                VrPerformance.Update(false, null, false, true);
+                DestroyImmediate(vr.rig.gameObject);
+            }
+            // Attach creates the frame statistics with the rig; they go with it.
+            VrPerformance.Detach();
         }
 
         private void Update()

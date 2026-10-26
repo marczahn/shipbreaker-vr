@@ -20,6 +20,8 @@ namespace ShipbreakerVR
     // reaches its hold by the end of the step: an impulse between the two, as a joint would apply, without joints.
     internal static class VrClimb
     {
+        static VrClimb() => VrSession.OnUnload("climbing", Release);
+
         // How far from the controller a surface may be to hold on, in meters at world scale 1.
         private const float Reach = 0.1f;
         // A hand held back this far from its hold (the body stuck behind something, the part torn away) lets go.

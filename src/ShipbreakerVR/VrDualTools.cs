@@ -26,6 +26,8 @@ namespace ShipbreakerVR
     // second one (Promote); letting go of the second one puts it away through its own controller (PutAway).
     internal static class VrDualTools
     {
+        static VrDualTools() => VrSession.OnUnload("second tool", Release);
+
         // Which tool's code a game class belongs to: its input, its aim and its "is it equipped" checks.
         public enum Family { Other, Cutter, Grapple }
 

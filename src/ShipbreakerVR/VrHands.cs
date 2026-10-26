@@ -21,6 +21,8 @@ namespace ShipbreakerVR
     // the tool in the left hand, or into a fist), through the animator's own grab pose (Fingers).
     internal static class VrHands
     {
+        static VrHands() => VrSession.OnUnload("hands", Release);
+
         // How long an arm takes to move between the game's pose and the controller.
         private const float Blend = 0.2f;
 
