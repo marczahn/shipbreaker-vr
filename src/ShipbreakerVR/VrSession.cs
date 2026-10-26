@@ -70,6 +70,7 @@ namespace ShipbreakerVR
                 if (Plugin.StartVrAtLaunch.Value) VrXr.Toggle();
             }
             if (Input.GetKeyDown(KeyCode.F3)) VrXr.Toggle();
+            VrXr.Watch();
             VrFrame.Check();
             VrMenuInput.EnsureAttached();
             AttachCamera();

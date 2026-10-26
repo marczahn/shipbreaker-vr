@@ -27,7 +27,12 @@ namespace ShipbreakerVR
         private float nextSearch;
         private bool hidden;
 
-        public static void Attach(VrCamera vr) => vr.gameObject.AddComponent<VrHelmet>().vr = vr;
+        public static VrHelmet Attach(VrCamera vr)
+        {
+            var helmet = vr.gameObject.AddComponent<VrHelmet>();
+            helmet.vr = vr;
+            return helmet;
+        }
 
         private void OnEnable() => RenderPipelineManager.beginCameraRendering += OnBeginCamera;
 
@@ -43,7 +48,8 @@ namespace ShipbreakerVR
             container.localScale = originalLocalScale;
         }
 
-        private void LateUpdate()
+        // From VrCamera.LateUpdate, after the rig and the UI.
+        public void Late()
         {
             if (controller == null)
             {
