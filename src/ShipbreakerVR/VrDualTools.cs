@@ -13,8 +13,13 @@ namespace ShipbreakerVR
     // tool (EquipmentController.CurrentEquipment); drawing another one puts the old one away (SetEquipment). Here the hand
     // that draws the second tool gets it as the game's own, and the tool the other hand holds stays out: its unequip is
     // skipped (UnequipPatch), and the code of that tool's family sees it as equipped (GatePatch). Each tool exists once,
-    // so a hand that reaches for the tool the other hand holds takes it over, as before. Only the cutter and the grapple
-    // pair up; the scanner and the demo charges still replace the tool in the other hand.
+    // so a hand that reaches for the tool the other hand holds takes it over, as before. The cutter, the grapple and the
+    // demo charges pair up. The demo charges stay the game's tool whichever hand drew first (their arm, animation and
+    // pieces hang on the game's right hand, VrToolModels), so a cutter or grapple drawn next to them is added as the
+    // second tool through its own controller (Add). The tools re-equip themselves while working (EquipGun on every
+    // grapple shot, EquipCutter on cutting); for the second one that neither touches the game's right hand nor tells the
+    // game (HandPatch, EquipPatch). The scanner does not pair: drawn next to another tool it hides that one, which comes
+    // back into its hand when the scanner is put away while that hand still holds its grip (Suspend, Resume).
     // The second tool works from its own hand: its family's input polls read that hand's buttons (VrToolInput), its aim
     // goes through a camera of its own on its muzzle (VrAim.CameraFor), and its model hangs on a point of its own that
     // follows that controller (Place), fitted like the first (VrToolFit). Letting go of the game's tool hands the game the
@@ -84,7 +89,11 @@ namespace ShipbreakerVR
             Enabled && held != next && IsPairable(held) && IsPairable(next);
 
         private static bool IsPairable(EquipmentController.Equipment tool) =>
-            tool == EquipmentController.Equipment.CuttingTool || tool == EquipmentController.Equipment.GrappleHook;
+            tool == EquipmentController.Equipment.CuttingTool || tool == EquipmentController.Equipment.GrappleHook
+            || tool == EquipmentController.Equipment.DemoCharge;
+
+        // Whether that hand holds the second tool.
+        public static bool Holds(XRNode node) => Second != EquipmentController.Equipment.None && SecondNode == node;
 
         // What the tool classes read instead of EquipmentController.CurrentEquipment: their own tool while it is the
         // second one, the game's otherwise.
@@ -112,6 +121,21 @@ namespace ShipbreakerVR
             Invoke(SetEquipment, next);
             Invoke(PlayEquipAudio, next);
             if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: {Name(keptBy)} hand keeps the {kept}, the other hand draws the {next}");
+        }
+
+        // Next to the demo charges, which stay the game's tool: the cutter or the grapple is equipped as the second tool
+        // through its own controller, without telling the game (which would put the charges away).
+        public static void Add(EquipmentController controller, EquipmentController.Equipment tool, XRNode node)
+        {
+            equipment = controller;
+            if (!FindTools()) return;
+            Second = tool;
+            SecondNode = node;
+            model = null;
+            if (tool == EquipmentController.Equipment.CuttingTool && cutter != null) cutter.EquipCutter(false);
+            else if (tool == EquipmentController.Equipment.GrappleHook && gun != null) gun.EquipGun(false);
+            Invoke(PlayEquipAudio, tool);
+            if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: {Name(node)} hand adds the {tool} to the {controller.CurrentEquipment}");
         }
 
         // The second tool changes hands (the other hand reached for it).
@@ -154,7 +178,51 @@ namespace ShipbreakerVR
                 if (Find()) Invoke(PlayUnequipAudio, tool);
                 gun.UnequipGun();
             }
+            model = null;
             if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: the {tool} in the {Name(SecondNode)} hand is put away");
+        }
+
+        // The tool the scanner hid, and the hand that held it.
+        public static EquipmentController.Equipment Suspended { get; private set; }
+        public static XRNode SuspendedNode { get; private set; }
+
+        // The scanner is drawn while the other hand holds the game's tool: the game puts that tool away, and it comes back
+        // after the scan (Resume).
+        public static void Suspend(EquipmentController.Equipment tool, XRNode node)
+        {
+            if (!Enabled) return;
+            Suspended = tool;
+            SuspendedNode = node;
+            if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: the scanner hides the {tool} in the {Name(node)} hand");
+        }
+
+        // The hand that held the hidden tool let go during the scan: it stays put away.
+        public static void Forget()
+        {
+            if (Suspended == EquipmentController.Equipment.None) return;
+            if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: the {Suspended} hidden by the scanner stays put away");
+            Suspended = EquipmentController.Equipment.None;
+        }
+
+        // The scanner is put away: the hidden tool comes back into its hand instead of an empty hand. False without one.
+        public static bool Resume(EquipmentController controller)
+        {
+            var tool = Suspended;
+            Suspended = EquipmentController.Equipment.None;
+            if (tool == EquipmentController.Equipment.None || !Enabled) return false;
+            equipment = controller;
+            Invoke(SetEquipment, tool);
+            Invoke(PlayEquipAudio, tool);
+            if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: the scanner is put away, the {tool} comes back into the {Name(SuspendedNode)} hand");
+            return true;
+        }
+
+        // From HandPatch: the second tool re-equipping itself hangs on its own point, not on the game's right hand.
+        public static Transform HoldPoint(GrabController grab)
+        {
+            var equipmentPoint = grab != null && grab.RightHand != null ? grab.RightHand.EquipmentGeoTransform : null;
+            if (equipmentPoint != null) EnsurePoint(equipmentPoint);
+            return point;
         }
 
         // Once a frame from VrToolInput: the second tool ends with the option, outside gameplay (pausing keeps it), and
@@ -241,13 +309,7 @@ namespace ShipbreakerVR
             if (Second == EquipmentController.Equipment.None || equipmentPoint == null || equipmentPoint.parent == null) return;
             var tool = Model(Second);
             if (tool == null || !GetDevice() || !VrAim.TryGetHand(device, out var grip, out var rotation)) return;
-            if (point == null || point.parent != equipmentPoint.parent)
-            {
-                if (point != null) Object.Destroy(point.gameObject);
-                point = new GameObject("ShipbreakerVR Second tool point").transform;
-                point.SetParent(equipmentPoint.parent, false);
-                point.localScale = equipmentPoint.localScale;
-            }
+            EnsurePoint(equipmentPoint);
             if (tool != model || tool.parent != point)
             {
                 model = tool;
@@ -270,6 +332,16 @@ namespace ShipbreakerVR
             point.rotation = rotation * turn;
             point.position = grip + rotation * mount;
             placed = true;
+        }
+
+        // A point of its own for the second tool, a sibling of the game's equipment point.
+        private static void EnsurePoint(Transform equipmentPoint)
+        {
+            if (point != null && point.parent == equipmentPoint.parent) return;
+            if (point != null) Object.Destroy(point.gameObject);
+            point = new GameObject("ShipbreakerVR Second tool point").transform;
+            point.SetParent(equipmentPoint.parent, false);
+            point.localScale = equipmentPoint.localScale;
         }
 
         // Where the second tool aims from and along: its muzzle along its barrel, or the hand's aim pose until its model
@@ -326,6 +398,7 @@ namespace ShipbreakerVR
         public static void Release()
         {
             PutAway(true);
+            Suspended = EquipmentController.Equipment.None;
             if (point != null) Object.Destroy(point.gameObject);
             if (aim != null) Object.Destroy(aim.gameObject);
             point = null;
@@ -363,6 +436,39 @@ namespace ShipbreakerVR
         private static MethodBase TargetMethod() => AccessTools.Method(typeof(EquipmentController), "UnequipEquipment");
 
         private static bool Prefix(EquipmentController.Equipment equipmentType) => !VrDualTools.Keeps(equipmentType);
+    }
+
+    // The second tool re-equipping itself (EquipGun, EquipCutter) asks for the game's right hand, which holds the game's
+    // tool; it gets its own point instead, and the right hand stays as it is (see VrDualTools).
+    [HarmonyPatch]
+    internal static class HandPatch
+    {
+        private static MethodBase TargetMethod() => AccessTools.Method(typeof(GrabController), nameof(GrabController.GetHandPositionTransformAndSetEquipment));
+
+        private static bool Prefix(GrabController __instance, EquipmentController.Equipment equipmentType, ref Transform __result)
+        {
+            if (!VrDualTools.Keeps(equipmentType)) return true;
+            __result = VrDualTools.HoldPoint(__instance);
+            return __result == null;
+        }
+    }
+
+    // Nor does it tell the game it is equipped, which would make the demo charges (DemoChargeController.OnEquipmentChanged)
+    // and the HUD think they were put away.
+    [HarmonyPatch]
+    internal static class EquipPatch
+    {
+        private static IEnumerable<MethodBase> TargetMethods()
+        {
+            yield return AccessTools.Method(typeof(CuttingToolController), nameof(CuttingToolController.EquipCutter));
+            yield return AccessTools.Method(typeof(GunController), nameof(GunController.EquipGun));
+        }
+
+        private static void Prefix(MethodBase __originalMethod, ref bool postEquipmentChangedEvent)
+        {
+            var tool = __originalMethod.DeclaringType == typeof(GunController) ? EquipmentController.Equipment.GrappleHook : EquipmentController.Equipment.CuttingTool;
+            if (VrDualTools.Keeps(tool)) postEquipmentChangedEvent = false;
+        }
     }
 
     // The tool classes check whether their tool is the equipped one; the second tool's family gets its own (VrDualTools).

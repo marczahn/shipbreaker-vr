@@ -91,8 +91,8 @@ namespace ShipbreakerVR
                 new BoolRow
                 {
                     Label = L("Two tools at once", "Zwei Werkzeuge gleichzeitig"), Entry = Plugin.TwoTools,
-                    Hint = L("The cutter and the grapple can be held at once, one in each hand: while one hand holds one of them, draw the other one with the other hand. Each hand's trigger and buttons work its own tool. Scanner and demo charges still replace the tool in the other hand.",
-                        "Cutter und Greifhaken lassen sich gleichzeitig halten, je einer pro Hand: Während eine Hand eins davon hält, zieht die andere Hand das andere. Trigger und Tasten jeder Hand bedienen ihr eigenes Werkzeug. Scanner und Sprengladungen ersetzen weiterhin das Werkzeug der anderen Hand."),
+                    Hint = L("Two of cutter, grapple and demo charges can be held at once, one in each hand: while one hand holds one of them, draw another with the other hand. Each hand's trigger and buttons work its own tool. The scanner hides the other hand's tool while it is out; keep that hand's grip and the tool comes back after the scan.",
+                        "Zwei von Cutter, Greifhaken und Sprengladungen lassen sich gleichzeitig halten, je eins pro Hand: Während eine Hand eins davon hält, zieht die andere Hand ein weiteres. Trigger und Tasten jeder Hand bedienen ihr eigenes Werkzeug. Der Scanner blendet das Werkzeug der anderen Hand aus; hältst du dort den Grip, kommt es nach dem Scan zurück."),
                 },
                 new BoolRow
                 {

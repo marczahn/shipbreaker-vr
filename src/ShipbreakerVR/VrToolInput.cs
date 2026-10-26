@@ -144,6 +144,8 @@ namespace ShipbreakerVR
             // The second hand letting go puts its tool away; the first one hands the game the second tool, if there is one.
             var second = VrDualTools.Second != EquipmentController.Equipment.None ? (VrDualTools.SecondNode == XRNode.LeftHand ? LeftHand : RightHand) : null;
             if (second != null && !second.GripDown) VrDualTools.PutAway();
+            if (VrDualTools.Suspended != EquipmentController.Equipment.None && !(VrDualTools.SuspendedNode == XRNode.LeftHand ? LeftHand : RightHand).GripDown)
+                VrDualTools.Forget();
             var tool = ToolNode == XRNode.LeftHand ? LeftHand : RightHand;
             if (tool.GripPressed) holsterPulses = 0;
             else if (!tool.GripDown) Holster();
@@ -237,14 +239,22 @@ namespace ShipbreakerVR
             }
             var current = equipment.IsNothingEquipped ? EquipmentController.Equipment.None : equipment.CurrentEquipment;
             var other = hand == LeftHand ? RightHand : LeftHand;
-            if (VrDualTools.Second == EquipmentController.Equipment.None && other.Node == ToolNode && other.GripDown
-                && VrDualTools.CanPair(current, tool))
+            var otherHolds = current != EquipmentController.Equipment.None && other.Node == ToolNode && other.GripDown;
+            if (VrDualTools.Second == EquipmentController.Equipment.None && otherHolds && VrDualTools.CanPair(current, tool))
             {
-                VrDualTools.Draw(equipment, current, other.Node, tool);
-                ToolNode = hand.Node;
+                // The demo charges stay the game's tool, the other tools join them.
+                if (current == EquipmentController.Equipment.DemoCharge) VrDualTools.Add(equipment, tool, hand.Node);
+                else
+                {
+                    VrDualTools.Draw(equipment, current, other.Node, tool);
+                    ToolNode = hand.Node;
+                }
                 holsterPulses = 0;
                 return;
             }
+            // The scanner hides the other hand's tool until it is put away.
+            if (tool == EquipmentController.Equipment.Scanner && otherHolds && VrDualTools.Second == EquipmentController.Equipment.None)
+                VrDualTools.Suspend(current, other.Node);
             var taken = current == tool;
             if (!taken)
                 now[(int)(zone == VrToolBelt.Zone.Grapple ? Action.Grapple
@@ -284,6 +294,14 @@ namespace ShipbreakerVR
             holsterPulses++;
             if (current == EquipmentController.Equipment.Scanner)
             {
+                // The tool the scanner hid comes back into the hand that still holds it.
+                var node = VrDualTools.SuspendedNode;
+                if (VrDualTools.Resume(equipment))
+                {
+                    ToolNode = node;
+                    holsterPulses = 0;
+                    return;
+                }
                 if (logs++ < 60) Plugin.Log.LogInfo("Tool control: scanner put away");
                 SetEquipment.Invoke(equipment, new object[] { EquipmentController.Equipment.None });
             }

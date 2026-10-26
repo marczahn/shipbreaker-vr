@@ -99,8 +99,9 @@ namespace ShipbreakerVR
             bool closed;
             if (arm.Driven)
             {
-                // The game's right hand with the charge in the left one: its fingers stay with the charge's animation.
-                if (arm.Hand.CurrentEquipmentType == EquipmentController.Equipment.DemoCharge) return;
+                // The game's right hand with the charge in the left one: its fingers stay with the charge's animation, unless
+                // it holds a second tool (VrDualTools).
+                if (arm.Hand.CurrentEquipmentType == EquipmentController.Equipment.DemoCharge && !VrDualTools.Holds(arm.Node)) return;
                 if (!arm.Device.isValid) arm.Device = InputDevices.GetDeviceAtXRNode(arm.Node);
                 arm.Device.TryGetFeatureValue(CommonUsages.grip, out var grip);
                 arm.Gripping = grip >= (arm.Gripping ? GripRelease : GripPress);

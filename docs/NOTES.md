@@ -208,7 +208,7 @@ interacting, the grapple and the "entity of interest".
   read also while hand aiming is inactive, so a grip held through a tracking loss no longer counts as a new press
   afterwards. Log: `Tool control: <left|right> hand draws|takes the <tool>`, `Tool belt: <left|right> hand at <zone>`.
 - Two tools at once (`VrDualTools`, config `Steuerung/ZweiWerkzeuge`, Marc's wish: the cutter in one hand, the grapple
-  in the other, each tool only once). The game knows one equipped tool (`EquipmentController.CurrentEquipment`), and
+  in the other, each tool only once; then the demo charges with either of them). The game knows one equipped tool (`EquipmentController.CurrentEquipment`), and
   `SetEquipment` puts the old one away (`UnequipEquipment`) before equipping the next. The tool controllers are
   separate, though, with their own fire actions (`CutterFire`, `GrappleFire`), and gate their work on
   `CurrentEquipment == <their tool>` (`GunController.Update`, `GrapplingHook`, `TetherController`,
@@ -227,10 +227,27 @@ interacting, the grapple and the "entity of interest".
   tool's fit for that hand (`VrToolFit`), and gets its own laser. Letting go: the second hand puts its tool away
   through its controller (`UnequipCutter`/`UnequipGun`, after `CanBeUnequipped`); the tool hand hands the game the
   second tool (`SetEquipment(second)`, which unequips the first and re-equips the second onto the right hand's point),
-  and that hand becomes the tool hand. The scanner and the demo charges do not pair; they replace the tool as before.
+  and that hand becomes the tool hand.
+  The first test (cutter and grapple) worked, holding a part with the grapple while cutting another, but the log showed
+  the second grapple's model taken back onto the game's right hand on every shot: the tools re-equip themselves while
+  working (`GrapplingHook`/`TetherController` call `EquipGun`, `CuttingController`/`ScalpelController` call
+  `EquipCutter`), and those call `GrabController.GetHandPositionTransformAndSetEquipment`, which hands the right hand
+  to that tool (`EndGrab`, `StartEquipment`). For the second tool a prefix (`HandPatch`) returns its own point and leaves
+  the right hand alone, and `EquipPatch` suppresses the `EquipmentChangedEvent` they post.
+  Demo charges pair too, but stay the game's tool whichever hand drew first: their arm (`VrToolModels.PoseArm`), hand
+  animation and pieces hang on the game's right hand. A cutter or grapple drawn next to them is added through its own
+  controller (`EquipCutter(false)`/`EquipGun(false)`, onto its own point via `HandPatch`, `VrDualTools.Add`), without
+  `SetEquipment`, which would put the charges away; `DemoChargeController` gates on its own copy of the equipped tool
+  from `EquipmentChangedEvent`, hence the suppressed events. The scanner does not pair: it does its raycasts whenever
+  it is activated, but its outlines and info panel follow the game's equipped tool, and with a tool in each hand no hand
+  is free to draw it anyway. Drawn while the other hand holds the game's tool, that tool is remembered
+  (`VrDualTools.Suspend`) and put away by the game as usual; when the scanner is put away and that hand still holds its
+  grip, the tool comes back (`SetEquipment(tool)` instead of `SetEquipment(None)`, `Resume`), and the hand becomes the
+  tool hand again. Letting go of that grip during the scan forgets it.
   The second tool is put away when the option or hand aiming goes off, outside gameplay (not on pause) and on unload.
-  Logs: `Two tools: <hand> hand keeps the <tool>, the other hand draws the <tool>`, `... is put away`, `... becomes the
-  game's tool`, `Two tools: <Class>.<Method>: N equipment check(s) redirected`; F8 shows `second tool: ...`.
+  Logs: `Two tools: <hand> hand keeps the <tool>, the other hand draws the <tool>`, `... adds the <tool> to the
+  DemoCharge`, `... is put away`, `... becomes the game's tool`, `the scanner hides the <tool>`, `... comes back into
+  the <hand> hand`, `Two tools: <Class>.<Method>: N equipment check(s) redirected`; F8 shows `second tool: ...`.
 - The game has two hands (`GrabController.LeftHand`/`RightHand`, both `HandGrab`): each with its own hand target
   (`m_HandTarget`), grab/rest/miss targets, equipment point and equipment grip targets, animator parameters of its own
   (`LGrab`/`RGrab`, `LPrepGrab`, `LReact`, ...) and its own grab action (`LeftHandGrab`/`RightHandGrab`); the flat game
