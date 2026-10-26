@@ -19,7 +19,8 @@ namespace ShipbreakerVR
     // the left hand (Charges).
     // The fingers come from the animation too: a hand that follows its controller closes around the tool in it while its
     // grip is held, through the animator's own grab pose (Fingers). That pose reaches out with the fingers stretched (the
-    // game grabs handholds with it), so an empty hand curls its finger bones into a fist instead (Fist).
+    // game grabs handholds with it), so an empty hand takes its fingers from one of the game's closed-hand clips instead
+    // (Fist).
     internal static class VrHands
     {
         // How long an arm takes to move between the game's pose and the controller.
@@ -45,6 +46,8 @@ namespace ShipbreakerVR
             public readonly Transform[] Fingers = new Transform[15];
             public bool Fist;
             public float Curl;
+            public Quaternion[] FistPose;
+            public string FistFrom;
             public float Weight;
             public bool Driven;
             public bool Gripping;
@@ -93,8 +96,8 @@ namespace ShipbreakerVR
             Fingers(RightArm, rightWasDriven);
             Pose(LeftArm, active && chargeLeft && Mirrored(out var hold) ? hold : Quaternion.identity);
             Pose(RightArm, Quaternion.identity);
-            Fist(LeftArm, -1f);
-            Fist(RightArm, 1f);
+            Fist(LeftArm);
+            Fist(RightArm);
             Charges(active && chargeLeft);
         }
 
@@ -130,9 +133,8 @@ namespace ShipbreakerVR
             if (fingerLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} hand {(closed ? "closes" : "opens")}{(arm.Driven ? "" : " (back to the game)")}");
         }
 
-        // How far each finger bone bends into a fist, in degrees: proximal, intermediate, distal; the thumb less.
-        private static readonly float[] FingerCurl = { 70f, 95f, 60f };
-        private static readonly float[] ThumbCurl = { 15f, 35f, 45f };
+        // The game's clips with a closed hand, tried in this order; each hand takes the one that bends its fingers most.
+        private static readonly string[] FistClips = { "anim_player_holdgrab", "anim_player_tools_holdtool", "anim_player_grab" };
         // How long the fingers take to close or open.
         private const float CurlTime = 0.12f;
 
@@ -141,32 +143,77 @@ namespace ShipbreakerVR
             grab.RightHand.CurrentEquipmentType != EquipmentController.Equipment.None
             && grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped && VrToolInput.ToolNode == arm.Node;
 
-        // An empty hand that follows its controller curls its fingers into a fist while the grip is held, after the
-        // animation (which sets the finger bones again every frame) and after the arm is posed. Each bone turns towards
-        // the palm about the axis across it. In the hand's own axes (Frame) the cross product of knuckles and thumb side
-        // points out of the right hand's palm (towards its left, holding a controller); side is 1 for the right hand and
-        // -1 for the left one, whose palm faces the other way.
-        private static void Fist(Arm arm, float side)
+        // An empty hand that follows its controller closes while the grip is held into the finger pose of one of the
+        // game's own closed-hand clips (SampleFist), after the animation (which sets the finger bones again every frame)
+        // and after the arm is posed.
+        private static void Fist(Arm arm)
         {
             arm.Curl = Mathf.MoveTowards(arm.Curl, arm.Driven && arm.Fist ? 1f : 0f, Time.unscaledDeltaTime / CurlTime);
-            if (arm.Curl <= 0f || !Frame(arm, out _, out var frame)) return;
-            var palmNormal = side * Vector3.Cross(frame * Vector3.forward, frame * Vector3.up);
-            for (var finger = 0; finger < 5; finger++)
+            if (arm.Curl <= 0f || !SampleFist() || arm.FistPose == null) return;
+            for (var i = 0; i < arm.Fingers.Length; i++)
+                if (arm.Fingers[i] != null) arm.Fingers[i].localRotation = Quaternion.Slerp(arm.Fingers[i].localRotation, arm.FistPose[i], arm.Curl);
+            if (fistLogs++ < 4 && arm.Curl >= 1f)
+                Plugin.Log.LogInfo($"Hands: {arm.Name} hand makes a fist ({arm.FistFrom})");
+        }
+
+        private static bool fistSampled;
+
+        // Once: each closed-hand clip is sampled onto the player (AnimationClip.SampleAnimation) and its finger bones
+        // read; everything the sampling moved is put back right after, so the frame keeps its pose.
+        private static bool SampleFist()
+        {
+            if (fistSampled) return true;
+            var controller = animator != null ? animator.runtimeAnimatorController : null;
+            if (controller == null) return false;
+            fistSampled = true;
+            var bones = animator.GetComponentsInChildren<Transform>(true);
+            var positions = bones.Select(b => b.localPosition).ToArray();
+            var rotations = bones.Select(b => b.localRotation).ToArray();
+            var scales = bones.Select(b => b.localScale).ToArray();
+            var arms = new[] { LeftArm, RightArm };
+            var rest = arms.Select(a => a.Fingers.Select(f => f != null ? f.localRotation : Quaternion.identity).ToArray()).ToArray();
+            var best = new float[2];
+            var report = new List<string>();
+            try
             {
-                var angles = finger == 0 ? ThumbCurl : FingerCurl;
-                for (var joint = 0; joint < 3; joint++)
+                foreach (var name in FistClips)
                 {
-                    var bone = arm.Fingers[finger * 3 + joint];
-                    var next = joint < 2 ? arm.Fingers[finger * 3 + joint + 1] : null;
-                    if (bone == null) continue;
-                    var along = next != null ? next.position - bone.position : bone.position - bone.parent.position;
-                    var axis = Vector3.Cross(along, palmNormal);
-                    if (axis.sqrMagnitude < 1e-10f) continue;
-                    bone.rotation = Quaternion.AngleAxis(angles[joint] * arm.Curl, axis.normalized) * bone.rotation;
+                    var clip = controller.animationClips.FirstOrDefault(c => c != null && c.name == name);
+                    if (clip == null) continue;
+                    clip.SampleAnimation(animator.gameObject, clip.length * 0.5f);
+                    for (var a = 0; a < 2; a++)
+                    {
+                        var arm = arms[a];
+                        // How far the four fingers (not the thumb) bend from the idle pose.
+                        var bend = 0f;
+                        for (var i = 3; i < arm.Fingers.Length; i++)
+                            if (arm.Fingers[i] != null) bend += Quaternion.Angle(arm.Fingers[i].localRotation, rest[a][i]);
+                        report.Add($"{name} {arm.Name} {bend:0}°");
+                        if (bend <= best[a]) continue;
+                        best[a] = bend;
+                        arm.FistPose = arm.Fingers.Select(f => f != null ? f.localRotation : Quaternion.identity).ToArray();
+                        arm.FistFrom = name;
+                    }
+                    for (var i = 0; i < bones.Length; i++)
+                    {
+                        bones[i].localPosition = positions[i];
+                        bones[i].localRotation = rotations[i];
+                        bones[i].localScale = scales[i];
+                    }
                 }
             }
-            if (fistLogs++ < 4 && arm.Curl >= 1f)
-                Plugin.Log.LogInfo($"Hands: {arm.Name} hand makes a fist ({arm.Fingers.Count(f => f != null)} of 15 finger bones)");
+            catch (System.Exception e)
+            {
+                Plugin.Log.LogWarning($"Hands: sampling the closed hand failed: {e.Message}");
+                for (var i = 0; i < bones.Length; i++)
+                {
+                    bones[i].localPosition = positions[i];
+                    bones[i].localRotation = rotations[i];
+                    bones[i].localScale = scales[i];
+                }
+            }
+            Plugin.Log.LogInfo($"Hands: closed hand from {LeftArm.FistFrom ?? "none"} (left), {RightArm.FistFrom ?? "none"} (right); finger bend from idle: {string.Join(", ", report)}");
+            return true;
         }
 
         private static int fistLogs;
@@ -359,6 +406,7 @@ namespace ShipbreakerVR
                 HumanBodyBones.LeftIndexProximal, HumanBodyBones.LeftMiddleProximal, HumanBodyBones.LeftLittleProximal);
             Setup(RightArm, grab.RightHand, animator, HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand,
                 HumanBodyBones.RightIndexProximal, HumanBodyBones.RightMiddleProximal, HumanBodyBones.RightLittleProximal);
+            fistSampled = false;
             LogClips();
             foreach (var arm in new[] { LeftArm, RightArm })
                 Plugin.Log.LogInfo($"Hands: {arm.Name} arm {Name(arm.Upper)} > {Name(arm.Lower)} > {Name(arm.Wrist)}, fingers {(arm.Index != null && arm.Middle != null && arm.Little != null ? "found" : "missing")}");
@@ -380,6 +428,8 @@ namespace ShipbreakerVR
                 arm.Fingers[i] = animator != null ? animator.GetBoneTransform(first + i) : null;
             arm.Curl = 0f;
             arm.Fist = false;
+            arm.FistPose = null;
+            arm.FistFrom = null;
             arm.Weight = 0f;
             arm.Driven = false;
         }
@@ -404,6 +454,7 @@ namespace ShipbreakerVR
             LeftArm.Gripping = RightArm.Gripping = false;
             LeftArm.Fist = RightArm.Fist = false;
             LeftArm.Curl = RightArm.Curl = 0f;
+            fistSampled = false;
             Charges(false);
             chargePieces.Clear();
             chargesOn = null;
