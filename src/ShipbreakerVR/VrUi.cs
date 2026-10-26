@@ -430,7 +430,7 @@ namespace ShipbreakerVR
         }
 
         // Matrices of the eye HDRP is currently rendering (MultiPass: one pass per eye).
-        private static int GetEye(HDCamera hdCamera, out Matrix4x4 view, out Matrix4x4 proj)
+        internal static int GetEye(HDCamera hdCamera, out Matrix4x4 view, out Matrix4x4 proj)
         {
             var xr = XrProperty.GetValue(hdCamera);
             if (getViewMatrix == null)
@@ -554,6 +554,7 @@ namespace ShipbreakerVR
         protected override void Execute(CustomPassContext ctx)
         {
             if (VrUi.Instance == null) return;
+            VrAim.Draw(ctx, VrCamera.Instance != null ? VrCamera.Instance.Camera : null);
             VrUi.Instance.Draw(ctx);
             VrUi.Instance.DrawFade(ctx);
         }

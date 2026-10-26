@@ -85,8 +85,20 @@ namespace ShipbreakerVR
                 new BoolRow
                 {
                     Label = L("Body follows head", "Körper folgt Kopf"), Entry = Plugin.BodyFollowsHead,
-                    Hint = L("The body and the tools' aim turn with your head; mouse and stick turn on top. Turn it off to look around without turning the body.",
-                        "Körper und Zielrichtung der Werkzeuge drehen sich mit dem Kopf, Maus und Stick drehen zusätzlich. Aus, um dich umzusehen, ohne den Körper zu drehen."),
+                    Hint = L("The body turns with your head; mouse and stick turn on top. Turn it off to look around without turning the body.",
+                        "Der Körper dreht sich mit dem Kopf, Maus und Stick drehen zusätzlich. Aus, um dich umzusehen, ohne den Körper zu drehen."),
+                },
+                new BoolRow
+                {
+                    Label = L("Aim with the hand", "Zielen mit der Hand"), Entry = Plugin.AimWithHand,
+                    Hint = L("Tools, grabbing and interacting aim where the controller with the tool points, from the tool's muzzle; a laser shows where, and the crosshair leaves the middle of the view. With an empty hand: no laser, A uses what is in the middle of the view. Grip at the body draws a tool with either hand and holds it while held: right hip grapple, left hip demo charges, over the right shoulder cutter, side of the helmet scanner. Trigger: fire or grapple, A: use (with the trigger held: throw), B with the trigger held: reel in, B: tool mode, B held: tether. In the left hand X and Y work as A and B, and flying pauses. The suit's hands follow the controllers. Off: aim at the center of your view.",
+                        "Werkzeuge, Greifen und Benutzen zielen dorthin, wohin der Controller mit dem Werkzeug zeigt, vom Lauf des Werkzeugs aus; ein Laser zeigt die Stelle, und das Fadenkreuz verschwindet aus der Blickmitte. Mit leerer Hand: kein Laser, A benutzt, was in der Blickmitte ist. Grip am Körper zieht mit jeder Hand ein Werkzeug und hält es, solange Grip gedrückt bleibt: rechte Hüfte Greifhaken, linke Hüfte Sprengladungen, über die rechte Schulter Cutter, Helmseite Scanner. Trigger: feuern oder greifen, A: benutzen (mit Trigger: werfen), B mit Trigger: einholen, B: Werkzeugmodus, B halten: Tether. In der linken Hand wirken X und Y wie A und B, und das Fliegen ruht. Die Hände des Anzugs folgen den Controllern. Aus: Ziel ist die Blickmitte."),
+                },
+                new BoolRow
+                {
+                    Label = L("Fit tools in the hand", "Werkzeuge justieren"), Entry = VrToolFit.Adjusting,
+                    Hint = L("While one hand holds the cutter or the grapple, squeeze the other hand's grip to grab the tool and move it until it sits in the hand; letting go stores the place for that tool and hand. Switch it off when they fit.",
+                        "Während eine Hand Cutter oder Greifhaken hält: Grip der anderen Hand greift das Werkzeug, bewege es, bis es in der Hand sitzt. Loslassen speichert die Lage für dieses Werkzeug und diese Hand. Danach wieder ausschalten."),
                 },
                 EnumRow(L("Controller flying", "Controllersteuerung"), Plugin.ControlScheme, new[] { L("Off", "Aus"), L("VTOL (trigger)", "VTOL (Trigger)") },
                     L("Hold the left trigger: moving the controller thrusts that way, tilting it sideways rolls. Right stick: turn and pitch. Y: brake. Off if you fly with mouse and keyboard or a gamepad.",

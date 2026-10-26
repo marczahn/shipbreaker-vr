@@ -270,6 +270,9 @@ namespace ShipbreakerVR
 
         private void LateUpdate()
         {
+            VrToolModels.PoseArm();
+            VrHands.LateUpdate();
+            VrCrosshair.LateUpdate();
             var running = VrXr.IsRunning;
             // The game may switch to the Hab and hide its load screen in the same frame, after Plugin.Update looked.
             // Without this the bay showed for a frame and the resolution went up for it.
@@ -577,6 +580,7 @@ namespace ShipbreakerVR
             rig.localScale = new Vector3(scale, scale, scale);
             rig.rotation = Playspace;
             rig.position = position - Playspace * (recenterPosition * scale) + WorldHeadOffset;
+            VrToolModels.Place();
         }
 
         // Lying in bed (waking up, the monitor above the bed) the Hab camera looks up at the ceiling. There the playspace

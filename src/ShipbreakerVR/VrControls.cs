@@ -10,7 +10,8 @@ namespace ShipbreakerVR
     // Moving the controller away from it thrusts in that direction; tilting it sideways rolls, around the body's own axis
     // and faster the further the hand is tilted. Back at the reference (or trigger released) nothing happens. In gameplay
     // the right stick turns (left/right; smoothly or in snap steps, see Turning) and pitches (up/down), faster the further
-    // it is pushed, and Y brakes. The grips stay free for grabbing.
+    // it is pushed, and Y brakes. The grips stay free for grabbing. While the left hand holds a tool its controller works
+    // the tool (VrToolInput), so there is no flying and no braking then; the right stick still turns.
     // Thrust and brake go through the game's own actions (ThrustController reads them via LynxControls), so fuel, forces and
     // HUD stay the game's. Rotation is applied in VrBody: to the playspace with "body follows head", to the body without.
     internal static class VrControls
@@ -59,6 +60,8 @@ namespace ShipbreakerVR
 
         private static bool snapped;
         private static bool braking;
+        // A left trigger still held from working a tool with that hand flies only after it was let go.
+        private static bool triggerFromTool;
 
         private static Scheme Active => VrXr.IsRunning && VrCamera.Instance != null ? Plugin.ControlScheme.Value : Scheme.Aus;
 
@@ -75,14 +78,16 @@ namespace ShipbreakerVR
             var playspace = VrCamera.Instance.Playspace;
 
             if (!GetLeft()) { held = false; return; }
+            var tool = VrToolInput.LeftHoldsTool;
             // Outside gameplay the sticks and buttons work the menus as a gamepad; turning there would swing the menus.
             if (GameSession.CurrentGameState == GameSession.GameState.Gameplay)
             {
-                left.TryGetFeatureValue(CommonUsages.secondaryButton, out braking);
+                if (!tool) left.TryGetFeatureValue(CommonUsages.secondaryButton, out braking);
                 // Y together with B centers the view (VrCamera) and does not brake.
                 if (VrCamera.CenterComboHeld) braking = false;
                 if (GetRight() && right.TryGetFeatureValue(CommonUsages.primary2DAxis, out var rightStick)) TurnFromStick(rightStick, playspace);
             }
+            if (tool) { held = false; triggerFromTool = true; return; }
             if (!left.TryGetFeatureValue(CommonUsages.devicePosition, out var grip)
                 || !left.TryGetFeatureValue(CommonUsages.deviceRotation, out var rotation)) { held = false; return; }
             // Thrust follows the wrist, not the controller: tilting the hand swings the controller around the wrist, and
@@ -93,7 +98,8 @@ namespace ShipbreakerVR
             handPosition = position;
             handRotation = rotation;
 
-            if (!Hold(trigger >= TriggerPress, position, rotation)) return;
+            if (trigger < TriggerPress) triggerFromTool = false;
+            if (!Hold(trigger >= TriggerPress && !triggerFromTool, position, rotation)) return;
             var offset = position - heldPosition;
             var strength = Ramp(offset.magnitude, MoveDeadzone, MoveFull);
             if (strength > 0f) thrust = playspace * offset.normalized * strength;

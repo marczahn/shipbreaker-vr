@@ -404,3 +404,174 @@ below, because no thumb pushes perfectly sideways; in menus only the stronger ax
 
 And the helmet frame follows the head, so it had moved along with the eyes and the view inside it looked exactly the
 same as before. Now the helmet stays where the game puts the head, and only the eyes move inside it.
+
+<a id="hand-aiming"></a>
+## 2026-10-23 · Aiming with the hand
+
+Marc wanted to stop picking tools from the flat game's wheel and grab them off the body instead: the grapple from the
+hip, the cutter from over the shoulder, like in some VR shooters. A nice picture, with one catch. Every tool still aimed
+where the eyes looked. Drawing a cutter over your shoulder and then pointing it with your forehead would have felt
+wrong, so we agreed to teach the tools to aim with the hand first.
+
+The game makes this easier than I feared. Cutter, grapple, scanner, demo charges, grabbing and even pressing buttons all
+ask one camera where they are looking. So the mod hangs a second camera on the right controller, one that never renders
+anything, gives it the main camera's lens, and quietly hands it to the tools whenever they ask. The cutter's fan of rays
+now spreads from the hand, and rolling the wrist rolls the cut line, which the flat game never offered.
+
+A thin beam from the hand with a dot at its end shows where things will land. The tools themselves still float in front
+of the helmet for now. Moving them into the hand comes later.
+
+Then came the buttons. The flat game spreads the tools over a dozen keys, and the controllers have far fewer. My first
+layout put reeling on the right stick while the grapple holds something, throwing on the stick press and the scanner on
+the left hand. Marc took it apart piece by piece: the right stick belongs to turning, always; a stick press is
+imprecise and wears out; and the tools should stay on one hand, or the controls fall apart into fragments. A throwing
+gesture was on the table for a minute too, until Marc pointed out that an accidental throw would look exactly like a
+bug. What is left is small: the trigger fires, A uses things or, with the trigger held, throws, the grip reels in while
+the trigger holds, and B switches the mode or, held down, strings a tether from where you point to where you let go.
+
+Marc's first round with all tools found three holes. The Stinger, the cutter's plain laser, ignored the trigger
+completely while the mouse worked. It turned out to be a controller of its own that I had simply not put on my lists, so
+it neither heard the trigger nor aimed with the hand. The cutter's angle did not seem to follow the wrist either. The cut
+itself does roll, but the rail on the tool model in front of the helmet kept showing the flat game's angle, so it now
+turns to what the hand is doing. And the demo charges flew only roughly where Marc looked. That one had a twist:
+the game throws them from in front of the head and along the body's forward, not even the head's.
+Now they leave from just in front of the hand and fly where it points.
+
+<a id="tools-in-hand"></a>
+## 2026-10-26 · Tools in the hand, tools on the belt
+
+With aiming in the hand working, the tools themselves still floated in front of the helmet, pointing wherever the
+hand pointed. A bit like a ghost holding them for you. Marc wanted them in the hand next, and the tool selection from
+the body right along with it, since the two belong together.
+
+The game turned out to be helpful again. Every tool hangs on one point of the player's right hand, and the game's own
+hand then reaches for the tool's handle. So the mod moves that one point to the controller every frame, right before
+rendering, turns it the way the hand points and shifts it until the handle sits in the fist.
+
+For picking tools, the right hand now reaches to the body and squeezes the grip: the grapple at the right hip, the demo
+charges at the left hip, the cutter over the right shoulder and the scanner at the side of the helmet. The controller
+buzzes when the hand is in a zone. Squeezing at the zone of the tool already in the hand puts it away. The zones are a
+first guess with a ruler and no body to measure, so they will need Marc's arms to set them right.
+
+Marc liked the first round, with two changes. The grapple's beam came out of his hand and the
+barrel pointed a little to the side of it. I had kept the angle the game gives the tools in the flat view, where they
+sit at the lower right and squint 10 degrees inwards to meet the crosshair. In the hand that squint is just wrong, so
+the tools now point straight along the hand, and the aim starts at the muzzle instead of the knuckles. And Marc wanted
+to hold the grip to keep the tool, like holding a real one: let go and it goes back on the belt. That took the grip
+away from reeling in, which moved to B with the trigger held, next to A for throwing.
+
+The demo charges stayed behind once more. They have no model of their own: the game's hand holds them, animated, so
+there was nothing on the tool point to move. My first idea was to move the point the game's hand reaches for. The log
+said my code ran, and Marc said nothing moved, charge and detonator included. So now the mod waits until the game has
+finished animating the arm and then bends it itself, elbow and shoulder, until the wrist sits at the controller. The
+first build of that did nothing either, without a word in the log: looking up the arm's bones tripped over a property
+that reflection cannot read, and the exception went to the game's own log. With that fixed the hand finally followed. Letting go of
+the grip, though, left the charge in the hand. The game never puts a charge away on its own, it only ever swaps it for
+another tool. The animations for stowing exist, nobody calls them, so the mod does. Which revealed where they start: for a moment the charge
+popped up at the right of the view, where the flat game keeps it, before it went away. So the charge now vanishes the
+moment the grip opens, and the empty hand drifts from the controller into the animation.
+
+One fix from the first round had to go again. Back then I had taught the cutter's rail, floating in front of the
+helmet, to turn along with the wrist. Now that the cutter sits in the hand, the rail turns with it anyway, and my old
+correction turned it a second time. Marc pointed out that the extra turn was no longer needed.
+
+Then Marc wanted both hands. One of the tools sits at the left hip, after all, and reaching across your own belly for it
+is not something anyone does twice. So either hand now takes tools off the belt, one tool at a time: the hand that
+grabs last holds it, and reaching for the tool in the other hand takes it over. Squeezing at the zone of the tool in
+the hand no longer puts it away; with the grip held to keep a tool, opening the hand already does that. The real
+question was what the left hand's buttons do while it holds a tool, since they fly the ship. Marc settled it quickly:
+the left hand then simply is the right one, trigger to fire, X and Y where A and B would be, and the ship stays put
+until it lets go. The right stick keeps turning.
+
+What I got wrong was the arms. I thought the game only had a right one, which would reach across the chest for a tool
+in the left hand, so the first build folded that arm into the shoulder while the frame was drawn. Marc liked the
+controls and asked for two hands, since we will need both at the same time later anyway. A closer look showed the game
+had them all along: a left and a right hand, each with its own target, its own grab animations and its own grab
+button. I then found an IK component in the game's code and was sure it moved the arms. The log of the next build said
+there was none on the player; the arms come straight from the animation. It did not matter much, since the mod bends
+the arms after the animation anyway: both now follow their controllers whenever the game does not need them for
+something else. Marc found the hands looking good. The demo charges are still the exception, since they hang on the
+right hand's bones.
+
+
+<a id="laser-pointer"></a>
+## 2026-10-26 · A laser pointer, and tools in the fist
+
+Before the next release Marc had four wishes. Every fresh start began with a demo charge out, although no tool should
+be. A tool drawn with the left hand should be held by the game's left hand. Cutter and grapple floated a good bit above
+the hands. And the crosshair in the middle of the view, which no tool listens to any more, should go, with something
+like a laser pointer instead of the beam.
+
+The demo charge was not out at all, as far as the log could tell. The game starts with the grapple in hand, and the mod
+puts it away at once. What I suspect Marc saw is the charge's model, which the game leaves hanging on the right hand's
+bone the whole time. In the flat game that hand is out of view unless it holds the charge. With the hand following the
+controller it is right in front of you. Until now the mod only hid the charge after it had been drawn and put away
+once, so now it stays hidden whenever it is not held.
+
+The floating tools were my mistake from [the first round](#tools-in-hand). I had put the tool's handle marker into the
+fist, trusting that the game's hand reaches for it. Nothing reaches for it. The game closes its hand around every tool
+with the same grab animation, and the marker sits more than half a meter from the point the tool hangs on. So the mod
+now watches the flat game's hand for a second the first time the right hand holds a tool, notes where the tool sits
+relative to the wrist, and from then on places the tool around the game's hand instead of the handle around the
+controller. The left hand gets the same grip, mirrored. That also covers Marc's second wish: the game's left hand
+closes around the tool while the grip is squeezed, and the right one stays open and empty. Inside the game the tool
+still belongs to the right hand. That only matters once both hands grab at the same time, so it can wait until then.
+
+For the crosshair Marc asked whether I had a better idea than a laser pointer. Half of one. The crosshair is gone and a
+thin laser with a bright dot replaces the beam, but the laser takes over the crosshair's color, the one the game uses
+to say that a target is in range or that the cutter is still cooling down. The information survives, just at the end
+of the laser instead of in the middle of the view. Whether the tools now sit in the fists, Marc will see in the
+headset.
+
+The headset disagreed on almost every point. The right hand still held a demo charge at the start. The hiding had
+simply come too early: when it ran, the charge was not switched on yet, so there was nothing to hide, and the game
+switched it on a moment later. Now the mod keeps checking every frame instead of once. The measured grip did not fit
+either, in the left hand wrong one way and in the right hand another. Marc suggested temporary settings so he could
+place the tools himself until they sit right, and I would take over his values. Typing centimeters into a menu with a
+headset on sounded tedious, so the setting works the other way round: with it on, the other hand grabs the tool and
+moves it, and letting go stores where it is. Once Marc is happy, his values become the defaults and the setting goes.
+
+Two leftovers from the crosshair as well. A dot still sat in the middle of the HUD, and the log claimed the game's
+center dot did not even exist, so it comes from something I do not know yet. Rather than guess its name, the mod now
+looks for small things in the middle of the HUD a few times and hides whatever it finds there, writing down what that
+was. And with a tool in hand Marc still saw orange lines with a ball at the front. I think that was my own laser,
+dressed in the grapple's orange, looking nothing like the laser of the empty hand. Now the laser stays the same with
+every tool and only the dot changes color.
+
+The grab-and-move fitting worked on the first try, which after this day felt almost suspicious. Marc pushed each tool
+around a few times per hand until it sat in the fist, and was happy enough with the idea to keep it: the setting stays
+in the VR tab for anyone whose hands disagree with his, and his values are the new defaults. The hidden center dot
+turned out to be a plain image called Center Dot on one of the HUD canvases, found on the first search.
+
+<a id="empty-hand"></a>
+## 2026-10-26 · An empty hand, and the charge on the left
+
+Two last wishes before the release. Demo charges taken with the left hand were still held by the right arm, reaching
+across the chest. And with nothing in the hand, the [laser](#laser-pointer) pointed anyway. Marc wanted it only with a
+tool, and the game's little dot back in the middle otherwise.
+
+The charge is a right-handed affair in the game. It hangs on the right hand's bone and only the right arm has the
+animations for it. Teaching the game a left-handed charge was not on the menu, so now each arm simply follows its own
+controller, and every frame, once both arms are in place, the mod moves the charge from the right hand over to the left
+one. It takes how the charge sits relative to the right hand's knuckles and thumb and puts the mirror image of that
+into the left fist. The right hand meanwhile goes on clutching a charge that is no longer there, which nobody will
+notice.
+
+The dot needed one more thought. A dot in the middle while the hand does the aiming would be exactly the useless
+crosshair Marc had asked me to remove in the first place. So with an empty hand the hand stops aiming altogether:
+interacting goes back to the middle of the view, as in the flat game, and the dot means what it shows. The moment a
+tool comes out of the belt, the hand takes over again and the laser appears.
+
+Marc called it almost perfect, with two exceptions. Throwing a charge with the left hand showed no throw at all. In the
+right hand the throw lives only in how the animation turns the hand, and the left hand simply pointed along its
+controller. So the left hand now borrows the right hand's animated turn as well, mirrored, and throws along with it.
+The fingers stay in a fist, which is fine for a throw that is mostly wrist anyway. And the dots at the end of the laser
+had to go. With them went the crosshair colors they carried, which ends my half of a better idea from earlier in the
+day. The laser is plain now, and Marc wants to rethink it later anyway.
+
+The very last wish before the release was about the cutter. The part at its front that shows whether the cut runs
+horizontally or vertically always stood crosswise, and Marc wanted it lengthwise. That one stands crosswise for a reason:
+the game starts with horizontal cuts, and the button that switches them sits on the right mouse button, which no
+controller reaches. In VR the wrist turns the line instead. Turning the part alone would have made it show the wrong
+angle, and turning the cut with it would have changed how cutting feels. Marc had asked me to talk before changing
+anything, and after the talk we left it as it is. Not every wish needs code.

@@ -12,7 +12,7 @@ namespace ShipbreakerVR
     {
         public const string Guid = "de.marczahn.shipbreakervr";
         public const string Name = "ShipbreakerVR";
-        public const string Version = "0.14.0";
+        public const string Version = "0.15.0";
 
         internal static ManualLogSource Log;
         internal static ConfigEntry<bool> MultiPass;
@@ -41,6 +41,7 @@ namespace ShipbreakerVR
         internal static ConfigEntry<float> FlightGlobeSize;
         internal static ConfigEntry<float> FlightGlobeX;
         internal static ConfigEntry<float> FlightGlobeY;
+        internal static ConfigEntry<bool> AimWithHand;
 
         private void Awake()
         {
@@ -52,11 +53,11 @@ namespace ShipbreakerVR
             StartVrAtLaunch = Config.Bind("Rendering", "VrBeimStart", true,
                 "Start VR as soon as the game launches, so the intro and loading screens already show in the headset. Off: start VR with F3.");
             BodyFollowsHead = Config.Bind("Steuerung", "KoerperFolgtKopf", true,
-                "The body, and with it the tools' aim, turns with the head. Mouse and stick add extra rotation. Off: the head looks around freely, only the mouse turns the body.");
+                "The body turns with the head (and with it the tools' aim, unless they aim with the hand, see ZielenMitHand). Mouse and stick add extra rotation. Off: the head looks around freely, only the mouse turns the body.");
             AmbientOcclusion = Config.Bind("Bild", "Umgebungsverdeckung", VrPerformance.Occlusion.Niedrig,
                 "Ambient occlusion (shading in corners and creases) in VR. Niedrig: half resolution and few steps, as the game uses it in the bay. The station asks for full resolution and 16 steps, which at VR resolution costs so much GPU time that it stutters. Aus: off. Spiel: as the game sets it.");
             ControlScheme = Config.Bind("Steuerung", "Controllersteuerung", VrControls.Scheme.Vtol,
-                "Flying with the motion controllers. Vtol: hold the left trigger and move the controller away from where it was when pressed to thrust that way, tilt it sideways to roll. Right stick: turn (left/right, see Drehen) and pitch (up/down). Y brakes. Aus: off.");
+                "Flying with the motion controllers. Vtol: hold the left trigger and move the controller away from where it was when pressed to thrust that way, tilt it sideways to roll. Right stick: turn (left/right, see Drehen) and pitch (up/down). Y brakes. While the left hand holds a tool (ZielenMitHand) it works the tool instead. Aus: off.");
             TurnMode = Config.Bind("Steuerung", "Drehen", VrControls.Turning.Fliessend,
                 "Turning with the right stick (controller flying). Fliessend: smooth, faster the further the stick is pushed. Snap30/Snap45/Snap90: one step of that many degrees per flick.");
             FlightGlobe = Config.Bind("Anzeige", "Flugkugel", VrFlightGlobe.Mode.Immer,
@@ -64,6 +65,9 @@ namespace ShipbreakerVR
             FlightGlobeSize = Config.Bind("Anzeige", "FlugkugelGroesse", 0.06f, "Radius of the flight globe relative to the visor height.");
             FlightGlobeX = Config.Bind("Anzeige", "FlugkugelX", -0.159f, "Horizontal position of the flight globe on the visor, from -0.5 (left edge) to 0.5 (right edge).");
             FlightGlobeY = Config.Bind("Anzeige", "FlugkugelY", -0.38f, "Vertical position of the flight globe on the visor, from -0.5 (bottom edge) to 0.5 (top edge).");
+            AimWithHand = Config.Bind("Steuerung", "ZielenMitHand", true,
+                "The tools (cutter, grapple, scanner, demo charges), grabbing and interacting aim where the controller of the hand holding the tool points (the right one unless the left one drew it) instead of at the center of the view, from the muzzle of the tool in the hand. A laser shows where, and the game's crosshair is hidden from the center of the view meanwhile; with an empty hand there is no laser, and interacting aims at the center of the view, marked by the game's dot. The grip at the body draws a tool with either hand: right hip grapple, left hip demo charges, over the right shoulder cutter, right side of the helmet scanner; it stays in the hand while the grip is held, and reaching for it with the other hand takes it over. Trigger fires or grapples, A interacts (with the trigger held: throws), B with the trigger held reels in, B switches the tool mode (held: places a tether, held while pointing at nothing: recalls the tethers). In the left hand X and Y do what A and B do, and controller flying pauses until it lets go. The suit's hands follow the controllers.");
+            VrToolFit.Bind(Config);
             UiInVr = Config.Bind("Anzeige", "UiImRaum", true,
                 "Show HUD and menus on a canvas in the world instead of flat over the image.");
             HudDistance = Config.Bind("Anzeige", "HudAbstand", 1.5f, "Distance of the visor display in front of the eyes, in meters.");
@@ -127,6 +131,10 @@ namespace ShipbreakerVR
             Unload("VR camera", VrCamera.Unload);
             Unload("frame statistics", VrPerformance.Detach);
             Unload("flight globe", VrFlightGlobe.Release);
+            Unload("tool models", VrToolModels.Release);
+            Unload("hands", VrHands.Release);
+            Unload("crosshair", VrCrosshair.Release);
+            Unload("aim camera", VrAim.Release);
             Unload("patches", () => harmony?.UnpatchSelf());
             Log.LogInfo($"{Name} unloaded");
             BepInEx.Logging.Logger.Sources.Remove(Log);
