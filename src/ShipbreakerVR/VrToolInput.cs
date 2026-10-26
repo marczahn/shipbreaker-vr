@@ -165,9 +165,14 @@ namespace ShipbreakerVR
 
             second = VrDualTools.Second != EquipmentController.Equipment.None ? (VrDualTools.SecondNode == XRNode.LeftHand ? LeftHand : RightHand) : null;
             tool = ToolNode == XRNode.LeftHand ? LeftHand : RightHand;
+            // An empty tool hand only interacts: the demo charges keep listening for their fire action after being put
+            // away, and a trigger pulled with the empty hand took them out behind the game's back, leaving their red
+            // placement marker stuck in the view (DemoChargeController.EquipDemoCharge).
+            var empty = !FindEquipment() || equipment.IsNothingEquipped;
             foreach (var each in new[] { LeftHand, RightHand })
             {
-                if (each == tool || each == second) Buttons(each);
+                if (each == second || (each == tool && !empty)) Buttons(each);
+                else if (each == tool) Interact(each);
                 else each.ADown = each.BDown = false;
             }
             // A grip on one of the game's controls works it like A (VrClimb).
@@ -211,6 +216,16 @@ namespace ShipbreakerVR
             // A tap switches the mode when it ends, so a long press never does.
             now[(int)Action.ToolMode] = !b && hand.BDown && !hand.BLong;
             hand.BDown = b;
+        }
+
+        // A of an empty hand: interact (with the trigger held too, since there is nothing to throw).
+        private static void Interact(Hand hand)
+        {
+            var a = Button(hand.Device, CommonUsages.primaryButton);
+            hand.AThrows = false;
+            hand.ADown = a;
+            hand.BDown = false;
+            hand.Now[(int)Action.Interact] = a;
         }
 
         // The hand's trigger and grip this frame, and the belt zone it is in. The grip is followed also while the tools do
