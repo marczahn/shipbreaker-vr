@@ -458,5 +458,7 @@ barrel pointed a little to the side of it. I had kept the angle the game gives t
 sit at the lower right and squint 10 degrees inwards to meet the crosshair. In the hand that squint is just wrong, so
 the tools now point straight along the hand, and the aim starts at the muzzle instead of the knuckles. And Marc wanted
 to hold the grip to keep the tool, like holding a real one: let go and it goes back on the belt. That took the grip
-away from reeling in, which moved to B with the trigger held, next to A for throwing. The demo charges stayed behind once more. They have no model of their own: the game's hand holds them, animated, so
+away from reeling in, which moved to B with the trigger held, next to A for throwing.
+
+The demo charges stayed behind once more. They have no model of their own: the game's hand holds them, animated, so
 there was nothing on the tool point to move. Now the hand itself goes to the controller while it holds a charge.
