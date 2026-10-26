@@ -31,6 +31,7 @@ namespace ShipbreakerVR
             var vr = VrCamera.Instance;
             if (vr == null || !vr.BodyFollowsHead)
             {
+                // Without VR the game turns the body as usual.
                 synced = false;
                 // Turns from the motion controllers act on the body directly; the camera follows it.
                 body.MoveRotation(vr != null ? VrControls.TakeTurn() * gameTarget : gameTarget);

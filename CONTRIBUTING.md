@@ -22,7 +22,7 @@ Copy the resulting `ShipbreakerVR.dll` to `BepInEx\plugins\ShipbreakerVR\`.
 
 ## Settings file
 All settings are stored in `BepInEx\config\de.marczahn.shipbreakervr.cfg`. The keys are German
-(`Bild/Weltmassstab`, `KoerperFolgtKopf`, ...) and stay that way so existing user settings survive.
+(`Bild/Weltmassstab`, `Steuerung/Drehen`, ...) and stay that way so existing user settings survive.
 
 ## License
 MIT, see [LICENSE](LICENSE). Third-party components keep their own licenses, see [licenses/](licenses) and

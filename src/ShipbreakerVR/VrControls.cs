@@ -13,7 +13,7 @@ namespace ShipbreakerVR
     // it is pushed, and Y brakes. The grips stay free for grabbing. While the left hand holds a tool its controller works
     // the tool (VrToolInput), so there is no flying and no braking then; the right stick still turns.
     // Thrust and brake go through the game's own actions (ThrustController reads them via LynxControls), so fuel, forces and
-    // HUD stay the game's. Rotation is applied in VrBody: to the playspace with "body follows head", to the body without.
+    // HUD stay the game's. Rotation is applied in VrBody, to the playspace.
     internal static class VrControls
     {
         public enum Scheme { Aus, Vtol }
@@ -24,8 +24,11 @@ namespace ShipbreakerVR
         private const float SnapPress = 0.7f;
         private const float SnapRelease = 0.3f;
         private const float TriggerPress = 0.5f;
-        private const float MoveDeadzone = 0.02f;
-        private const float MoveFull = 0.15f;
+        // Hand offset for thrust, in centimeters (Plugin.ThrustDeadzone, Plugin.ThrustFull): full thrust needs at least
+        // MinThrustRange more than the deadzone, so the ramp between them never shrinks to a switch.
+        public const float DeadzoneMax = 10f;
+        public const float FullMax = 30f;
+        public const float MinThrustRange = 5f;
         // The wrist relative to the grip pose (which runs along the handle): an estimate, about 8 cm behind the grip.
         private static readonly Vector3 WristOffset = new Vector3(0f, 0f, -0.08f);
         private const float TurnDeadzone = 8f;
@@ -83,8 +86,6 @@ namespace ShipbreakerVR
             if (GameSession.CurrentGameState == GameSession.GameState.Gameplay)
             {
                 if (!tool) left.TryGetFeatureValue(CommonUsages.secondaryButton, out braking);
-                // Y together with B centers the view (VrCamera) and does not brake.
-                if (VrCamera.CenterComboHeld) braking = false;
                 if (GetRight() && right.TryGetFeatureValue(CommonUsages.primary2DAxis, out var rightStick)) TurnFromStick(rightStick, playspace);
             }
             if (tool) { held = false; triggerFromTool = true; return; }
@@ -101,7 +102,7 @@ namespace ShipbreakerVR
             if (trigger < TriggerPress) triggerFromTool = false;
             if (!Hold(trigger >= TriggerPress && !triggerFromTool, position, rotation)) return;
             var offset = position - heldPosition;
-            var strength = Ramp(offset.magnitude, MoveDeadzone, MoveFull);
+            var strength = Ramp(offset.magnitude, MoveDeadzone, FullOffset);
             if (strength > 0f) thrust = playspace * offset.normalized * strength;
             RollFromReference(rotation, playspace);
         }
@@ -202,9 +203,23 @@ namespace ShipbreakerVR
             return result;
         }
 
-        // For the flight globe (VrFlightGlobe): the hand offset that gives full thrust, and the share of it that is deadzone.
-        public const float FullOffset = MoveFull;
-        public const float DeadzoneShare = MoveDeadzone / MoveFull;
+        // The hand offset (meters) where thrust starts and where it is full; also used by the flight globe (VrFlightGlobe).
+        // Clamped here as well, in case the config file was edited by hand.
+        private static float MoveDeadzone => Mathf.Clamp(Plugin.ThrustDeadzone.Value, 0f, DeadzoneMax) / 100f;
+        public static float FullOffset => Mathf.Clamp(Plugin.ThrustFull.Value, Mathf.Clamp(Plugin.ThrustDeadzone.Value, 0f, DeadzoneMax) + MinThrustRange, FullMax) / 100f;
+        public static float DeadzoneShare => MoveDeadzone / FullOffset;
+
+        // Keeps full thrust at least MinThrustRange beyond the deadzone: whichever value was just changed wins and pushes
+        // the other one along.
+        public static void KeepThrustRange(bool deadzoneChanged)
+        {
+            var deadzone = Plugin.ThrustDeadzone;
+            var full = Plugin.ThrustFull;
+            if (full.Value - deadzone.Value >= MinThrustRange - 0.001f) return;
+            if (deadzoneChanged) full.Value = Mathf.Min(deadzone.Value + MinThrustRange, FullMax);
+            else deadzone.Value = Mathf.Max(full.Value - MinThrustRange, 0f);
+            VrOptions.Refresh(deadzoneChanged ? full : deadzone);
+        }
 
         public static bool Flying => Active == Scheme.Vtol && GameSession.CurrentGameState == GameSession.GameState.Gameplay;
 

@@ -13,7 +13,7 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
 
 ## Use
 - Connect the headset and start the game; VR starts right away. **F3** toggles VR.
-- **F4** (or **B + Y** on the controllers) recenters the view on the headset: position, and in menus also view direction and the menu canvas.
+- **F4** (or pressing the **left stick** on the controllers) recenters the view on the headset: position, and in menus also view direction and the menu canvas.
   Menus always appear at eye height, also when you look up or down.
   The row "Center view" at the top of the VR tab does the same.
 - **F7** at one of the station's monitors switches its screen look. **F8** writes what is drawn around you into the log,
@@ -33,8 +33,12 @@ Switch it in the options row "Controller flying" in the VR tab. Hold the left tr
 - move the controller away from where it was when you pressed it to fly that way,
 - tilt it sideways to roll; the further, the faster.
 
+Thrust starts 2 cm away from that point and is full at 10 cm. The rows "Thrust deadzone" and "Full thrust at" change
+both; full thrust always stays at least 5 cm beyond the deadzone.
+
 The right stick turns (left/right) and pitches (up/down), the further, the faster; it needs no trigger. The row "Turning"
-switches turning to steps of 30, 45 or 90 degrees per flick. Y brakes. Mouse, keyboard and gamepad keep working.
+switches turning to steps of 30, 45 or 90 degrees per flick. Y brakes. Pressing the right stick opens the pause menu
+(also in the station), pressing the left stick recenters the view. Mouse, keyboard and gamepad keep working.
 
 A small globe at the bottom of the visor shows where the left controller is while you hold the trigger: its center is
 where you pressed it, its surface full thrust, the small inner globe the deadzone, and a small cross in it moves and turns with your hand. The row
@@ -67,15 +71,16 @@ flat game.
 ### Menus with the controllers
 In menus both controllers act as one Xbox gamepad, each button where its counterpart sits, so the game shows gamepad
 button prompts:
-- sticks = sticks (left: navigate, right: scroll), right stick pressed = R3
+- sticks = sticks (left: navigate, right: scroll), right stick pressed = R3 in menus
 - A/B/X/Y = A/B/X/Y (A confirms, B goes back)
 - triggers = shoulder buttons (switch tabs), grips = triggers
-- A + X together = Start: in gameplay it opens the pause menu, on loading screens it cycles the tips. In menus it is
-  just A and X, since the game would read Start as "confirm".
-- B + Y together recenters the view, like F4, everywhere (also in gameplay, where Y alone brakes).
+- pressing the right stick = Start: in gameplay and in the station it opens the pause menu, on loading screens it
+  cycles the tips. In the station it works where Esc does, not inside a terminal screen. In menus it is R3, since the
+  game would read Start as "confirm".
+- pressing the left stick recenters the view, like F4, everywhere.
 
-There is no View button and no D-pad; the left menu button stays with Virtual Desktop. In gameplay only A + X
-reaches the game.
+There is no View button and no D-pad; the left menu button stays with Virtual Desktop. In gameplay only the right
+stick press reaches the game.
 
 ## Uninstall
 Delete `winhttp.dll` from the game folder (disables all BepInEx mods). For a full removal also delete `BepInEx\`,

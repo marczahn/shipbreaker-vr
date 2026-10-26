@@ -79,14 +79,8 @@ namespace ShipbreakerVR
                 new ActionRow
                 {
                     Label = L("Center view", "Ansicht zentrieren"), Run = VrCamera.RecenterView,
-                    Hint = L("Puts the view and the menus in front of you again, like F4 or B + Y. Use it after you turned around or moved away from your spot.",
-                        "Richtet Blick und Menüs wieder vor dir aus, wie F4 oder B + Y. Nutzen, wenn du dich umgedreht oder von deinem Platz entfernt hast."),
-                },
-                new BoolRow
-                {
-                    Label = L("Body follows head", "Körper folgt Kopf"), Entry = Plugin.BodyFollowsHead,
-                    Hint = L("The body turns with your head; mouse and stick turn on top. Turn it off to look around without turning the body.",
-                        "Der Körper dreht sich mit dem Kopf, Maus und Stick drehen zusätzlich. Aus, um dich umzusehen, ohne den Körper zu drehen."),
+                    Hint = L("Puts the view and the menus in front of you again, like F4 or pressing the left stick. Use it after you turned around or moved away from your spot.",
+                        "Richtet Blick und Menüs wieder vor dir aus, wie F4 oder ein Druck auf den linken Stick. Nutzen, wenn du dich umgedreht oder von deinem Platz entfernt hast."),
                 },
                 new BoolRow
                 {
@@ -106,6 +100,18 @@ namespace ShipbreakerVR
                 EnumRow(L("Turning", "Drehen"), Plugin.TurnMode, new[] { L("Smooth", "Fließend"), "30°", "45°", "90°" },
                     L("How the right stick turns you when flying with the controllers: smoothly, or in steps of 30, 45 or 90 degrees per flick. Steps are easier on the stomach.",
                         "Wie der rechte Stick dich beim Fliegen mit den Controllern dreht: fließend oder in Schritten von 30, 45 oder 90 Grad pro Antippen. Schritte sind magenfreundlicher.")),
+                new SliderRow
+                {
+                    Label = L("Thrust deadzone (cm)", "Schub-Totzone (cm)"), Entry = Plugin.ThrustDeadzone, Min = 0f, Max = VrControls.DeadzoneMax, Format = "0", Step = 1f,
+                    Hint = L("How far you move the left controller from where you pressed the trigger before thrust starts. Raise it if you drift without meaning to.",
+                        "Wie weit du den linken Controller von dort, wo du den Trigger gedrückt hast, bewegen musst, bevor Schub einsetzt. Erhöhen, wenn du ungewollt driftest."),
+                },
+                new SliderRow
+                {
+                    Label = L("Full thrust at (cm)", "Voller Schub ab (cm)"), Entry = Plugin.ThrustFull, Min = VrControls.MinThrustRange, Max = VrControls.FullMax, Format = "0", Step = 1f,
+                    Hint = L("How far you move the left controller for full thrust. Shorter needs less arm movement, longer gives finer control. Always at least 5 cm beyond the deadzone.",
+                        "Wie weit du den linken Controller für vollen Schub bewegst. Kürzer braucht weniger Armbewegung, länger erlaubt feinere Kontrolle. Immer mindestens 5 cm mehr als die Totzone."),
+                },
                 EnumRow(L("Flight globe", "Flugkugel"), Plugin.FlightGlobe, new[] { L("Off", "Aus"), L("Always", "Immer"), L("While flying", "Beim Fliegen") },
                     L("A small globe in the visor shows where your left controller is while you hold the trigger: the center is where you pressed it, the surface full thrust. Helps to find the zero point again.",
                         "Eine kleine Kugel im Visier zeigt, wo dein linker Controller ist, während du den Trigger hältst: die Mitte ist, wo du gedrückt hast, die Oberfläche voller Schub. Hilft, den Nullpunkt wiederzufinden.")),

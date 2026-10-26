@@ -9,8 +9,8 @@ using UnityEngine.XR;
 namespace ShipbreakerVR
 {
     // A stereo camera sits on its own rig that follows the game camera's position and applies head rotation and head position.
-    // The rig's rotation is the "playspace": with body-follows-head, VrBody sets the body to playspace * head every frame,
-    // otherwise the playspace simply turns with the game camera (head looks freely, mouse turns the body).
+    // The rig's rotation is the "playspace": VrBody sets the body to playspace * head every frame, so the body always
+    // follows the head (the option to turn that off, letting the head look around freely, was dropped).
     // The game camera stays the tools' aiming camera, but does not render while VR is running.
     internal class VrCamera : MonoBehaviour
     {
@@ -32,7 +32,7 @@ namespace ShipbreakerVR
         // Tracked head position that should coincide with the game camera (F4).
         private Vector3 recenterPosition;
 
-        // Yaw that, without body-follows-head, turns the head to the game camera's view direction (F4).
+        // Yaw that turns the head to the game camera's view direction in the Hab (F4).
         private Quaternion recenterRotation = Quaternion.identity;
 
         // Rotation of the playspace in the world; the head looks along Playspace * HeadRotation.
@@ -95,7 +95,7 @@ namespace ShipbreakerVR
         private static float HabScale => Mathf.Clamp(Plugin.StationResolution.Value, 0.5f, HabResolution);
         private bool habScaleLogged;
 
-        public bool BodyFollowsHead => VrXr.IsRunning && Plugin.BodyFollowsHead.Value;
+        public bool BodyFollowsHead => VrXr.IsRunning;
 
         // True while loading (no game camera, or the game's load screen covers the image): only the UI canvas on black.
         private bool worldHidden;
@@ -264,7 +264,7 @@ namespace ShipbreakerVR
             VrPerformance.FrameStart();
             VrLoadTrace.EndFrame(this);
             if (VrXr.IsRunning && Input.GetKeyDown(KeyCode.F4)) Recenter(true);
-            UpdateCenterCombo();
+            UpdateCenterPress();
             VrDiagnostics.Update(this);
         }
 
@@ -571,7 +571,6 @@ namespace ShipbreakerVR
             // The Hab camera swings between bed, kitchen and terminal; the playspace turns along, but only around the
             // vertical axis: its pitch would tilt the room. Looking up or down is up to the head. Except lying in bed.
             if (FollowsHab) Playspace = HabHeading(cam.rotation) * recenterRotation;
-            else if (!BodyFollowsHead) Playspace = cam.rotation * recenterRotation;
             // Cinemachine sets the lens every frame: in the Hab the rooms reach 500 m, the view out of the window
             // 5000 m (ship and dock). Copied only once, the ship stayed cut off at 500 m. In the Hab at least as far
             // as its farthest view: at the terminal (2555 m) the earth outside was cut off depending on the head.
@@ -607,34 +606,25 @@ namespace ShipbreakerVR
             return forward.sqrMagnitude < 1e-8f ? Quaternion.identity : Quaternion.LookRotation(forward, Vector3.up);
         }
 
-        // B + Y together on the controllers: the same as F4. From the press until both buttons are up again they count as
-        // the combo, so neither acts on its own meanwhile (Y brakes, B is Back in menus; VrControls, VrMenuInput).
-        public static bool CenterComboHeld { get; private set; }
-        private static InputDevice comboLeft;
-        private static InputDevice comboRight;
+        // Pressing the left stick: the same as F4. Nothing else uses that press (VrMenuInput sends no L3).
+        private static bool centerHeld;
+        private static InputDevice centerDevice;
 
-        private void UpdateCenterCombo()
+        private void UpdateCenterPress()
         {
             if (!VrXr.IsRunning)
             {
-                CenterComboHeld = false;
+                centerHeld = false;
                 return;
             }
-            var y = Pressed(ref comboLeft, XRNode.LeftHand);
-            var b = Pressed(ref comboRight, XRNode.RightHand);
-            if (y && b && !CenterComboHeld)
+            if (!centerDevice.isValid) centerDevice = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
+            var pressed = centerDevice.isValid && centerDevice.TryGetFeatureValue(CommonUsages.primary2DAxisClick, out var click) && click;
+            if (pressed && !centerHeld)
             {
-                CenterComboHeld = true;
-                Plugin.Log.LogInfo("B + Y pressed: centering the view");
+                Plugin.Log.LogInfo("Left stick pressed: centering the view");
                 Recenter(true);
             }
-            else if (!y && !b) CenterComboHeld = false;
-        }
-
-        private static bool Pressed(ref InputDevice device, XRNode node)
-        {
-            if (!device.isValid) device = InputDevices.GetDeviceAtXRNode(node);
-            return device.isValid && device.TryGetFeatureValue(CommonUsages.secondaryButton, out var pressed) && pressed;
+            centerHeld = pressed;
         }
 
         // "Center view" in the VR options: the same as F4.
@@ -643,7 +633,7 @@ namespace ShipbreakerVR
             if (VrXr.IsRunning && Instance != null) Instance.Recenter(true);
         }
 
-        // Puts the current head position on the game camera; without body-follows-head also the view direction (yaw only).
+        // Puts the current head position on the game camera.
         // With F4 (toGaze) the view direction is also centered in menus, where the body does not turn with the head.
         // The menu canvas is placed in front of the head again, upright at eye height.
         private void Recenter(bool toGaze)
@@ -653,14 +643,14 @@ namespace ShipbreakerVR
             var headYaw = Quaternion.Euler(0f, head.localEulerAngles.y, 0f);
             recenterRotation = Quaternion.Inverse(headYaw);
             var gameplay = GameSession.CurrentGameState == GameSession.GameState.Gameplay && gameCamera == LynxCameraController.MainCamera;
-            if (toGaze && BodyFollowsHead && !gameplay && gameCamera != null)
+            if (toGaze && !gameplay && gameCamera != null)
             {
                 Playspace = Quaternion.Euler(0f, gameCamera.transform.eulerAngles.y, 0f) * Quaternion.Inverse(headYaw);
                 // Back in gameplay the body takes its playspace from where it actually points.
                 VrBody.Resync();
             }
             if (VrUi.Instance != null) VrUi.Instance.Recenter();
-            Plugin.Log.LogInfo($"Head recentered{(toGaze ? " (F4, B + Y or options)" : "")} (tracked head position {head.localPosition})");
+            Plugin.Log.LogInfo($"Head recentered{(toGaze ? " (F4, left stick or options)" : "")} (tracked head position {head.localPosition})");
         }
     }
 }

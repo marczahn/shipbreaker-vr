@@ -7,7 +7,7 @@ OpenXR at runtime. Tested with a Meta Quest via Virtual Desktop (VDXR runtime). 
 - Everything in the repository is English: code, comments, docs, commit messages, PR titles and bodies.
 - Conversation with Marc happens in German.
 - Exception: the config keys in `BepInEx\config\de.marczahn.shipbreakervr.cfg` are German (`Bild/Weltmassstab`,
-  `KoerperFolgtKopf`, ...). Keep them so existing user settings survive.
+  `Steuerung/Drehen`, ...). Keep them so existing user settings survive.
 
 ## Layout
 - `src/ShipbreakerVR/` – the plugin (C#, net48). One file per concern: `VrCamera` (rig, eye resolution, video memory),

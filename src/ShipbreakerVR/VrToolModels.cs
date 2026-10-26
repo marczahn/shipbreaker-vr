@@ -487,6 +487,18 @@ namespace ShipbreakerVR
                 $"hand animator {(animator == null ? "none" : Chain(animator.transform))}");
         }
 
+        // The game parents a drawn tool to the equipment point keeping its world pose, so it starts where it rested in front
+        // of the body and springs into the hand from there (CuttingFXController / GunController lerp it to the point). With
+        // the point in the controller the tool is taken from the body where the hand reaches for it, so it starts in the
+        // hand at once.
+        public static void SnapIntoHand(Transform tool)
+        {
+            if (!moved || point == null || tool == null || tool.parent != point) return;
+            Plugin.Log.LogInfo($"Tool in hand: '{tool.name}' drawn straight into the hand ({tool.localPosition.magnitude:0.00} m from it)");
+            tool.localPosition = Vector3.zero;
+            tool.localRotation = Quaternion.identity;
+        }
+
         // On unload (hot reload): the equipment point goes back to the game.
         public static void Release()
         {
@@ -509,5 +521,23 @@ namespace ShipbreakerVR
             loggedArm = loggedArmSkip = false;
             rigKnown = false;
         }
+    }
+
+    // The cutter and the grapple start in the hand when drawn (VrToolModels.SnapIntoHand).
+    [HarmonyPatch]
+    internal static class ToolDrawPatch
+    {
+        private static readonly AccessTools.FieldRef<CuttingToolController, Transform> Cutter =
+            AccessTools.FieldRefAccess<CuttingToolController, Transform>("m_CuttingTool");
+        private static readonly AccessTools.FieldRef<GunController, Transform> Grapple =
+            AccessTools.FieldRefAccess<GunController, Transform>("m_GrapplingGun");
+
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(CuttingToolController), "EquipCurrentMode")]
+        private static void CutterDrawn(CuttingToolController __instance) => VrToolModels.SnapIntoHand(Cutter(__instance));
+
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(GunController), nameof(GunController.EquipGun))]
+        private static void GrappleDrawn(GunController __instance) => VrToolModels.SnapIntoHand(Grapple(__instance));
     }
 }

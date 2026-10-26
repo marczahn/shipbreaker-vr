@@ -103,8 +103,8 @@ interacting, the grapple and the "entity of interest".
   grapple charges while `Throw` is held and throws on release); B with the trigger held = `RetractionModifier` (reel in;
   the game only knows reeling in at a fixed speed, there is no reeling out); B tap = `ToolMode` (sent on release); B
   held 0.4 s = `PlaceTether` held until B is released (the tether runs from where the hand points at the start to where
-  it points at the release), or one `RecallTethers` press if the hand points at nothing. A button counts only without
-  its twin on the other controller (A + X pause, B + Y centering). The throwing gesture was considered and dropped: an
+  it points at the release), or one `RecallTethers` press if the hand points at nothing. (Until pause and centering
+  moved to the stick presses, a button counted only without its twin on the other controller.) The throwing gesture was considered and dropped: an
   accidental throw would look like a bug. The stick press was dropped too: it is imprecise and wears out.
 - The game polls actions through `LynxControlExtensions.GetInputWasPressed/IsPressed/IsHolding/WasReleased`, which
   Mono inlines; `ToolInputPatch` redirects those calls in the tool classes (grapple, tether, magnet, cutter, demo charge,
@@ -173,7 +173,11 @@ interacting, the grapple and the "entity of interest".
   game camera in `onBeforeRender`, so the hand is placed relative to the rig shifted by the game camera's movement
   since. The log line `Tool in hand: game arm ...` lists all rig constraints, and `Tool in hand: demo charge; wrist ...`
   whether the detonator hangs on the hand. The equip log of the other tools is written a second after drawing, since the
-  models first slide in from their rest points (the first frame showed offsets over a meter).
+  models used to slide in from their rest points (the first frame showed offsets over a meter): `EquipCurrentMode` /
+  `EquipGun` parent the model to the equipment point keeping its world pose, and `CuttingFXController` /
+  `GunController` spring its local pose to zero. With the point on the controller, the cutter came flying from in
+  front of the body although the hand had taken it over the shoulder, so `ToolDrawPatch` sets the model's local pose
+  to zero right after equipping (log `Tool in hand: '<model>' drawn straight into the hand (<distance> m from it)`).
 - Aiming from the muzzle: the aim camera (and the beam) sits on the muzzle of the tool in the hand, pointing along the
   aim pose turned by the tool's fit, i.e. along the barrel: grapple `GrapplingHook.m_GrapplingGunBarrel`, Splitsaw `CuttingFXController.m_CutOriginTransform` +
   `m_CutOriginOffset`, Stinger `ScalpelFXController.m_CutOriginTransform` + `m_CutOriginOffset`. The muzzle's offset to
@@ -261,6 +265,9 @@ interacting, the grapple and the "entity of interest".
   is set to P * head. Rotations from elsewhere (death spin, respawn) are detected and P is resynced.
 - The VR rig is not a child of the game camera (that would double the rotation); it only follows its position.
 - `HandleReorient` is skipped in VR; the reorient key levels P instead.
+- This is always on in VR. The config option `Steuerung/KoerperFolgtKopf` (off: the head looks around freely and only
+  the mouse turns the body) was dropped: in VR that made no sense in practice. An old entry in the config file is
+  ignored.
 
 ## UI
 - The game renders its UI with a camera tagged `UI_Camera` inside HDRP custom passes (`HUDCustomPass`,
@@ -273,7 +280,7 @@ interacting, the grapple and the "entity of interest".
   (`UI/Default`, ZTest Always, eye matrices via reflection from `HDCamera.xr`). In gameplay the quad is a visor in
   front of the head; elsewhere it is a canvas fixed in the playspace, upright at eye height in the direction the head
   faces. It follows the eye height once the eyes are more than 30 cm above or below its center (standing up, sitting
-  down). F4 (or B + Y on the controllers, `VrCamera.UpdateCenterCombo`) places it in front of the head again and, in menus, turns the playspace to the gaze. The VR tab row "Center view" (`VrOptions.ActionRow`, a toggle row
+  down). F4 (or pressing the left stick, `VrCamera.UpdateCenterPress`) places it in front of the head again and, in menus, turns the playspace to the gaze. The VR tab row "Center view" (`VrOptions.ActionRow`, a toggle row
   without the toggle) does the same.
 - The game switches its custom pass volumes off outside gameplay (e.g. pause), so the mod uses its own
   `CustomPassVolume` (AfterPostProcess) and only disables the game's UI passes for the VR camera.
@@ -402,11 +409,11 @@ the eye textures were recreated a second after VR started (1.0, then 0.95); a lo
 `ThrustController.Update` reads the thrust axes via `LynxControls.GetOneAxisInputControlValue` (`ThrustMove...Composite`)
 and thrusts along its orientation transform (the body, or a steering transform). A postfix on that extension method adds
 the controller thrust, converted into that transform's axes, so fuel, forces and the thrust HUD stay the game's.
-Rotation from the controllers is applied in `VrBody`: to the playspace with body-follows-head, otherwise to the body
-(`turn * gameTarget` in the redirected `MoveRotation`), which the camera follows.
+Rotation from the controllers is applied in `VrBody`, to the playspace.
 Config `Steuerung/Controllersteuerung` (Aus/Vtol; the earlier "point and twist" Pavlov scheme was removed for now):
-- Hold the left trigger; moving the controller away from where it was when pressed thrusts that way (2 cm deadzone,
-  full at 15 cm), measured at an estimated wrist point 8 cm behind the grip pose: measured at the controller, tilting
+- Hold the left trigger; moving the controller away from where it was when pressed thrusts that way (deadzone
+  `Steuerung/SchubTotzone`, 2 cm, full at `Steuerung/SchubVoll`, 10 cm; full stays at least 5 cm beyond the deadzone,
+  changing one pushes the other along; until 0.14.0 fixed at 2 and 15 cm), measured at an estimated wrist point 8 cm behind the grip pose: measured at the controller, tilting
   the hand to turn swung it past the deadzone and added thrust in a direction nobody asked for. Rotation uses the aim pose (`PointerRotation`; the `deviceRotation` grip pose runs along the handle).
   The hand's roll away from the reference (`eulerAngles.z`) rolls the body around the head's forward axis (8 degree
   deadzone, full 45 degrees/s at 45). Turning and pitching by twisting the hand worked, but holding the trigger and the
@@ -428,8 +435,8 @@ controllers because `VrXr` enables the Oculus Touch interaction profile, which t
 `FlugkugelGroesse` = radius relative to the visor height, `FlugkugelX/Y` = position on the visor from -0.5 to 0.5). The
 defaults (radius 0.06, X -0.159, Y -0.38) put it in the gap between the scanner/helmet lamp keys and the hull/suit bars,
 its lowest point on the baseline of the lower row, measured on an F8 dump of the gameplay HUD (2560x1440: the gap runs
-from x 774 to 971, the baseline is at y 1354). Its radius is the full-thrust offset (15 cm), a small inner globe the
-deadzone (2 cm). A 3D cross (the hand's axes; the upper arm longer and capped so up stays clear at any roll) sits at the
+from x 774 to 971, the baseline is at y 1354). Its radius is the full-thrust offset (`SchubVoll`), a small inner globe the
+deadzone (`SchubTotzone`; the mesh is rebuilt when the share changes). A 3D cross (the hand's axes; the upper arm longer and capped so up stays clear at any roll) sits at the
 hand's offset from the reference (tracking space) and turns by the hand's rotation relative to the reference in the
 controller's own frame, the same rotation whose `z` is the roll. Everything is one light HUD color; while the trigger is
 held, the cross and the line from the center to it take the orange of the game's gauge bars (255, 139, 0), the line
@@ -452,14 +459,21 @@ Actions read `InputManager.ActiveDevice`, the device with the most recent input.
 updated from `LynxControls.Update`.
 `VrMenuInput` is an InControl `InputDevice` (class Controller, style XboxOne, so the prompts show Xbox glyphs) attached
 with `InputManager.AttachDevice` once InControl is set up. In its `Update` it reads both XR controllers and maps them
-by place: sticks = sticks, A/B/X/Y = A/B/X/Y, triggers = bumpers, grips = analog triggers, right stick pressed =
-R3. A + X together is Menu (Start), only in `Gameplay` and `LoadingInProgress` (it cycles the loading tips; A and X then
-send nothing else): the left menu button belongs to Virtual Desktop, the left stick press (the first choice) was too easy
-to hit while steering with the left stick, and in menus the Doozy button bridges read Start like Confirm on the
-selected button. No View button (Back; `BackButtonService` treats Decline/B the same, so B covers Esc in menus) and no D-pad. In
-`Gameplay` it reports only A + X, which opens the pause menu; everything else stays with controller flying. A press held across a game state change is ignored until released, so the
-press that opens the pause menu does not close it again. B + Y together centers the view (`VrCamera.CenterComboHeld`,
-from the press until both are up again): then B and Y send nothing and Y does not brake. Pressed buttons are logged as `Menu control: ...`.
+by place: sticks = sticks, A/B/X/Y = A/B/X/Y, triggers = bumpers, grips = analog triggers. Pressing the right stick
+is Menu (Start) in `Gameplay` and `LoadingInProgress` (it cycles the loading tips) and R3 elsewhere: the left menu
+button belongs to Virtual Desktop, and in menus the Doozy button bridges read Start like Confirm on the selected
+button. History: Menu was first the left stick press (too easy to hit while that stick steered), then A + X; since
+steering moved to the right stick Marc moved it to the right stick press. In the Hab (`GameState.Hab`) the press opens the station's pause menu, but not as Start: the Hab is a
+`FrontEnd` state, where Start is bound to both `FrontEndActionSet.Pause` (read by `Hab3DController.Update`) and
+`FrontEndActionSet.Start` (read by the Doozy bridges like Confirm). So the press sets `VrMenuInput.HabPauseRequested`
+and a postfix on `Hab3DController.Update` (`HabPausePatch`) does what the game does for Pause: post `HabPauseEvent`
+and call `ToggleHabPaused(true)`, with the game's conditions (not in a navigable screen, past the splash) plus
+`ActionBlockerService` not blocking Pause (the game blocks it while going to sleep). Logged as `Menu control: right
+stick press opens the station's pause menu` or `... ignored (...)`. No View button (Back; `BackButtonService` treats Decline/B the same, so B covers Esc in menus) and no D-pad. In
+`Gameplay` it reports only the right stick press, which opens the pause menu; everything else stays with controller flying. A press held across a game state change is ignored until released, so the
+press that opens the pause menu does not close it again. Pressing the left stick centers the view (`VrCamera`, logged
+as `Left stick pressed: centering the view`); no L3 is sent. It was B + Y before, which kept B, Y and the brake silent
+while held. Pressed buttons are logged as `Menu control: ...`.
 InControl makes a device active only when its last input is strictly newer than the active one's. An "Unknown
 Device" (probably a joystick exposed by the runtime) had input every frame and kept the role, so the first version's
 presses never reached the game. A postfix on `InputManager.UpdateActiveDevice` gives our device the role while it has

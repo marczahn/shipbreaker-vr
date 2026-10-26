@@ -36,6 +36,8 @@ namespace ShipbreakerVR
         private static Material markerMaterial;
         private static Material tetherMaterial;
         private static bool logged;
+        // The deadzone share the globe mesh was built with; the mesh is rebuilt when the thrust settings change it.
+        private static float builtDeadzone = -1f;
 
         // What is shown, easing back to the center after the trigger is released; offset in globe radii.
         private static Vector3 shownOffset;
@@ -55,6 +57,7 @@ namespace ShipbreakerVR
             }
             if (alpha <= 0.01f) return;
             if (globe == null) Create();
+            else if (!Mathf.Approximately(builtDeadzone, VrControls.DeadzoneShare)) RebuildGlobe();
 
             var height = ((Vector3)visor.GetColumn(1)).magnitude;
             var radius = Plugin.FlightGlobeSize.Value * height;
@@ -112,21 +115,10 @@ namespace ShipbreakerVR
 
         private static void Create()
         {
-            var builder = new Builder();
-            builder.Ring(Vector3.right, Vector3.up, 1f, 0.005f, RingColor);
-            builder.Ring(Vector3.right, Vector3.forward, 1f, 0.005f, RingColor);
-            builder.Ring(Vector3.up, Vector3.forward, 1f, 0.005f, RingColor);
-            // The deadzone: a small globe of its own around the center.
-            var deadzone = VrControls.DeadzoneShare;
-            builder.Ring(Vector3.right, Vector3.up, deadzone, 0.004f, DeadzoneColor);
-            builder.Ring(Vector3.right, Vector3.forward, deadzone, 0.004f, DeadzoneColor);
-            builder.Ring(Vector3.up, Vector3.forward, deadzone, 0.004f, DeadzoneColor);
-            foreach (var axis in new[] { Vector3.right, Vector3.up, Vector3.forward })
-                builder.Tube(new[] { -axis, axis }, 0.007f, AxisColor);
-            globe = builder.Mesh("Globe");
+            globe = BuildGlobe();
 
             // The hand's axes as a cross, the upper arm longer and capped; in globe radii.
-            builder = new Builder();
+            var builder = new Builder();
             // White: the material color tints it (MarkerColor, or ActiveColor while the trigger is held).
             builder.Tube(new[] { new Vector3(-0.22f, 0f, 0f), new Vector3(0.22f, 0f, 0f) }, 0.015f, Color.white);
             builder.Tube(new[] { new Vector3(0f, -0.22f, 0f), new Vector3(0f, 0.32f, 0f) }, 0.015f, Color.white);
@@ -142,6 +134,28 @@ namespace ShipbreakerVR
             globeMaterial = CreateMaterial();
             markerMaterial = CreateMaterial();
             tetherMaterial = CreateMaterial();
+        }
+
+        private static void RebuildGlobe()
+        {
+            Object.Destroy(globe);
+            globe = BuildGlobe();
+        }
+
+        private static Mesh BuildGlobe()
+        {
+            var builder = new Builder();
+            builder.Ring(Vector3.right, Vector3.up, 1f, 0.005f, RingColor);
+            builder.Ring(Vector3.right, Vector3.forward, 1f, 0.005f, RingColor);
+            builder.Ring(Vector3.up, Vector3.forward, 1f, 0.005f, RingColor);
+            // The deadzone: a small globe of its own around the center.
+            var deadzone = builtDeadzone = VrControls.DeadzoneShare;
+            builder.Ring(Vector3.right, Vector3.up, deadzone, 0.004f, DeadzoneColor);
+            builder.Ring(Vector3.right, Vector3.forward, deadzone, 0.004f, DeadzoneColor);
+            builder.Ring(Vector3.up, Vector3.forward, deadzone, 0.004f, DeadzoneColor);
+            foreach (var axis in new[] { Vector3.right, Vector3.up, Vector3.forward })
+                builder.Tube(new[] { -axis, axis }, 0.007f, AxisColor);
+            return builder.Mesh("Globe");
         }
 
         // Unloading (ScriptEngine reload): meshes and materials are not part of any scene and would stay behind.

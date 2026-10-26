@@ -23,7 +23,6 @@ namespace ShipbreakerVR
     //   B / Y tap       tool mode (cutter Stinger/Splitsaw, grapple/magnet, demo charge mode)
     //   B / Y held      place a tether from where the hand points when the hold starts to where it points on release;
     //                   held while pointing at nothing: recall all tethers
-    // A + X (pause) and B + Y (center the view) are combos of their own; a button counts only without its twin.
     // The game polls its actions through LynxControlExtensions; those methods are small enough for Mono to inline, so the
     // calls in the tool classes are redirected (ToolInputPatch) to versions that add these presses to the real ones.
     internal static class VrToolInput
@@ -131,19 +130,18 @@ namespace ShipbreakerVR
             if (RightHand.GripPressed && !RightHand.Trigger && RightHand.Zone != VrToolBelt.Zone.None && !VrToolFit.Blocks(RightHand.Node)) Draw(RightHand);
             if (LeftHand.GripPressed && !LeftHand.Trigger && LeftHand.Zone != VrToolBelt.Zone.None && !VrToolFit.Blocks(LeftHand.Node)) Draw(LeftHand);
             var tool = ToolNode == XRNode.LeftHand ? LeftHand : RightHand;
-            var other = tool == LeftHand ? RightHand : LeftHand;
             if (tool.GripPressed) holsterPulses = 0;
             else if (!tool.GripDown) Holster();
 
             var trigger = tool.Trigger;
             now[(int)Action.Fire] = trigger;
 
-            var a = Button(tool.Device, CommonUsages.primaryButton) && !Button(other.Device, CommonUsages.primaryButton);
+            var a = Button(tool.Device, CommonUsages.primaryButton);
             if (a && !aDown) aThrows = trigger;
             aDown = a;
             now[(int)(aThrows ? Action.Throw : Action.Interact)] = a;
 
-            var b = Button(tool.Device, CommonUsages.secondaryButton) && !Button(other.Device, CommonUsages.secondaryButton);
+            var b = Button(tool.Device, CommonUsages.secondaryButton);
             if (b && !bDown)
             {
                 bDownAt = Time.unscaledTime;

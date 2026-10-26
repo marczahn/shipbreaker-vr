@@ -12,14 +12,15 @@ namespace ShipbreakerVR
     // actions (Confirm = Action1, Decline = Action2, navigation = left stick or D-pad, scrolling = right stick, tabs =
     // bumpers, pause = Menu). So both controllers together are presented to InControl as one more gamepad and the game
     // does the rest, including its gamepad button prompts. The mapping follows the buttons' places, as Marc asked:
-    //   sticks = sticks, A/B/X/Y = A/B/X/Y, triggers = bumpers, grips = triggers, right stick pressed = R3.
-    //   A + X together is Menu (Start, the pause menu), but only in gameplay and on loading screens (where it cycles the
-    //   tips): the left menu button belongs to Virtual Desktop, and A + X is the usual VR pause combo. It used to be the
-    //   left stick press, which is too easy to hit while steering with that stick. In menus the game reads Start like
-    //   Confirm on the selected button, which set off things Marc never chose, so there the combo sends nothing.
-    //   B + Y together centers the view (VrCamera, like F4) and sends nothing.
+    //   sticks = sticks, A/B/X/Y = A/B/X/Y, triggers = bumpers, grips = triggers.
+    //   Pressing the right stick is Menu (Start, the pause menu) in gameplay and on loading screens (where it cycles the
+    //   tips), and R3 in menus: the left menu button belongs to Virtual Desktop, and in menus the game reads Start like
+    //   Confirm on the selected button, which set off things Marc never chose. (Menu was A + X for a while.)
+    //   In the station (Hab) the press opens the station's pause menu, but not through Menu: there the game reads Start as
+    //   both Pause and Confirm, so it goes straight to Hab3DController (HabPausePatch), as Esc does.
+    //   Pressing the left stick centers the view (VrCamera, like F4) and sends nothing.
     //   There is no View button (Back; B does the same in menus) and no D-pad.
-    // In gameplay only A + X counts (it opens the pause menu); the rest belongs to controller flying.
+    // In gameplay only the right stick press counts (it opens the pause menu); the rest belongs to controller flying.
     // The actions read only InControl's active device, and another device kept that role (see ActiveDevicePatch).
     internal class VrMenuInput : InControl.InputDevice
     {
@@ -41,6 +42,10 @@ namespace ShipbreakerVR
         private bool waitForRelease;
         private readonly bool[] pressed = new bool[Buttons.Length];
         private string lastPressed = "";
+        private bool habMenuHeld;
+
+        // Set when the right stick was pressed in the Hab; HabPausePatch opens the station's pause menu and clears it.
+        public static bool HabPauseRequested { get; set; }
 
         private VrMenuInput() : base("ShipbreakerVR controllers")
         {
@@ -106,8 +111,9 @@ namespace ShipbreakerVR
             {
                 var state = GameSession.CurrentGameState;
                 var gameplay = state == GameSession.GameState.Gameplay;
-                var menu = (gameplay || state == GameSession.GameState.LoadingInProgress)
-                    && Button(right, CommonUsages.primaryButton) && Button(left, CommonUsages.primaryButton);
+                var hab = state == GameSession.GameState.Hab;
+                var menu = (gameplay || hab || state == GameSession.GameState.LoadingInProgress)
+                    && Button(right, CommonUsages.primary2DAxisClick);
                 if (gameplay)
                 {
                     pressed[7] = menu;
@@ -125,12 +131,8 @@ namespace ShipbreakerVR
                     pressed[3] = Button(left, CommonUsages.secondaryButton);
                     pressed[4] = Trigger(left);
                     pressed[5] = Trigger(right);
-                    pressed[6] = Button(right, CommonUsages.primary2DAxisClick);
-                    pressed[7] = menu;
-                    // A and X are the combo here, not Confirm and Action3.
-                    if (menu) pressed[0] = pressed[2] = false;
-                    // B and Y together center the view (VrCamera), not Back and Action4.
-                    if (VrCamera.CenterComboHeld) pressed[1] = pressed[3] = false;
+                    pressed[6] = Button(right, CommonUsages.primary2DAxisClick) && !menu;
+                    pressed[7] = menu && !hab;
                 }
 
                 // A press that opened or closed a menu is still held when the next state starts; it must not act there
@@ -145,6 +147,9 @@ namespace ShipbreakerVR
                 if (waitForRelease)
                     for (var i = 0; i < pressed.Length; i++) pressed[i] = false;
                 LogPresses(state);
+                if (hab && menu && !habMenuHeld && !waitForRelease) HabPauseRequested = true;
+                else if (!hab) HabPauseRequested = false;
+                habMenuHeld = hab && menu;
             }
 
             UpdateLeftStickWithValue(leftStick, updateTick, deltaTime);
@@ -201,6 +206,35 @@ namespace ShipbreakerVR
             if (!VrMenuInput.HasInput || InputManager.ActiveDevice is VrMenuInput) return;
             if (logs++ < 5) Plugin.Log.LogInfo($"Menu control: taking the active device role from '{InputManager.ActiveDevice?.Name}'");
             Active() = VrMenuInput.Current;
+        }
+    }
+
+    // Opens the station's pause menu for the right stick press (VrMenuInput) the way Hab3DController.Update does for Pause (Esc or Start):
+    // not inside a terminal or other navigable screen, not before the splash, and not while the game blocks Pause.
+    [HarmonyPatch(typeof(Hab3DController), "Update")]
+    internal static class HabPausePatch
+    {
+        private static readonly AccessTools.FieldRef<Hab3DController, bool> InNavigableScreen =
+            AccessTools.FieldRefAccess<Hab3DController, bool>("mIsInNavigableScreen");
+        private static readonly AccessTools.FieldRef<Hab3DController, bool> PastSplash =
+            AccessTools.FieldRefAccess<Hab3DController, bool>("mHasProgressedPastSplash");
+        private static readonly System.Action<Hab3DController, bool> TogglePaused =
+            AccessTools.MethodDelegate<System.Action<Hab3DController, bool>>(AccessTools.Method(typeof(Hab3DController), "ToggleHabPaused"));
+
+        private static void Postfix(Hab3DController __instance)
+        {
+            if (!VrMenuInput.HabPauseRequested) return;
+            VrMenuInput.HabPauseRequested = false;
+            var blocked = ActionBlockerService.Instance != null
+                && ActionBlockerService.Instance.IsActionBlocked(LynxControls.ActionSetAndId.FromEnum(FrontEndActions.FrontEndActionSet.Pause));
+            if (InNavigableScreen(__instance) || !PastSplash(__instance) || blocked || __instance.IsHabPaused)
+            {
+                Plugin.Log.LogInfo($"Menu control: right stick press in the station ignored (screen {InNavigableScreen(__instance)}, past splash {PastSplash(__instance)}, blocked {blocked}, paused {__instance.IsHabPaused})");
+                return;
+            }
+            Plugin.Log.LogInfo("Menu control: right stick press opens the station's pause menu");
+            ((Carbon.Core.Events.IEventBroadcaster)Main.EventSystem).Post(HabPauseEvent.GetEvent(pause: true));
+            TogglePaused(__instance, true);
         }
     }
 }

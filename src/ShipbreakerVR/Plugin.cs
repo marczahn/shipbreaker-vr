@@ -12,13 +12,12 @@ namespace ShipbreakerVR
     {
         public const string Guid = "de.marczahn.shipbreakervr";
         public const string Name = "ShipbreakerVR";
-        public const string Version = "0.15.0";
+        public const string Version = "0.16.0";
 
         internal static ManualLogSource Log;
         internal static ConfigEntry<bool> MultiPass;
         internal static ConfigEntry<bool> SeparateEyeTextures;
         internal static ConfigEntry<bool> StartVrAtLaunch;
-        internal static ConfigEntry<bool> BodyFollowsHead;
         internal static ConfigEntry<bool> UiInVr;
         internal static ConfigEntry<float> HudDistance;
         internal static ConfigEntry<float> HudScale;
@@ -37,6 +36,8 @@ namespace ShipbreakerVR
         internal static ConfigEntry<VrPerformance.Occlusion> AmbientOcclusion;
         internal static ConfigEntry<VrControls.Scheme> ControlScheme;
         internal static ConfigEntry<VrControls.Turning> TurnMode;
+        internal static ConfigEntry<float> ThrustDeadzone;
+        internal static ConfigEntry<float> ThrustFull;
         internal static ConfigEntry<VrFlightGlobe.Mode> FlightGlobe;
         internal static ConfigEntry<float> FlightGlobeSize;
         internal static ConfigEntry<float> FlightGlobeX;
@@ -52,14 +53,19 @@ namespace ShipbreakerVR
                 "A separate texture per eye instead of a Texture2DArray. Experimental, in case MultiPass alone is not enough.");
             StartVrAtLaunch = Config.Bind("Rendering", "VrBeimStart", true,
                 "Start VR as soon as the game launches, so the intro and loading screens already show in the headset. Off: start VR with F3.");
-            BodyFollowsHead = Config.Bind("Steuerung", "KoerperFolgtKopf", true,
-                "The body turns with the head (and with it the tools' aim, unless they aim with the hand, see ZielenMitHand). Mouse and stick add extra rotation. Off: the head looks around freely, only the mouse turns the body.");
             AmbientOcclusion = Config.Bind("Bild", "Umgebungsverdeckung", VrPerformance.Occlusion.Niedrig,
                 "Ambient occlusion (shading in corners and creases) in VR. Niedrig: half resolution and few steps, as the game uses it in the bay. The station asks for full resolution and 16 steps, which at VR resolution costs so much GPU time that it stutters. Aus: off. Spiel: as the game sets it.");
             ControlScheme = Config.Bind("Steuerung", "Controllersteuerung", VrControls.Scheme.Vtol,
                 "Flying with the motion controllers. Vtol: hold the left trigger and move the controller away from where it was when pressed to thrust that way, tilt it sideways to roll. Right stick: turn (left/right, see Drehen) and pitch (up/down). Y brakes. While the left hand holds a tool (ZielenMitHand) it works the tool instead. Aus: off.");
             TurnMode = Config.Bind("Steuerung", "Drehen", VrControls.Turning.Fliessend,
                 "Turning with the right stick (controller flying). Fliessend: smooth, faster the further the stick is pushed. Snap30/Snap45/Snap90: one step of that many degrees per flick.");
+            ThrustDeadzone = Config.Bind("Steuerung", "SchubTotzone", 2f,
+                "How far the left controller has to move from where the trigger was pressed before thrust starts, in centimeters (0 to 10).");
+            ThrustFull = Config.Bind("Steuerung", "SchubVoll", 10f,
+                "How far the left controller has to move from where the trigger was pressed for full thrust, in centimeters (5 to 30). At least 5 cm more than SchubTotzone.");
+            ThrustDeadzone.SettingChanged += (_, __) => VrControls.KeepThrustRange(true);
+            ThrustFull.SettingChanged += (_, __) => VrControls.KeepThrustRange(false);
+            VrControls.KeepThrustRange(false);
             FlightGlobe = Config.Bind("Anzeige", "Flugkugel", VrFlightGlobe.Mode.Immer,
                 "A small globe in the visor that shows where the left controller is relative to where the trigger was pressed (controller flying): its surface is full thrust, the small inner globe the deadzone. Immer: always in gameplay. BeimFliegen: only while the trigger is held. Aus: off.");
             FlightGlobeSize = Config.Bind("Anzeige", "FlugkugelGroesse", 0.06f, "Radius of the flight globe relative to the visor height.");
