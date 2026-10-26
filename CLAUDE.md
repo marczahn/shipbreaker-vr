@@ -15,7 +15,7 @@ OpenXR at runtime. Tested with a Meta Quest via Virtual Desktop (VDXR runtime). 
   `VrOptionsNavigation` (rows in the game's options menu), `VrControls` (motion controller flying), `VrXr` (OpenXR
   setup), `VrAim` (aiming with the hand, laser), `VrToolInput` / `VrToolBelt` (tool buttons, taking tools off the
   body), `VrDualTools` (two tools at once, one per hand; the scanner hides the other), `VrToolModels` / `VrToolFit` (tools in the hand, demo charge arm), `VrHands` (the suit's hands follow the
-  controllers), `VrClimb` (holding on and climbing with the grip of a free hand), `VrInput` (the controllers, read once per frame), `VrHand` (what each hand does: tool, second tool, hidden tool, holding on),
+  controllers), `VrClimb` (holding on and climbing with the grip of a free hand), `VrTetherMode` (the grapple's tether mode), `VrInput` (the controllers, read once per frame), `VrHand` (what each hand does: tool, second tool, hidden tool, holding on),
   `VrFrame` (the per-frame order: input, tool hands, aim and flying, then the steps on the VR camera's callbacks), `VrCrosshair` (hiding the crosshair while aiming), `GameTools` (the game classes the tool transpilers reach into, with their tool family), `GameRefs` (the player's controllers, found once), `PatchReport` (patch summary, features off when their patches are incomplete), `VrUtil` (small shared helpers: transform paths, canvas group alpha, overlay material), `VrHelmet`, `VrPostProcess`, `ScreenSizePatch`,
   `HdrpXrPatch`.
 - `unity/ShipbreakerVRUnity/` – helper project that builds the `xrmanager` AssetBundle with the XR/OpenXR settings and
@@ -25,6 +25,9 @@ OpenXR at runtime. Tested with a Meta Quest via Virtual Desktop (VDXR runtime). 
 - `docs/INSTALL.md` – user install guide; `docs/releases/<version>.md` – release notes.
 - `tests/ShipbreakerVR.Tests/` – tests for the logic that runs without the engine; `tools/check.sh` builds and runs them.
 - `tools/build-release.sh` and `.claude/skills/release/` – building a release ZIP.
+- `tools/control-images.py` – draws the control overviews in `docs/images` (flying, hands, tool buttons, cutter,
+  demo charges, grapple, menus). When a control changes, update its texts there, in `README.md`, in `docs/INSTALL.md` and in the setting's
+  description (`VrSettings`), then run it.
 - `licenses/`, `THIRD-PARTY-NOTICES.md`, `LICENSE` (MIT), `DISCLAIMER.md`.
 
 ## Building

@@ -32,7 +32,7 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
   `BepInEx\config\de.marczahn.shipbreakervr.cfg`.
 
 ### Flying with the controllers
-![Controls overview](images/controls.svg)
+![Flying controls](images/flying.svg)
 
 Switch it in the options row "Controller flying" in the VR tab. Hold the left trigger, then:
 - move the controller away from where it was when you pressed it to fly that way,
@@ -54,7 +54,9 @@ where you pressed it, its surface full thrust, the small inner globe the deadzon
 "Flight globe" shows it always, only while flying, or never.
 
 ### Tools in the hand
-![Tool controls](images/tools.svg)
+![Hands](images/hands.svg)
+
+![Tool buttons](images/tools.svg)
 
 With the row "Aim with the hand" in the VR tab on (the default), the tools aim where the controller that holds them
 points, from the tool's muzzle. A thin laser shows where; the crosshair in the middle of the view is hidden meanwhile.
@@ -69,9 +71,9 @@ flat game.
   comes back when you let go of the scanner. The row "Two tools at once" in the VR tab switches this off, so a tool taken
   with one hand replaces the one in the other hand.
 - On the controller that holds the tool: trigger = use the tool (cut, grapple, place or detonate demo charges), A =
-  use what you point at, trigger + A = throw, B = switch the tool's mode, trigger + B = reel in, hold B = place a tether
-  from where you point to where you let go, hold B pointing at nothing = recall the tethers. In the left hand X and Y
-  stand for A and B, and controller flying pauses until you let go; the right stick still turns.
+  use what you point at (A or X works from either hand, also an empty one), trigger + A = throw, B = switch the tool's
+  mode, trigger + B = reel in. In the left hand X and Y stand for A and B, and controller flying pauses until you let
+  go; the right stick still turns. The grapple's tethers are below.
 - The cutter's line turns with your wrist. It starts out horizontal; the game's switch to vertical cuts has no button,
   so roll your wrist for vertical cuts.
 - The suit's hands follow your controllers and close while you squeeze the grip.
@@ -84,7 +86,40 @@ flat game.
   the other hand does not take tools from the body). The values are in `BepInEx\config\de.marczahn.shipbreakervr.cfg`
   under `[Justierung]`; delete one to get its default back.
 
+### Cutter and demo charges
+![Cutter](images/cutter.svg)
+
+![Demo charges](images/charges.svg)
+
+- Cutter: the trigger cuts, B switches between the Splitsaw (a line, horizontal at first; roll your wrist to turn it)
+  and the Stinger (the point the laser shows).
+- Demo charges: the trigger places a charge where you point, or throws it where your hand points if you point at
+  nothing. B takes the detonator (and goes back to the charges while you have some left); with the detonator the
+  trigger detonates.
+
+### Grapple and tethers
+![Grapple and tethers](images/grapple.svg)
+
+B switches the grapple between two modes. The controller buzzes twice when the tether mode starts and once when
+grappling comes back.
+- Grappling (blue laser): the trigger grapples, as in the flat game. Hold B to place a tether from where you point to
+  where you let go; hold B pointing at nothing to recall all tethers.
+- Placing tethers (orange laser, a ring where it points): pull the trigger at the start of the tether and let go at
+  the end; a line shows the tether meanwhile. The tether you point at lights up orange, and a tap on A removes it;
+  pointing at no tether, A uses what you point at. Hold A to recall all tethers. B switches back to grappling however
+  long you hold it.
+
+### Holding on and climbing
+Squeeze the grip of a hand that holds no tool close to anything: the hand holds on right there. Move the hand to pull
+yourself along it, hand over hand with both hands, or with one hand while the other works a tool. Who moves depends on
+the masses: the station, fixed hulls and anything too heavy for the game's own grab stay put, light parts come to your
+hand instead. Let go while the hand moves to push off; you keep that speed. While the left hand holds on, controller
+flying pauses. Near an airlock console or a switch the grip holds on too; A or X works it. The row "Hold on and climb"
+in the VR tab switches this off.
+
 ### Menus with the controllers
+![Menus and keyboard](images/menus.svg)
+
 In menus both controllers act as one Xbox gamepad, each button where its counterpart sits, so the game shows gamepad
 button prompts:
 - sticks = sticks (left: navigate, right: scroll), right stick pressed = R3 in menus
