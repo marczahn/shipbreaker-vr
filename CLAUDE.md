@@ -20,7 +20,6 @@ OpenXR at runtime. Tested with a Meta Quest via Virtual Desktop (VDXR runtime). 
 - `unity/ShipbreakerVRUnity/` – helper project that builds the `xrmanager` AssetBundle with the XR/OpenXR settings and
   collects the OpenXR DLLs (menu *ShipbreakerVR → Build for the game*).
 - `docs/NOTES.md` – technical findings about the game and why the mod does what it does.
-- `docs/JOURNAL.md` – the development journal (see below).
 - `README.md` – the players' front page (written for non-technical users); `CONTRIBUTING.md` – building and layout for developers.
 - `docs/INSTALL.md` – user install guide; `docs/releases/<version>.md` – release notes.
 - `tools/build-release.sh` and `.claude/skills/release/` – building a release ZIP.
@@ -57,26 +56,3 @@ The game logic lives in `BBI.Unity.Game.dll`, `Assembly-CSharp` is nearly empty.
 - Work on a branch and open a PR; merge only when Marc says so. Rebase or merge `main` before testing when asked.
 - Releases follow the release skill in `.claude/skills/release/`. Tags and GitHub releases are named `alpha-v<version>`.
   Sessions cannot push tags or create GitHub releases, so Marc publishes them by hand.
-
-## Development journal
-`docs/JOURNAL.md` tells the story of the mod's development for people who want to see how it came about, including
-dead ends, wrong guesses and revised decisions. It is the counterpart to a developer diary: an experience report told by
-Claude in the first person.
-
-**Add an entry in the same PR** whenever the PR adds a feature, fixes a bug, or revises an earlier decision. Pure
-documentation, release housekeeping and refactorings without visible effect do not need one.
-
-How to write an entry:
-- Append it at the bottom (chronological order). Start with an anchor and a heading:
-  `<a id="short-slug"></a>` then `## YYYY-MM-DD · Title`. Use a date range if the work spanned several days.
-- Written in English, in the first person from Claude's perspective ("I"). Refer to Marc and his brother Raik (tester
-  and source of ideas) by name.
-- Follow the style, tone and length of the existing entries: short, conversational, like a blog post, with short
-  sentences and dry humor. The facts must stay accurate.
-- Tell what was wanted, what went wrong, which attempts failed and why, and what finally worked. Mention when
-  something took several rounds or when Marc's or Raik's observation or suggestion cracked the problem.
-- When a change revises or builds on an earlier entry, link it: `[world scale](#world-scale)`.
-- Leave out technical detail the story does not need; the facts belong in `docs/NOTES.md`.
-- No direct quotes from Marc or Raik; paraphrase what they said or decided.
-- Group related small problems by cause or theme instead of walking through each one separately.
-- No personal paths, drive letters or user names from the test machine.
