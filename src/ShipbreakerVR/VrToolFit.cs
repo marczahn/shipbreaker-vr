@@ -10,9 +10,9 @@ namespace ShipbreakerVR
     // hand's wrist (the grip pose moved back by VrToolModels.WristBehindGrip, in the aim pose's axes: x right, y up,
     // z forward) in centimeters, and its turn as pitch, yaw and roll in degrees, one config entry per tool and hand
     // ("x y z / pitch yaw roll"). The tool turns with it, and so does the aim, which runs along the barrel. Measuring the
-    // flat game's hold left the tools off in both hands, each differently, so Marc sets them in the headset: with
+    // flat game's hold left the tools off in both hands, each differently, so they are set in the headset: with
     // "WerkzeugeJustieren" on, the grip of the other hand grabs the tool in the hand and moves it rigidly, and letting go
-    // stores where it is (Adjust). Temporary, until the values are known and become the defaults.
+    // stores where it is (Adjust). The defaults are where Marc put them; the option stays for anyone whose hands differ.
     internal static class VrToolFit
     {
         private const float GripPress = 0.5f;
@@ -34,11 +34,11 @@ namespace ShipbreakerVR
             }
         }
 
-        // The starting points come from the measured flat-game hold, mirrored for the left hand.
-        private static readonly Fit GrappleRight = new Fit("GreifhakenRechts", "25 30 -34 / 0 0 0");
-        private static readonly Fit GrappleLeft = new Fit("GreifhakenLinks", "-25 30 -34 / 0 0 0");
-        private static readonly Fit CutterRight = new Fit("CutterRechts", "32 34 -42 / 0 0 0");
-        private static readonly Fit CutterLeft = new Fit("CutterLinks", "-34 34 -42 / 0 0 0");
+        // As Marc fitted them in the headset.
+        private static readonly Fit GrappleRight = new Fit("GreifhakenRechts", "-6.5 12.1 -20.7 / 5.9 1.1 8.6");
+        private static readonly Fit GrappleLeft = new Fit("GreifhakenLinks", "3.7 10.0 -23.2 / 4.9 -0.3 -1.6");
+        private static readonly Fit CutterRight = new Fit("CutterRechts", "1.6 -4.6 -0.5 / 7.0 5.2 10.8");
+        private static readonly Fit CutterLeft = new Fit("CutterLinks", "2.8 -4.9 1.9 / 6.5 6.2 -6.7");
 
         public static ConfigEntry<bool> Adjusting;
 
@@ -53,7 +53,7 @@ namespace ShipbreakerVR
         public static void Bind(ConfigFile config)
         {
             Adjusting = config.Bind("Justierung", "WerkzeugeJustieren", false,
-                "Temporary, for fitting the tools into the hands: while a hand holds the cutter or the grapple, the other hand's grip grabs the tool and moves it; letting go stores its place in the entries below.");
+                "For fitting the tools into the hands: while a hand holds the cutter or the grapple, the other hand's grip grabs the tool and moves it; letting go stores its place in the entries below. Delete an entry to get its default back.");
             foreach (var fit in new[] { GrappleRight, GrappleLeft, CutterRight, CutterLeft })
                 fit.Entry = config.Bind("Justierung", fit.Key, fit.Default,
                     "Where the tool sits in that hand: its mount relative to the wrist in centimeters (x right, y up, z forward along the controller), then its turn in degrees (pitch, yaw, roll), as \"x y z / pitch yaw roll\".");

@@ -119,6 +119,8 @@ likely to need:
 - **Head height** and **Head sideways:** move your view if you seem to sit too low or off to one side in the suit.
 - **Controller flying:** switch it off if you fly with mouse and keyboard or a gamepad.
 - **Aim with the hand:** switch it off to aim your tools at the center of your view again, as in the flat game.
+- **Fit tools in the hand:** if the cutter or the grapple does not sit right in your hand, switch this on, grab the
+  tool with your other hand and move it into place. Letting go stores it. Switch it off again when you are done.
 
 ## Something is wrong
 

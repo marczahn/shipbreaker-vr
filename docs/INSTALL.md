@@ -55,6 +55,11 @@ example when the grapple has a target in range); the crosshair in the middle of 
   from where you point to where you let go, hold B pointing at nothing = recall the tethers. In the left hand X and Y
   stand for A and B, and controller flying pauses until you let go; the right stick still turns.
 - The suit's hands follow your controllers and close while you squeeze the grip.
+- If the cutter or the grapple does not sit right in your hand, switch on "Fit tools in the hand" in the VR tab. While
+  one hand holds the tool, squeeze the grip of the other hand at the tool to grab it, then move and turn it into place;
+  letting go stores it, separately for each tool and hand. Switch the row off again when you are done (while it is on,
+  the other hand does not take tools from the body). The values are in `BepInEx\config\de.marczahn.shipbreakervr.cfg`
+  under `[Justierung]`; delete one to get its default back.
 
 ### Menus with the controllers
 In menus both controllers act as one Xbox gamepad, each button where its counterpart sits, so the game shows gamepad

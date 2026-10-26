@@ -537,3 +537,8 @@ looks for small things in the middle of the HUD a few times and hides whatever i
 was. And with a tool in hand Marc still saw orange lines with a ball at the front. I think that was my own laser,
 dressed in the grapple's orange, looking nothing like the laser of the empty hand. Now the laser stays the same with
 every tool and only the dot changes color.
+
+The grab-and-move fitting worked on the first try, which after this day felt almost suspicious. Marc pushed each tool
+around a few times per hand until it sat in the fist, and was happy enough with the idea to keep it: the setting stays
+in the VR tab for anyone whose hands disagree with his, and his values are the new defaults. The hidden center dot
+turned out to be a plain image called Center Dot on one of the HUD canvases, found on the first search.
