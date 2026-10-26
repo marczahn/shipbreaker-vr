@@ -453,7 +453,7 @@ charges at the left hip, the cutter over the right shoulder and the scanner at t
 buzzes when the hand is in a zone. Squeezing at the zone of the tool already in the hand puts it away. The zones are a
 first guess with a ruler and no body to measure, so they will need Marc's arms to set them right.
 
-Marc's verdict on the first round was "not bad", with two changes. The grapple's beam came out of his hand and the
+Marc liked the first round, with two changes. The grapple's beam came out of his hand and the
 barrel pointed a little to the side of it. I had kept the angle the game gives the tools in the flat view, where they
 sit at the lower right and squint 10 degrees inwards to meet the crosshair. In the hand that squint is just wrong, so
 the tools now point straight along the hand, and the aim starts at the muzzle instead of the knuckles. And Marc wanted
