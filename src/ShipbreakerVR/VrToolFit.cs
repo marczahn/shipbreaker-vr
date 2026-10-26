@@ -131,7 +131,7 @@ namespace ShipbreakerVR
             Plugin.Log.LogInfo($"Tool fit: {fit.Key} = {Format(fit)}");
         }
 
-        private static bool TryParse(string text, out Vector3 offset, out Vector3 angles)
+        internal static bool TryParse(string text, out Vector3 offset, out Vector3 angles)
         {
             offset = angles = Vector3.zero;
             var parts = (text ?? "").Replace(',', '.').Split('/');

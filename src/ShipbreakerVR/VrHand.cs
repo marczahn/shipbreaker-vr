@@ -82,10 +82,16 @@ namespace ShipbreakerVR
         {
             // A left controller that is gone (switched off) holds nothing.
             if (GameToolHand == Left && !VrInput.Left.Valid) GameToolHand = Right;
-            aiming = VrAim.CanAim(GameToolHand.Node);
+            Apply(VrAim.CanAim(GameToolHand.Node), equipped);
+            return aiming;
+        }
+
+        // The game's side of the state: whether the tools aim with the hand, and the equipped tool.
+        internal static void Apply(bool aimingNow, EquipmentController.Equipment equipped)
+        {
+            aiming = aimingNow;
             gameTool = equipped;
             Refresh();
-            return aiming;
         }
 
         private static void Refresh()

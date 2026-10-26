@@ -58,7 +58,12 @@ namespace ShipbreakerVR
             forward.y = 0f;
             if (forward.sqrMagnitude < 0.0001f) return Zone.None;
             local = Quaternion.Inverse(Quaternion.LookRotation(forward, Vector3.up)) * (hand - head.localPosition);
+            return ZoneAt(local);
+        }
 
+        // The zone at a hand position relative to the head, in meters along the head's heading (x right, y up, z forward).
+        internal static Zone ZoneAt(Vector3 local)
+        {
             if (local.y < HipBelow && local.z < HipForward)
             {
                 if (local.x > HipSide) return Zone.Grapple;

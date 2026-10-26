@@ -27,6 +27,19 @@ Copy the resulting `ShipbreakerVR.dll` to `BepInEx\plugins\ShipbreakerVR\`, or w
 `BepInEx\scripts\` (see [docs/NOTES.md](docs/NOTES.md), "Reloading without restarting the game").
 The DLL's version comes from `Plugin.Version` in `Plugin.cs`.
 
+## Checks
+```
+tools/check.sh -p:GameDir="C:\path\to\Hardspace Shipbreaker"
+```
+builds the plugin with warnings as errors and runs the tests in `tests/ShipbreakerVR.Tests` (xUnit, .NET 8). Run it
+before every pull request. The tests cover logic that runs without the engine: the settings (ranges, the thrust
+range's gap, complete option texts), the hands' states (`VrHand`), the tool belt's zones, reading the tool fit and the
+render resolution that fits into video memory. They load the plugin and the game's managed DLLs, so they need the
+game's whole `Shipbreaker_Data/Managed` folder, not only the DLLs the build references. A test must not reach an
+engine call (`Transform`, `Rigidbody`, `Input`, `Quaternion.Euler`, ...); move the logic into a function that takes
+plain values, like `VrToolBelt.ZoneAt` or `VrResolution.FitScale`. There is no CI on GitHub: the game's DLLs cannot
+go into the public repository.
+
 ## From the Unity helper project to a release
 *ShipbreakerVR → Build for the game* in `unity/ShipbreakerVRUnity` writes `Output/` in the game's folder structure.
 `tools/build-release.sh` reads the same files from a flatter `DEPLOY_DIR`, copied from `Output/` like this:
