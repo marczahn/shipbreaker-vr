@@ -147,22 +147,29 @@ interacting, the grapple and the "entity of interest".
   (`m_HandTarget`), grab/rest/miss targets, equipment point and equipment grip targets, animator parameters of its own
   (`LGrab`/`RGrab`, `LPrepGrab`, `LReact`, ...) and its own grab action (`LeftHandGrab`/`RightHandGrab`); the flat game
   grabs with both at once. Equipment always goes to the right hand (`GetHandPositionTransformAndSetEquipment` uses
-  `RightHand`), although `HandGrab.StartEquipment` would work for either. The arms are pulled to the hand targets by
-  `BBI.IKLimb` (in `BBI.Unity.Game`, not Animation Rigging, which is why the search for rig constraints found nothing):
-  `UpperArm`/`Forearm`/`Hand`/`Target`/`ElbowTarget`, solved in its `LateUpdate`, blended by `Transition` (which an
-  animation may drive), hand rotation by `HandRotationPolicy`.
+  `RightHand`), although `HandGrab.StartEquipment` would work for either, and the left hand has an equipment point of
+  its own (`Left Hand Equipment Point < Left Hand Targets < GrabController`). The hand targets are `rig_LHand_Target`/
+  `rig_RHand_Target` under `unit_player/rig_root`. `BBI.Unity.Game` has a two-bone IK component (`BBI.IKLimb`), but the
+  player has none (log `Hands: no IKLimb on the player` in a test build), and no Animation Rigging either: the arms come
+  from the humanoid animator alone. Animator parameters: `LPrepGrab`, `RPrepGrab`, `LGrab`, `RGrab`, `LCancelGrab`,
+  `RCancelGrab`, `LHIdle`, `RHIdle`, `LBringOut`, `RBringOut`, `LStow`, `RStow`, `LThrow`, `RThrow`, `LRecoil`,
+  `RRecoil`, `PushOff`, `LPushOff`, `RPushOff`, `LPushRate`, `RPushRate`, `LInteract`, `LInteractionType`, `RInteract`,
+  `RInteractionType`, `Dead`, `DeathType`, `Damaged`, `DamageType`, `LReact`, `LReactType`, `RReact`, `RReactType`,
+  `LLunge`, `RLunge`, `randomizer`, `revive`, `LCrush`, `RCrush`, `LCrushing`, `RCrushing`, `LSuffocating`,
+  `RSuffocating`, `LSuffocate`, `RSuffocate`, `IceElementAmount`, `UtilityKeyVisible`, `RigidBodyDisable`,
+  `PrepDemoCharge`, `ThrowDemoCharge`, `PlaceDemoCharge`, `StowDemoCharge`, `DemoChargeVisible`, `PrepDetonator`,
+  `TriggerDetonator`, `StowDetonator`, `DetonatorVisible`, `DetonatorFail`. The demo charge ones have no left variant.
 - The first version with a tool in the left hand folded the right arm into its shoulder (upper arm scaled to 0.001 for
-  rendering). Marc wanted two real hands instead, so now `VrHands` lets each arm follow its controller: a postfix on
-  `IKLimb.LateUpdate` (or `VrCamera.LateUpdate` for an arm without an active `IKLimb`) bends the arm with the same
-  two-bone solve as the demo charge until the wrist sits 8 cm behind the grip pose, and turns the hand so that wrist to
-  middle finger runs along the aim pose and little to index finger points up (humanoid finger bones; without them the
-  hand keeps the animation's angle to the eye). Driven, blended in and out over 0.2 s, while hand aiming is active and
-  the game's hand is idle (`None`, `Resting`, `Leading`); the right one also while it holds the scanner, or a tool that
-  the left hand holds. The right hand with a tool in it stays with the game's IK, which already reaches for the tool's
-  grip in the controller. Demo charges stay with `VrToolModels.PoseArm` (the charge hangs on the right hand bone, so
-  with the charge in the left hand that arm still reaches over), and the left arm stays with the game then. Logs:
-  `Hands: IKLimb on ...` and `Hands: <left|right> arm ...` once (bones, IK, targets), the animator's parameters,
-  `Hands: <arm> follows the controller | back to the game`, and the IK's state per tool (`Hands: with <tool> ...`).
+  rendering). Marc wanted two real hands instead, so now `VrHands` lets each arm follow its controller: in
+  `VrCamera.LateUpdate`, after the animation and `PoseArm`, it bends the arm with the same two-bone solve as the demo
+  charge until the wrist sits 8 cm behind the grip pose, and turns the hand so that wrist to middle finger runs along
+  the aim pose and little to index finger points up (humanoid finger bones; without them the hand keeps the animation's
+  angle to the eye). Driven, blended in and out over 0.2 s, while hand aiming is active and the game's hand is idle
+  (`None`, `Resting`, `Leading`); the right one also while it holds the scanner, or a tool that the left hand holds. The
+  right hand with a tool in it stays with the game, as before. Demo charges stay with `VrToolModels.PoseArm` (the charge
+  hangs on the right hand bone, so with the charge in the left hand that arm still reaches over), and the left arm stays
+  with the game then. Logs: `Hands: <left|right> arm ...` once (bones, fingers) and `Hands: <arm> follows the controller
+  | back to the game`. Marc found both hands looking good in the first test.
 
 ## Body follows head
 - The body rotates in `OrientationController.HandleAxisRotation` via `Rigidbody.MoveRotation(rotation * mouseDelta)`.
