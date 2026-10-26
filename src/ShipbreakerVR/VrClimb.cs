@@ -15,18 +15,14 @@ namespace ShipbreakerVR
     // player along it; a light part comes to the hand instead. With both hands holding, each pulls with half the player's
     // mass, so the body settles between them and hand over hand climbs. Letting go keeps the speed the hands gave the
     // body, so a push off flies on. While the left hand holds on, controller flying rests (VrControls).
-    // A grip on one of the game's controls (an InteractableObject the game works by looking at it and pressing interact,
-    // like the airlock console's lock panel) works that control instead of holding on: the game's interaction starts on
-    // it, and the grip presses interact for as long as it is held (VrToolInput), wherever one looks meanwhile.
+    // The grip always holds on, also at the game's controls (airlock consoles, panels); working them is A or X, as Marc
+    // asked (VrToolInput).
     // Each physics step (VrCamera.FixedUpdate) the player's velocity, and the thing's at the hold, is set so the hand
     // reaches its hold by the end of the step: an impulse between the two, as a joint would apply, without joints.
     internal static class VrClimb
     {
-        private const float GripPress = 0.5f;
-        private const float GripRelease = 0.4f;
-        // How far from the controller a surface may be to hold on, and a control to work it, in meters at world scale 1.
+        // How far from the controller a surface may be to hold on, in meters at world scale 1.
         private const float Reach = 0.1f;
-        private const float ControlReach = 0.15f;
         // A hand held back this far from its hold (the body stuck behind something, the part torn away) lets go.
         private const float TearOff = 0.5f;
         // How fast the hold may pull the body, and how fast a push off may fly, in m/s at world scale 1.
@@ -42,14 +38,11 @@ namespace ShipbreakerVR
 
         private static readonly System.Reflection.MethodInfo RawGrabbedMassRange =
             AccessTools.PropertyGetter(typeof(GrabController), "RawGrabbedMassRange");
-        private static readonly System.Reflection.MethodInfo StartInteraction =
-            AccessTools.Method(typeof(InteractionController), "StartInteraction");
 
         private class Hand
         {
-            public readonly XRNode Node;
-            public readonly string Name;
-            public InputDevice Device;
+            public readonly VrInput.Hand Input;
+            // The grip as this hand last saw it: the physics may step several times in a frame, or not at all.
             public bool GripDown;
             public bool Tracked;
             // The controller's position in tracking space this physics step.
@@ -62,23 +55,19 @@ namespace ShipbreakerVR
             // The hold: a point fixed on Anchor (the body, or the collider's transform without one).
             public Transform Anchor;
             public Vector3 Point;
-            // The control this hand's grip works, instead of holding on.
-            public InteractableObject Control;
 
-            public Hand(XRNode node, string name)
-            {
-                Node = node;
-                Name = name;
-            }
+            public Hand(VrInput.Hand input) => Input = input;
+
+            public XRNode Node => Input.Node;
+            public string Name => Input.Name;
         }
 
-        private static readonly Hand LeftHand = new Hand(XRNode.LeftHand, "left");
-        private static readonly Hand RightHand = new Hand(XRNode.RightHand, "right");
+        private static readonly Hand LeftHand = new Hand(VrInput.Left);
+        private static readonly Hand RightHand = new Hand(VrInput.Right);
         private static readonly Hand[] Hands = { LeftHand, RightHand };
         private static readonly Collider[] Found = new Collider[32];
 
         private static GrabController grab;
-        private static InteractionController interaction;
         private static Rigidbody player;
         private static float nextSearch;
         // Where the body was when the rig was placed last (RigPlaced).
@@ -91,10 +80,6 @@ namespace ShipbreakerVR
 
         // Whether that hand holds on (VrControls: the left one does not fly meanwhile).
         public static bool Holds(XRNode node) => (node == XRNode.LeftHand ? LeftHand : RightHand).Holding;
-
-        // Whether a grip works a control: VrToolInput presses interact, and the game keeps the interaction on it
-        // (LineOfSightActivationPatch).
-        public static bool WorksControl => LeftHand.Control != null || RightHand.Control != null;
 
         // From VrCamera.FollowGameCamera, right after the rig was placed for the frame. The hands are measured on the rig,
         // which moves once per frame; in the physics steps between they move along by as far as the body has come since.
@@ -121,7 +106,6 @@ namespace ShipbreakerVR
         {
             LetGoAll();
             grab = null;
-            interaction = null;
             player = null;
             rigPlaced = false;
         }
@@ -136,7 +120,6 @@ namespace ShipbreakerVR
             {
                 nextSearch = Time.unscaledTime + 1f;
                 grab = Object.FindObjectOfType<GrabController>();
-                interaction = Object.FindObjectOfType<InteractionController>();
                 player = grab != null ? PlayerBody(grab) : null;
                 rigPlaced = false;
                 if (player != null && logs++ < 80)
@@ -145,23 +128,15 @@ namespace ShipbreakerVR
             return player != null && rigPlaced;
         }
 
-        // The controller's grip and position this step; a grip pressed starts holding on, one let go stops.
+        // The controller's grip (VrInput's for the frame) and position this step; a grip pressed starts holding on, one
+        // let go stops.
         private static void Read(Hand hand)
         {
-            if (!hand.Device.isValid) hand.Device = InputDevices.GetDeviceAtXRNode(hand.Node);
-            var valid = hand.Device.isValid;
-            hand.Tracked = valid && (!hand.Device.TryGetFeatureValue(CommonUsages.isTracked, out var tracked) || tracked)
-                && hand.Device.TryGetFeatureValue(CommonUsages.devicePosition, out hand.Local);
-            var grip = 0f;
-            if (valid) hand.Device.TryGetFeatureValue(CommonUsages.grip, out grip);
-            var down = grip >= (hand.GripDown ? GripRelease : GripPress);
+            var input = hand.Input;
+            hand.Tracked = input.Tracked && input.TryGetPosition(out hand.Local);
+            var down = input.Grip.Down;
             var pressed = down && !hand.GripDown;
             hand.GripDown = down;
-            if (hand.Control != null && (!down || !hand.Tracked))
-            {
-                if (logs++ < 80) Plugin.Log.LogInfo($"Climbing: {hand.Name} hand lets go of the control '{hand.Control.name}'");
-                hand.Control = null;
-            }
             if (hand.Holding)
             {
                 if (!down) LetGo(hand, true, "let go");
@@ -169,36 +144,7 @@ namespace ShipbreakerVR
                 else if (hand.Anchor == null || !hand.Anchor.gameObject.activeInHierarchy || hand.Collider == null || !hand.Collider.enabled)
                     LetGo(hand, false, "the hold is gone");
             }
-            else if (pressed && hand.Tracked && VrToolInput.Free(hand.Node) && !TryWork(hand)) TryHold(hand);
-        }
-
-        // Works the control nearest to the hand, if one is within reach: through InteractionController.StartInteraction,
-        // as when it comes into view, so the game does the rest (its hand reaching for the control, the progress, the
-        // result). Their interaction volumes are triggers, so those count too.
-        private static bool TryWork(Hand hand)
-        {
-            if (interaction == null || StartInteraction == null) return false;
-            var at = HandWorld(hand);
-            var count = Physics.OverlapSphereNonAlloc(at, ControlReach * VrCamera.WorldScale, Found, Physics.AllLayers, QueryTriggerInteraction.Collide);
-            InteractableObject best = null;
-            var bestDistance = float.MaxValue;
-            for (var i = 0; i < count; i++)
-            {
-                var control = Found[i].GetComponentInParent<InteractableObject>();
-                if (control == null || control.Asset == null || control.Asset.Data.ActivationType != InteractionActivationType.LineOfSight
-                    || !control.IsInteractable || control.IsComplete || !control.CheckConditions()) continue;
-                var distance = (Closest(Found[i], at) - at).sqrMagnitude;
-                if (distance >= bestDistance) continue;
-                best = control;
-                bestDistance = distance;
-            }
-            if (best == null) return false;
-            StartInteraction.Invoke(interaction, new object[] { best, null });
-            hand.Control = best;
-            hand.Device.SendHapticImpulse(0, 0.5f, 0.06f);
-            if (logs++ < 80)
-                Plugin.Log.LogInfo($"Climbing: {hand.Name} hand works the control '{best.name}' < '{(best.transform.parent != null ? best.transform.parent.name : "-")}' ({best.Asset.Data.ProgressType}), {Mathf.Sqrt(bestDistance):0.00} m away");
-            return true;
+            else if (pressed && hand.Tracked && VrToolInput.Free(hand.Node)) TryHold(hand);
         }
 
         // Holds on to the surface nearest to the hand, if one is within reach, right where the hand is.
@@ -233,7 +179,7 @@ namespace ShipbreakerVR
             hand.Point = hand.Anchor.InverseTransformPoint(at);
             if (!LeftHand.Holding && !RightHand.Holding) pushOff = Vector3.zero;
             hand.Holding = true;
-            hand.Device.SendHapticImpulse(0, 0.5f, 0.06f);
+            hand.Input.Buzz(0.5f, 0.06f);
             if (logs++ < 80)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds '{best.name}' (layer {best.gameObject.layer}, "
                     + (body == null ? "no rigidbody" : $"rigidbody '{body.name}' {body.mass:0.#} kg{(body.isKinematic ? " kinematic" : "")}")
@@ -347,17 +293,8 @@ namespace ShipbreakerVR
 
         private static void LetGoAll()
         {
-            LeftHand.Control = RightHand.Control = null;
             foreach (var hand in Hands)
                 if (hand.Holding) LetGo(hand, false, "climbing paused");
         }
-    }
-
-    // While a grip works a control (VrClimb), the game keeps its interaction on that control instead of switching to
-    // whatever is in the middle of the view, or ending it when nothing is.
-    [HarmonyPatch(typeof(InteractionController), "HandleLineOfSightActivation")]
-    internal static class LineOfSightActivationPatch
-    {
-        private static bool Prefix() => !VrClimb.WorksControl;
     }
 }

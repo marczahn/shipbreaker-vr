@@ -81,7 +81,7 @@ namespace ShipbreakerVR
             TwoTools = Config.Bind("Steuerung", "ZweiWerkzeuge", true,
                 "With aiming with the hand: two of the cutter, the grapple and the demo charges can be held at once, one in each hand. While one hand holds one of them, the other hand draws another, and each hand's trigger and buttons work its own tool. The scanner hides the other hand's tool while it is out; the tool comes back when the scanner is put away and that hand still holds its grip.");
             Climbing = Config.Bind("Steuerung", "Festhalten", true,
-                "Hold on to anything with the grip of a hand that holds no tool, and climb along it: moving the hand moves you, or a light part towards you, by their masses; the station and fixed hulls do not move. Works with one hand, both, or one while the other works a tool. Letting go keeps the speed, so you can push off. While the left hand holds on, controller flying rests. Near one of the game's controls (an airlock console, a switch) the grip works it, as A does.");
+                "Hold on to anything with the grip of a hand that holds no tool, and climb along it: moving the hand moves you, or a light part towards you, by their masses; the station and fixed hulls do not move. Works with one hand, both, or one while the other works a tool. Letting go keeps the speed, so you can push off. While the left hand holds on, controller flying rests. The grip holds on at the game's controls too (airlock consoles, switches); A or X works them.");
             Diagnostics = Config.Bind("Debug", "Diagnose", false,
                 "For finding problems: F8 writes what is drawn around the player into the log and saves screenshots next to it (also on its own 6 s after entering the Hab), load screens are logged frame by frame, and frame times are logged every 30 s.");
             ToolExport = Config.Bind("Debug", "WerkzeugExport", false,
@@ -132,6 +132,8 @@ namespace ShipbreakerVR
                 catch (System.Exception e) { Log.LogError($"Patch {type.Name} failed: {e}"); }
             }
             PatchReport.LogSummary();
+            try { VrFrame.Install(); }
+            catch (System.Exception e) { Log.LogError($"Installing the frame update failed, running it from Update: {e}"); }
             Application.quitting += OnQuitting;
         }
 
@@ -148,6 +150,7 @@ namespace ShipbreakerVR
             Application.quitting -= OnQuitting;
             if (quitting) return;
             Log.LogInfo($"{Name} unloading");
+            Unload("frame update", VrFrame.Uninstall);
             Unload("options tab", VrOptionsTab.RemoveAll);
             Unload("menu control", VrMenuInput.Detach);
             Unload("VR camera", VrCamera.Unload);
@@ -196,6 +199,7 @@ namespace ShipbreakerVR
                 if (StartVrAtLaunch.Value) VrXr.Toggle();
             }
             if (Input.GetKeyDown(KeyCode.F3)) VrXr.Toggle();
+            VrFrame.Check();
             VrMenuInput.EnsureAttached();
 
             // The main menu has no LynxCameraController yet; the VR camera then attaches to the menu camera.

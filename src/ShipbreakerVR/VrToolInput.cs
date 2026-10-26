@@ -19,7 +19,8 @@ namespace ShipbreakerVR
     //                   hand holds takes it over.
     //   trigger         the tool's main action: cut, grapple (hold to keep hold), place or detonate a demo charge
     //   A / X           with the trigger held: throw what the grapple holds (hold to charge, release to throw);
-    //                   otherwise interact (doors, switches, containers)
+    //                   otherwise interact (doors, switches, containers, airlock consoles), from either hand, also
+    //                   one without a tool; the grip never does (it holds on, VrClimb)
     //   B / Y           with the trigger held: reel in what the grapple holds, while the button is held
     //   B / Y tap       tool mode (cutter Stinger/Splitsaw, grapple/magnet, demo charge mode)
     //   B / Y held      place a tether from where the hand points when the hold starts to where it points on release;
@@ -30,11 +31,6 @@ namespace ShipbreakerVR
     {
         private enum Action { Fire, Throw, Interact, ToolMode, Tether, Recall, Retract, Grapple, Cutter, DemoCharge, Scanner, Holster }
 
-        private const float TriggerPress = 0.5f;
-        private const float TriggerRelease = 0.4f;
-        // The same grip thresholds as VrClimb, VrHands and VrToolFit, so a grip resting in between counts as held for all.
-        private const float GripPress = 0.5f;
-        private const float GripRelease = 0.4f;
         private const float LongPress = 0.4f;
 
         private static readonly int Count = System.Enum.GetValues(typeof(Action)).Length;
@@ -59,14 +55,11 @@ namespace ShipbreakerVR
             { GameplayActions.GameplayActionSet.UnequipCurrentEquipment, Action.Holster },
         };
 
-        // One controller: its trigger (with hysteresis), its grip and the belt zone it is in this frame, and the tool
-        // actions its buttons press for the tool it holds.
+        // One controller (VrInput): its grip pressed for drawing, the belt zone it is in this frame, and the tool actions
+        // its buttons press for the tool it holds.
         private class Hand
         {
-            public readonly XRNode Node;
-            public InputDevice Device;
-            public bool Trigger;
-            public bool GripDown;
+            public readonly VrInput.Hand Input;
             public bool GripPressed;
             public VrToolBelt.Zone Zone;
             public readonly bool[] Now = new bool[Count];
@@ -81,13 +74,17 @@ namespace ShipbreakerVR
             // B decides at its press whether it reels in (trigger held) or works as tap/hold, and keeps that until released.
             public bool BReels;
 
-            public Hand(XRNode node) => Node = node;
+            public Hand(VrInput.Hand input) => Input = input;
 
-            public string Name => Node == XRNode.LeftHand ? "left" : "right";
+            public XRNode Node => Input.Node;
+            public string Name => Input.Name;
+            public bool Trigger => Input.Trigger.Down;
+            public bool GripDown => Input.Grip.Down;
         }
 
-        private static readonly Hand LeftHand = new Hand(XRNode.LeftHand);
-        private static readonly Hand RightHand = new Hand(XRNode.RightHand);
+        private static readonly Hand LeftHand = new Hand(VrInput.Left);
+        private static readonly Hand RightHand = new Hand(VrInput.Right);
+        private static readonly Hand[] Hands = { LeftHand, RightHand };
 
         // The hand that holds the tool: the right one unless the left one drew it or took it over; back to the right once
         // the tool is put away.
@@ -99,17 +96,12 @@ namespace ShipbreakerVR
 
         // Whether that controller's grip is held this frame (VrToolModels: a right hand that takes the demo charges over
         // from the left one holds its grip).
-        public static bool GripHeld(XRNode node)
-        {
-            Update();
-            return (node == XRNode.LeftHand ? LeftHand : RightHand).GripDown;
-        }
+        public static bool GripHeld(XRNode node) => VrInput.Of(node).Grip.Down;
 
         // Whether that hand is free to hold on (VrClimb): not at the belt, where its grip draws a tool, holding no tool,
         // and not fitting one (VrToolFit). Without aiming with the hand the grips draw nothing, so both are free.
         public static bool Free(XRNode node)
         {
-            Update();
             if (!VrAim.Active) return true;
             var hand = node == XRNode.LeftHand ? LeftHand : RightHand;
             if (hand.Zone != VrToolBelt.Zone.None || VrToolFit.Blocks(node)) return false;
@@ -128,21 +120,22 @@ namespace ShipbreakerVR
         // Pulses of the unequip key before giving up, if the game keeps the tool (it may refuse while a tool is busy).
         private const int MaxHolsterPulses = 10;
 
-        private static void Update()
+        // From VrFrame, once per frame, after VrInput and before VrAim places the aim camera on the tool hand.
+        public static void Update()
         {
             if (updatedFrame == Time.frameCount) return;
             updatedFrame = Time.frameCount;
             System.Array.Copy(now, before, Count);
             System.Array.Clear(now, 0, Count);
-            foreach (var each in new[] { LeftHand, RightHand })
+            foreach (var each in Hands)
             {
                 System.Array.Copy(each.Now, each.Before, Count);
                 System.Array.Clear(each.Now, 0, Count);
             }
             // A left controller that is gone (switched off) holds nothing.
-            if (ToolNode == XRNode.LeftHand && !Get(LeftHand)) ToolNode = XRNode.RightHand;
+            if (ToolNode == XRNode.LeftHand && !VrInput.Left.Valid) ToolNode = XRNode.RightHand;
             VrDualTools.Check();
-            var active = VrAim.Active;
+            var active = VrAim.CanAim(ToolNode);
             Read(LeftHand, active);
             Read(RightHand, active);
             if (!active)
@@ -171,14 +164,15 @@ namespace ShipbreakerVR
             // away, and a trigger pulled with the empty hand took them out behind the game's back, leaving their red
             // placement marker stuck in the view (DemoChargeController.EquipDemoCharge).
             var empty = !FindEquipment() || equipment.IsNothingEquipped;
-            foreach (var each in new[] { LeftHand, RightHand })
+            foreach (var each in Hands)
             {
                 if (each == second || (each == tool && !empty)) Buttons(each);
                 else if (each == tool) Interact(each);
-                else each.ADown = each.BDown = false;
+                else Interact(each);
             }
-            // A grip on one of the game's controls works it like A (VrClimb).
-            if (VrClimb.WorksControl) tool.Now[(int)Action.Interact] = true;
+            // Interacting reaches the game from either hand: the game's interaction code reads the tool hand's actions.
+            foreach (var each in Hands)
+                if (each != tool && each.Now[(int)Action.Interact]) tool.Now[(int)Action.Interact] = true;
             LogChanges();
         }
 
@@ -189,12 +183,12 @@ namespace ShipbreakerVR
             var now = hand.Now;
             now[(int)Action.Fire] = trigger;
 
-            var a = Button(hand.Device, CommonUsages.primaryButton);
+            var a = hand.Input.Primary.Down;
             if (a && !hand.ADown) hand.AThrows = trigger;
             hand.ADown = a;
             now[(int)(hand.AThrows ? Action.Throw : Action.Interact)] = a;
 
-            var b = Button(hand.Device, CommonUsages.secondaryButton);
+            var b = hand.Input.Secondary.Down;
             if (b && !hand.BDown)
             {
                 hand.BDownAt = Time.unscaledTime;
@@ -223,32 +217,23 @@ namespace ShipbreakerVR
         // A of an empty hand: interact (with the trigger held too, since there is nothing to throw).
         private static void Interact(Hand hand)
         {
-            var a = Button(hand.Device, CommonUsages.primaryButton);
+            var a = hand.Input.Primary.Down;
             hand.AThrows = false;
             hand.ADown = a;
             hand.BDown = false;
             hand.Now[(int)Action.Interact] = a;
         }
 
-        // The hand's trigger and grip this frame, and the belt zone it is in. The grip is followed also while the tools do
+        // The grip pressed this frame, and the belt zone the hand is in. VrInput follows the grip also while the tools do
         // not aim from the hand, so a grip held through such a moment (tracking lost) does not draw again afterwards.
         private static void Read(Hand hand, bool active)
         {
             hand.GripPressed = false;
             hand.Zone = VrToolBelt.Zone.None;
-            if (!Get(hand))
-            {
-                hand.Trigger = hand.GripDown = false;
-                return;
-            }
-            hand.Device.TryGetFeatureValue(CommonUsages.trigger, out var trigger);
-            hand.Trigger = trigger >= (hand.Trigger ? TriggerRelease : TriggerPress);
-            hand.Device.TryGetFeatureValue(CommonUsages.grip, out var grip);
-            var down = grip >= (hand.GripDown ? GripRelease : GripPress);
-            hand.GripPressed = active && down && !hand.GripDown;
-            hand.GripDown = down;
+            if (!hand.Input.Valid) return;
+            hand.GripPressed = active && hand.Input.Grip.Pressed;
             // No buzz while the trigger is held: the grip does not draw then (flying with the left hand, or firing).
-            if (active) hand.Zone = VrToolBelt.Update(hand.Node, hand.Device, hand.Trigger);
+            if (active) hand.Zone = VrToolBelt.Update(hand.Input, hand.Trigger);
         }
 
         // Grip pressed at a zone of the tool belt: that tool goes into this hand. Through the game's own selection keys
@@ -350,15 +335,6 @@ namespace ShipbreakerVR
             return equipment != null;
         }
 
-        private static bool Get(Hand hand)
-        {
-            if (!hand.Device.isValid) hand.Device = InputDevices.GetDeviceAtXRNode(hand.Node);
-            return hand.Device.isValid;
-        }
-
-        private static bool Button(InputDevice device, InputFeatureUsage<bool> usage) =>
-            device.isValid && device.TryGetFeatureValue(usage, out var value) && value;
-
         private static void LogChanges()
         {
             if (logs >= 60) return;
@@ -385,7 +361,6 @@ namespace ShipbreakerVR
             current = previous = null;
             index = 0;
             if (!Actions.TryGetValue(actionSetAndId, out var action)) return false;
-            Update();
             index = (int)action;
             if (action >= Action.Grapple)
             {

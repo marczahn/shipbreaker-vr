@@ -610,24 +610,11 @@ namespace ShipbreakerVR
         }
 
         // Pressing the left stick: the same as F4. Nothing else uses that press (VrMenuInput sends no L3).
-        private static bool centerHeld;
-        private static InputDevice centerDevice;
-
         private void UpdateCenterPress()
         {
-            if (!VrXr.IsRunning)
-            {
-                centerHeld = false;
-                return;
-            }
-            if (!centerDevice.isValid) centerDevice = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
-            var pressed = centerDevice.isValid && centerDevice.TryGetFeatureValue(CommonUsages.primary2DAxisClick, out var click) && click;
-            if (pressed && !centerHeld)
-            {
-                Plugin.Log.LogInfo("Left stick pressed: centering the view");
-                Recenter(true);
-            }
-            centerHeld = pressed;
+            if (!VrXr.IsRunning || !VrInput.Left.StickClick.Pressed) return;
+            Plugin.Log.LogInfo("Left stick pressed: centering the view");
+            Recenter(true);
         }
 
         // "Center view" in the VR options: the same as F4.

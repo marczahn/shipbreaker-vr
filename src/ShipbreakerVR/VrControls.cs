@@ -25,24 +25,16 @@ namespace ShipbreakerVR
 
         private const float SnapPress = 0.7f;
         private const float SnapRelease = 0.3f;
-        private const float TriggerPress = 0.5f;
         // Hand offset for thrust, in centimeters (Plugin.ThrustDeadzone, Plugin.ThrustFull): full thrust needs at least
         // MinThrustRange more than the deadzone, so the ramp between them never shrinks to a switch.
         public const float DeadzoneMax = 10f;
         public const float FullMax = 30f;
         public const float MinThrustRange = 5f;
-        // The wrist relative to the grip pose (which runs along the handle): an estimate, about 8 cm behind the grip.
-        private static readonly Vector3 WristOffset = new Vector3(0f, 0f, -0.08f);
         private const float TurnDeadzone = 8f;
         private const float TurnFull = 45f;
         private const float TurnSpeed = 45f;
         private const float StickDeadzone = 0.15f;
 
-        // The aim pose points where the controller points; the device (grip) pose runs along the handle, tilted upward.
-        private static readonly InputFeatureUsage<Quaternion> PointerRotation = new InputFeatureUsage<Quaternion>("PointerRotation");
-
-        private static InputDevice left;
-        private static InputDevice right;
         private static bool loggedDevice;
         private static float nextDeviceLog;
         private static int deviceLogs;
@@ -70,7 +62,8 @@ namespace ShipbreakerVR
 
         private static Scheme Active => VrXr.IsRunning && VrCamera.Instance != null ? Plugin.ControlScheme.Value : Scheme.Aus;
 
-        private static void Update()
+        // From VrFrame, once per frame, after VrToolInput (whether the left hand holds a tool).
+        public static void Update()
         {
             if (updatedFrame == Time.frameCount) return;
             updatedFrame = Time.frameCount;
@@ -82,28 +75,28 @@ namespace ShipbreakerVR
             // Controller poses are in tracking space, i.e. relative to the rig whose rotation is the playspace.
             var playspace = VrCamera.Instance.Playspace;
 
-            if (!GetLeft()) { held = false; return; }
+            var left = VrInput.Left;
+            if (!LeftConnected()) { held = false; return; }
             // Holding on with the left hand rests flying as a tool in it does (VrClimb).
             var tool = VrToolInput.LeftHoldsTool || VrClimb.Holds(XRNode.LeftHand);
             // Outside gameplay the sticks and buttons work the menus as a gamepad; turning there would swing the menus.
             if (GameSession.CurrentGameState == GameSession.GameState.Gameplay)
             {
-                if (!tool) left.TryGetFeatureValue(CommonUsages.secondaryButton, out braking);
-                if (GetRight() && right.TryGetFeatureValue(CommonUsages.primary2DAxis, out var rightStick)) TurnFromStick(rightStick, playspace);
+                if (!tool) braking = left.Secondary.Down;
+                if (VrInput.Right.Valid) TurnFromStick(VrInput.Right.Stick, playspace);
             }
             if (tool) { held = false; triggerFromTool = true; return; }
-            if (!left.TryGetFeatureValue(CommonUsages.devicePosition, out var grip)
-                || !left.TryGetFeatureValue(CommonUsages.deviceRotation, out var rotation)) { held = false; return; }
+            if (!left.TryGetGripPose(out var grip, out var rotation)) { held = false; return; }
             // Thrust follows the wrist, not the controller: tilting the hand swings the controller around the wrist, and
             // measured at the controller that swing alone moved it past the deadzone, adding thrust nobody asked for.
-            var position = grip + rotation * WristOffset;
-            if (left.TryGetFeatureValue(PointerRotation, out var aim)) rotation = aim;
-            left.TryGetFeatureValue(CommonUsages.trigger, out var trigger);
+            var position = grip + rotation * VrInput.WristBehindGrip;
+            left.TryGetAimRotation(out rotation);
             handPosition = position;
             handRotation = rotation;
 
-            if (trigger < TriggerPress) triggerFromTool = false;
-            if (!Hold(trigger >= TriggerPress && !triggerFromTool, position, rotation)) return;
+            var trigger = left.Trigger.Down;
+            if (!trigger) triggerFromTool = false;
+            if (!Hold(trigger && !triggerFromTool, position, rotation)) return;
             var offset = position - heldPosition;
             var strength = Ramp(offset.magnitude, MoveDeadzone, FullOffset);
             if (strength > 0f) thrust = playspace * offset.normalized * strength;
@@ -164,10 +157,10 @@ namespace ShipbreakerVR
             return Mathf.Sign(x) * angle;
         }
 
-        private static bool GetLeft()
+        private static bool LeftConnected()
         {
-            if (!left.isValid) left = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
-            if (!left.isValid)
+            var left = VrInput.Left.Device;
+            if (!VrInput.Left.Valid)
             {
                 if (Time.unscaledTime >= nextDeviceLog && deviceLogs < 5)
                 {
@@ -189,18 +182,11 @@ namespace ShipbreakerVR
             return true;
         }
 
-        private static bool GetRight()
-        {
-            if (!right.isValid) right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
-            return right.isValid;
-        }
-
         private static float Ramp(float value, float start, float full) => Mathf.Clamp01((value - start) / (full - start));
 
         // Rotation to apply to the playspace (or the body) this frame, in world space. Called by VrBody once per body update.
         public static Quaternion TakeTurn()
         {
-            Update();
             var result = turn;
             turn = Quaternion.identity;
             return result;
@@ -226,16 +212,12 @@ namespace ShipbreakerVR
 
         public static bool Flying => Active == Scheme.Vtol && GameSession.CurrentGameState == GameSession.GameState.Gameplay;
 
-        public static bool Holding
-        {
-            get { Update(); return held; }
-        }
+        public static bool Holding => held;
 
         // While the trigger is held: the hand's offset from the reference in tracking space (meters), and its rotation
         // relative to the reference, in the controller's own frame (z is the roll the controls read).
         public static bool TryGetHand(out Vector3 offset, out Quaternion rotation)
         {
-            Update();
             offset = held ? handPosition - heldPosition : Vector3.zero;
             rotation = held ? Quaternion.Inverse(heldRotation) * handRotation : Quaternion.identity;
             return held;
@@ -243,17 +225,12 @@ namespace ShipbreakerVR
 
         public static void SetThrustFrame(Transform frame) => thrustFrame = frame;
 
-        public static bool IsBraking()
-        {
-            Update();
-            return braking;
-        }
+        public static bool IsBraking() => braking;
 
         // Thrust along the game's thrust axes: x = right, y = up, z = forward of the thrust frame.
         public static bool TryGetThrust(out Vector3 local)
         {
             local = Vector3.zero;
-            Update();
             if (thrust == Vector3.zero || thrustFrame == null) return false;
             local = thrustFrame.InverseTransformDirection(thrust);
             return true;

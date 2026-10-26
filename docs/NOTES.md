@@ -503,13 +503,15 @@ far the body moved since. Letting go of the last hold keeps the body's velocity 
 80 ms, capped at 5 m/s, so a push off flies on; a hand held back more than 0.5 m from its hold lets go without it.
 While the left hand holds on, controller flying rests. Log lines start with "Climbing:".
 
-The grip near one of the game's controls works it instead of holding on. Controls are `InteractableObject`s; the
-airlock console (`SM_AirlockConsole_LockPanel`) has a trigger collider "Interaction Volume" with activation
-`LineOfSight`, progress `Press`, `WaitForRelease` and a `HandTarget` the game's hand reaches for. The flat game starts
-the interaction when the control is in the middle of the view (`InteractionController.HandleLineOfSightActivation`)
-and works it while interact is held. The grip looks for such a control within 15 cm (triggers included), starts the
-interaction on it through `InteractionController.StartInteraction` and presses interact through `VrToolInput` while it
-is held; `LineOfSightActivationPatch` keeps the interaction on that control meanwhile, wherever one looks.
+Controls are `InteractableObject`s; the airlock console (`SM_AirlockConsole_LockPanel`) has a trigger collider
+"Interaction Volume" with activation `LineOfSight`, progress `Press`, `WaitForRelease` and a `HandTarget` the game's
+hand reaches for. The flat game starts the interaction when the control is in the middle of the view
+(`InteractionController.HandleLineOfSightActivation`) and works it while interact is held. For a while (0.18.0) the
+grip near such a control (within 15 cm, triggers included) started the interaction through
+`InteractionController.StartInteraction` and pressed interact while held. Marc wanted the grip to always hold on, so
+that was removed: the grip holds on at controls too (`TryHold` ignores trigger colliders, so it takes the console's
+solid collider), and A or X of either hand interacts (`VrToolInput` adds a free hand's interact to the tool hand's,
+which `InteractionController` reads).
 
 Empty hand: the demo charges keep their last equipment state after being put away (`DemoChargeController` takes
 `mCurrentEquipment` from `EquipmentChangedEvent`) and equip themselves on `DemoChargeFire`
@@ -742,6 +744,22 @@ test run missed frames and ran out of video memory (`Failed to create RenderText
 session started), with about 50,000 more loaded objects at the bay load than the comparison run. Those were counted
 before the boundary could change anything, so a different ship is the likelier cause, but it was not settled. Marc
 parked the change for a later performance audit; the PR is closed, its commits stay under `refs/pull/24/head`.
+
+## Input and frame order
+`VrInput` reads both controllers once per frame: buttons, triggers, grips and sticks, with one hysteresis for trigger
+and grip (pressed at 0.5, let go below 0.4) and press/release edges. Every module reads that snapshot, so they agree on
+whether a grip is held. Poses are read live through the same devices, because the runtime updates them again right
+before rendering, where the tool models, arms and laser are placed.
+
+`VrFrame` runs the per-frame logic in a fixed order from a step at the end of Unity's `EarlyUpdate` (inserted into the
+player loop, removed on unload): after the runtime delivered the controller state, before the physics steps and before
+any of the game's `Update`s. The order is `VrInput` → `VrToolInput` (drawing, holding and putting away tools, the tool
+hand, the buttons' actions, `VrDualTools.Check`) → `VrAim` (the aim camera on the tool hand) → `VrDualTools.UpdateAim`
+→ `VrControls` (flying, braking, turning). The patched game code and `VrClimb` (in the physics step) only read the
+results. Before, each module computed its state on the first read in a frame, so the order depended on which game
+method asked first: `VrAim` could cache the old tool hand for a frame after the other hand took the tool. If the step
+goes missing from the player loop (the game's ECS world can rebuild it), `Plugin.Update` runs the frame instead and puts
+the step back within a second, with a warning in the log.
 
 ## Diagnostics
 The tools below are off by default, so players' logs stay readable: config `Debug/Diagnose` turns on F8, the automatic

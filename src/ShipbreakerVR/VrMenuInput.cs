@@ -4,7 +4,6 @@ using HarmonyLib;
 using InControl;
 using UnityEngine;
 using UnityEngine.XR;
-using XrDevice = UnityEngine.XR.InputDevice;
 
 namespace ShipbreakerVR
 {
@@ -24,8 +23,6 @@ namespace ShipbreakerVR
     // The actions read only InControl's active device, and another device kept that role (see ActiveDevicePatch).
     internal class VrMenuInput : InControl.InputDevice
     {
-        private const float TriggerPress = 0.5f;
-
         private static readonly InputControlType[] Buttons =
         {
             InputControlType.Action1, InputControlType.Action2, InputControlType.Action3, InputControlType.Action4,
@@ -36,8 +33,6 @@ namespace ShipbreakerVR
         private static VrMenuInput instance;
         private static int pressLogs;
 
-        private XrDevice left;
-        private XrDevice right;
         private GameSession.GameState lastState;
         private bool waitForRelease;
         private readonly bool[] pressed = new bool[Buttons.Length];
@@ -107,31 +102,32 @@ namespace ShipbreakerVR
             float leftGrip = 0f, rightGrip = 0f;
             for (var i = 0; i < pressed.Length; i++) pressed[i] = false;
 
-            if (VrXr.IsRunning && (Get(ref left, XRNode.LeftHand) | Get(ref right, XRNode.RightHand)))
+            var left = VrInput.Left;
+            var right = VrInput.Right;
+            if (VrXr.IsRunning && (left.Valid || right.Valid))
             {
                 var state = GameSession.CurrentGameState;
                 var gameplay = state == GameSession.GameState.Gameplay;
                 var hab = state == GameSession.GameState.Hab;
                 var menu = (gameplay || hab || state == GameSession.GameState.LoadingInProgress)
-                    && Button(right, CommonUsages.primary2DAxisClick);
+                    && right.StickClick.Down;
                 if (gameplay)
                 {
                     pressed[7] = menu;
                 }
                 else
                 {
-                    left.TryGetFeatureValue(CommonUsages.primary2DAxis, out leftStick);
-                    leftStick = DominantAxis(leftStick);
-                    right.TryGetFeatureValue(CommonUsages.primary2DAxis, out rightStick);
-                    left.TryGetFeatureValue(CommonUsages.grip, out leftGrip);
-                    right.TryGetFeatureValue(CommonUsages.grip, out rightGrip);
-                    pressed[0] = Button(right, CommonUsages.primaryButton);
-                    pressed[1] = Button(right, CommonUsages.secondaryButton);
-                    pressed[2] = Button(left, CommonUsages.primaryButton);
-                    pressed[3] = Button(left, CommonUsages.secondaryButton);
-                    pressed[4] = Trigger(left);
-                    pressed[5] = Trigger(right);
-                    pressed[6] = Button(right, CommonUsages.primary2DAxisClick) && !menu;
+                    leftStick = DominantAxis(left.Stick);
+                    rightStick = right.Stick;
+                    leftGrip = left.GripValue;
+                    rightGrip = right.GripValue;
+                    pressed[0] = right.Primary.Down;
+                    pressed[1] = right.Secondary.Down;
+                    pressed[2] = left.Primary.Down;
+                    pressed[3] = left.Secondary.Down;
+                    pressed[4] = left.Trigger.Down;
+                    pressed[5] = right.Trigger.Down;
+                    pressed[6] = right.StickClick.Down && !menu;
                     pressed[7] = menu && !hab;
                 }
 
@@ -159,22 +155,10 @@ namespace ShipbreakerVR
             for (var i = 0; i < Buttons.Length; i++) UpdateWithState(Buttons[i], pressed[i], updateTick, deltaTime);
         }
 
-        private static bool Get(ref XrDevice device, XRNode node)
-        {
-            if (!device.isValid) device = InputDevices.GetDeviceAtXRNode(node);
-            return device.isValid;
-        }
-
         // Menus move one row per up/down and change a value per left/right. A thumb pushed sideways is rarely level, and
         // its vertical part jumped to the row above or below in the middle of adjusting a slider. Only the stronger axis counts.
         private static Vector2 DominantAxis(Vector2 stick) =>
             Mathf.Abs(stick.x) >= Mathf.Abs(stick.y) ? new Vector2(stick.x, 0f) : new Vector2(0f, stick.y);
-
-        private static bool Button(XrDevice device, InputFeatureUsage<bool> usage) =>
-            device.isValid && device.TryGetFeatureValue(usage, out var value) && value;
-
-        private static bool Trigger(XrDevice device) =>
-            device.isValid && device.TryGetFeatureValue(CommonUsages.trigger, out var value) && value >= TriggerPress;
 
         private void LogPresses(GameSession.GameState state)
         {
