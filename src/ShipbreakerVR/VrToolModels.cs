@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using BBI.Unity.Game;
 using HarmonyLib;
 using UnityEngine;
-using UnityEngine.Rendering;
 
 namespace ShipbreakerVR
 {
@@ -14,8 +13,8 @@ namespace ShipbreakerVR
     // that the tool's grip lies in the controller's grip. The tools aim from their muzzle (Muzzle), so beam, cut and
     // grapple line leave from the barrel. With hand aiming off the point goes back. Demo charges have no model on the
     // point: the game's hand holds them, animated, so for them the arm is bent after the animation until the hand reaches
-    // the controller (PoseArm). The game's arm is a right arm; with a tool in the left hand it is folded away (Fold),
-    // except for demo charges, which it reaches over for.
+    // the controller (PoseArm); with them in the left hand that arm reaches over. Otherwise the game's arms follow their
+    // controllers (VrHands).
     internal static class VrToolModels
     {
         private static readonly AccessTools.FieldRef<HandGrab, List<Transform>> HandTargets =
@@ -213,21 +212,17 @@ namespace ShipbreakerVR
             }
             heldBefore = holding;
 
-            // A grapple or cutter in the left hand: the game's right hand still reaches for the tool's grip, across the
-            // body, so the right arm is folded away. The demo charges hang on that hand, so for them it reaches over.
-            Fold(hand != null && VrToolInput.LeftHoldsTool
-                && (holding == EquipmentController.Equipment.GrappleHook || holding == EquipmentController.Equipment.CuttingTool)
-                && FindArm(hand));
-
             // Fully at the controller while the charge is held; after letting go the arm blends back into the stow
             // animation, starting from the hand instead of the flat game's spot at the right.
             var weight = 0f;
             if (hand != null && hand.Hand == HandGrab.PlayerHand.Right && hand.CurrentHandState == HandGrab.HandState.Equipped
                 && holding == EquipmentController.Equipment.DemoCharge) weight = 1f;
             else if (stowingSince >= 0f && Time.time - stowingSince < StowBlend) weight = 1f - (Time.time - stowingSince) / StowBlend;
+            PosesRightArm = weight > 0f;
             if (weight <= 0f || vr == null || hand == null || !rigKnown) return;
             var camera = vr.GameCamera;
-            if (camera == null || !VrAim.TryGetHandLocal(out var gripLocal, out var aimLocal))
+            if (camera == null || !VrAim.TryGetHandLocal(out var gripLocal, out var aimLocal)
+                || !TrackingToWorld(gripLocal + aimLocal * WristBehindGrip, aimLocal, out var wrist, out var aim))
             {
                 if (!loggedArmSkip)
                 {
@@ -238,55 +233,29 @@ namespace ShipbreakerVR
             }
             if (!FindArm(hand)) return;
             var head = camera.transform;
-            var rig = vr.transform.parent;
-            var rigPosition = rig.position + (head.position - lastCameraPosition);
-            var grip = rigPosition + rig.rotation * Vector3.Scale(rig.localScale, gripLocal);
-            var aim = rig.rotation * aimLocal;
             var animated = armTip.rotation;
             var wristRotation = aim * (Quaternion.Inverse(head.rotation) * animated);
-            var wrist = grip + aim * (WristBehindGrip * rig.localScale.z);
             if (weight >= 1f) LogArm(hand, head);
             Bend(armRoot, armMid, armTip, Vector3.Lerp(armTip.position, wrist, weight));
             armTip.rotation = Quaternion.Slerp(animated, wristRotation, weight);
         }
 
-        // The arm folded away for this frame: scaled down to nothing at the upper arm, after the animation and before
-        // skinning, so arm and hand shrink into the shoulder. Its scale goes back once the VR camera has drawn the frame,
-        // before the game's code or animation sees the arm again; or at the latest with the next fold.
-        private static Transform folded;
-        private static Vector3 foldedScale;
-        private static bool foldHooked;
-        private static bool loggedFold;
-        private const float FoldScale = 0.001f;
+        // True while PoseArm bends the right arm (VrHands leaves it alone then).
+        public static bool PosesRightArm { get; private set; }
 
-        private static void Fold(bool fold)
+        // A pose in tracking space in the world, for code that runs after the animation (LateUpdate), before the rig
+        // follows the game camera (onBeforeRender): the rig is moved by as much as the game camera moved since then.
+        public static bool TrackingToWorld(Vector3 local, Quaternion localRotation, out Vector3 position, out Quaternion rotation)
         {
-            Unfold();
-            if (!fold) return;
-            folded = armRoot;
-            foldedScale = armRoot.localScale;
-            armRoot.localScale = foldedScale * FoldScale;
-            if (!foldHooked)
-            {
-                foldHooked = true;
-                RenderPipelineManager.endFrameRendering += OnEndFrame;
-            }
-            if (loggedFold) return;
-            loggedFold = true;
-            Plugin.Log.LogInfo($"Tool in hand: tool in the left hand, right arm folded at '{armRoot.name}'");
-        }
-
-        private static void OnEndFrame(ScriptableRenderContext context, Camera[] cameras)
-        {
-            var camera = VrCamera.Instance != null ? VrCamera.Instance.Camera : null;
-            if (camera == null || System.Array.IndexOf(cameras, camera) >= 0) Unfold();
-        }
-
-        private static void Unfold()
-        {
-            if (folded == null) return;
-            folded.localScale = foldedScale;
-            folded = null;
+            position = Vector3.zero;
+            rotation = Quaternion.identity;
+            var vr = VrCamera.Instance;
+            var camera = vr != null ? vr.GameCamera : null;
+            if (!rigKnown || camera == null) return false;
+            var rig = vr.transform.parent;
+            position = rig.position + (camera.transform.position - lastCameraPosition) + rig.rotation * Vector3.Scale(rig.localScale, local);
+            rotation = rig.rotation * localRotation;
+            return true;
         }
 
         // How long the arm takes to blend from the controller into the stow animation.
@@ -354,11 +323,11 @@ namespace ShipbreakerVR
         private static bool stowed;
 
         // The wrist relative to the grip pose, along the aim: an estimate, as in VrControls.
-        private static readonly Vector3 WristBehindGrip = new Vector3(0f, 0f, -0.08f);
+        public static readonly Vector3 WristBehindGrip = new Vector3(0f, 0f, -0.08f);
 
         // Two-bone IK: the elbow bends until shoulder to wrist is as long as shoulder to target, then the shoulder turns
         // the arm onto the target. The elbow stays in the plane the animation gave it.
-        private static void Bend(Transform root, Transform mid, Transform tip, Vector3 target)
+        public static void Bend(Transform root, Transform mid, Transform tip, Vector3 target)
         {
             var a = root.position;
             var b = mid.position;
@@ -454,10 +423,8 @@ namespace ShipbreakerVR
         // On unload (hot reload): the equipment point goes back to the game.
         public static void Release()
         {
-            Unfold();
-            if (foldHooked) RenderPipelineManager.endFrameRendering -= OnEndFrame;
-            foldHooked = loggedFold = false;
             HideProps(false);
+            PosesRightArm = false;
             stowingSince = -1f;
             Restore();
             point = null;

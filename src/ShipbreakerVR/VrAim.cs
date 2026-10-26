@@ -140,7 +140,7 @@ namespace ShipbreakerVR
             return true;
         }
 
-        // The right controller's aim pose in the world (it points where the controller points; the grip pose runs along
+        // The tool hand's aim pose in the world (it points where the controller points; the grip pose runs along
         // the handle). Poses are in tracking space, i.e. relative to the rig.
         private static bool TryGetPose(out Vector3 position, out Quaternion rotation)
         {

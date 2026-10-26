@@ -143,14 +143,26 @@ interacting, the grapple and the "entity of interest".
   draw then, and flying passes the left hip): the buzz comes when the trigger is let go inside the zone. The grips are
   read also while hand aiming is inactive, so a grip held through a tracking loss no longer counts as a new press
   afterwards. Log: `Tool control: <left|right> hand draws|takes the <tool>`, `Tool belt: <left|right> hand at <zone>`.
-- The game's arm is a right arm. With the grapple or cutter in the left hand it would reach for the tool's grip across
-  the body (the grip target moves with the model), so `VrToolModels.Fold` scales the upper arm bone (`armRoot`,
-  `rig_right_shoulder`) to 0.001 in `VrCamera.LateUpdate`, after the animation and before skinning: arm and hand shrink
-  into the shoulder. The scale goes back at `RenderPipelineManager.endFrameRendering` of a render that included the VR
-  camera (the end of a single camera's render may come after the first eye only, with multi-pass), at the latest with
-  the next fold, so the game's code and animation see the arm as usual. Log `Tool in hand: tool in the left hand, right arm folded at ...`.
-  Demo charges and the detonator hang on that hand, so for them the arm is bent across to the left controller instead,
-  the same way as to the right one.
+- The game has two hands (`GrabController.LeftHand`/`RightHand`, both `HandGrab`): each with its own hand target
+  (`m_HandTarget`), grab/rest/miss targets, equipment point and equipment grip targets, animator parameters of its own
+  (`LGrab`/`RGrab`, `LPrepGrab`, `LReact`, ...) and its own grab action (`LeftHandGrab`/`RightHandGrab`); the flat game
+  grabs with both at once. Equipment always goes to the right hand (`GetHandPositionTransformAndSetEquipment` uses
+  `RightHand`), although `HandGrab.StartEquipment` would work for either. The arms are pulled to the hand targets by
+  `BBI.IKLimb` (in `BBI.Unity.Game`, not Animation Rigging, which is why the search for rig constraints found nothing):
+  `UpperArm`/`Forearm`/`Hand`/`Target`/`ElbowTarget`, solved in its `LateUpdate`, blended by `Transition` (which an
+  animation may drive), hand rotation by `HandRotationPolicy`.
+- The first version with a tool in the left hand folded the right arm into its shoulder (upper arm scaled to 0.001 for
+  rendering). Marc wanted two real hands instead, so now `VrHands` lets each arm follow its controller: a postfix on
+  `IKLimb.LateUpdate` (or `VrCamera.LateUpdate` for an arm without an active `IKLimb`) bends the arm with the same
+  two-bone solve as the demo charge until the wrist sits 8 cm behind the grip pose, and turns the hand so that wrist to
+  middle finger runs along the aim pose and little to index finger points up (humanoid finger bones; without them the
+  hand keeps the animation's angle to the eye). Driven, blended in and out over 0.2 s, while hand aiming is active and
+  the game's hand is idle (`None`, `Resting`, `Leading`); the right one also while it holds the scanner, or a tool that
+  the left hand holds. The right hand with a tool in it stays with the game's IK, which already reaches for the tool's
+  grip in the controller. Demo charges stay with `VrToolModels.PoseArm` (the charge hangs on the right hand bone, so
+  with the charge in the left hand that arm still reaches over), and the left arm stays with the game then. Logs:
+  `Hands: IKLimb on ...` and `Hands: <left|right> arm ...` once (bones, IK, targets), the animator's parameters,
+  `Hands: <arm> follows the controller | back to the game`, and the IK's state per tool (`Hands: with <tool> ...`).
 
 ## Body follows head
 - The body rotates in `OrientationController.HandleAxisRotation` via `Rigidbody.MoveRotation(rotation * mouseDelta)`.

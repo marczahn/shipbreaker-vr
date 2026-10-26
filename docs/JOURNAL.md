@@ -481,8 +481,14 @@ grabs last holds it, and reaching for the tool in the other hand takes it over. 
 the hand no longer puts it away; with the grip held to keep a tool, opening the hand already does that. The real
 question was what the left hand's buttons do while it holds a tool, since they fly the ship. Marc settled it quickly:
 the left hand then simply is the right one, trigger to fire, X and Y where A and B would be, and the ship stays put
-until it lets go. The right stick keeps turning. The game, however, only has a right arm, and it would reach across
-the chest for a tool in the left hand. For the grapple and the cutter the mod folds that arm into the shoulder while
-the frame is drawn and unfolds it right after, so the game never notices. The demo charges hang on that very hand, so
-for them the arm still reaches over.
+until it lets go. The right stick keeps turning.
+
+What I got wrong was the arms. I thought the game only had a right one, which would reach across the chest for a tool
+in the left hand, so the first build folded that arm into the shoulder while the frame was drawn. Marc liked the
+controls and asked for two hands, since we will need both at the same time later anyway. A closer look showed the game
+had them all along: a left and a right hand, each with its own target, its own grab animations and its own grab
+button. I had searched for Unity's ready-made arm IK, found none and stopped looking, while the game brings its own
+small IK component. So now both arms follow their controllers whenever the game does not need them for something else:
+right after the game's IK, each arm is bent until the wrist sits at its controller. The demo charges are still the
+exception, since they hang on the right hand's bones.
 
