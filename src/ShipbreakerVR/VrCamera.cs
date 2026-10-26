@@ -268,6 +268,8 @@ namespace ShipbreakerVR
             VrDiagnostics.Update(this);
         }
 
+        private void FixedUpdate() => VrClimb.FixedUpdate();
+
         private void LateUpdate()
         {
             VrToolModels.PoseArm();
@@ -579,6 +581,7 @@ namespace ShipbreakerVR
             rig.localScale = new Vector3(scale, scale, scale);
             rig.rotation = Playspace;
             rig.position = position - Playspace * (recenterPosition * scale) + WorldHeadOffset;
+            VrClimb.RigPlaced();
             VrToolModels.Place();
         }
 

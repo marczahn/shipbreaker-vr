@@ -12,7 +12,7 @@ namespace ShipbreakerVR
     // Moving the controller away from it thrusts in that direction; tilting it sideways rolls, around the body's own axis
     // and faster the further the hand is tilted. Back at the reference (or trigger released) nothing happens. In gameplay
     // the right stick turns (left/right; smoothly or in snap steps, see Turning) and pitches (up/down), faster the further
-    // it is pushed, and Y brakes. The grips stay free for grabbing. While the left hand holds a tool its controller works
+    // it is pushed, and Y brakes. The grips stay free for holding on (VrClimb). While the left hand holds a tool its controller works
     // the tool (VrToolInput), so there is no flying and no braking then; the right stick still turns.
     // Thrust and brake go through the game's own actions (ThrustController reads them via LynxControls), so fuel, forces and
     // HUD stay the game's. Rotation is applied in VrBody, to the playspace.
@@ -83,7 +83,8 @@ namespace ShipbreakerVR
             var playspace = VrCamera.Instance.Playspace;
 
             if (!GetLeft()) { held = false; return; }
-            var tool = VrToolInput.LeftHoldsTool;
+            // Holding on with the left hand rests flying as a tool in it does (VrClimb).
+            var tool = VrToolInput.LeftHoldsTool || VrClimb.Holds(XRNode.LeftHand);
             // Outside gameplay the sticks and buttons work the menus as a gamepad; turning there would swing the menus.
             if (GameSession.CurrentGameState == GameSession.GameState.Gameplay)
             {
