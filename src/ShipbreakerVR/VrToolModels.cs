@@ -23,7 +23,6 @@ namespace ShipbreakerVR
             AccessTools.FieldRefAccess<HandGrab, List<Transform>>("m_EquipmentHandTargetTransforms");
 
         private static GrabController grab;
-        private static float nextSearch;
         private static float nextMirror;
         private static Transform point;
         // The point's own pose under its parent, to put it back, and relative to the game camera, for the angle.
@@ -133,7 +132,7 @@ namespace ShipbreakerVR
         private static int Key(EquipmentController.Equipment equipment)
         {
             if (equipment != EquipmentController.Equipment.CuttingTool) return (int)equipment;
-            if (cutter == null) cutter = Object.FindObjectOfType<CuttingToolController>();
+            if (cutter == null) cutter = GameRefs.Cutter;
             return (int)equipment * 10 + (cutter != null ? (int)cutter.CurrentMode : 0);
         }
 
@@ -158,7 +157,7 @@ namespace ShipbreakerVR
                 return barrel;
             }
             if (equipment != EquipmentController.Equipment.CuttingTool) return null;
-            if (cutter == null) cutter = Object.FindObjectOfType<CuttingToolController>();
+            if (cutter == null) cutter = GameRefs.Cutter;
             if (cutter != null && cutter.CurrentMode == CuttingToolController.CutterMode.Scalpel)
             {
                 if (stinger == null) stinger = Object.FindObjectOfType<ScalpelFXController>();
@@ -174,14 +173,8 @@ namespace ShipbreakerVR
 
         private static HandGrab RightHand()
         {
-            if (grab == null)
-            {
-                if (Time.unscaledTime < nextSearch) return null;
-                nextSearch = Time.unscaledTime + 1f;
-                grab = Object.FindObjectOfType<GrabController>();
-                if (grab == null) return null;
-            }
-            return grab.RightHand;
+            if (grab == null) grab = GameRefs.Grab;
+            return grab != null ? grab.RightHand : null;
         }
 
         private static Transform GripTarget(HandGrab hand, EquipmentController.Equipment equipment)

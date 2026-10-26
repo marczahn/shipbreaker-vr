@@ -784,6 +784,18 @@ After patching, `PatchReport` logs one line per transpiler, `Patch <name>: N cal
 warns when a transpiler reached fewer methods than with game 1.3.0.1263554, or redirected nothing in one of them: a
 game update that renamed a type or changed a method body. The per-method counts are at Debug level.
 
+A feature that needs a patch that failed or came out incomplete switches itself off instead of half working:
+aiming with the hand needs `Aim`, `Tool control`, `AimPatch` and `ToolInputPatch`; two tools at once needs `Two tools`,
+`GatePatch`, `UnequipPatch`, `HandPatch`, `EquipPatch` and aiming with the hand. The log then says
+`Aiming with the hand is off: patch ... failed or is incomplete`, and the F8 dump shows `(off, patches incomplete)`.
+The game classes the three tool transpilers reach into are one table, `GameTools`: each class with its tool family
+(whose input, aim and "is it equipped" check it gets with two tools) and the redirects that apply to it. Before, the
+three patches and `VrDualTools` had four lists that had to match.
+
+The player's `EquipmentController`, `GrabController`, `CuttingToolController` and `GunController` are found once in
+`GameRefs` and shared, searched again at most once a second while missing. Reflection left in the code runs once or
+only when something changes (the options rows, the screen size, the F8 dump), not every frame.
+
 F8 (`VrDiagnostics`) is for things only seen in the headset. It writes into the log: game state, head pose, the camera
 the rig follows, where the UI canvas hangs, every active root canvas (render mode, camera, layer, whether `VrCanvases`
 attached it, direction and distance from the head for the non-overlay ones, and its dark, large or specially shaded

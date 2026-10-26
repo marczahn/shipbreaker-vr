@@ -6,9 +6,24 @@ namespace ShipbreakerVR
 {
     // Counts what the transpilers redirect and logs one line per patch after patching. A game update that renames a
     // type or changes a method body makes a transpiler match less, which used to show only as a smaller number in one of
-    // ~70 Info lines; now it is a warning.
+    // ~70 Info lines; now it is a warning. A feature that needs a patch that failed or came out incomplete is switched
+    // off instead of half working (HandAimWorks, TwoToolsWork), with a warning that says why.
     internal static class PatchReport
     {
+        // The patches each feature needs: transpilers by their name here, the other patch classes by their class name.
+        private static readonly string[] HandAimPatches = { "Aim", "Tool control", "AimPatch", "ToolInputPatch" };
+        private static readonly string[] TwoToolsPatches = { "Two tools", "GatePatch", "UnequipPatch", "HandPatch", "EquipPatch" };
+
+        private static readonly HashSet<string> Broken = new HashSet<string>();
+
+        // Aiming with the hand (VrAim) and two tools at once (VrDualTools, which also needs aiming with the hand) have all
+        // their patches. True until LogSummary has looked.
+        public static bool HandAimWorks { get; private set; } = true;
+        public static bool TwoToolsWork { get; private set; } = true;
+
+        // From VrSession, when a patch class could not be applied.
+        public static void Failed(string patchClass) => Broken.Add(patchClass);
+
         // Each transpiler, with the number of methods it reached with game 1.3.0.1263554. Fewer means a part of the
         // feature silently stopped working.
         private static readonly Dictionary<string, int> Expected = new Dictionary<string, int>
@@ -44,10 +59,24 @@ namespace ShipbreakerVR
                 if (Expected.TryGetValue(patch, out var expected) && reached < expected) problems.Add($"expected {expected} methods");
                 var empty = methods?.Where(m => m.Value == 0).Select(m => Name(m.Key)).ToList();
                 if (empty != null && empty.Count > 0) problems.Add($"nothing redirected in {string.Join(", ", empty)}");
-                if (problems.Count > 0) Plugin.Log.LogWarning($"{line}: {string.Join("; ", problems)}. Part of this feature may not work.");
+                if (problems.Count > 0)
+                {
+                    Broken.Add(patch);
+                    Plugin.Log.LogWarning($"{line}: {string.Join("; ", problems)}. Part of this feature may not work.");
+                }
                 else Plugin.Log.LogInfo(line);
             }
             counts.Clear();
+            HandAimWorks = Check("Aiming with the hand", HandAimPatches);
+            TwoToolsWork = HandAimWorks && Check("Two tools at once", TwoToolsPatches);
+        }
+
+        private static bool Check(string feature, string[] patches)
+        {
+            var missing = patches.Where(Broken.Contains).ToList();
+            if (missing.Count == 0) return true;
+            Plugin.Log.LogWarning($"{feature} is off: patch {string.Join(", ", missing)} failed or is incomplete");
+            return false;
         }
 
         private static string Name(MethodBase method) => $"{method.DeclaringType?.Name}.{method.Name}";
