@@ -1,12 +1,11 @@
 using BBI.Unity.Game;
 using HarmonyLib;
 using UnityEngine;
-using UnityEngine.XR;
 
 namespace ShipbreakerVR
 {
     // Holding on to anything and climbing along it with the hands, as Marc asked: with one hand, with both, or with one
-    // while the other works a tool. The grip of a hand that holds no tool and is not at the tool belt (VrToolInput.Free),
+    // while the other works a tool. The grip of a hand that holds no tool and is not at the tool belt (VrHand.Free),
     // pressed with a surface within reach of the controller, holds on right where the hand is: that point stays fixed on
     // the thing held and moves with it, and the hand does not drift from it. Moving the hand then moves the player and the
     // thing held against each other, shared by their masses, as two bodies pushing each other would: the station, a fixed
@@ -41,13 +40,13 @@ namespace ShipbreakerVR
 
         private class Hand
         {
+            public readonly VrHand Vr;
             public readonly VrInput.Hand Input;
             // The grip as this hand last saw it: the physics may step several times in a frame, or not at all.
             public bool GripDown;
             public bool Tracked;
             // The controller's position in tracking space this physics step.
             public Vector3 Local;
-            public bool Holding;
             public Collider Collider;
             // The rigidbody of what is held, if it has one; Movable when the hand may move it.
             public Rigidbody Body;
@@ -56,14 +55,19 @@ namespace ShipbreakerVR
             public Transform Anchor;
             public Vector3 Point;
 
-            public Hand(VrInput.Hand input) => Input = input;
+            public Hand(VrHand vr)
+            {
+                Vr = vr;
+                Input = vr.Input;
+            }
 
-            public XRNode Node => Input.Node;
             public string Name => Input.Name;
+            // Holding on is the hand's state (VrHand), so no tool goes into it meanwhile.
+            public bool Holding => Vr.State == HandState.Holding;
         }
 
-        private static readonly Hand LeftHand = new Hand(VrInput.Left);
-        private static readonly Hand RightHand = new Hand(VrInput.Right);
+        private static readonly Hand LeftHand = new Hand(VrHand.Left);
+        private static readonly Hand RightHand = new Hand(VrHand.Right);
         private static readonly Hand[] Hands = { LeftHand, RightHand };
         private static readonly Collider[] Found = new Collider[32];
 
@@ -77,9 +81,6 @@ namespace ShipbreakerVR
         private static Vector3 pushOff;
         private static Vector3 holdVelocity;
         private static int logs;
-
-        // Whether that hand holds on (VrControls: the left one does not fly meanwhile).
-        public static bool Holds(XRNode node) => (node == XRNode.LeftHand ? LeftHand : RightHand).Holding;
 
         // From VrCamera.FollowGameCamera, right after the rig was placed for the frame. The hands are measured on the rig,
         // which moves once per frame; in the physics steps between they move along by as far as the body has come since.
@@ -144,7 +145,7 @@ namespace ShipbreakerVR
                 else if (hand.Anchor == null || !hand.Anchor.gameObject.activeInHierarchy || hand.Collider == null || !hand.Collider.enabled)
                     LetGo(hand, false, "the hold is gone");
             }
-            else if (pressed && hand.Tracked && VrToolInput.Free(hand.Node)) TryHold(hand);
+            else if (pressed && hand.Tracked && hand.Vr.Free) TryHold(hand);
         }
 
         // Holds on to the surface nearest to the hand, if one is within reach, right where the hand is.
@@ -170,6 +171,8 @@ namespace ShipbreakerVR
                 return;
             }
 
+            var first = !LeftHand.Holding && !RightHand.Holding;
+            if (!VrHand.StartHolding(hand.Vr)) return;
             var body = best.attachedRigidbody;
             hand.Collider = best;
             hand.Body = body;
@@ -177,8 +180,7 @@ namespace ShipbreakerVR
                 && !TooHeavy(body.mass);
             hand.Anchor = body != null ? body.transform : best.transform;
             hand.Point = hand.Anchor.InverseTransformPoint(at);
-            if (!LeftHand.Holding && !RightHand.Holding) pushOff = Vector3.zero;
-            hand.Holding = true;
+            if (first) pushOff = Vector3.zero;
             hand.Input.Buzz(0.5f, 0.06f);
             if (logs++ < 80)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds '{best.name}' (layer {best.gameObject.layer}, "
@@ -279,7 +281,7 @@ namespace ShipbreakerVR
         // Letting go keeps the speed the hands gave the body once the last hand is off: a push off flies on.
         private static void LetGo(Hand hand, bool push, string reason)
         {
-            hand.Holding = false;
+            VrHand.StopHolding(hand.Vr);
             hand.Anchor = null;
             hand.Collider = null;
             hand.Body = null;

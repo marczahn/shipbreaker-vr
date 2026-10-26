@@ -2,11 +2,10 @@ using System.Collections.Generic;
 using BBI.Unity.Game;
 using HarmonyLib;
 using UnityEngine;
-using UnityEngine.XR;
 
 namespace ShipbreakerVR
 {
-    // The tool models in the hand that holds the tool (VrToolInput.ToolNode) while aiming with it (VrAim). The game hangs
+    // The tool models in the hand that holds the tool (VrHand.GameToolHand) while aiming with it (VrAim). The game hangs
     // the equipped tool on the right hand's equipment point (HandGrab.EquipmentGeoTransform, via
     // GrabController.GetHandPositionTransformAndSetEquipment), a fixed point on the player's body to the lower right of the
     // view, and its animation closes the right hand around the tool there (the same grab animation for every tool). Right
@@ -97,7 +96,7 @@ namespace ShipbreakerVR
 
             // Cutter and grapple sit in the hand as set for them (VrToolFit, adjusted here while the other hand drags them),
             // relative to the wrist where VrHands puts the game's; the other tools have no model on the point.
-            var left = VrToolInput.ToolNode == XRNode.LeftHand;
+            var left = VrHand.GameToolHand.IsLeft;
             if (VrAim.TryGetHandLocal(out var gripLocal, out var aimLocal))
                 VrToolFit.Adjust(equipment, left, gripLocal + aimLocal * VrInput.WristBehindGrip, aimLocal);
             var fitted = VrToolFit.TryGet(equipment, left, out var offset, out turn);
@@ -260,8 +259,8 @@ namespace ShipbreakerVR
             // only once the charge is gone; a right hand that takes the charge over holds its grip.
             var charge = hand != null && hand.Hand == HandGrab.PlayerHand.Right && hand.CurrentHandState == HandGrab.HandState.Equipped
                 && holding == EquipmentController.Equipment.DemoCharge;
-            ChargeInLeftHand = aiming && charge && (VrToolInput.ToolNode == XRNode.LeftHand
-                || (chargeLeft && !VrToolInput.GripHeld(XRNode.RightHand)));
+            ChargeInLeftHand = aiming && charge && (VrHand.GameToolHand.IsLeft
+                || (chargeLeft && !VrInput.Right.Grip.Down));
 
             // Fully at the controller while the charge is held in the right hand; after letting go the arm blends back
             // into the stow animation, starting from the hand instead of the flat game's spot at the right.

@@ -11,8 +11,8 @@ namespace ShipbreakerVR
     // order depended on which game method happened to ask first, and a module could cache the state of another one
     // that changed later in the same frame (the aim still on the old hand for a frame after the other hand took the tool).
     //   1. VrInput      the controllers' buttons, triggers, grips and sticks
-    //   2. VrToolInput  what the hands do: drawing, holding and putting away tools, the tool hand, the buttons' actions
-    //                   (and VrDualTools.Check), from whether the tool hand can aim (VrAim.CanAim)
+    //   2. VrToolInput  what the hands do (VrHand, brought up to date with the game first): drawing, holding and putting
+    //                   away tools, the tool hand, the buttons' actions (and VrDualTools.Check)
     //   3. VrAim        the aim camera on the tool hand that step 2 settled
     //   4. VrDualTools  the second tool's aim camera
     //   5. VrControls   flying, braking and turning, which rest while the left hand holds a tool or holds on

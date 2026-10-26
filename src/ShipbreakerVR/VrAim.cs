@@ -14,7 +14,7 @@ namespace ShipbreakerVR
     // Aiming with the hand. Every tool aims through the game's main camera: rays through screen points
     // (ScreenPointToRay), its position and forward, and its matrices for the ray grids of grabbing and the grapple.
     // A camera that never renders sits on the muzzle of the tool in the hand that holds it, the right one unless the left
-    // one drew it (VrToolInput.ToolNode; the hand's aim pose without a tool model), pointing where the controller points,
+    // one drew it (VrHand.GameToolHand; the hand's aim pose without a tool model), pointing where the controller points,
     // with the main camera's lens, and takes the main camera's place in the tools' code (AimPatch). The screen-space
     // patterns (the cutter's line, the grapple's search grid) then fan out from the hand as they did from the eye, and
     // rolling the hand rolls the cutter's line.
@@ -207,8 +207,8 @@ namespace ShipbreakerVR
             return TryGetPoseLocal(out _, out rotation) && Tool.TryGetPosition(out grip);
         }
 
-        // The controller of the hand that holds the tool (VrToolInput.ToolNode), the right one unless the left hand drew it.
-        private static VrInput.Hand Tool => VrInput.Of(VrToolInput.ToolNode);
+        // The controller of the hand that holds the tool (VrHand.GameToolHand), the right one unless the left hand drew it.
+        private static VrInput.Hand Tool => VrHand.GameToolHand.Input;
 
         private static bool TryGetPoseLocal(out Vector3 local, out Quaternion localRotation)
         {
@@ -367,7 +367,7 @@ namespace ShipbreakerVR
         {
             var text = $"aim with hand: option {Plugin.AimWithHand.Value}, active {Active}, tool {withTool}";
             if (active) text += $", hand at {VrDiagnostics.Direction(head, aim.transform.position)} {Vector3.Distance(head.position, aim.transform.position):0.00} m, pointing {VrDiagnostics.Direction(head, head.position + aim.transform.forward)}, beam on {beamTarget}";
-            return text + "; " + VrDualTools.Describe() + CutterModel();
+            return text + "; " + VrHand.Describe() + "; " + VrDualTools.Describe() + CutterModel();
         }
 
         // Where the game keeps the cutter's model, for moving the tools into the hand later.

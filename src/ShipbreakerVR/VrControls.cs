@@ -78,7 +78,7 @@ namespace ShipbreakerVR
             var left = VrInput.Left;
             if (!LeftConnected()) { held = false; return; }
             // Holding on with the left hand rests flying as a tool in it does (VrClimb).
-            var tool = VrToolInput.LeftHoldsTool || VrClimb.Holds(XRNode.LeftHand);
+            var tool = VrHand.Left.HoldsTool || VrHand.Left.State == HandState.Holding;
             // Outside gameplay the sticks and buttons work the menus as a gamepad; turning there would swing the menus.
             if (GameSession.CurrentGameState == GameSession.GameState.Gameplay)
             {
