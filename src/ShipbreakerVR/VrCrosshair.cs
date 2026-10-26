@@ -17,6 +17,8 @@ namespace ShipbreakerVR
     // interacting aims at the middle of the view, and the dot marks it.
     internal static class VrCrosshair
     {
+        static VrCrosshair() => VrSession.OnUnload("crosshair", Release);
+
         private static readonly AccessTools.FieldRef<GrappleCrosshairController, Image> GrappleSnap =
             AccessTools.FieldRefAccess<GrappleCrosshairController, Image>("m_GrappleSnapImage");
         private static readonly AccessTools.FieldRef<CuttingUIController, Image> CutterReticle =

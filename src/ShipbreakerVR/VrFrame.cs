@@ -20,6 +20,8 @@ namespace ShipbreakerVR
     // follow the latest pose right before rendering.
     internal static class VrFrame
     {
+        static VrFrame() => VrSession.OnUnload("frame update", Uninstall);
+
         private static readonly (string Name, System.Action Step)[] Steps =
         {
             ("input", VrInput.Update),

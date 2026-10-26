@@ -15,6 +15,8 @@ namespace ShipbreakerVR
     // Drawn in 3D for each eye after the visor (VrUi.Draw), from meshes built here, since the plugin brings no shaders.
     internal static class VrFlightGlobe
     {
+        static VrFlightGlobe() => VrSession.OnUnload("flight globe", Release);
+
         public enum Mode { Aus, Immer, BeimFliegen }
 
         private const float ReturnSpeed = 12f;

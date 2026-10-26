@@ -827,12 +827,16 @@ AssetBundle stay where they are. Settings in `BepInEx\config\com.bepis.bepinex.s
 
 How a reload goes: ScriptEngine destroys its object with the plugin on it, then a frame later loads the DLL from memory
 under a new assembly name (`ShipbreakerVR-<ticks>`) and adds the new plugin.
-- `Plugin.OnDestroy` hands everything back to the game, as stopping VR does: the VR tab and the VR rows leave the
+- `Plugin.OnDestroy` (`VrSession.Unload`) hands everything back to the game, as stopping VR does: the VR tab and the VR rows leave the
   options screen (`VrOptionsTab.RemoveAll`), the InControl device is detached, the game cameras and the silenced ones are
   switched on as the game wants them, the Hab's sway and blends come back, the truck viewer renders again, the canvases
   return to their render modes and layers, the helmet goes back onto the body, the rig is destroyed right away (with
   the UI pass and the quality volume), the render pipeline events are removed, and the Harmony patches are undone. Not
   when the game quits.
+- Each module registers its own teardown with `VrSession.OnUnload` in its static constructor, which runs on the
+  module's first use; unloading runs them in reverse order, the patches last, and logs the order as
+  `Unloaded: crosshair, hands, ..., patches`. A module that was never used changed nothing and has nothing to undo.
+  Before, `Plugin.OnDestroy` called a hand-kept list, and a new module had to remember to add itself.
 - The Harmony ID contains the assembly name, so the old instance's `UnpatchSelf` only removes its own patches.
 - OpenXR keeps running. The AssetBundle with the XR settings cannot be loaded twice, and `XRGeneralSettings.Instance`
   survives the reload, so the new instance takes both over (`VrXr.Adopt`) and does not toggle VR at launch (that would
