@@ -170,6 +170,8 @@ namespace ShipbreakerVR
                 if (each == tool || each == second) Buttons(each);
                 else each.ADown = each.BDown = false;
             }
+            // A grip on one of the game's controls works it like A (VrClimb).
+            if (VrClimb.WorksControl) tool.Now[(int)Action.Interact] = true;
             LogChanges();
         }
 
