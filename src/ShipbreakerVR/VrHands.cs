@@ -15,10 +15,14 @@ namespace ShipbreakerVR
     // right hand with a tool in it; with the tool in the left hand the right one follows its controller empty. Demo charges
     // hang on the right hand's bone, so that arm is posed for them by VrToolModels.PoseArm, also with the charge in the
     // left hand; the left arm stays with the game then.
+    // The fingers come from the animation too: a hand that follows its controller closes while its grip is held (around
+    // the tool in the left hand, or into a fist), through the animator's own grab pose (Fingers).
     internal static class VrHands
     {
         // How long an arm takes to move between the game's pose and the controller.
         private const float Blend = 0.2f;
+        private const float GripPress = 0.5f;
+        private const float GripRelease = 0.4f;
 
         private static readonly InputFeatureUsage<Quaternion> PointerRotation = new InputFeatureUsage<Quaternion>("PointerRotation");
 
@@ -36,18 +40,28 @@ namespace ShipbreakerVR
             public Transform Little;
             public float Weight;
             public bool Driven;
+            public bool Gripping;
+            // The animator's grab parameters of this hand, as HandGrab sets them.
+            public readonly string Prep;
+            public readonly string Grab;
+            public readonly string Cancel;
 
-            public Arm(XRNode node, string name)
+            public Arm(XRNode node, string name, string side)
             {
                 Node = node;
                 Name = name;
+                Prep = side + "PrepGrab";
+                Grab = side + "Grab";
+                Cancel = side + "CancelGrab";
             }
         }
 
-        private static readonly Arm LeftArm = new Arm(XRNode.LeftHand, "left");
-        private static readonly Arm RightArm = new Arm(XRNode.RightHand, "right");
+        private static readonly Arm LeftArm = new Arm(XRNode.LeftHand, "left", "L");
+        private static readonly Arm RightArm = new Arm(XRNode.RightHand, "right", "R");
 
         private static GrabController grab;
+        private static Animator animator;
+        private static int fingerLogs;
         private static float nextSearch;
         private static int logs;
 
@@ -56,6 +70,8 @@ namespace ShipbreakerVR
         public static void LateUpdate()
         {
             if (!Find()) return;
+            var leftWasDriven = LeftArm.Driven;
+            var rightWasDriven = RightArm.Driven;
             var active = VrAim.Active;
             var equipment = grab.RightHand.CurrentEquipmentType;
             var leftHolds = VrToolInput.LeftHoldsTool;
@@ -66,8 +82,38 @@ namespace ShipbreakerVR
                 && (equipment == EquipmentController.Equipment.Scanner || (leftHolds && equipment != EquipmentController.Equipment.DemoCharge)))));
             // The demo charge's arm is bent there; another bend on top would fight it.
             if (rightBusy) RightArm.Weight = 0f;
+            Fingers(LeftArm, leftWasDriven);
+            Fingers(RightArm, rightWasDriven);
             Pose(LeftArm);
             Pose(RightArm);
+        }
+
+        // Closes the hand while its grip is held, as long as it follows its controller: the same parameters HandGrab sets
+        // for grabbing and for holding a tool (PrepGrab trigger and Grab on; Grab off and CancelGrab trigger). Handed back
+        // to the game, the hand gets the pose the game had set for it: closed on a tool or a grab, open otherwise. The game
+        // sets these only when its hand changes state, so a hand taken over keeps what is set here until then.
+        private static void Fingers(Arm arm, bool wasDriven)
+        {
+            bool closed;
+            if (arm.Driven)
+            {
+                if (!arm.Device.isValid) arm.Device = InputDevices.GetDeviceAtXRNode(arm.Node);
+                arm.Device.TryGetFeatureValue(CommonUsages.grip, out var grip);
+                arm.Gripping = grip >= (arm.Gripping ? GripRelease : GripPress);
+                closed = arm.Gripping;
+            }
+            else if (wasDriven)
+            {
+                var state = arm.Hand.CurrentHandState;
+                closed = state == HandGrab.HandState.Success
+                    || (state == HandGrab.HandState.Equipped && arm.Hand.CurrentEquipmentType != EquipmentController.Equipment.DemoCharge);
+            }
+            else return;
+            if (animator == null || animator.GetBool(arm.Grab) == closed) return;
+            animator.ResetTrigger(closed ? arm.Cancel : arm.Prep);
+            animator.SetTrigger(closed ? arm.Prep : arm.Cancel);
+            animator.SetBool(arm.Grab, closed);
+            if (fingerLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} hand {(closed ? "closes" : "opens")}{(arm.Driven ? "" : " (back to the game)")}");
         }
 
         // Not grabbing, gesturing, hurt or holding a tool.
@@ -129,7 +175,7 @@ namespace ShipbreakerVR
             nextSearch = Time.unscaledTime + 1f;
             grab = Object.FindObjectOfType<GrabController>();
             if (grab == null) return false;
-            var animator = grab.GetComponentsInChildren<Animator>(true).FirstOrDefault(a => a != null && a.isHuman);
+            animator = grab.GetComponentsInChildren<Animator>(true).FirstOrDefault(a => a != null && a.isHuman);
             Setup(LeftArm, grab.LeftHand, animator, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand,
                 HumanBodyBones.LeftIndexProximal, HumanBodyBones.LeftMiddleProximal, HumanBodyBones.LeftLittleProximal);
             Setup(RightArm, grab.RightHand, animator, HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand,
@@ -158,9 +204,13 @@ namespace ShipbreakerVR
         // On unload (hot reload).
         public static void Release()
         {
+            foreach (var arm in new[] { LeftArm, RightArm })
+                if (animator != null && arm.Driven && arm.Hand != null && Idle(arm.Hand)) animator.SetBool(arm.Grab, false);
+            animator = null;
             grab = null;
             LeftArm.Weight = RightArm.Weight = 0f;
             LeftArm.Driven = RightArm.Driven = false;
+            LeftArm.Gripping = RightArm.Gripping = false;
         }
     }
 }

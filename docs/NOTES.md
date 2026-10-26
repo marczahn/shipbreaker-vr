@@ -170,6 +170,12 @@ interacting, the grapple and the "entity of interest".
   hangs on the right hand bone, so with the charge in the left hand that arm still reaches over), and the left arm stays
   with the game then. Logs: `Hands: <left|right> arm ...` once (bones, fingers) and `Hands: <arm> follows the controller
   | back to the game`. Marc found both hands looking good in the first test.
+- Fingers: a hand that follows its controller closes while its grip is held (fist, or around the tool in the left
+  hand), through the animator's grab parameters as `HandGrab` sets them (`xPrepGrab` trigger + `xGrab` on; `xGrab`
+  off + `xCancelGrab` trigger). The game sets them only on its hand's state changes (`SetGrabState` returns early for
+  the same state), so they stay as set. Handed back to the game, the hand gets closed for `Success` and `Equipped`
+  (not demo charges), open otherwise; this restores the grip pose when a tool goes back from the left to the right
+  hand. Log `Hands: <hand> closes | opens`.
 
 ## Body follows head
 - The body rotates in `OrientationController.HandleAxisRotation` via `Rigidbody.MoveRotation(rotation * mouseDelta)`.
