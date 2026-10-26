@@ -98,13 +98,14 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | Use it | Point the controller and pull the trigger: cut, grapple, place or detonate demo charges. |
 | Reel in what the grapple holds | Hold the trigger and press B. |
 | Fly while the grapple holds something big | Fly and brake as usual. If you fly farther away than the grapple reaches, the rope snaps. |
-| Use what I point at | Press A. With an empty hand it uses what is in the middle of your view, marked by the game's dot. |
+| Use what I point at | Press A. With an empty hand it uses what is in the middle of your view, marked by the game's dot. Without a tool the trigger and B do nothing. |
 | Turn the cutter's line | Roll your wrist. The cutter starts with horizontal cuts, and its switch to vertical cuts has no button. |
 | Throw | Hold the trigger and press A. |
 | Switch the tool's mode | Press B (demo charges: switch to the detonator). |
 | Place a tether | Hold B while pointing at the start, let go at the end. |
 | Recall the tethers | Hold B while pointing at nothing. |
 | Hold on and climb | Squeeze the grip of a hand without a tool close to anything: the hand holds on there. Move the hand to pull yourself along, with both hands hand over hand, or with one while the other works a tool. Light parts come to your hand instead; the station and fixed hulls stay put. Let go while moving the hand to push off. |
+| Work an airlock console or a switch | Look at it and press A, or reach for it and squeeze the grip. |
 | Use a tool with the left hand | Take it with the left hand. X and Y then do what A and B do, and flying pauses until you let go. |
 
 **In menus** both controllers act together like one Xbox gamepad: left stick to move around, A to confirm, B to go

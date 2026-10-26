@@ -266,7 +266,6 @@ namespace ShipbreakerVR
             if (VrXr.IsRunning && Input.GetKeyDown(KeyCode.F4)) Recenter(true);
             UpdateCenterPress();
             VrDiagnostics.Update(this);
-            VrInteractionTrace.Attach();
         }
 
         private void FixedUpdate() => VrClimb.FixedUpdate();

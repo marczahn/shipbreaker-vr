@@ -503,6 +503,20 @@ far the body moved since. Letting go of the last hold keeps the body's velocity 
 80 ms, capped at 5 m/s, so a push off flies on; a hand held back more than 0.5 m from its hold lets go without it.
 While the left hand holds on, controller flying rests. Log lines start with "Climbing:".
 
+The grip near one of the game's controls works it instead of holding on. Controls are `InteractableObject`s; the
+airlock console (`SM_AirlockConsole_LockPanel`) has a trigger collider "Interaction Volume" with activation
+`LineOfSight`, progress `Press`, `WaitForRelease` and a `HandTarget` the game's hand reaches for. The flat game starts
+the interaction when the control is in the middle of the view (`InteractionController.HandleLineOfSightActivation`)
+and works it while interact is held. The grip looks for such a control within 15 cm (triggers included), starts the
+interaction on it through `InteractionController.StartInteraction` and presses interact through `VrToolInput` while it
+is held; `LineOfSightActivationPatch` keeps the interaction on that control meanwhile, wherever one looks.
+
+Empty hand: the demo charges keep their last equipment state after being put away (`DemoChargeController` takes
+`mCurrentEquipment` from `EquipmentChangedEvent`) and equip themselves on `DemoChargeFire`
+(`EquipDemoCharge`, in the detonation states) behind `EquipmentController`'s back. A trigger pulled with an empty hand
+did that and left their red placement marker in the view, impossible to use or put away. So an empty tool hand only
+presses interact (A); trigger and B send nothing.
+
 ### Flight globe
 `VrFlightGlobe` draws a small globe at the bottom of the visor (config `Anzeige/Flugkugel`: Immer/BeimFliegen/Aus;
 `FlugkugelGroesse` = radius relative to the visor height, `FlugkugelX/Y` = position on the visor from -0.5 to 0.5). The

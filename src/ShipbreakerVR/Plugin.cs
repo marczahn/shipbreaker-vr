@@ -12,7 +12,7 @@ namespace ShipbreakerVR
     {
         public const string Guid = "de.marczahn.shipbreakervr";
         public const string Name = "ShipbreakerVR";
-        public const string Version = "0.17.0";
+        public const string Version = "0.18.0";
 
         internal static ManualLogSource Log;
         internal static ConfigEntry<bool> MultiPass;
@@ -79,7 +79,7 @@ namespace ShipbreakerVR
             TwoTools = Config.Bind("Steuerung", "ZweiWerkzeuge", true,
                 "With aiming with the hand: two of the cutter, the grapple and the demo charges can be held at once, one in each hand. While one hand holds one of them, the other hand draws another, and each hand's trigger and buttons work its own tool. The scanner hides the other hand's tool while it is out; the tool comes back when the scanner is put away and that hand still holds its grip.");
             Climbing = Config.Bind("Steuerung", "Festhalten", true,
-                "Hold on to anything with the grip of a hand that holds no tool, and climb along it: moving the hand moves you, or a light part towards you, by their masses; the station and fixed hulls do not move. Works with one hand, both, or one while the other works a tool. Letting go keeps the speed, so you can push off. While the left hand holds on, controller flying rests.");
+                "Hold on to anything with the grip of a hand that holds no tool, and climb along it: moving the hand moves you, or a light part towards you, by their masses; the station and fixed hulls do not move. Works with one hand, both, or one while the other works a tool. Letting go keeps the speed, so you can push off. While the left hand holds on, controller flying rests. Near one of the game's controls (an airlock console, a switch) the grip works it, as A does.");
             MirrorCutter = Config.Bind("Bild", "CutterSpiegeln", true,
                 "Copy the detailed left side of the cutter's model onto its plain right side, which the flat game never showed.");
             VrToolFit.Bind(Config);
@@ -150,7 +150,6 @@ namespace ShipbreakerVR
             Unload("tool models", VrToolModels.Release);
             Unload("hands", VrHands.Release);
             Unload("climbing", VrClimb.Release);
-            Unload("interaction trace", VrInteractionTrace.Detach);
             Unload("crosshair", VrCrosshair.Release);
             Unload("aim camera", VrAim.Release);
             Unload("patches", () => harmony?.UnpatchSelf());
