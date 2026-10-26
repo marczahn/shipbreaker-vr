@@ -88,6 +88,13 @@ interacting, the grapple and the "entity of interest".
   barrels 10° off the beam. Its rest local pose is restored when hand aiming is inactive and on unload. The tools' shadow
   copies (`m_...Shadow`, `ShadowActivePoint`) stay where they were. The log line `Tool in hand: <tool>; equipment point
   ...` shows the hierarchy, offsets and muzzle once per tool (and cutter mode).
+- Demo charges have no model on the equipment point: the game's right hand holds them, driven by its animator
+  (`DemoChargeController.m_HandAnimatorController`, triggers like `DemoChargeEquipParameter`) and its IK target
+  (`HandGrab.m_HandTarget`, `rig_RHand_Target`), which `HandGrab.UpdateHandTarget` lerps to the rest target every
+  update. A postfix on `UpdateHandTarget` (`HandTargetPatch`) puts that target on the controller's grip while the right
+  hand holds a demo charge, with the game's angle to the eye kept. Placing still animates the hand towards the surface
+  via `m_HandAnimationTarget`. The equip log of the other tools is written a second after drawing, since the models
+  first slide in from their rest points (the first frame showed offsets over a meter).
 - Aiming from the muzzle: the aim camera (and the beam) sits on the muzzle of the tool in the hand, pointing along the
   aim pose: grapple `GrapplingHook.m_GrapplingGunBarrel`, Splitsaw `CuttingFXController.m_CutOriginTransform` +
   `m_CutOriginOffset`, Stinger `ScalpelFXController.m_CutOriginTransform` + `m_CutOriginOffset`. The muzzle's offset to

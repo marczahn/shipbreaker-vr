@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Reflection;
 using BBI.Unity.Game;
 using HarmonyLib;
 using UnityEngine;
@@ -11,7 +12,8 @@ namespace ShipbreakerVR
     // (m_EquipmentHandTargetTransforms). Right before rendering, that point goes to the controller: turned like the aim
     // pose (the barrels run along the point's forward), and shifted so that the tool's grip lies in the controller's grip.
     // The tools aim from their muzzle (Muzzle), so beam, cut and grapple line leave from the barrel. With hand aiming off
-    // the point goes back.
+    // the point goes back. Demo charges have no model on the point: the game's hand holds them, animated, so for them the
+    // hand itself goes to the controller (HandTargetPatch).
     internal static class VrToolModels
     {
         private static readonly AccessTools.FieldRef<HandGrab, List<Transform>> HandTargets =
@@ -43,6 +45,9 @@ namespace ShipbreakerVR
         private static readonly AccessTools.FieldRef<GrapplingHook, Transform> GrappleBarrel =
             AccessTools.FieldRefAccess<GrapplingHook, Transform>("m_GrapplingGunBarrel");
         private static readonly HashSet<int> logged = new HashSet<int>();
+        private static bool loggedCharge;
+        private static int logCandidate;
+        private static float logCandidateSince;
 
         // From VrCamera.FollowGameCamera, after the rig has moved.
         public static void Place()
@@ -150,11 +155,17 @@ namespace ShipbreakerVR
             point.localRotation = restRotation;
         }
 
-        // Once per tool: where the game keeps it, for judging the fit in the headset.
+        // Once per tool, a second after it was drawn (the model first slides in from its rest point): where the game keeps
+        // it, for judging the fit in the headset.
         private static void Log(HandGrab hand, EquipmentController.Equipment equipment, Transform gripTarget, Transform muzzle)
         {
             var key = equipment == EquipmentController.Equipment.CuttingTool && cutter != null ? (int)equipment * 10 + (int)cutter.CurrentMode : (int)equipment;
-            if (equipment == EquipmentController.Equipment.None || !logged.Add(key)) return;
+            if (key != logCandidate)
+            {
+                logCandidate = key;
+                logCandidateSince = Time.unscaledTime;
+            }
+            if (equipment == EquipmentController.Equipment.None || Time.unscaledTime - logCandidateSince < 1f || !logged.Add(key)) return;
             var models = new List<string>();
             foreach (Transform child in point) models.Add($"'{child.name}'");
             Plugin.Log.LogInfo($"Tool in hand: {equipment}; equipment point {Chain(point)}, rest {restPosition} {restRotation.eulerAngles}; " +
@@ -170,6 +181,23 @@ namespace ShipbreakerVR
             return string.Join(" < ", names);
         }
 
+        // The game's right hand holding a demo charge: its IK target (HandGrab.m_HandTarget) goes to the controller's grip,
+        // keeping the angle to the eye that the game gave it. Called after HandGrab.UpdateHandTarget, before the animation
+        // reads the target.
+        public static void HoldCharge(HandGrab hand, Transform target)
+        {
+            if (target == null || hand.Hand != HandGrab.PlayerHand.Right || hand.CurrentHandState != HandGrab.HandState.Equipped
+                || hand.CurrentEquipmentType != EquipmentController.Equipment.DemoCharge) return;
+            var head = LynxCameraController.MainCameraTransform;
+            if (head == null || !VrAim.TryGetHand(out var grip, out var aim)) return;
+            if (!loggedCharge)
+            {
+                loggedCharge = true;
+                Plugin.Log.LogInfo($"Tool in hand: demo charge held by the game's hand {Chain(target)}, at {head.InverseTransformPoint(target.position)} from the eye");
+            }
+            target.SetPositionAndRotation(grip, aim * (Quaternion.Inverse(head.rotation) * target.rotation));
+        }
+
         // On unload (hot reload): the equipment point goes back to the game.
         public static void Release()
         {
@@ -181,6 +209,18 @@ namespace ShipbreakerVR
             stinger = null;
             grapple = null;
             logged.Clear();
+            loggedCharge = false;
         }
+    }
+
+    // See VrToolModels.HoldCharge.
+    [HarmonyPatch]
+    internal static class HandTargetPatch
+    {
+        private static readonly AccessTools.FieldRef<HandGrab, Transform> Target = AccessTools.FieldRefAccess<HandGrab, Transform>("m_HandTarget");
+
+        private static MethodBase TargetMethod() => AccessTools.Method(AccessTools.TypeByName("BBI.Unity.Game.HandGrab"), "UpdateHandTarget");
+
+        private static void Postfix(HandGrab __instance) => VrToolModels.HoldCharge(__instance, Target(__instance));
     }
 }
