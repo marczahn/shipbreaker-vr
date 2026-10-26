@@ -104,6 +104,7 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | Switch the tool's mode | Press B (demo charges: switch to the detonator). |
 | Place a tether | Hold B while pointing at the start, let go at the end. |
 | Recall the tethers | Hold B while pointing at nothing. |
+| Hold on and climb | Squeeze the grip of a hand without a tool close to anything: the hand holds on there. Move the hand to pull yourself along, with both hands hand over hand, or with one while the other works a tool. Light parts come to your hand instead; the station and fixed hulls stay put. Let go while moving the hand to push off. |
 | Use a tool with the left hand | Take it with the left hand. X and Y then do what A and B do, and flying pauses until you let go. |
 
 **In menus** both controllers act together like one Xbox gamepad: left stick to move around, A to confirm, B to go
@@ -124,6 +125,7 @@ likely to need:
 - **Controller flying:** switch it off if you fly with mouse and keyboard or a gamepad.
 - **Aim with the hand:** switch it off to aim your tools at the center of your view again, as in the flat game.
 - **Two tools at once:** switch it off if you want a tool from one hand to replace the one in the other hand.
+- **Hold on and climb:** switch it off if the grip of an empty hand should do nothing.
 - **Fit tools in the hand:** if the cutter or the grapple does not sit right in your hand, switch this on, grab the
   tool with your other hand and move it into place. Letting go stores it. Switch it off again when you are done.
 
@@ -175,7 +177,6 @@ That has not been tested.
 
 ## What does not work yet
 
-- You cannot grab things with the suit's hands yet; the grip only takes tools.
 - The cutter's switch between horizontal and vertical cuts has no button; roll your wrist instead.
 - There is no laser pointer for the menus yet; you move through them with the sticks.
 - During loading screens the view can go dark for a moment.

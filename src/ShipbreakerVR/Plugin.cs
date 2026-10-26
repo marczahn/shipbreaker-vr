@@ -45,6 +45,7 @@ namespace ShipbreakerVR
         internal static ConfigEntry<bool> AimWithHand;
         internal static ConfigEntry<bool> MirrorCutter;
         internal static ConfigEntry<bool> TwoTools;
+        internal static ConfigEntry<bool> Climbing;
 
         private void Awake()
         {
@@ -77,6 +78,8 @@ namespace ShipbreakerVR
                 "The tools (cutter, grapple, scanner, demo charges), grabbing and interacting aim where the controller of the hand holding the tool points (the right one unless the left one drew it) instead of at the center of the view, from the muzzle of the tool in the hand. A laser shows where, and the game's crosshair is hidden from the center of the view meanwhile; with an empty hand there is no laser, and interacting aims at the center of the view, marked by the game's dot. The grip at the body draws a tool with either hand: right hip grapple, left hip demo charges, over the right shoulder cutter, right side of the helmet scanner; it stays in the hand while the grip is held, and reaching for it with the other hand takes it over. Trigger fires or grapples, A interacts (with the trigger held: throws), B with the trigger held reels in, B switches the tool mode (held: places a tether, held while pointing at nothing: recalls the tethers). In the left hand X and Y do what A and B do, and controller flying pauses until it lets go. The suit's hands follow the controllers.");
             TwoTools = Config.Bind("Steuerung", "ZweiWerkzeuge", true,
                 "With aiming with the hand: two of the cutter, the grapple and the demo charges can be held at once, one in each hand. While one hand holds one of them, the other hand draws another, and each hand's trigger and buttons work its own tool. The scanner hides the other hand's tool while it is out; the tool comes back when the scanner is put away and that hand still holds its grip.");
+            Climbing = Config.Bind("Steuerung", "Festhalten", true,
+                "Hold on to anything with the grip of a hand that holds no tool, and climb along it: moving the hand moves you, or a light part towards you, by their masses; the station and fixed hulls do not move. Works with one hand, both, or one while the other works a tool. Letting go keeps the speed, so you can push off. While the left hand holds on, controller flying rests.");
             MirrorCutter = Config.Bind("Bild", "CutterSpiegeln", true,
                 "Copy the detailed left side of the cutter's model onto its plain right side, which the flat game never showed.");
             VrToolFit.Bind(Config);
@@ -146,6 +149,7 @@ namespace ShipbreakerVR
             Unload("second tool", VrDualTools.Release);
             Unload("tool models", VrToolModels.Release);
             Unload("hands", VrHands.Release);
+            Unload("climbing", VrClimb.Release);
             Unload("crosshair", VrCrosshair.Release);
             Unload("aim camera", VrAim.Release);
             Unload("patches", () => harmony?.UnpatchSelf());

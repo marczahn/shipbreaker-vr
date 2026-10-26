@@ -96,6 +96,12 @@ namespace ShipbreakerVR
                 },
                 new BoolRow
                 {
+                    Label = L("Hold on and climb", "Festhalten und Hangeln"), Entry = Plugin.Climbing,
+                    Hint = L("Grip with a hand that holds no tool, close to a surface, holds on there; moving the hand pulls you along it, hand over hand with both. A light part comes to the hand instead, the station and fixed hulls stay put. Letting go keeps your speed, so you can push off. While the left hand holds on, flying rests.",
+                        "Grip mit einer Hand ohne Werkzeug, nah an einer Oberfläche, hält dich dort fest; bewegst du die Hand, ziehst du dich daran entlang, mit beiden Händen Hand über Hand. Ein leichtes Teil kommt stattdessen zur Hand, Station und feste Rümpfe bleiben, wo sie sind. Loslassen behält deinen Schwung, so kannst du dich abstoßen. Solange die linke Hand festhält, ruht das Fliegen."),
+                },
+                new BoolRow
+                {
                     Label = L("Fit tools in the hand", "Werkzeuge justieren"), Entry = VrToolFit.Adjusting,
                     Hint = L("While one hand holds the cutter or the grapple, squeeze the other hand's grip to grab the tool and move it until it sits in the hand; letting go stores the place for that tool and hand. Switch it off when they fit.",
                         "Während eine Hand Cutter oder Greifhaken hält: Grip der anderen Hand greift das Werkzeug, bewege es, bis es in der Hand sitzt. Loslassen speichert die Lage für dieses Werkzeug und diese Hand. Danach wieder ausschalten."),

@@ -471,7 +471,7 @@ Config `Steuerung/Controllersteuerung` (Aus/Vtol; the earlier "point and twist" 
   left stick press. A postfix on
   `LynxControlExtensions.GetInputIsPressed` never ran because Mono inlines it, so a transpiler redirects the calls in
   `ThrustController.Update`.
-The grip stays free for grabbing later. The left controller's name and features are logged once. OpenXR only reports
+The grip stays free for holding on (`VrClimb`, below). The left controller's name and features are logged once. OpenXR only reports
 controllers because `VrXr` enables the Oculus Touch interaction profile, which the AssetBundle's settings carry disabled.
 
 Hanging on the grapple: grappling something heavy (`GrappledMassRatio >= 1`, or reeling in something medium) makes the
@@ -485,6 +485,23 @@ game's own `TriggerRopeBreak(OutOfBounds)`, with its effects and the durability 
 rope (log: "Grapple: rope snapped at ..."). The game skips its out-of-view snap for heavy objects, so this is the only
 snap there apart from the rope passing through something. Holding something heavy with a hand still blocks thrust
 (`GrabController.IsGrabPreventingThrust`).
+
+### Holding on and climbing (`VrClimb`, config `Steuerung/Festhalten`)
+The game has its own grab (`GrabController`, `HandGrab`): it reaches for a raycast hit and holds the player with springs
+1.75 m behind the grabbed point (`HandSettings.ConnectedAnchorZOffset`), with lead and sticky animations. That does not
+fit a hand that should stay exactly where it holds, so the mod does its own: the grip of a hand that is free
+(`VrToolInput.Free`: no tool, not at the belt, not fitting a tool) looks for the nearest non-trigger collider within 10 cm
+of the controller (`Physics.OverlapSphere`, the player's own colliders skipped) and fixes the hand's position on it (on
+its rigidbody, or its transform without one). Each physics step (`VrCamera.FixedUpdate`) an impulse between the player's
+body (`GrabController.m_PlayerRigidbodyReference`) and the hold sets their relative velocity so the hand reaches the hold
+by the end of the step: a deadbeat constraint, no joints. Its share follows the masses; the station's static layer (27,
+`InStaticLayer`), kinematic bodies and masses above `GrabController.RawGrabbedMassRange` count as immovable, as in the
+game's `RigidbodyUtils.MassRatio`. Off the center of mass the part's effective mass along the push is used, which
+includes its turning. Two hands share the player's mass (and a part both hold, its mass). The controllers are measured
+on the rig, which moves once per frame at render (`VrClimb.RigPlaced`); within physics steps the hand moves along by how
+far the body moved since. Letting go of the last hold keeps the body's velocity relative to the holds smoothed over
+80 ms, capped at 5 m/s, so a push off flies on; a hand held back more than 0.5 m from its hold lets go without it.
+While the left hand holds on, controller flying rests. Log lines start with "Climbing:".
 
 ### Flight globe
 `VrFlightGlobe` draws a small globe at the bottom of the visor (config `Anzeige/Flugkugel`: Immer/BeimFliegen/Aus;

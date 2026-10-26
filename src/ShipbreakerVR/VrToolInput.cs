@@ -103,6 +103,19 @@ namespace ShipbreakerVR
             return (node == XRNode.LeftHand ? LeftHand : RightHand).GripDown;
         }
 
+        // Whether that hand is free to hold on (VrClimb): not at the belt, where its grip draws a tool, holding no tool,
+        // and not fitting one (VrToolFit). Without aiming with the hand the grips draw nothing, so both are free.
+        public static bool Free(XRNode node)
+        {
+            Update();
+            if (!VrAim.Active) return true;
+            var hand = node == XRNode.LeftHand ? LeftHand : RightHand;
+            if (hand.Zone != VrToolBelt.Zone.None || VrToolFit.Blocks(node)) return false;
+            if (VrDualTools.Second != EquipmentController.Equipment.None && VrDualTools.SecondNode == node) return false;
+            if (VrDualTools.Suspended != EquipmentController.Equipment.None && VrDualTools.SuspendedNode == node) return false;
+            return node != ToolNode || !FindEquipment() || equipment.IsNothingEquipped;
+        }
+
         private static int updatedFrame = -1;
         private static int holsterPulses;
         private static EquipmentController.Equipment lastEquipment;
