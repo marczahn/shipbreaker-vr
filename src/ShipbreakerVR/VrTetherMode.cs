@@ -8,12 +8,13 @@ namespace ShipbreakerVR
 {
     // A second mode for the grapple, like the cutter's, as Marc asked: B tap switches between grappling and placing
     // tethers (VrToolInput). In the tether mode the trigger places a tether: pressed it starts where the hand points,
-    // released it ends where the hand points then; B held recalls the tethers. The mode is the mod's own, the game only
+    // released it ends where the hand points then; A held recalls the tethers, and B only switches back, so a slow
+    // tap never recalls them. The mode is the mod's own, the game only
     // gets the tether actions instead of the grapple's. The game's own grapple modes (GunController: Grapple and an
     // unreleased Magnet) are left alone; B tap no longer sends ToolMode to the grapple.
-    // In the tether mode A lets go of the tether the laser points at (on its rope or near one of its ends), as recalling
-    // does for all of them (TetherController.TryDespawnTether: Tether.DespawnRope); that tether is traced in orange
-    // (VrAim). Pointing at no tether, A interacts as usual.
+    // In the tether mode a tap on A lets go of the tether the laser points at (on its rope or near one of its ends), as
+    // recalling does for all of them (TetherController.TryDespawnTether: Tether.DespawnRope); that tether is traced in
+    // orange (VrAim). Pointing at no tether, A interacts as usual.
     // Shown by the laser, orange instead of blue, a ring where the laser meets something, a line from where the tether
     // started to where the hand points while the trigger is held (VrAim), and by the controller: one buzz when the grapple
     // mode comes back, two for the tether mode.

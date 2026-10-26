@@ -115,14 +115,14 @@ interacting, the grapple and the "entity of interest".
   it points at the release), or one `RecallTethers` press if the hand points at nothing. On the grapple B tap switches
   the mod's own tether mode instead (`VrTetherMode`, Marc's wish, like the cutter's mode switch): there the trigger
   sends `PlaceTether` instead of `GrappleFire` (decided at the press, only if the hand points at something), A does not
-  throw, B does not reel, and B held always recalls. The game's grapple has modes of its own (`GunController`,
+  throw, B does not reel, A held recalls, and B only switches back (any length, so a slow tap never recalls). The game's grapple has modes of its own (`GunController`,
   `GunMode` Grapple/Magnet, `CycleGunMode` on `ToolMode`, only through the modes in `m_AvailableGunModes`); the
   magnet (`MagnetController`, fixed magnets that hold parts on springs) seems unreleased. B tap no longer sends
   `ToolMode` to the grapple; the first switch logs whether the game's grapple has more than one mode. The mode shows as
   an orange laser, a ring where it hits and a line from the tether's start while the trigger is held (`VrAim`), and
   one buzz back to grappling, two into the tether mode. In the tether mode A lets go of the tether the laser points at
   (the active tether whose straight line from start to end passes closest to the laser, within about 3°; traced in
-  orange meanwhile): `Tether.DespawnRope`, which recalling calls for each tether (`TetherController.TryDespawnTether`)
+  orange meanwhile), on release of a tap: `Tether.DespawnRope`, which recalling calls for each tether (`TetherController.TryDespawnTether`)
   and which removes it from `mActiveTethers` through `OnTetherDespawned`. Pointing at no tether, A interacts. (Until pause and centering
   moved to the stick presses, a button counted only without its twin on the other controller.) The throwing gesture was considered and dropped: an
   accidental throw would look like a bug. The stick press was dropped too: it is imprecise and wears out.
