@@ -18,7 +18,6 @@ namespace ShipbreakerVR
         internal static ConfigEntry<bool> MultiPass;
         internal static ConfigEntry<bool> SeparateEyeTextures;
         internal static ConfigEntry<bool> StartVrAtLaunch;
-        internal static ConfigEntry<bool> BodyFollowsHead;
         internal static ConfigEntry<bool> UiInVr;
         internal static ConfigEntry<float> HudDistance;
         internal static ConfigEntry<float> HudScale;
@@ -54,8 +53,6 @@ namespace ShipbreakerVR
                 "A separate texture per eye instead of a Texture2DArray. Experimental, in case MultiPass alone is not enough.");
             StartVrAtLaunch = Config.Bind("Rendering", "VrBeimStart", true,
                 "Start VR as soon as the game launches, so the intro and loading screens already show in the headset. Off: start VR with F3.");
-            BodyFollowsHead = Config.Bind("Steuerung", "KoerperFolgtKopf", true,
-                "The body turns with the head (and with it the tools' aim, unless they aim with the hand, see ZielenMitHand). Mouse and stick add extra rotation. Off: the head looks around freely, only the mouse turns the body.");
             AmbientOcclusion = Config.Bind("Bild", "Umgebungsverdeckung", VrPerformance.Occlusion.Niedrig,
                 "Ambient occlusion (shading in corners and creases) in VR. Niedrig: half resolution and few steps, as the game uses it in the bay. The station asks for full resolution and 16 steps, which at VR resolution costs so much GPU time that it stutters. Aus: off. Spiel: as the game sets it.");
             ControlScheme = Config.Bind("Steuerung", "Controllersteuerung", VrControls.Scheme.Vtol,

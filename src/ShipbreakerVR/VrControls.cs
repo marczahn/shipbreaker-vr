@@ -13,7 +13,7 @@ namespace ShipbreakerVR
     // it is pushed, and Y brakes. The grips stay free for grabbing. While the left hand holds a tool its controller works
     // the tool (VrToolInput), so there is no flying and no braking then; the right stick still turns.
     // Thrust and brake go through the game's own actions (ThrustController reads them via LynxControls), so fuel, forces and
-    // HUD stay the game's. Rotation is applied in VrBody: to the playspace with "body follows head", to the body without.
+    // HUD stay the game's. Rotation is applied in VrBody, to the playspace.
     internal static class VrControls
     {
         public enum Scheme { Aus, Vtol }
