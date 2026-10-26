@@ -29,7 +29,7 @@ tools off your suit and aim them with your hands, and use the menus with your mo
   stick turns you, Y brakes.
 - **Tools in your hands.** Grab the grapple, cutter, demo charges and scanner from your hips, shoulder and helmet with
   either hand, and aim them where your hand points. A thin laser shows where. The suit's hands follow your
-  controllers.
+  controllers, and the cutter's plain right side, never seen in the flat game, gets the detail of its left side.
 - **Menus with the controllers.** No need to reach for the mouse: your controllers work like a gamepad in all menus.
 - **Your HUD inside the helmet.** The game's display sits in your visor, menus float in the room in front of you, and
   the helmet frame moves with your head.
