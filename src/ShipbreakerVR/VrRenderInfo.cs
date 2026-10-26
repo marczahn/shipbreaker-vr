@@ -97,7 +97,7 @@ namespace ShipbreakerVR
             foreach (var light in UnityEngine.Object.FindObjectsOfType<HDAdditionalLightData>())
             {
                 var unity = light.GetComponent<Light>();
-                if (unity == null || !unity.isActiveAndEnabled || unity.shadows == LightShadows.None || (unity.bakingOutput.isBakeUsed && unity.bakingOutput.lightmapBakeType == LightmapBakeType.Baked)) continue;
+                if (unity == null || !unity.isActiveAndEnabled || unity.shadows == LightShadows.None || (unity.bakingOutput.isBaked && unity.bakingOutput.lightmapBakeType == LightmapBakeType.Baked)) continue;
                 count++;
                 if (count <= 12) lights.Append(lights.Length > 0 ? ", " : "").Append($"'{light.name}' {unity.type} {light.shadowUpdateMode}");
             }
