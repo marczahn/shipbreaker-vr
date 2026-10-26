@@ -577,6 +577,7 @@ namespace ShipbreakerVR
             rig.localScale = new Vector3(scale, scale, scale);
             rig.rotation = Playspace;
             rig.position = position - Playspace * (recenterPosition * scale) + WorldHeadOffset;
+            VrToolModels.Place();
         }
 
         // Lying in bed (waking up, the monitor above the bed) the Hab camera looks up at the ceiling. There the playspace

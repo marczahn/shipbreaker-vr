@@ -75,6 +75,24 @@ interacting, the grapple and the "entity of interest".
   `CutterFire`/`ToolMode` (animations, prompts); virtual presses post none.
 - F8 logs the aim state, what the beam hits and the parent chain of the cutter model (`CuttingFXController.m_CuttingTool`)
   for moving the tool models into the hand later.
+- Tool models (`VrToolModels`): every equipped tool is parented to the right hand's equipment point
+  (`HandGrab.EquipmentGeoTransform`, returned by `GrabController.GetHandPositionTransformAndSetEquipment`); unequipped
+  tools go to rest points. The game's hand (`HandGrab.m_HandTarget`) lerps to the tool's grip
+  (`m_EquipmentHandTargetTransforms[equipment]`). In `Application.onBeforeRender`, after the rig has moved
+  (`VrCamera.FollowGameCamera`), the equipment point is set to the controller: rotation = aim pose × the point's rest
+  rotation relative to the game camera, position so that the tool's grip target lands on the grip pose's position. Its
+  rest local pose is restored when hand aiming is inactive and on unload. The cutter's beam
+  (`m_CutOriginTransform`) and the grapple's line start on the models, so they leave from the hand. The tools' shadow
+  copies (`m_...Shadow`, `ShadowActivePoint`) stay where they were. The log line `Tool in hand: <tool>; equipment point
+  ...` shows the hierarchy once per tool.
+- Tool belt (`VrToolBelt`): zones relative to the head in tracking space, turned with the head's heading (x right,
+  y up, z forward): hips below -0.45 m and less than 0.25 m forward, right of +0.08 m grapple, left of -0.08 m demo
+  charges; the right side of the helmet (within 0.22 m, x > 0.06, z > -0.05) scanner; over the shoulder (y > -0.12,
+  z < -0.05, x > -0.1) cutter. A short buzz on entering a zone, logged as `Tool belt: hand at <zone> (x, y, z m from
+  the head)`. Grip pressed in a zone without the trigger pulses the game's `SelectGrapple`/`SelectCutter`/
+  `SelectDemoCharge`/`ActivateScanner`, or `UnequipCurrentEquipment` if that tool is already in the hand
+  (`EquipmentController.Update`, now in the input patch list); `CanEquip` and `IsEquipmentBlocked` are checked first,
+  because virtual presses bypass the action blocker.
 
 ## Body follows head
 - The body rotates in `OrientationController.HandleAxisRotation` via `Rigidbody.MoveRotation(rotation * mouseDelta)`.

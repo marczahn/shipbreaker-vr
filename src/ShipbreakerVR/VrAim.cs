@@ -18,7 +18,7 @@ namespace ShipbreakerVR
     // search grid) then fan out from the hand as they did from the eye, and rolling the hand rolls the cutter's line.
     // A beam from the hand to what it points at shows where that is; the visor's crosshair still marks the head's center.
     // The buttons of the right controller work the tools while aiming with the hand (VrToolInput).
-    // The tool models stay where the game puts them, in front of the head.
+    // The tool models go into the hand (VrToolModels).
     internal static class VrAim
     {
         private const float BeamWidth = 0.004f;
@@ -124,6 +124,17 @@ namespace ShipbreakerVR
             aim.nearClipPlane = main.nearClipPlane;
             aim.farClipPlane = main.farClipPlane;
             active = true;
+        }
+
+        // For holding the tool models (VrToolModels), right before rendering: where the hand holds (the grip pose's
+        // position) and where it points (the aim pose's rotation), in the world.
+        public static bool TryGetHand(out Vector3 grip, out Quaternion rotation)
+        {
+            grip = Vector3.zero;
+            if (!TryGetPose(out _, out rotation)) return false;
+            if (!right.TryGetFeatureValue(CommonUsages.devicePosition, out var local)) return false;
+            grip = VrCamera.Instance.transform.parent.TransformPoint(local);
+            return true;
         }
 
         // The right controller's aim pose in the world (it points where the controller points; the grip pose runs along

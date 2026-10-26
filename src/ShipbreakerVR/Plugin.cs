@@ -66,7 +66,7 @@ namespace ShipbreakerVR
             FlightGlobeX = Config.Bind("Anzeige", "FlugkugelX", -0.159f, "Horizontal position of the flight globe on the visor, from -0.5 (left edge) to 0.5 (right edge).");
             FlightGlobeY = Config.Bind("Anzeige", "FlugkugelY", -0.38f, "Vertical position of the flight globe on the visor, from -0.5 (bottom edge) to 0.5 (top edge).");
             AimWithHand = Config.Bind("Steuerung", "ZielenMitHand", true,
-                "The tools (cutter, grapple, scanner, demo charges), grabbing and interacting aim where the right controller points instead of at the center of the view. A beam shows where. The right controller works the tools: trigger fires or grapples, A interacts (with the trigger held: throws), grip with the trigger held reels in, B switches the tool mode (held: places a tether, held while pointing at nothing: recalls the tethers).");
+                "The tools (cutter, grapple, scanner, demo charges), grabbing and interacting aim where the right controller points instead of at the center of the view. A beam shows where. The right controller works the tools: trigger fires or grapples, A interacts (with the trigger held: throws), grip with the trigger held reels in, B switches the tool mode (held: places a tether, held while pointing at nothing: recalls the tethers). The grip at the body draws or puts away a tool: right hip grapple, left hip demo charges, over the right shoulder cutter, right side of the helmet scanner. The tool models sit in the right hand.");
             UiInVr = Config.Bind("Anzeige", "UiImRaum", true,
                 "Show HUD and menus on a canvas in the world instead of flat over the image.");
             HudDistance = Config.Bind("Anzeige", "HudAbstand", 1.5f, "Distance of the visor display in front of the eyes, in meters.");
@@ -130,6 +130,7 @@ namespace ShipbreakerVR
             Unload("VR camera", VrCamera.Unload);
             Unload("frame statistics", VrPerformance.Detach);
             Unload("flight globe", VrFlightGlobe.Release);
+            Unload("tool models", VrToolModels.Release);
             Unload("aim camera", VrAim.Release);
             Unload("patches", () => harmony?.UnpatchSelf());
             Log.LogInfo($"{Name} unloaded");

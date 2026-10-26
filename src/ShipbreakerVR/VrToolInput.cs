@@ -22,7 +22,7 @@ namespace ShipbreakerVR
     // calls in the tool classes are redirected (ToolInputPatch) to versions that add these presses to the real ones.
     internal static class VrToolInput
     {
-        private enum Action { Fire, Throw, Interact, ToolMode, Tether, Recall, Retract }
+        private enum Action { Fire, Throw, Interact, ToolMode, Tether, Recall, Retract, Grapple, Cutter, DemoCharge, Scanner, Holster }
 
         private const float TriggerPress = 0.5f;
         private const float TriggerRelease = 0.4f;
@@ -43,6 +43,11 @@ namespace ShipbreakerVR
             { GameplayActions.GameplayActionSet.PlaceTether, Action.Tether },
             { GameplayActions.GameplayActionSet.RecallTethers, Action.Recall },
             { GameplayActions.GameplayActionSet.RetractionModifier, Action.Retract },
+            { GameplayActions.GameplayActionSet.SelectGrapple, Action.Grapple },
+            { GameplayActions.GameplayActionSet.SelectCutter, Action.Cutter },
+            { GameplayActions.GameplayActionSet.SelectDemoCharge, Action.DemoCharge },
+            { GameplayActions.GameplayActionSet.ActivateScanner, Action.Scanner },
+            { GameplayActions.GameplayActionSet.UnequipCurrentEquipment, Action.Holster },
         };
 
         private static InputDevice left;
@@ -56,6 +61,9 @@ namespace ShipbreakerVR
         private static float bDownAt;
         private static bool bLong;
         private static bool bTether;
+        private static bool gripDown;
+        private static EquipmentController equipment;
+        private static float nextSearch;
         private static int logs;
 
         private static void Update()
@@ -66,7 +74,8 @@ namespace ShipbreakerVR
             System.Array.Clear(now, 0, Count);
             if (!VrAim.Active || !Get(ref right, XRNode.RightHand))
             {
-                trigger = aDown = bDown = false;
+                trigger = aDown = bDown = gripDown = false;
+                VrToolBelt.Reset();
                 return;
             }
             Get(ref left, XRNode.LeftHand);
@@ -76,6 +85,10 @@ namespace ShipbreakerVR
             now[(int)Action.Fire] = trigger;
             right.TryGetFeatureValue(CommonUsages.grip, out var grip);
             now[(int)Action.Retract] = trigger && grip >= GripPress;
+            var zone = VrToolBelt.Update(right);
+            var gripPressed = grip >= GripPress && !gripDown;
+            gripDown = grip >= GripPress;
+            if (gripPressed && !trigger && zone != VrToolBelt.Zone.None) Draw(zone);
 
             var a = Button(right, CommonUsages.primaryButton) && !Button(left, CommonUsages.primaryButton);
             if (a && !aDown) aThrows = trigger;
@@ -101,6 +114,30 @@ namespace ShipbreakerVR
             bDown = b;
 
             LogChanges();
+        }
+
+        // Grip at a zone of the tool belt: draws that tool, or puts it away if it is the one in the hand. Through the
+        // game's own selection keys (EquipmentController.Update), which check whether the tool may change; the scanner's
+        // key switches back to the previous tool by itself.
+        private static void Draw(VrToolBelt.Zone zone)
+        {
+            if (equipment == null && Time.unscaledTime >= nextSearch)
+            {
+                nextSearch = Time.unscaledTime + 1f;
+                equipment = Object.FindObjectOfType<EquipmentController>();
+            }
+            if (equipment == null) return;
+            var tool = zone == VrToolBelt.Zone.Grapple ? EquipmentController.Equipment.GrappleHook
+                : zone == VrToolBelt.Zone.Cutter ? EquipmentController.Equipment.CuttingTool
+                : zone == VrToolBelt.Zone.DemoCharge ? EquipmentController.Equipment.DemoCharge
+                : EquipmentController.Equipment.Scanner;
+            if (!equipment.CanEquip(tool) || equipment.IsEquipmentBlocked(tool)) return;
+            var holster = tool != EquipmentController.Equipment.Scanner && !equipment.IsNothingEquipped && equipment.CurrentEquipment == tool;
+            now[(int)(holster ? Action.Holster
+                : zone == VrToolBelt.Zone.Grapple ? Action.Grapple
+                : zone == VrToolBelt.Zone.Cutter ? Action.Cutter
+                : zone == VrToolBelt.Zone.DemoCharge ? Action.DemoCharge
+                : Action.Scanner)] = true;
         }
 
         private static bool Get(ref InputDevice device, XRNode node)
@@ -154,6 +191,7 @@ namespace ShipbreakerVR
             "BBI.Unity.Game.ScalpelController", "BBI.Unity.Game.ScalpelFXController",
             "BBI.Unity.Game.DemoChargeController", "BBI.Unity.Game.Scanner", "BBI.Unity.Game.InteractionController",
             "BBI.Unity.Game.ThrowController", "BBI.Unity.Game.HandGrab", "BBI.Unity.Game.GrabController",
+            "BBI.Unity.Game.EquipmentController",
         };
 
         private static readonly Dictionary<MethodInfo, MethodInfo> Replacements = new[]

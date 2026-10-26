@@ -436,3 +436,20 @@ itself does roll, but the rail on the tool model in front of the helmet kept sho
 turns to what the hand is doing. And the demo charges flew only roughly where Marc looked. That one had a twist:
 the game throws them from in front of the head and along the body's forward, not even the head's.
 Now they leave from just in front of the hand and fly where it points.
+
+<a id="tools-in-hand"></a>
+## 2026-10-26 · Tools in the hand, tools on the belt
+
+With aiming in the hand working, the tools themselves still floated in front of the helmet, pointing wherever the
+hand pointed. A bit like a ghost holding them for you. Marc wanted them in the hand next, and the tool selection from
+the body right along with it, since the two belong together.
+
+The game turned out to be helpful again. Every tool hangs on one point of the player's right hand, and the game's own
+hand then reaches for the tool's handle. So the mod moves that one point to the controller every frame, right before
+rendering, turns it the way the hand points and shifts it until the handle sits in the fist.
+
+For picking tools, the right hand now reaches to the body and squeezes the grip: the grapple at the right hip, the demo
+charges at the left hip, the cutter over the right shoulder and the scanner at the side of the helmet. The controller
+buzzes when the hand is in a zone. Squeezing at the zone of the tool already in the hand puts it away. The zones are a
+first guess with a ruler and no body to measure, so they will need Marc's arms to set them right.
+
