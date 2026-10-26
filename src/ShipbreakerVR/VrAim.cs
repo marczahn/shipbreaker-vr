@@ -18,16 +18,22 @@ namespace ShipbreakerVR
     // with the main camera's lens, and takes the main camera's place in the tools' code (AimPatch). The screen-space
     // patterns (the cutter's line, the grapple's search grid) then fan out from the hand as they did from the eye, and
     // rolling the hand rolls the cutter's line.
-    // A beam from the hand to what it points at shows where that is; the visor's crosshair still marks the head's center.
+    // A thin laser from the muzzle with a dot on what it hits shows where the hand points, in the color the game gives its
+    // reticle for the tool (in range, cooling down); the game's crosshair in the middle of the view is hidden meanwhile
+    // (VrCrosshair).
     // The buttons of the tool hand's controller work the tools while aiming with the hand (VrToolInput).
     // The tool models go into the hand (VrToolModels).
     internal static class VrAim
     {
-        private const float BeamWidth = 0.004f;
+        private const float BeamWidth = 0.002f;
         private const float BeamMiss = 5f;
         private const float BeamRange = 100f;
-        // Size of the dot on what the hand points at, as a fraction of its distance from the eye (about 0.7 degrees).
-        private const float DotSize = 0.012f;
+        // Size of the dot on what the hand points at, as a fraction of its distance from the eye (about 0.5 degrees),
+        // and of its bright core.
+        private const float DotSize = 0.009f;
+        private const float CoreSize = 0.4f;
+        // The laser without a tool reticle to take the color from (scanner, demo charges, empty hand).
+        private static readonly Color LaserColor = new Color(0.55f, 0.95f, 1f);
 
         // How far in front of the hand a thrown demo charge starts, clear of the player's collider.
         private const float ThrowAhead = 0.2f;
@@ -55,6 +61,8 @@ namespace ShipbreakerVR
         private static Mesh dotMesh;
         private static Material beamMaterial;
         private static Material dotMaterial;
+        private static Material coreMaterial;
+        private static Color laserColor = LaserColor;
 
         // True while the tools aim from the hand: VR in gameplay, the option on and the tool hand's controller tracked.
         public static bool Active
@@ -70,6 +78,9 @@ namespace ShipbreakerVR
         public static Camera Camera => Active ? aim : LynxCameraController.MainCamera;
 
         public static Transform CameraTransform => Active ? aim.transform : LynxCameraController.MainCameraTransform;
+
+        // The aim camera in the place of another one the game's code holds (GrappleCrosshairPatch).
+        public static Camera Instead(Camera camera) => Active ? aim : camera;
 
         // Where the cutter's line starts in CuttingFXController.StartCutLine (the tool's own transform in the flat game).
         public static Transform CutOrigin(Component tool) => Active ? aim.transform : tool.transform;
@@ -188,14 +199,16 @@ namespace ShipbreakerVR
             return true;
         }
 
-        // Called from our UI pass for each eye, before the UI: the beam from the hand and a dot on what it hits. Drawn
-        // over everything (the pass has no depth), which is fine since the beam ends at the first thing it meets.
+        // Called from our UI pass for each eye, before the UI: the laser from the hand and a dot on what it hits. Drawn
+        // over everything (the pass has no depth), which is fine since the laser ends at the first thing it meets.
         public static void Draw(CustomPassContext context, Camera vrCamera)
         {
             if (vrCamera == null || context.hdCamera.camera != vrCamera) return;
             UpdateBeam();
             if (!beamVisible) return;
             if (beamMesh == null) CreateMeshes();
+            beamMaterial.color = laserColor;
+            dotMaterial.color = laserColor;
 
             VrUi.GetEye(context.hdCamera, out var view, out var proj);
             var eye = (Vector3)view.inverse.GetColumn(3);
@@ -219,7 +232,9 @@ namespace ShipbreakerVR
             if (beamHit)
             {
                 var size = Vector3.Distance(eye, beamEnd) * DotSize;
-                cmd.DrawMesh(dotMesh, Matrix4x4.TRS(beamEnd, Quaternion.LookRotation(eye - beamEnd), new Vector3(size, size, 1f)), dotMaterial, 0, 0);
+                var facing = Quaternion.LookRotation(eye - beamEnd);
+                cmd.DrawMesh(dotMesh, Matrix4x4.TRS(beamEnd, facing, new Vector3(size, size, 1f)), dotMaterial, 0, 0);
+                cmd.DrawMesh(dotMesh, Matrix4x4.TRS(beamEnd, facing, new Vector3(size * CoreSize, size * CoreSize, 1f)), coreMaterial, 0, 0);
             }
             context.renderContext.ExecuteCommandBuffer(cmd);
             cmd.Clear();
@@ -234,6 +249,7 @@ namespace ShipbreakerVR
             var rotation = Quaternion.identity;
             beamVisible = LynxCameraController.MainCamera != null && TryGetAim(out beamStart, out rotation);
             if (!beamVisible) return;
+            laserColor = VrCrosshair.TryGetColor(out var reticle) ? new Color(reticle.r, reticle.g, reticle.b) : LaserColor;
             if (pointerMask == 0) pointerMask = PointerMask();
             var forward = rotation * Vector3.forward;
             beamHit = Physics.Raycast(beamStart, forward, out var hit, BeamRange * VrCamera.WorldScale, pointerMask, QueryTriggerInteraction.Ignore);
@@ -267,9 +283,9 @@ namespace ShipbreakerVR
 
         private static void CreateMeshes()
         {
-            // Bright near the hand, fading towards the target.
-            var near = new Color(0.55f, 0.95f, 1f, 0.55f);
-            var far = new Color(0.55f, 0.95f, 1f, 0.12f);
+            // Bright near the hand, fading a little towards the target; tinted by the material (laserColor).
+            var near = new Color(1f, 1f, 1f, 0.9f);
+            var far = new Color(1f, 1f, 1f, 0.4f);
             beamMesh = new Mesh { name = "ShipbreakerVR Aim Beam" };
             beamMesh.vertices = new[] { new Vector3(-0.5f, 0f, 0f), new Vector3(0.5f, 0f, 0f), new Vector3(0.5f, 1f, 0f), new Vector3(-0.5f, 1f, 0f) };
             beamMesh.colors = new[] { near, near, far, far };
@@ -292,7 +308,8 @@ namespace ShipbreakerVR
             dotMesh = new Mesh { name = "ShipbreakerVR Aim Dot", vertices = vertices, colors = colors, triangles = triangles };
 
             beamMaterial = Overlay(Color.white);
-            dotMaterial = Overlay(new Color(0.75f, 1f, 1f, 0.9f));
+            dotMaterial = Overlay(Color.white);
+            coreMaterial = Overlay(new Color(1f, 1f, 1f, 0.9f));
         }
 
         private static Material Overlay(Color color)
@@ -306,12 +323,12 @@ namespace ShipbreakerVR
         public static void Release()
         {
             if (aim != null) Object.Destroy(aim.gameObject);
-            foreach (var o in new Object[] { beamMesh, dotMesh, beamMaterial, dotMaterial })
+            foreach (var o in new Object[] { beamMesh, dotMesh, beamMaterial, dotMaterial, coreMaterial })
                 if (o != null) Object.Destroy(o);
             aim = null;
             throwOrigin = null;
             beamMesh = dotMesh = null;
-            beamMaterial = dotMaterial = null;
+            beamMaterial = dotMaterial = coreMaterial = null;
         }
 
         // For the F8 dump.

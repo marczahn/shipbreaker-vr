@@ -493,3 +493,32 @@ the arms after the animation anyway: both now follow their controllers whenever 
 something else. Marc found the hands looking good. The demo charges are still the exception, since they hang on the
 right hand's bones.
 
+
+<a id="laser-pointer"></a>
+## 2026-10-26 · A laser pointer, and tools in the fist
+
+Before the next release Marc had four wishes. Every fresh start began with a demo charge out, although no tool should
+be. A tool drawn with the left hand should be held by the game's left hand. Cutter and grapple floated a good bit above
+the hands. And the crosshair in the middle of the view, which no tool listens to any more, should go, with something
+like a laser pointer instead of the beam.
+
+The demo charge was not out at all, as far as the log could tell. The game starts with the grapple in hand, and the mod
+puts it away at once. What I suspect Marc saw is the charge's model, which the game leaves hanging on the right hand's
+bone the whole time. In the flat game that hand is out of view unless it holds the charge. With the hand following the
+controller it is right in front of you. Until now the mod only hid the charge after it had been drawn and put away
+once, so now it stays hidden whenever it is not held.
+
+The floating tools were my mistake from [the first round](#tools-in-hand). I had put the tool's handle marker into the
+fist, trusting that the game's hand reaches for it. Nothing reaches for it. The game closes its hand around every tool
+with the same grab animation, and the marker sits more than half a meter from the point the tool hangs on. So the mod
+now watches the flat game's hand for a second the first time the right hand holds a tool, notes where the tool sits
+relative to the wrist, and from then on places the tool around the game's hand instead of the handle around the
+controller. The left hand gets the same grip, mirrored. That also covers Marc's second wish: the game's left hand
+closes around the tool while the grip is squeezed, and the right one stays open and empty. Inside the game the tool
+still belongs to the right hand. That only matters once both hands grab at the same time, so it can wait until then.
+
+For the crosshair Marc asked whether I had a better idea than a laser pointer. Half of one. The crosshair is gone and a
+thin laser with a bright dot replaces the beam, but the laser takes over the crosshair's color, the one the game uses
+to say that a target is in range or that the cutter is still cooling down. The information survives, just at the end
+of the laser instead of in the middle of the view. Whether the tools now sit in the fists, Marc will see in the
+headset.

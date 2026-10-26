@@ -2,19 +2,20 @@ using System.Collections.Generic;
 using BBI.Unity.Game;
 using HarmonyLib;
 using UnityEngine;
+using UnityEngine.XR;
 
 namespace ShipbreakerVR
 {
     // The tool models in the hand that holds the tool (VrToolInput.ToolNode) while aiming with it (VrAim). The game hangs
     // the equipped tool on the right hand's equipment point (HandGrab.EquipmentGeoTransform, via
     // GrabController.GetHandPositionTransformAndSetEquipment), a fixed point on the player's body to the lower right of the
-    // view, and moves the game's hand to the tool's grip (m_EquipmentHandTargetTransforms). Right before rendering, that
-    // point goes to the controller: turned like the aim pose (the barrels run along the point's forward), and shifted so
-    // that the tool's grip lies in the controller's grip. The tools aim from their muzzle (Muzzle), so beam, cut and
+    // view, and its animation closes the right hand around the tool there (the same grab animation for every tool). Right
+    // before rendering, that point goes to the controller: turned like the aim pose (the barrels run along the point's
+    // forward), and shifted so that the game's hand, which follows the controller (VrHands), holds the tool as it does in
+    // the flat game (Measure); in the left hand mirrored. The tools aim from their muzzle (Muzzle), so laser, cut and
     // grapple line leave from the barrel. With hand aiming off the point goes back. Demo charges have no model on the
     // point: the game's hand holds them, animated, so for them the arm is bent after the animation until the hand reaches
-    // the controller (PoseArm); with them in the left hand that arm reaches over. Otherwise the game's arms follow their
-    // controllers (VrHands).
+    // the controller (PoseArm); with them in the left hand that arm reaches over.
     internal static class VrToolModels
     {
         private static readonly AccessTools.FieldRef<HandGrab, List<Transform>> HandTargets =
@@ -76,13 +77,16 @@ namespace ShipbreakerVR
                 return;
             }
 
-            // The tool's grip and muzzle relative to the point, in the point's axes but world units (the point at rest if
-            // the grip does not move with it).
+            // The tool's grip and muzzle relative to the point, in the point's axes but world units: the controller's grip
+            // where the game's hand holds the tool, its wrist placed as in VrHands; until that hold is known the tool's
+            // grip target (the point at rest if the target does not move with it), which lies well away from the hand.
             var equipment = hand.CurrentEquipmentType;
             var gripTarget = GripTarget(hand, equipment);
             var toPoint = Quaternion.Inverse(point.rotation);
             gripOffset = Vector3.zero;
-            if (gripTarget != null)
+            if (TryGetHold(VrToolInput.ToolNode == XRNode.LeftHand, out var wrist, out _, out _))
+                gripOffset = wrist - WristBehindGrip * VrCamera.WorldScale;
+            else if (gripTarget != null)
             {
                 gripOffset = gripTarget.IsChildOf(point)
                     ? toPoint * (gripTarget.position - point.position)
@@ -96,6 +100,91 @@ namespace ShipbreakerVR
             point.rotation = aim;
             point.position = grip - aim * gripOffset;
             moved = true;
+        }
+
+        // How the game's right hand holds the tool models: its wrist and directions (knuckles: wrist to middle finger;
+        // thumb side: little to index finger) in the equipment point's axes, in world units. Per tool and cutter mode (Key),
+        // though the game uses one animation for all of them.
+        private struct Hold
+        {
+            public Vector3 Wrist;
+            public Vector3 Knuckles;
+            public Vector3 ThumbSide;
+            // The barrel's sideways position, the plane to mirror the hold at for the left hand.
+            public float Barrel;
+        }
+
+        private const float MeasureAfter = 1f;
+        private static readonly Dictionary<int, Hold> holds = new Dictionary<int, Hold>();
+        private static Hold lastHold;
+        private static bool anyHold;
+        private static int measureKey = -1;
+        private static float measureSince;
+
+        // From VrHands.LateUpdate, after the animation, before the arms are posed: once per tool, when the game's right
+        // hand has held it closed for MeasureAfter (the bring-out animation done) with the right controller, how the flat
+        // game's hand holds it. The point is where the flat game keeps it then, at rest under its parent (Place moves it
+        // only right before rendering).
+        public static void Measure(Transform wrist, Transform index, Transform middle, Transform little, bool closed)
+        {
+            var hand = RightHand();
+            var equipment = hand != null ? hand.CurrentEquipmentType : EquipmentController.Equipment.None;
+            var holding = closed && HasModel(equipment) && hand.CurrentHandState == HandGrab.HandState.Equipped
+                && VrToolInput.ToolNode == XRNode.RightHand && point != null && point.parent != null
+                && wrist != null && index != null && middle != null && little != null;
+            var key = holding ? Key(equipment) : -1;
+            if (key != measureKey)
+            {
+                measureKey = key;
+                measureSince = Time.unscaledTime;
+            }
+            if (key < 0 || Time.unscaledTime - measureSince < MeasureAfter || holds.ContainsKey(key)) return;
+            var toPoint = Quaternion.Inverse(point.parent.rotation * restRotation);
+            var origin = point.parent.TransformPoint(restPosition);
+            var hold = new Hold
+            {
+                Wrist = toPoint * (wrist.position - origin),
+                Knuckles = toPoint * (middle.position - wrist.position),
+                ThumbSide = toPoint * (index.position - little.position),
+                Barrel = hasMuzzle ? muzzleOffset.x : 0f,
+            };
+            holds[key] = hold;
+            lastHold = hold;
+            anyHold = true;
+            Plugin.Log.LogInfo($"Tool in hand: the game's right hand holds the {equipment}{(equipment == EquipmentController.Equipment.CuttingTool && cutter != null ? $" ({cutter.CurrentMode})" : "")} " +
+                $"with the wrist at {hold.Wrist.ToString("F3")} m from the equipment point, knuckles {hold.Knuckles.normalized.ToString("F2")}, " +
+                $"thumb side {hold.ThumbSide.normalized.ToString("F2")}, barrel at {hold.Barrel:0.000} m");
+        }
+
+        // How the hand that holds the tool holds the equipped tool model, in the point's axes (see Hold); the left hand
+        // like the right one mirrored at the barrel. Until the right hand was measured with this tool, as with another one.
+        public static bool TryGetHold(bool left, out Vector3 wrist, out Vector3 knuckles, out Vector3 thumbSide)
+        {
+            wrist = knuckles = thumbSide = Vector3.zero;
+            var hand = RightHand();
+            if (hand == null || !HasModel(hand.CurrentEquipmentType) || !anyHold) return false;
+            if (!holds.TryGetValue(Key(hand.CurrentEquipmentType), out var hold)) hold = lastHold;
+            wrist = hold.Wrist;
+            knuckles = hold.Knuckles;
+            thumbSide = hold.ThumbSide;
+            if (left)
+            {
+                wrist.x = 2f * hold.Barrel - wrist.x;
+                knuckles.x = -knuckles.x;
+                thumbSide.x = -thumbSide.x;
+            }
+            return true;
+        }
+
+        // The tools with a model on the equipment point.
+        private static bool HasModel(EquipmentController.Equipment equipment) =>
+            equipment == EquipmentController.Equipment.CuttingTool || equipment == EquipmentController.Equipment.GrappleHook;
+
+        private static int Key(EquipmentController.Equipment equipment)
+        {
+            if (equipment != EquipmentController.Equipment.CuttingTool) return (int)equipment;
+            if (cutter == null) cutter = Object.FindObjectOfType<CuttingToolController>();
+            return (int)equipment * 10 + (cutter != null ? (int)cutter.CurrentMode : 0);
         }
 
         // Where the tool in the hand aims from, for a hand at grip pointing along rotation (VrAim, also before Place has
@@ -165,7 +254,7 @@ namespace ShipbreakerVR
         // it, for judging the fit in the headset.
         private static void Log(HandGrab hand, EquipmentController.Equipment equipment, Transform gripTarget, Transform muzzle)
         {
-            var key = equipment == EquipmentController.Equipment.CuttingTool && cutter != null ? (int)equipment * 10 + (int)cutter.CurrentMode : (int)equipment;
+            var key = Key(equipment);
             if (key != logCandidate)
             {
                 logCandidate = key;
@@ -175,8 +264,9 @@ namespace ShipbreakerVR
             var models = new List<string>();
             foreach (Transform child in point) models.Add($"'{child.name}'");
             Plugin.Log.LogInfo($"Tool in hand: {equipment}; equipment point {Chain(point)}, rest {restPosition} {restRotation.eulerAngles}; " +
-                $"models on it: {string.Join(", ", models)}; grip {(gripTarget == null ? "none" : Chain(gripTarget))}, " +
-                $"{(gripTarget != null && gripTarget.IsChildOf(point) ? "moves with the tool" : "stays")}, offset {gripOffset} m, scale {point.lossyScale}; " +
+                $"models on it: {string.Join(", ", models)}; grip target {(gripTarget == null ? "none" : Chain(gripTarget))}, " +
+                $"{(gripTarget != null && gripTarget.IsChildOf(point) ? "moves with the tool" : "stays")}; controller grip at {gripOffset} m " +
+                $"({(TryGetHold(false, out _, out _, out _) ? "as the game's hand holds it" : "on the grip target")}), scale {point.lossyScale}; " +
                 $"muzzle {(muzzle == null ? "none" : $"{Chain(muzzle)} at {muzzleOffset} m, {Vector3.Angle(muzzle.forward, point.forward):0}° off the point's forward")}; hand target {Chain(hand.HandPositionTransform)}");
         }
 
@@ -198,19 +288,19 @@ namespace ShipbreakerVR
             var vr = VrCamera.Instance;
             var hand = RightHand();
             var holding = hand != null ? hand.CurrentEquipmentType : EquipmentController.Equipment.None;
-            if (heldBefore == EquipmentController.Equipment.DemoCharge && holding == EquipmentController.Equipment.None && VrAim.Active)
+            var aiming = VrAim.Active;
+            if (heldBefore == EquipmentController.Equipment.DemoCharge && holding == EquipmentController.Equipment.None && aiming)
             {
                 StowCharge(true);
-                HideProps(true);
                 stowingSince = Time.time;
             }
             else if (heldBefore != EquipmentController.Equipment.DemoCharge && holding == EquipmentController.Equipment.DemoCharge)
             {
                 if (stowed) StowCharge(false);
-                HideProps(false);
                 stowingSince = -1f;
             }
             heldBefore = holding;
+            HideProps(aiming && hand != null && holding != EquipmentController.Equipment.DemoCharge && FindArm(hand));
 
             // Fully at the controller while the charge is held; after letting go the arm blends back into the stow
             // animation, starting from the hand instead of the flat game's spot at the right.
@@ -262,11 +352,17 @@ namespace ShipbreakerVR
         private const float StowBlend = 0.35f;
         private static float stowingSince = -1f;
         private static readonly List<Renderer> hiddenProps = new List<Renderer>();
+        private static bool propsHidden;
+        private static int propLogs;
 
-        // The charge and the detonator hang on the hand bone; they disappear as soon as the grip lets go instead of riding
-        // along through the stow animation, and come back when the charge is drawn again.
+        // The charge and the detonator hang on the right hand's bone, and the game leaves them there: the flat game keeps
+        // that hand out of view unless it holds them. Here the hand follows its controller (VrHands), so they are hidden
+        // whenever the charge is not held, from the start (when the game's hand already carries a charge) and as soon as
+        // the grip lets go instead of riding along through the stow animation. They come back when the charge is drawn.
         private static void HideProps(bool hide)
         {
+            if (hide == propsHidden) return;
+            propsHidden = hide;
             if (!hide)
             {
                 foreach (var renderer in hiddenProps)
@@ -274,14 +370,22 @@ namespace ShipbreakerVR
                 hiddenProps.Clear();
                 return;
             }
-            if (armTip == null) return;
             foreach (var renderer in armTip.GetComponentsInChildren<Renderer>())
             {
-                if (!renderer.enabled) continue;
+                if (!renderer.enabled || !OnCharge(renderer.transform)) continue;
                 renderer.enabled = false;
                 hiddenProps.Add(renderer);
             }
-            if (stowLogs < 5) Plugin.Log.LogInfo($"Tool in hand: hid {hiddenProps.Count} renderer(s) on the hand: {string.Join(", ", hiddenProps.ConvertAll(r => r.name))}");
+            if (propLogs++ < 5) Plugin.Log.LogInfo($"Tool in hand: hid {hiddenProps.Count} renderer(s) on the hand: {string.Join(", ", hiddenProps.ConvertAll(r => r.name))}");
+        }
+
+        // Only the charge's own pieces (SM_Props_Demo_Charge, PRF_Tool_ExplosiveChargeDetonator), not whatever else
+        // the game may hang on the hand.
+        private static bool OnCharge(Transform transform)
+        {
+            for (var t = transform; t != null && t != armTip; t = t.parent)
+                if (t.name.IndexOf("Charge", System.StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            return false;
         }
 
         // Put away with the grip (VrToolInput), the demo charge stays in the animated hand: the game only ever leaves it by
@@ -434,6 +538,9 @@ namespace ShipbreakerVR
             stinger = null;
             grapple = null;
             logged.Clear();
+            holds.Clear();
+            anyHold = false;
+            measureKey = -1;
             armRoot = armMid = armTip = armFor = null;
             charges = null;
             loggedArm = loggedArmSkip = false;

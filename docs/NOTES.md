@@ -58,9 +58,25 @@ interacting, the grapple and the "entity of interest".
   `Transform.forward`, the body, not the head, which is why they flew only roughly where one looked. With hand aiming
   `ThrowOffset` becomes a point 0.2 m in front of the hand and the direction the hand's forward. Placed charges are
   jointed and drop the velocity component, so the direction does not matter for them.
-- Pointer: a beam (4 mm, fading) from the hand to the first hit of a plain raycast (default layers minus layers whose
-  name contains "Player", "UI" and our pass layer), with a dot of about 0.7 degrees on the hit, 5 m long without a hit.
-  Drawn with `UI/Default` in our after-post-process pass (`VrUiPass`) per eye, without depth, under the UI.
+- Pointer: a laser (2 mm, fading slightly) from the muzzle to the first hit of a plain raycast (default layers minus
+  layers whose name contains "Player", "UI" and our pass layer), with a dot of about 0.5 degrees and a white core on the
+  hit, 5 m long without a hit. Drawn with `UI/Default` in our after-post-process pass (`VrUiPass`) per eye, without
+  depth, under the UI. The first version was a 4 mm cyan beam that faded out; Marc wanted something more like a laser
+  pointer. Its color is the color the game gives the reticle of the tool in the hand: `GrappleCrosshairController.
+  CrosshairIcon` (lerped to `HookableInRange`, `HookableOutOfRange`, `NotHookableColor`, `NothingColor`), the cutter's
+  `CuttingUIController.m_AimedCenterReticleIcon` (cuttable in range, cooling down, nothing to cut) or the Stinger's
+  `m_ScalpelReticle`; cyan for the other tools and the empty hand. Log `Laser: <tool> reticle color #...` once per
+  color.
+- The game's crosshair (`VrCrosshair`): while hand aiming is active, the reticles in the middle of the view mark where
+  the head looks, which no tool uses. Hidden through `CanvasRenderer.SetAlpha(0)` (the game never touches that alpha, so
+  its own enabling and coloring go on): the center dot (`CentreDotUIController`, which the game only switches off for
+  the tool menu), the grapple's icon, grips, denied image, center dot, snap image, thrust indicators and distance text
+  (`GrappleCrosshairController`), the cutter's center reticle, cooldown ring, cut lines (`mCutLines`, created as needed,
+  so the list is collected every second) and edge points, and the Stinger's reticle (`CuttingUIController`). The cut
+  warnings stay. Back to alpha 1 when hand aiming is off. Log `Crosshair hidden while aiming with the hand: N
+  graphic(s): ...` once. Where the grapple has no target of its own, `GrappleCrosshairController.Update` judges what is
+  aimed at with a ray from its own camera field `PlayerCamera`, which `AimPatch` does not reach; `GrappleCrosshairPatch`
+  puts the aim camera in its place (`VrAim.Instead`), so the laser's color follows the hand.
 - Tool buttons (`VrToolInput`, only while hand aiming is active): all on the controller of the hand that holds the tool
   (the right one by default; on the left X stands for A and Y for B), the right stick stays with turning. Trigger =
   `GrappleFire`/`CutterFire`/`DemoChargeFire`; A = `Interact`, or `Throw` if the trigger was held when A went down (the
@@ -83,14 +99,24 @@ interacting, the grapple and the "entity of interest".
   EquipmentController < Player`, so on the body, not the camera; returned by
   `GrabController.GetHandPositionTransformAndSetEquipment`); unequipped tools go to rest points. The grapple
   (`PRFB_GrappleGun`) and the cutter (`CuttingTool`) are models on it, demo charges and scanner have none. The game's
-  hand (`HandGrab.m_HandTarget`, `rig_RHand_Target`) lerps to the tool's grip (`m_EquipmentHandTargetTransforms[equipment]`,
-  `RHandTarget` inside the model). The point rests at local rotation (358, 350, 0), i.e. turned 10° to the left so the
-  barrels converge on the screen center: the barrels run along the point's forward. In `Application.onBeforeRender`,
-  after the rig has moved (`VrCamera.FollowGameCamera`), the point gets the aim pose's rotation and a position that puts
-  the grip target on the grip pose's position. The first version kept the point's rest angle to the eye, which left the
-  barrels 10° off the beam. Its rest local pose is restored when hand aiming is inactive and on unload. The tools' shadow
-  copies (`m_...Shadow`, `ShadowActivePoint`) stay where they were. The log line `Tool in hand: <tool>; equipment point
-  ...` shows the hierarchy, offsets and muzzle once per tool (and cutter mode).
+  hand (`HandGrab.m_HandTarget`, `rig_RHand_Target`) lerps to the tool's grip
+  (`m_EquipmentHandTargetTransforms[equipment]`, `RHandTarget` inside the model), but nothing moves the arm there: for
+  every tool but demo charges `HandGrab` enters `Equipped` with the same parameters as a grab (`xPrepGrab` trigger,
+  `xGrab` on), so the animation alone has to close the hand around the model at the point. The point rests at local
+  rotation (358, 350, 0), i.e. turned 10° to the left so the barrels converge on the screen center: the barrels run
+  along the point's forward. In `Application.onBeforeRender`, after the rig has moved (`VrCamera.FollowGameCamera`), the
+  point gets the aim pose's rotation and a position that puts the game's hand, which follows the controller (`VrHands`),
+  where it holds the tool in the flat game. That hold is measured once per tool and cutter mode (`VrToolModels.Measure`,
+  from `VrHands.LateUpdate` before the arms are bent): a second after the right hand holds the tool closed with the
+  right controller, the animated wrist (`rig_right_hand`) and the hand's directions (wrist to middle finger, little to
+  index finger) relative to the point at rest. The left hand gets the same hold mirrored at the barrel's vertical plane
+  (the muzzle's x in point space). Until the first measurement the tool is placed by the grip target, as at first: that
+  put the grip target on the grip pose, but the grip target lies about 0.5 m from the hand (grapple: (-0.2, -0.5, 0.2) m
+  in point space, muzzle at (0, 0.2, 0.7)), and Marc saw the tools well above the hands. Log `Tool in hand: the game's
+  right hand holds the <tool> with the wrist at ...`. The first version kept the point's rest angle to the eye, which
+  left the barrels 10° off the beam. Its rest local pose is restored when hand aiming is inactive and on unload. The
+  tools' shadow copies (`m_...Shadow`, `ShadowActivePoint`) stay where they were. The log line `Tool in hand: <tool>;
+  equipment point ...` shows the hierarchy, offsets and muzzle once per tool (and cutter mode).
 - Demo charges have no model on the equipment point: the game's right hand holds them (and later the detonator), driven
   by its animator (`DemoChargeController.m_HandAnimatorController`, triggers like `DemoChargeEquipParameter`) and
   Animation Rigging IK towards `HandGrab.m_HandTarget` (`rig_RHand_Target`). Moving that target in a postfix on
@@ -106,14 +132,18 @@ interacting, the grapple and the "entity of interest".
   (`AnimationParameters.DemoChargeStowParameter`/`DetonatorStowParameter`) are never fired by the game's code. The mod
   fires the matching one when the right hand goes from demo charge to nothing (log `Tool in hand: demo charge put away`)
   and resets them when the charge is drawn again. Stopping the arm pose at once showed the charge for a moment at the
-  flat game's spot at the right, where the stow animation starts; now the renderers on the hand bone are disabled at
-  once (log `hid N renderer(s) on the hand`, re-enabled when the charge is drawn again) and the arm blends from the
-  controller into the animation over 0.35 s. A two-bone solve puts the wrist 8 cm behind the grip pose, and the hand
-  keeps the animation's angle to the game camera. The rig only follows the game camera in `onBeforeRender`, so the hand
-  is placed relative to the rig shifted by the game camera's movement since. The log line `Tool in hand: game arm ...`
-  lists all rig constraints, and `Tool in hand: demo charge; wrist ...` whether the detonator hangs on the hand. The
-  equip log of the other tools is written a second after drawing, since the models first slide in from their rest points
-  (the first frame showed offsets over a meter).
+  flat game's spot at the right, where the stow animation starts; now the charge's renderers on the hand bone are
+  disabled at once and the arm blends from the controller into the animation over 0.35 s. The charge hangs on the hand
+  bone from the start, too, where the flat game keeps the hand out of view. Marc saw the demo charge active on every
+  fresh start, while the log showed the grapple as the starting tool, put away at once; presumably he saw the charge in
+  the hand that follows its controller. So the charge's renderers (those under an object named `*Charge*`, i.e.
+  `SM_Props_Demo_Charge` and `PRF_Tool_ExplosiveChargeDetonator`) stay disabled whenever hand aiming is active and the
+  charge is not held (log `hid N renderer(s) on the hand`), and come back when it is drawn. A two-bone solve puts the
+  wrist 8 cm behind the grip pose, and the hand keeps the animation's angle to the game camera. The rig only follows the
+  game camera in `onBeforeRender`, so the hand is placed relative to the rig shifted by the game camera's movement
+  since. The log line `Tool in hand: game arm ...` lists all rig constraints, and `Tool in hand: demo charge; wrist ...`
+  whether the detonator hangs on the hand. The equip log of the other tools is written a second after drawing, since the
+  models first slide in from their rest points (the first frame showed offsets over a meter).
 - Aiming from the muzzle: the aim camera (and the beam) sits on the muzzle of the tool in the hand, pointing along the
   aim pose: grapple `GrapplingHook.m_GrapplingGunBarrel`, Splitsaw `CuttingFXController.m_CutOriginTransform` +
   `m_CutOriginOffset`, Stinger `ScalpelFXController.m_CutOriginTransform` + `m_CutOriginOffset`. The muzzle's offset to
@@ -165,17 +195,19 @@ interacting, the grapple and the "entity of interest".
   charge until the wrist sits 8 cm behind the grip pose, and turns the hand so that wrist to middle finger runs along
   the aim pose and little to index finger points up (humanoid finger bones; without them the hand keeps the animation's
   angle to the eye). Driven, blended in and out over 0.2 s, while hand aiming is active and the game's hand is idle
-  (`None`, `Resting`, `Leading`); the right one also while it holds the scanner, or a tool that the left hand holds. The
-  right hand with a tool in it stays with the game, as before. Demo charges stay with `VrToolModels.PoseArm` (the charge
-  hangs on the right hand bone, so with the charge in the left hand that arm still reaches over), and the left arm stays
-  with the game then. Logs: `Hands: <left|right> arm ...` once (bones, fingers) and `Hands: <arm> follows the controller
-  | back to the game`. Marc found both hands looking good in the first test.
-- Fingers: a hand that follows its controller closes while its grip is held (fist, or around the tool in the left
-  hand), through the animator's grab parameters as `HandGrab` sets them (`xPrepGrab` trigger + `xGrab` on; `xGrab`
-  off + `xCancelGrab` trigger). The game sets them only on its hand's state changes (`SetGrabState` returns early for
-  the same state), so they stay as set. Handed back to the game, the hand gets closed for `Success` and `Equipped`
-  (not demo charges), open otherwise; this restores the grip pose when a tool goes back from the left to the right
-  hand. Log `Hands: <hand> closes | opens`.
+  (`None`, `Resting`, `Leading`); the right one also while it holds a tool (`Equipped`), whichever controller holds it.
+  At first the right hand with a tool stayed with the game, at the flat game's spot. The hand that holds a tool model is
+  turned by the measured hold instead of along the aim, so it closes around the tool as in the flat game. Demo charges
+  stay with `VrToolModels.PoseArm` (the charge hangs on the right hand bone, so with the charge in the left hand that
+  arm still reaches over), and the left arm stays with the game then. Logs: `Hands: <left|right> arm ...` once (bones,
+  fingers) and `Hands: <arm> follows the controller | back to the game`. Marc found both hands looking good in the first
+  test.
+- Fingers: a hand that follows its controller closes while its grip is held (fist, or around the tool), through the
+  animator's grab parameters as `HandGrab` sets them (`xPrepGrab` trigger + `xGrab` on; `xGrab` off + `xCancelGrab`
+  trigger). The game sets them only on its hand's state changes (`SetGrabState` returns early for the same state), so
+  they stay as set. Handed back to the game, the hand gets closed for `Success` and `Equipped` (not demo charges), open
+  otherwise; this restores the grip pose when a tool goes back from the left to the right hand. Log `Hands: <hand>
+  closes | opens`.
 
 ## Body follows head
 - The body rotates in `OrientationController.HandleAxisRotation` via `Rigidbody.MoveRotation(rotation * mouseDelta)`.
