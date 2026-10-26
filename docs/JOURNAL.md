@@ -522,3 +522,18 @@ thin laser with a bright dot replaces the beam, but the laser takes over the cro
 to say that a target is in range or that the cutter is still cooling down. The information survives, just at the end
 of the laser instead of in the middle of the view. Whether the tools now sit in the fists, Marc will see in the
 headset.
+
+The headset disagreed on almost every point. The right hand still held a demo charge at the start. The hiding had
+simply come too early: when it ran, the charge was not switched on yet, so there was nothing to hide, and the game
+switched it on a moment later. Now the mod keeps checking every frame instead of once. The measured grip did not fit
+either, in the left hand wrong one way and in the right hand another. Marc suggested temporary settings so he could
+place the tools himself until they sit right, and I would take over his values. Typing centimeters into a menu with a
+headset on sounded tedious, so the setting works the other way round: with it on, the other hand grabs the tool and
+moves it, and letting go stores where it is. Once Marc is happy, his values become the defaults and the setting goes.
+
+Two leftovers from the crosshair as well. A dot still sat in the middle of the HUD, and the log claimed the game's
+center dot did not even exist, so it comes from something I do not know yet. Rather than guess its name, the mod now
+looks for small things in the middle of the HUD a few times and hides whatever it finds there, writing down what that
+was. And with a tool in hand Marc still saw orange lines with a ball at the front. I think that was my own laser,
+dressed in the grapple's orange, looking nothing like the laser of the empty hand. Now the laser stays the same with
+every tool and only the dot changes color.

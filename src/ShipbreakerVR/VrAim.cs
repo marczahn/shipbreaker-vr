@@ -18,9 +18,9 @@ namespace ShipbreakerVR
     // with the main camera's lens, and takes the main camera's place in the tools' code (AimPatch). The screen-space
     // patterns (the cutter's line, the grapple's search grid) then fan out from the hand as they did from the eye, and
     // rolling the hand rolls the cutter's line.
-    // A thin laser from the muzzle with a dot on what it hits shows where the hand points, in the color the game gives its
-    // reticle for the tool (in range, cooling down); the game's crosshair in the middle of the view is hidden meanwhile
-    // (VrCrosshair).
+    // A thin laser from the muzzle with a dot on what it hits shows where the hand points, the same with every tool; the dot
+    // takes the color the game gives its reticle for the tool (in range, cooling down). The game's crosshair in the middle
+    // of the view is hidden meanwhile (VrCrosshair).
     // The buttons of the tool hand's controller work the tools while aiming with the hand (VrToolInput).
     // The tool models go into the hand (VrToolModels).
     internal static class VrAim
@@ -32,7 +32,8 @@ namespace ShipbreakerVR
         // and of its bright core.
         private const float DotSize = 0.009f;
         private const float CoreSize = 0.4f;
-        // The laser without a tool reticle to take the color from (scanner, demo charges, empty hand).
+        // The laser, and its dot without a tool reticle to take the color from (scanner, demo charges, empty hand). Tinting
+        // the whole laser in the reticle's orange made it look like another thing than the laser of the empty hand.
         private static readonly Color LaserColor = new Color(0.55f, 0.95f, 1f);
 
         // How far in front of the hand a thrown demo charge starts, clear of the player's collider.
@@ -62,7 +63,7 @@ namespace ShipbreakerVR
         private static Material beamMaterial;
         private static Material dotMaterial;
         private static Material coreMaterial;
-        private static Color laserColor = LaserColor;
+        private static Color dotColor = LaserColor;
 
         // True while the tools aim from the hand: VR in gameplay, the option on and the tool hand's controller tracked.
         public static bool Active
@@ -129,14 +130,18 @@ namespace ShipbreakerVR
             active = true;
         }
 
-        // Where the tools aim from: the muzzle of the tool in the hand (VrToolModels), which points where the hand points,
-        // or the hand itself without a tool model (scanner, demo charges, empty hand).
+        // Where the tools aim from: the muzzle of the tool in the hand (VrToolModels), along its barrel (where the hand points,
+        // turned as the tool is turned in the hand), or the hand itself without a tool model (scanner, demo charges, empty
+        // hand).
         private static bool TryGetAim(out Vector3 position, out Quaternion rotation)
         {
             if (!TryGetPose(out position, out rotation)) return false;
             if (hand.TryGetFeatureValue(CommonUsages.devicePosition, out var local)
-                && VrToolModels.Muzzle(VrCamera.Instance.transform.parent.TransformPoint(local), rotation, out var muzzle))
+                && VrToolModels.Muzzle(VrCamera.Instance.transform.parent.TransformPoint(local), rotation, out var muzzle, out var barrel))
+            {
                 position = muzzle;
+                rotation = barrel;
+            }
             return true;
         }
 
@@ -207,8 +212,7 @@ namespace ShipbreakerVR
             UpdateBeam();
             if (!beamVisible) return;
             if (beamMesh == null) CreateMeshes();
-            beamMaterial.color = laserColor;
-            dotMaterial.color = laserColor;
+            dotMaterial.color = dotColor;
 
             VrUi.GetEye(context.hdCamera, out var view, out var proj);
             var eye = (Vector3)view.inverse.GetColumn(3);
@@ -249,7 +253,7 @@ namespace ShipbreakerVR
             var rotation = Quaternion.identity;
             beamVisible = LynxCameraController.MainCamera != null && TryGetAim(out beamStart, out rotation);
             if (!beamVisible) return;
-            laserColor = VrCrosshair.TryGetColor(out var reticle) ? new Color(reticle.r, reticle.g, reticle.b) : LaserColor;
+            dotColor = VrCrosshair.TryGetColor(out var reticle) ? new Color(reticle.r, reticle.g, reticle.b) : LaserColor;
             if (pointerMask == 0) pointerMask = PointerMask();
             var forward = rotation * Vector3.forward;
             beamHit = Physics.Raycast(beamStart, forward, out var hit, BeamRange * VrCamera.WorldScale, pointerMask, QueryTriggerInteraction.Ignore);
@@ -283,7 +287,7 @@ namespace ShipbreakerVR
 
         private static void CreateMeshes()
         {
-            // Bright near the hand, fading a little towards the target; tinted by the material (laserColor).
+            // Bright near the hand, fading a little towards the target; tinted by the material.
             var near = new Color(1f, 1f, 1f, 0.9f);
             var far = new Color(1f, 1f, 1f, 0.4f);
             beamMesh = new Mesh { name = "ShipbreakerVR Aim Beam" };
@@ -307,8 +311,8 @@ namespace ShipbreakerVR
             }
             dotMesh = new Mesh { name = "ShipbreakerVR Aim Dot", vertices = vertices, colors = colors, triangles = triangles };
 
-            beamMaterial = Overlay(Color.white);
-            dotMaterial = Overlay(Color.white);
+            beamMaterial = Overlay(LaserColor);
+            dotMaterial = Overlay(LaserColor);
             coreMaterial = Overlay(new Color(1f, 1f, 1f, 0.9f));
         }
 

@@ -118,9 +118,10 @@ namespace ShipbreakerVR
                 return;
             }
 
-            // Grip pressed at the belt draws that tool into the hand, or takes it over from the other hand.
-            if (RightHand.GripPressed && !RightHand.Trigger && RightHand.Zone != VrToolBelt.Zone.None) Draw(RightHand);
-            if (LeftHand.GripPressed && !LeftHand.Trigger && LeftHand.Zone != VrToolBelt.Zone.None) Draw(LeftHand);
+            // Grip pressed at the belt draws that tool into the hand, or takes it over from the other hand. While the tools
+            // are being fitted the other hand's grip moves the tool instead (VrToolFit).
+            if (RightHand.GripPressed && !RightHand.Trigger && RightHand.Zone != VrToolBelt.Zone.None && !VrToolFit.Blocks(RightHand.Node)) Draw(RightHand);
+            if (LeftHand.GripPressed && !LeftHand.Trigger && LeftHand.Zone != VrToolBelt.Zone.None && !VrToolFit.Blocks(LeftHand.Node)) Draw(LeftHand);
             var tool = ToolNode == XRNode.LeftHand ? LeftHand : RightHand;
             var other = tool == LeftHand ? RightHand : LeftHand;
             if (tool.GripPressed) holsterPulses = 0;

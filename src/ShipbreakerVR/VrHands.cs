@@ -10,9 +10,8 @@ namespace ShipbreakerVR
     // targets, grab animations and grab actions). The arms come from the animation alone (the game has an IK component,
     // BBI.IKLimb, but not on the player). After the animation, before skinning (VrCamera.LateUpdate), each arm is bent
     // until the wrist sits at its controller, and the hand is turned so that its knuckles point where the controller
-    // points, thumb side up. A hand with a tool model in it is turned the way the flat game's right hand holds that tool
-    // (VrToolModels.Measure, mirrored for the left hand), and the tool is placed around it (VrToolModels.Place). The game
-    // itself keeps the tool on its right hand; with the tool in the left hand the right one follows its controller empty.
+    // points, thumb side up. The tools are placed in the hand that holds them (VrToolModels, VrToolFit). The game itself
+    // keeps the tool on its right hand; with the tool in the left hand the right one follows its controller empty.
     // A hand that is busy with something of the game's (grabbing, a gesture, damage) is left to the game. Demo charges
     // hang on the right hand's bone, so that arm is posed for them by VrToolModels.PoseArm, also with the charge in the
     // left hand; the left arm stays with the game then.
@@ -76,8 +75,6 @@ namespace ShipbreakerVR
             var active = VrAim.Active;
             var equipment = grab.RightHand.CurrentEquipmentType;
             var leftHolds = VrToolInput.LeftHoldsTool;
-            // The flat game's hold, before the right arm is moved.
-            VrToolModels.Measure(RightArm.Wrist, RightArm.Index, RightArm.Middle, RightArm.Little, animator != null && animator.GetBool(RightArm.Grab));
             Drive(LeftArm, active && Idle(grab.LeftHand) && !(leftHolds && equipment == EquipmentController.Equipment.DemoCharge));
             var rightBusy = VrToolModels.PosesRightArm;
             Drive(RightArm, active && !rightBusy && (Idle(grab.RightHand)
@@ -145,32 +142,24 @@ namespace ShipbreakerVR
                 && !arm.Device.TryGetFeatureValue(CommonUsages.deviceRotation, out aimLocal)) return;
             if (!VrToolModels.TrackingToWorld(gripLocal + aimLocal * VrToolModels.WristBehindGrip, aimLocal, out var wrist, out var aim)) return;
 
-            // With a tool model in the hand as the game's hand holds it (the tool turns like the aim pose), otherwise the
-            // knuckles along the controller's aim, the thumb side up, as when holding a Touch controller: the palm then
-            // faces inwards on either hand.
-            if (arm.Node != VrToolInput.ToolNode || !VrToolModels.TryGetHold(arm.Node == XRNode.LeftHand, out _, out var knuckles, out var thumbSide))
-            {
-                knuckles = Vector3.forward;
-                thumbSide = Vector3.up;
-            }
             var animated = arm.Wrist.rotation;
             VrToolModels.Bend(arm.Upper, arm.Lower, arm.Wrist, Vector3.Lerp(arm.Wrist.position, wrist, weight));
-            arm.Wrist.rotation = Quaternion.Slerp(animated, HandRotation(arm, aim * knuckles, aim * thumbSide, aim, animated), weight);
+            arm.Wrist.rotation = Quaternion.Slerp(animated, HandRotation(arm, aim, animated), weight);
         }
 
-        // The hand turned so that its knuckles (wrist to the middle finger) point along knuckles and its thumb side
-        // (little finger to index finger) towards thumbSide. Without finger bones the hand keeps the angle to the eye
-        // that the animation gave it.
-        private static Quaternion HandRotation(Arm arm, Vector3 knuckles, Vector3 thumbSide, Quaternion aim, Quaternion animated)
+        // The hand's knuckles (wrist to the middle finger) along the controller's aim, the thumb side (little finger to
+        // index finger) up, as when holding a Touch controller: the palm then faces inwards on either hand. Without
+        // finger bones the hand keeps the angle to the eye that the animation gave it.
+        private static Quaternion HandRotation(Arm arm, Quaternion aim, Quaternion animated)
         {
             if (arm.Index != null && arm.Middle != null && arm.Little != null)
             {
-                var currentKnuckles = arm.Middle.position - arm.Wrist.position;
-                var currentThumbSide = arm.Index.position - arm.Little.position;
-                if (currentKnuckles.sqrMagnitude > 1e-8f && currentThumbSide.sqrMagnitude > 1e-8f)
+                var knuckles = arm.Middle.position - arm.Wrist.position;
+                var thumbSide = arm.Index.position - arm.Little.position;
+                if (knuckles.sqrMagnitude > 1e-8f && thumbSide.sqrMagnitude > 1e-8f)
                 {
-                    var current = Quaternion.LookRotation(currentKnuckles, currentThumbSide);
-                    var wanted = Quaternion.LookRotation(knuckles, thumbSide);
+                    var current = Quaternion.LookRotation(knuckles, thumbSide);
+                    var wanted = Quaternion.LookRotation(aim * Vector3.forward, aim * Vector3.up);
                     return wanted * Quaternion.Inverse(current) * arm.Wrist.rotation;
                 }
             }
