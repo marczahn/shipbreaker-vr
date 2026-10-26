@@ -60,7 +60,6 @@ namespace ShipbreakerVR
         private static GrabController grab;
         private static Animator animator;
         private static int fingerLogs;
-        private static float nextSearch;
         private static int logs;
 
         // From VrCamera.LateUpdate, after VrToolModels.PoseArm: which arms follow their controllers, blended in and out
@@ -250,9 +249,7 @@ namespace ShipbreakerVR
         private static bool Find()
         {
             if (grab != null) return true;
-            if (Time.unscaledTime < nextSearch) return false;
-            nextSearch = Time.unscaledTime + 1f;
-            grab = Object.FindObjectOfType<GrabController>();
+            grab = GameRefs.Grab;
             if (grab == null) return false;
             animator = grab.GetComponentsInChildren<Animator>(true).FirstOrDefault(a => a != null && a.isHuman);
             Setup(LeftArm, grab.LeftHand, animator, HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand,

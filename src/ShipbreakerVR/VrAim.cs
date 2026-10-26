@@ -236,7 +236,7 @@ namespace ShipbreakerVR
         private static bool Usable()
         {
             var vr = VrCamera.Instance;
-            if (!VrXr.IsRunning || !Plugin.AimWithHand.Value || vr == null || vr.FollowsHab) return false;
+            if (!VrXr.IsRunning || !Plugin.AimWithHand.Value || !PatchReport.HandAimWorks || vr == null || vr.FollowsHab) return false;
             return GameSession.CurrentGameState == GameSession.GameState.Gameplay;
         }
 
@@ -367,7 +367,7 @@ namespace ShipbreakerVR
         // For the F8 dump.
         public static string Describe(Transform head)
         {
-            var text = $"aim with hand: option {Plugin.AimWithHand.Value}, active {Active}, tool {withTool}";
+            var text = $"aim with hand: option {Plugin.AimWithHand.Value}{(PatchReport.HandAimWorks ? "" : " (off, patches incomplete)")}, active {Active}, tool {withTool}";
             if (active) text += $", hand at {VrDiagnostics.Direction(head, aim.transform.position)} {Vector3.Distance(head.position, aim.transform.position):0.00} m, pointing {VrDiagnostics.Direction(head, head.position + aim.transform.forward)}, beam on {beamTarget}";
             return text + "; " + VrHand.Describe() + "; " + VrDualTools.Describe() + CutterModel();
         }
@@ -392,14 +392,6 @@ namespace ShipbreakerVR
     [HarmonyPatch]
     internal static class AimPatch
     {
-        private static readonly string[] Types =
-        {
-            "BBI.Unity.Game.CuttingController", "BBI.Unity.Game.CuttingFXController", "TetherController", "GrapplingHook",
-            "BBI.Unity.Game.MagnetController", "BBI.Unity.Game.Scanner", "BBI.Unity.Game.ThrowController",
-            "BBI.Unity.Game.DemoChargeController", "BBI.Unity.Game.RaycastSystem", "BBI.Unity.Game.ScalpelController",
-            "BBI.Unity.Game.ScalpelFXController", "BBI.Unity.Game.ScalpelTarget",
-        };
-
         // Methods that aim without the main camera: where thrown demo charges start and fly.
         private static readonly (string Type, string Method)[] Extra =
         {
@@ -419,7 +411,7 @@ namespace ShipbreakerVR
 
         private static IEnumerable<MethodBase> TargetMethods()
         {
-            var methods = new HashSet<MethodBase>(MainCameraUsers());
+            var methods = new HashSet<MethodBase>(GameTools.MethodsCalling(GameTools.Redirect.Aim, "Aim", new[] { MainCamera, MainCameraTransform }));
             foreach (var (type, name) in Extra)
             {
                 var method = AccessTools.Method(AccessTools.TypeByName(type), name);
@@ -427,36 +419,6 @@ namespace ShipbreakerVR
                 else methods.Add(method);
             }
             return methods;
-        }
-
-        private static IEnumerable<MethodBase> MainCameraUsers()
-        {
-            foreach (var name in Types)
-            {
-                var type = AccessTools.TypeByName(name);
-                if (type == null)
-                {
-                    Plugin.Log.LogWarning($"Aim: type {name} not found");
-                    continue;
-                }
-                foreach (var nested in new[] { type }.Concat(type.GetNestedTypes(AccessTools.all)))
-                    foreach (var method in AccessTools.GetDeclaredMethods(nested))
-                        if (!method.IsAbstract && !method.ContainsGenericParameters && method.GetMethodBody() != null && UsesMainCamera(method))
-                            yield return method;
-            }
-        }
-
-        private static bool UsesMainCamera(MethodBase method)
-        {
-            try
-            {
-                return PatchProcessor.ReadMethodBody(method).Any(i => i.Value is MethodInfo called && (called == MainCamera || called == MainCameraTransform));
-            }
-            catch (System.Exception e)
-            {
-                Plugin.Log.LogWarning($"Aim: could not read {method.DeclaringType?.Name}.{method.Name}: {e.Message}");
-                return false;
-            }
         }
 
         private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, MethodBase original)

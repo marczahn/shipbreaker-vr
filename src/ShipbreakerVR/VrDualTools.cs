@@ -9,6 +9,8 @@ using UnityEngine.XR;
 
 namespace ShipbreakerVR
 {
+    using Family = GameTools.Family;
+
     // One tool in each hand, as Marc asked: the cutter in one, the grapple in the other. The game knows a single equipped
     // tool (EquipmentController.CurrentEquipment); drawing another one puts the old one away (SetEquipment). Here the hand
     // that draws the second tool gets it as the game's own, and the tool the other hand holds stays out: its unequip is
@@ -28,10 +30,6 @@ namespace ShipbreakerVR
     {
         static VrDualTools() => VrSession.OnUnload("second tool", Release);
 
-        // Which tool's code a game class belongs to: its input, its aim and its "is it equipped" checks.
-        public enum Family { Other, Cutter, Grapple }
-
-        // The tool the second hand holds (None, CuttingTool or GrappleHook) and that hand (VrHand keeps both).
         public static EquipmentController.Equipment Second => VrHand.Second;
         public static XRNode SecondNode => VrHand.SecondHand?.Node ?? XRNode.LeftHand;
 
@@ -47,33 +45,11 @@ namespace ShipbreakerVR
             AccessTools.FieldRefAccess<GunController, Transform>("m_GrapplingGun");
         private static int logs;
 
-        public static bool Enabled => Plugin.TwoTools != null && Plugin.TwoTools.Value;
+        // The option, with all the patches it needs (PatchReport).
+        public static bool Enabled => Plugin.TwoTools != null && Plugin.TwoTools.Value && PatchReport.TwoToolsWork;
 
-        private static readonly Dictionary<string, Family> Families = new Dictionary<string, Family>
-        {
-            { "BBI.Unity.Game.CuttingController", Family.Cutter },
-            { "BBI.Unity.Game.CuttingFXController", Family.Cutter },
-            { "BBI.Unity.Game.CuttingToolController", Family.Cutter },
-            { "BBI.Unity.Game.ScalpelController", Family.Cutter },
-            { "BBI.Unity.Game.ScalpelFXController", Family.Cutter },
-            { "BBI.Unity.Game.ScalpelTarget", Family.Cutter },
-            { "BBI.Unity.Game.CutterHeatBarUIController", Family.Cutter },
-            { "GrapplingHook", Family.Grapple },
-            { "TetherController", Family.Grapple },
-            { "BBI.Unity.Game.Tether", Family.Grapple },
-            { "BBI.Unity.Game.MagnetController", Family.Grapple },
-            { "BBI.Unity.Game.GunController", Family.Grapple },
-            { "BBI.Unity.Game.GrappleRaycastSystem", Family.Grapple },
-            { "BBI.Unity.Game.GrapplePushRaycastSystem", Family.Grapple },
-        };
-
-        // The family of a game class (or of the class a nested type, a job or a lambda, sits in).
-        public static Family FamilyOf(System.Type type)
-        {
-            for (var t = type; t != null; t = t.DeclaringType)
-                if (Families.TryGetValue(t.FullName ?? "", out var family)) return family;
-            return Family.Other;
-        }
+        // The family of a game class (GameTools).
+        public static Family FamilyOf(System.Type type) => GameTools.FamilyOf(type);
 
         // For code shared by several families (RaycastSystem): the family of the instance running it.
         public static int FamilyOfInstance(object instance) => instance == null ? 0 : (int)FamilyOf(instance.GetType());
@@ -253,14 +229,14 @@ namespace ShipbreakerVR
 
         private static bool Find()
         {
-            if (equipment == null) equipment = Object.FindObjectOfType<EquipmentController>();
+            if (equipment == null) equipment = GameRefs.Equipment;
             return equipment != null;
         }
 
         private static bool FindTools()
         {
-            if (cutter == null) cutter = Object.FindObjectOfType<CuttingToolController>();
-            if (gun == null) gun = Object.FindObjectOfType<GunController>();
+            if (cutter == null) cutter = GameRefs.Cutter;
+            if (gun == null) gun = GameRefs.Gun;
             return cutter != null || gun != null;
         }
 
@@ -466,42 +442,8 @@ namespace ShipbreakerVR
         private static readonly MethodInfo Current = AccessTools.Method(typeof(VrDualTools), nameof(VrDualTools.CurrentEquipment));
         private static readonly MethodInfo TetherEquipped = AccessTools.Method(typeof(VrDualTools), nameof(VrDualTools.TetherEquipped));
 
-        private static readonly string[] Types =
-        {
-            "BBI.Unity.Game.CuttingController", "BBI.Unity.Game.CuttingToolController", "BBI.Unity.Game.ScalpelController",
-            "BBI.Unity.Game.ScalpelFXController", "BBI.Unity.Game.CutterHeatBarUIController", "GrapplingHook",
-            "TetherController", "BBI.Unity.Game.GunController",
-        };
-
-        private static IEnumerable<MethodBase> TargetMethods()
-        {
-            foreach (var name in Types)
-            {
-                var type = AccessTools.TypeByName(name);
-                if (type == null)
-                {
-                    Plugin.Log.LogWarning($"Two tools: type {name} not found");
-                    continue;
-                }
-                foreach (var nested in new[] { type }.Concat(type.GetNestedTypes(AccessTools.all)))
-                    foreach (var method in AccessTools.GetDeclaredMethods(nested))
-                        if (!method.IsAbstract && !method.ContainsGenericParameters && method.GetMethodBody() != null && Checks(method))
-                            yield return method;
-            }
-        }
-
-        private static bool Checks(MethodBase method)
-        {
-            try
-            {
-                return PatchProcessor.ReadMethodBody(method).Any(i => i.Value is MethodInfo called && (called == CurrentEquipment || called == TetherIsEquipped));
-            }
-            catch (System.Exception e)
-            {
-                Plugin.Log.LogWarning($"Two tools: could not read {method.DeclaringType?.Name}.{method.Name}: {e.Message}");
-                return false;
-            }
-        }
+        private static IEnumerable<MethodBase> TargetMethods() =>
+            GameTools.MethodsCalling(GameTools.Redirect.Gate, "Two tools", new[] { CurrentEquipment, TetherIsEquipped });
 
         private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
         {

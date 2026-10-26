@@ -122,7 +122,7 @@ namespace ShipbreakerVR
             if ((grab == null || player == null) && Time.unscaledTime >= nextSearch)
             {
                 nextSearch = Time.unscaledTime + 1f;
-                grab = Object.FindObjectOfType<GrabController>();
+                grab = GameRefs.Grab;
                 player = grab != null ? PlayerBody(grab) : null;
                 rigPlaced = false;
                 if (player != null && logs++ < 80)

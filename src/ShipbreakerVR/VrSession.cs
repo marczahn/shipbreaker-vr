@@ -33,7 +33,11 @@ namespace ShipbreakerVR
             foreach (var type in AccessTools.GetTypesFromAssembly(typeof(Plugin).Assembly))
             {
                 try { harmony.CreateClassProcessor(type).Patch(); }
-                catch (System.Exception e) { Plugin.Log.LogError($"Patch {type.Name} failed: {e}"); }
+                catch (System.Exception e)
+                {
+                    Plugin.Log.LogError($"Patch {type.Name} failed: {e}");
+                    PatchReport.Failed(type.Name);
+                }
             }
             PatchReport.LogSummary();
             try { VrFrame.Install(); }

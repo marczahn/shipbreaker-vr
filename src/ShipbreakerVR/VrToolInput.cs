@@ -97,7 +97,6 @@ namespace ShipbreakerVR
         private static int holsterPulses;
         private static EquipmentController.Equipment lastEquipment;
         private static EquipmentController equipment;
-        private static float nextSearch;
         private static int logs;
         private static readonly MethodInfo SetEquipment = AccessTools.Method(typeof(EquipmentController), "SetEquipment");
         // Pulses of the unequip key before giving up, if the game keeps the tool (it may refuse while a tool is busy).
@@ -304,11 +303,7 @@ namespace ShipbreakerVR
 
         private static bool FindEquipment()
         {
-            if (equipment == null && Time.unscaledTime >= nextSearch)
-            {
-                nextSearch = Time.unscaledTime + 1f;
-                equipment = Object.FindObjectOfType<EquipmentController>();
-            }
+            equipment = GameRefs.Equipment;
             return equipment != null;
         }
 
@@ -368,16 +363,6 @@ namespace ShipbreakerVR
     [HarmonyPatch]
     internal static class ToolInputPatch
     {
-        private static readonly string[] Types =
-        {
-            "GrapplingHook", "TetherController", "BBI.Unity.Game.Tether", "BBI.Unity.Game.MagnetController",
-            "BBI.Unity.Game.CuttingController", "BBI.Unity.Game.CuttingFXController", "BBI.Unity.Game.CuttingToolController",
-            "BBI.Unity.Game.ScalpelController", "BBI.Unity.Game.ScalpelFXController",
-            "BBI.Unity.Game.DemoChargeController", "BBI.Unity.Game.Scanner", "BBI.Unity.Game.InteractionController",
-            "BBI.Unity.Game.ThrowController", "BBI.Unity.Game.HandGrab", "BBI.Unity.Game.GrabController",
-            "BBI.Unity.Game.EquipmentController",
-        };
-
         private static readonly Dictionary<MethodInfo, MethodInfo> Replacements = new[]
         {
             nameof(LynxControlExtensions.GetInputWasPressed), nameof(LynxControlExtensions.GetInputIsPressed),
@@ -386,35 +371,8 @@ namespace ShipbreakerVR
             name => AccessTools.Method(typeof(LynxControlExtensions), name, new[] { typeof(LynxControls), typeof(LynxControls.ActionSetAndId) }),
             name => AccessTools.Method(typeof(VrToolInput), name));
 
-        private static IEnumerable<MethodBase> TargetMethods()
-        {
-            foreach (var name in Types)
-            {
-                var type = AccessTools.TypeByName(name);
-                if (type == null)
-                {
-                    Plugin.Log.LogWarning($"Tool control: type {name} not found");
-                    continue;
-                }
-                foreach (var nested in new[] { type }.Concat(type.GetNestedTypes(AccessTools.all)))
-                    foreach (var method in AccessTools.GetDeclaredMethods(nested))
-                        if (!method.IsAbstract && !method.ContainsGenericParameters && method.GetMethodBody() != null && PollsInput(method))
-                            yield return method;
-            }
-        }
-
-        private static bool PollsInput(MethodBase method)
-        {
-            try
-            {
-                return PatchProcessor.ReadMethodBody(method).Any(i => i.Value is MethodInfo called && Replacements.ContainsKey(called));
-            }
-            catch (System.Exception e)
-            {
-                Plugin.Log.LogWarning($"Tool control: could not read {method.DeclaringType?.Name}.{method.Name}: {e.Message}");
-                return false;
-            }
-        }
+        private static IEnumerable<MethodBase> TargetMethods() =>
+            GameTools.MethodsCalling(GameTools.Redirect.Input, "Tool control", Replacements.Keys);
 
         private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
         {
