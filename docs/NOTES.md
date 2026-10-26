@@ -173,7 +173,11 @@ interacting, the grapple and the "entity of interest".
   game camera in `onBeforeRender`, so the hand is placed relative to the rig shifted by the game camera's movement
   since. The log line `Tool in hand: game arm ...` lists all rig constraints, and `Tool in hand: demo charge; wrist ...`
   whether the detonator hangs on the hand. The equip log of the other tools is written a second after drawing, since the
-  models first slide in from their rest points (the first frame showed offsets over a meter).
+  models used to slide in from their rest points (the first frame showed offsets over a meter): `EquipCurrentMode` /
+  `EquipGun` parent the model to the equipment point keeping its world pose, and `CuttingFXController` /
+  `GunController` spring its local pose to zero. With the point on the controller, the cutter came flying from in
+  front of the body although the hand had taken it over the shoulder, so `ToolDrawPatch` sets the model's local pose
+  to zero right after equipping (log `Tool in hand: '<model>' drawn straight into the hand (<distance> m from it)`).
 - Aiming from the muzzle: the aim camera (and the beam) sits on the muzzle of the tool in the hand, pointing along the
   aim pose turned by the tool's fit, i.e. along the barrel: grapple `GrapplingHook.m_GrapplingGunBarrel`, Splitsaw `CuttingFXController.m_CutOriginTransform` +
   `m_CutOriginOffset`, Stinger `ScalpelFXController.m_CutOriginTransform` + `m_CutOriginOffset`. The muzzle's offset to
