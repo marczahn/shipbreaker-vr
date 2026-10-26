@@ -258,6 +258,12 @@ interacting, the grapple and the "entity of interest".
   they stay as set. Handed back to the game, the hand gets closed for `Success` and `Equipped` (not demo charges), open
   otherwise; this restores the grip pose when a tool goes back from the left to the right hand. Log `Hands: <hand>
   closes | opens`.
+- That grab pose reaches out with the fingers stretched (the game grabs handholds with it), so an empty hand looked
+  as if it opened when gripping. An empty hand therefore keeps the animator's grab pose off and curls its finger bones
+  into a fist after the animation (`VrHands.Fist`): each bone turns towards the palm (from the hand's own axes) about
+  the axis across it, 70/95/60 degrees for proximal/intermediate/distal, the thumb 15/35/45, over 0.12 s. The animator
+  sets the finger bones again every frame, so nothing adds up. A hand holding a tool keeps the grab pose. Log
+  `Hands: <hand> hand makes a fist`.
 
 ## Body follows head
 - The body rotates in `OrientationController.HandleAxisRotation` via `Rigidbody.MoveRotation(rotation * mouseDelta)`.

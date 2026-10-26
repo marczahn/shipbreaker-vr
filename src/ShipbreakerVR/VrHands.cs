@@ -17,8 +17,9 @@ namespace ShipbreakerVR
     // hang on the right hand's bone, so that arm is posed for them by VrToolModels.PoseArm. With the charge in the left
     // hand, the left arm follows its controller like any other, the right one its own, and the charge's pieces go over to
     // the left hand (Charges).
-    // The fingers come from the animation too: a hand that follows its controller closes while its grip is held (around
-    // the tool in the left hand, or into a fist), through the animator's own grab pose (Fingers).
+    // The fingers come from the animation too: a hand that follows its controller closes around the tool in it while its
+    // grip is held, through the animator's own grab pose (Fingers). That pose reaches out with the fingers stretched (the
+    // game grabs handholds with it), so an empty hand curls its finger bones into a fist instead (Fist).
     internal static class VrHands
     {
         // How long an arm takes to move between the game's pose and the controller.
@@ -40,6 +41,10 @@ namespace ShipbreakerVR
             public Transform Index;
             public Transform Middle;
             public Transform Little;
+            // Thumb, index, middle, ring, little; proximal, intermediate, distal.
+            public readonly Transform[] Fingers = new Transform[15];
+            public bool Fist;
+            public float Curl;
             public float Weight;
             public bool Driven;
             public bool Gripping;
@@ -87,6 +92,8 @@ namespace ShipbreakerVR
             Fingers(RightArm, rightWasDriven);
             Pose(LeftArm, active && chargeLeft && Mirrored(out var hold) ? hold : Quaternion.identity);
             Pose(RightArm, Quaternion.identity);
+            Fist(LeftArm, -1f);
+            Fist(RightArm, 1f);
             Charges(active && chargeLeft);
         }
 
@@ -104,7 +111,9 @@ namespace ShipbreakerVR
                 if (!arm.Device.isValid) arm.Device = InputDevices.GetDeviceAtXRNode(arm.Node);
                 arm.Device.TryGetFeatureValue(CommonUsages.grip, out var grip);
                 arm.Gripping = grip >= (arm.Gripping ? GripRelease : GripPress);
-                closed = arm.Gripping;
+                // An empty hand makes a fist on its own (Fist); the animator's grab pose stays off for it.
+                arm.Fist = arm.Gripping && !HoldsTool(arm);
+                closed = arm.Gripping && !arm.Fist;
             }
             else if (wasDriven)
             {
@@ -119,6 +128,47 @@ namespace ShipbreakerVR
             animator.SetBool(arm.Grab, closed);
             if (fingerLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} hand {(closed ? "closes" : "opens")}{(arm.Driven ? "" : " (back to the game)")}");
         }
+
+        // How far each finger bone bends into a fist, in degrees: proximal, intermediate, distal; the thumb less.
+        private static readonly float[] FingerCurl = { 70f, 95f, 60f };
+        private static readonly float[] ThumbCurl = { 15f, 35f, 45f };
+        // How long the fingers take to close or open.
+        private const float CurlTime = 0.12f;
+
+        // The tool in the hand (the game keeps it on its right hand; VrToolInput says which hand holds it).
+        private static bool HoldsTool(Arm arm) =>
+            grab.RightHand.CurrentEquipmentType != EquipmentController.Equipment.None
+            && grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped && VrToolInput.ToolNode == arm.Node;
+
+        // An empty hand that follows its controller curls its fingers into a fist while the grip is held, after the
+        // animation (which sets the finger bones again every frame) and after the arm is posed. Each bone turns towards
+        // the palm about the axis across it. In the hand's own axes (Frame) the cross product of knuckles and thumb side
+        // points out of the right hand's palm (towards its left, holding a controller); side is 1 for the right hand and
+        // -1 for the left one, whose palm faces the other way.
+        private static void Fist(Arm arm, float side)
+        {
+            arm.Curl = Mathf.MoveTowards(arm.Curl, arm.Driven && arm.Fist ? 1f : 0f, Time.unscaledDeltaTime / CurlTime);
+            if (arm.Curl <= 0f || !Frame(arm, out _, out var frame)) return;
+            var palmNormal = side * Vector3.Cross(frame * Vector3.forward, frame * Vector3.up);
+            for (var finger = 0; finger < 5; finger++)
+            {
+                var angles = finger == 0 ? ThumbCurl : FingerCurl;
+                for (var joint = 0; joint < 3; joint++)
+                {
+                    var bone = arm.Fingers[finger * 3 + joint];
+                    var next = joint < 2 ? arm.Fingers[finger * 3 + joint + 1] : null;
+                    if (bone == null) continue;
+                    var along = next != null ? next.position - bone.position : bone.position - bone.parent.position;
+                    var axis = Vector3.Cross(along, palmNormal);
+                    if (axis.sqrMagnitude < 1e-10f) continue;
+                    bone.rotation = Quaternion.AngleAxis(angles[joint] * arm.Curl, axis.normalized) * bone.rotation;
+                }
+            }
+            if (fistLogs++ < 4 && arm.Curl >= 1f)
+                Plugin.Log.LogInfo($"Hands: {arm.Name} hand makes a fist ({arm.Fingers.Count(f => f != null)} of 15 finger bones)");
+        }
+
+        private static int fistLogs;
 
         // Not grabbing, gesturing, hurt or holding a tool.
         private static bool Idle(HandGrab hand)
@@ -282,6 +332,11 @@ namespace ShipbreakerVR
             arm.Index = animator != null ? animator.GetBoneTransform(index) : null;
             arm.Middle = animator != null ? animator.GetBoneTransform(middle) : null;
             arm.Little = animator != null ? animator.GetBoneTransform(little) : null;
+            var first = wrist == HumanBodyBones.LeftHand ? HumanBodyBones.LeftThumbProximal : HumanBodyBones.RightThumbProximal;
+            for (var i = 0; i < arm.Fingers.Length; i++)
+                arm.Fingers[i] = animator != null ? animator.GetBoneTransform(first + i) : null;
+            arm.Curl = 0f;
+            arm.Fist = false;
             arm.Weight = 0f;
             arm.Driven = false;
         }
@@ -304,6 +359,8 @@ namespace ShipbreakerVR
             LeftArm.Weight = RightArm.Weight = 0f;
             LeftArm.Driven = RightArm.Driven = false;
             LeftArm.Gripping = RightArm.Gripping = false;
+            LeftArm.Fist = RightArm.Fist = false;
+            LeftArm.Curl = RightArm.Curl = 0f;
             Charges(false);
             chargePieces.Clear();
             chargesOn = null;
