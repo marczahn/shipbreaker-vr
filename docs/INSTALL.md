@@ -40,6 +40,22 @@ A small globe at the bottom of the visor shows where the left controller is whil
 where you pressed it, its surface full thrust, the small inner globe the deadzone, and a small cross in it moves and turns with your hand. The row
 "Flight globe" shows it always, only while flying, or never.
 
+### Tools in the hand
+![Tool controls](images/tools.svg)
+
+With the row "Aim with the hand" in the VR tab on (the default), the tools aim where the controller that holds them
+points, from the tool's muzzle. A thin laser shows where, in the color the game gives its crosshair (for example when
+the grapple has a target in range); the crosshair in the middle of the view is hidden meanwhile.
+- Squeeze the grip at your body to take a tool: grapple at the right hip, demo charges at the left hip, cutter over the
+  right shoulder, scanner at the right side of the helmet. The controller buzzes when it is in such a spot. Keep the
+  grip squeezed to hold the tool; let go to put it away.
+- Either hand can take a tool, one at a time. Reaching for the tool in one hand with the other one hands it over.
+- On the controller that holds the tool: trigger = use the tool (cut, grapple, place or detonate demo charges), A =
+  use what you point at, trigger + A = throw, B = switch the tool's mode, trigger + B = reel in, hold B = place a tether
+  from where you point to where you let go, hold B pointing at nothing = recall the tethers. In the left hand X and Y
+  stand for A and B, and controller flying pauses until you let go; the right stick still turns.
+- The suit's hands follow your controllers and close while you squeeze the grip.
+
 ### Menus with the controllers
 In menus both controllers act as one Xbox gamepad, each button where its counterpart sits, so the game shows gamepad
 button prompts:

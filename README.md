@@ -1,7 +1,7 @@
 # ShipbreakerVR
 
-Play **Hardspace: Shipbreaker** in VR: look around your cutting bay with your own head, fly with your hand and use the
-menus with your motion controllers.
+Play **Hardspace: Shipbreaker** in VR: look around your cutting bay with your own head, fly with one hand, take your
+tools off your suit and aim them with your hands, and use the menus with your motion controllers.
 
 **[Download the latest version](https://github.com/marczahn/shipbreaker-vr/releases/latest)**
 
@@ -24,9 +24,12 @@ menus with your motion controllers.
 ## What you get
 
 - **Real VR from the first second.** The game starts in your headset, intro and loading screens included. Look around
-  freely; your body and your tools turn with your head.
+  freely; your body turns with your head.
 - **Fly with your hand.** Hold the trigger on the left controller and move your hand where you want to go. The right
   stick turns you, Y brakes.
+- **Tools in your hands.** Grab the grapple, cutter, demo charges and scanner from your hips, shoulder and helmet with
+  either hand, and aim them where your hand points. A thin laser shows where, in the color of the game's crosshair. The
+  suit's hands follow your controllers.
 - **Menus with the controllers.** No need to reach for the mouse: your controllers work like a gamepad in all menus.
 - **Your HUD inside the helmet.** The game's display sits in your visor, menus float in the room in front of you, and
   the helmet frame moves with your head.
@@ -82,6 +85,23 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | Open the pause menu | Press X and A together. |
 | Put the view back in front of me | Press B and Y together (or F4 on the keyboard). |
 
+**Tools:**
+
+![Tool controls](docs/images/tools.svg)
+
+| I want to … | How |
+|---|---|
+| Take a tool | Reach to where it sits and squeeze the grip: grapple at the right hip, demo charges at the left hip, cutter over the right shoulder, scanner at the right side of the helmet. The controller buzzes when you are there. |
+| Put it away | Let go of the grip. |
+| Use it | Point the controller and pull the trigger: cut, grapple, place or detonate demo charges. |
+| Reel in what the grapple holds | Hold the trigger and press B. |
+| Use what I point at | Press A. |
+| Throw | Hold the trigger and press A. |
+| Switch the tool's mode | Press B (demo charges: switch to the detonator). |
+| Place a tether | Hold B while pointing at the start, let go at the end. |
+| Recall the tethers | Hold B while pointing at nothing. |
+| Use a tool with the left hand | Take it with the left hand. X and Y then do what A and B do, and flying pauses until you let go. |
+
 **In menus** both controllers act together like one Xbox gamepad: left stick to move around, A to confirm, B to go
 back, the triggers switch tabs.
 
@@ -98,6 +118,7 @@ likely to need:
 - **Turning:** smooth turning, or turning in steps, which is easier on the stomach.
 - **Head height** and **Head sideways:** move your view if you seem to sit too low or off to one side in the suit.
 - **Controller flying:** switch it off if you fly with mouse and keyboard or a gamepad.
+- **Aim with the hand:** switch it off to aim your tools at the center of your view again, as in the flat game.
 
 ## Something is wrong
 
@@ -147,7 +168,9 @@ That has not been tested.
 
 ## What does not work yet
 
-- Your tools still aim where you look, not where your hand points.
+- Demo charges are always held by the suit's right hand, even when you take them with the left; that arm then reaches
+  across.
+- You cannot grab things with the suit's hands yet; the grip only takes tools.
 - There is no laser pointer for the menus yet; you move through them with the sticks.
 - During loading screens the view can go dark for a moment.
 - Above 1.0, the render resolution can crash the game after loading (see above).
