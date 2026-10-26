@@ -10,10 +10,13 @@ namespace ShipbreakerVR
 {
     // The right controller works the tools while they aim with the hand (VrAim), all on one hand, as Marc asked; the right
     // stick stays with turning, the left hand with flying:
+    //   grip at the body  draw a tool (VrToolBelt): right hip grapple, left hip demo charges, over the right shoulder
+    //                   cutter, right side of the helmet scanner; the tool stays in the hand while the grip is held and
+    //                   goes back to the belt when it is let go
     //   trigger         the tool's main action: cut, grapple (hold to keep hold), place or detonate a demo charge
     //   A               with the trigger held: throw what the grapple holds (hold A to charge, release to throw);
     //                   otherwise interact (doors, switches, containers)
-    //   grip            with the trigger held: reel in what the grapple holds
+    //   B               with the trigger held: reel in what the grapple holds, while B is held
     //   B tap           tool mode (cutter Stinger/Splitsaw, grapple/magnet, demo charge mode)
     //   B held          place a tether from where the hand points when the hold starts to where it points on release;
     //                   held while pointing at nothing: recall all tethers
@@ -61,10 +64,17 @@ namespace ShipbreakerVR
         private static float bDownAt;
         private static bool bLong;
         private static bool bTether;
+        // B decides at its press whether it reels in (trigger held) or works as tap/hold, and keeps that until released.
+        private static bool bReels;
         private static bool gripDown;
+        private static int holsterPulses;
+        private static EquipmentController.Equipment lastEquipment;
         private static EquipmentController equipment;
         private static float nextSearch;
         private static int logs;
+        private static readonly MethodInfo SetEquipment = AccessTools.Method(typeof(EquipmentController), "SetEquipment");
+        // Pulses of the unequip key before giving up, if the game keeps the tool (it may refuse while a tool is busy).
+        private const int MaxHolsterPulses = 10;
 
         private static void Update()
         {
@@ -84,11 +94,15 @@ namespace ShipbreakerVR
             trigger = triggerValue >= (trigger ? TriggerRelease : TriggerPress);
             now[(int)Action.Fire] = trigger;
             right.TryGetFeatureValue(CommonUsages.grip, out var grip);
-            now[(int)Action.Retract] = trigger && grip >= GripPress;
             var zone = VrToolBelt.Update(right);
             var gripPressed = grip >= GripPress && !gripDown;
             gripDown = grip >= GripPress;
-            if (gripPressed && !trigger && zone != VrToolBelt.Zone.None) Draw(zone);
+            if (gripPressed)
+            {
+                holsterPulses = 0;
+                if (!trigger && zone != VrToolBelt.Zone.None) Draw(zone);
+            }
+            else if (!gripDown) Holster();
 
             var a = Button(right, CommonUsages.primaryButton) && !Button(left, CommonUsages.primaryButton);
             if (a && !aDown) aThrows = trigger;
@@ -100,6 +114,14 @@ namespace ShipbreakerVR
             {
                 bDownAt = Time.unscaledTime;
                 bLong = bTether = false;
+                bReels = trigger;
+            }
+            now[(int)Action.Retract] = b && bReels;
+            if (bReels)
+            {
+                bDown = b;
+                LogChanges();
+                return;
             }
             if (b && !bLong && Time.unscaledTime - bDownAt >= LongPress)
             {
@@ -116,17 +138,11 @@ namespace ShipbreakerVR
             LogChanges();
         }
 
-        // Grip at a zone of the tool belt: draws that tool, or puts it away if it is the one in the hand. Through the
-        // game's own selection keys (EquipmentController.Update), which check whether the tool may change; the scanner's
-        // key switches back to the previous tool by itself.
+        // Grip pressed at a zone of the tool belt: draws that tool, or puts it away if it is still the one in the hand.
+        // Through the game's own selection keys (EquipmentController.Update), which check whether the tool may change.
         private static void Draw(VrToolBelt.Zone zone)
         {
-            if (equipment == null && Time.unscaledTime >= nextSearch)
-            {
-                nextSearch = Time.unscaledTime + 1f;
-                equipment = Object.FindObjectOfType<EquipmentController>();
-            }
-            if (equipment == null) return;
+            if (!FindEquipment()) return;
             var tool = zone == VrToolBelt.Zone.Grapple ? EquipmentController.Equipment.GrappleHook
                 : zone == VrToolBelt.Zone.Cutter ? EquipmentController.Equipment.CuttingTool
                 : zone == VrToolBelt.Zone.DemoCharge ? EquipmentController.Equipment.DemoCharge
@@ -138,6 +154,39 @@ namespace ShipbreakerVR
                 : zone == VrToolBelt.Zone.Cutter ? Action.Cutter
                 : zone == VrToolBelt.Zone.DemoCharge ? Action.DemoCharge
                 : Action.Scanner)] = true;
+        }
+
+        // Grip let go: the hand stays empty, as Marc wanted, whatever put the tool there (the belt, or the game at the
+        // start of a shift). Through the unequip key, which the game ignores for the scanner; that one switches off
+        // through EquipmentController.SetEquipment(None), the way the game ends a scan without a previous tool.
+        private static void Holster()
+        {
+            if (!FindEquipment() || equipment.IsNothingEquipped)
+            {
+                holsterPulses = 0;
+                return;
+            }
+            var current = equipment.CurrentEquipment;
+            if (current != lastEquipment) holsterPulses = 0;
+            lastEquipment = current;
+            if (holsterPulses >= MaxHolsterPulses || before[(int)Action.Holster] || !equipment.CanUnequipCurrentEquipment()) return;
+            holsterPulses++;
+            if (current == EquipmentController.Equipment.Scanner)
+            {
+                if (logs++ < 60) Plugin.Log.LogInfo("Tool control: scanner put away");
+                SetEquipment.Invoke(equipment, new object[] { EquipmentController.Equipment.None });
+            }
+            else now[(int)Action.Holster] = true;
+        }
+
+        private static bool FindEquipment()
+        {
+            if (equipment == null && Time.unscaledTime >= nextSearch)
+            {
+                nextSearch = Time.unscaledTime + 1f;
+                equipment = Object.FindObjectOfType<EquipmentController>();
+            }
+            return equipment != null;
         }
 
         private static bool Get(ref InputDevice device, XRNode node)

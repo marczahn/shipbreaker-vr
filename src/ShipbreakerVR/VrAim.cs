@@ -13,8 +13,9 @@ namespace ShipbreakerVR
 {
     // Aiming with the right hand. Every tool aims through the game's main camera: rays through screen points
     // (ScreenPointToRay), its position and forward, and its matrices for the ray grids of grabbing and the grapple.
-    // A camera that never renders sits on the right controller's aim pose with the main camera's lens and takes the
-    // main camera's place in the tools' code (AimPatch). The screen-space patterns (the cutter's line, the grapple's
+    // A camera that never renders sits on the muzzle of the tool in the right hand (the hand's aim pose without a tool
+    // model), pointing where the controller points, with the main camera's lens, and takes the main camera's place in the
+    // tools' code (AimPatch). The screen-space patterns (the cutter's line, the grapple's
     // search grid) then fan out from the hand as they did from the eye, and rolling the hand rolls the cutter's line.
     // A beam from the hand to what it points at shows where that is; the visor's crosshair still marks the head's center.
     // The buttons of the right controller work the tools while aiming with the hand (VrToolInput).
@@ -105,7 +106,7 @@ namespace ShipbreakerVR
             updatedFrame = Time.frameCount;
             active = false;
             var main = LynxCameraController.MainCamera;
-            if (main == null || !TryGetPose(out var position, out var rotation)) return;
+            if (main == null || !TryGetAim(out var position, out var rotation)) return;
 
             if (aim == null)
             {
@@ -124,6 +125,17 @@ namespace ShipbreakerVR
             aim.nearClipPlane = main.nearClipPlane;
             aim.farClipPlane = main.farClipPlane;
             active = true;
+        }
+
+        // Where the tools aim from: the muzzle of the tool in the hand (VrToolModels), which points where the hand points,
+        // or the hand itself without a tool model (scanner, demo charges, empty hand).
+        private static bool TryGetAim(out Vector3 position, out Quaternion rotation)
+        {
+            if (!TryGetPose(out position, out rotation)) return false;
+            if (right.TryGetFeatureValue(CommonUsages.devicePosition, out var local)
+                && VrToolModels.Muzzle(VrCamera.Instance.transform.parent.TransformPoint(local), rotation, out var muzzle))
+                position = muzzle;
+            return true;
         }
 
         // For holding the tool models (VrToolModels), right before rendering: where the hand holds (the grip pose's
@@ -209,7 +221,7 @@ namespace ShipbreakerVR
             if (beamFrame == Time.frameCount) return;
             beamFrame = Time.frameCount;
             var rotation = Quaternion.identity;
-            beamVisible = LynxCameraController.MainCamera != null && TryGetPose(out beamStart, out rotation);
+            beamVisible = LynxCameraController.MainCamera != null && TryGetAim(out beamStart, out rotation);
             if (!beamVisible) return;
             if (pointerMask == 0) pointerMask = PointerMask();
             var forward = rotation * Vector3.forward;

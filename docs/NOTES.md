@@ -76,23 +76,36 @@ interacting, the grapple and the "entity of interest".
 - F8 logs the aim state, what the beam hits and the parent chain of the cutter model (`CuttingFXController.m_CuttingTool`)
   for moving the tool models into the hand later.
 - Tool models (`VrToolModels`): every equipped tool is parented to the right hand's equipment point
-  (`HandGrab.EquipmentGeoTransform`, returned by `GrabController.GetHandPositionTransformAndSetEquipment`); unequipped
-  tools go to rest points. The game's hand (`HandGrab.m_HandTarget`) lerps to the tool's grip
-  (`m_EquipmentHandTargetTransforms[equipment]`). In `Application.onBeforeRender`, after the rig has moved
-  (`VrCamera.FollowGameCamera`), the equipment point is set to the controller: rotation = aim pose × the point's rest
-  rotation relative to the game camera, position so that the tool's grip target lands on the grip pose's position. Its
-  rest local pose is restored when hand aiming is inactive and on unload. The cutter's beam
-  (`m_CutOriginTransform`) and the grapple's line start on the models, so they leave from the hand. The tools' shadow
+  (`HandGrab.EquipmentGeoTransform`, `Right Hand Equipment Point < Right Hand Targets < GrabController <
+  EquipmentController < Player`, so on the body, not the camera; returned by
+  `GrabController.GetHandPositionTransformAndSetEquipment`); unequipped tools go to rest points. The grapple
+  (`PRFB_GrappleGun`) and the cutter (`CuttingTool`) are models on it, demo charges and scanner have none. The game's
+  hand (`HandGrab.m_HandTarget`, `rig_RHand_Target`) lerps to the tool's grip (`m_EquipmentHandTargetTransforms[equipment]`,
+  `RHandTarget` inside the model). The point rests at local rotation (358, 350, 0), i.e. turned 10° to the left so the
+  barrels converge on the screen center: the barrels run along the point's forward. In `Application.onBeforeRender`,
+  after the rig has moved (`VrCamera.FollowGameCamera`), the point gets the aim pose's rotation and a position that puts
+  the grip target on the grip pose's position. The first version kept the point's rest angle to the eye, which left the
+  barrels 10° off the beam. Its rest local pose is restored when hand aiming is inactive and on unload. The tools' shadow
   copies (`m_...Shadow`, `ShadowActivePoint`) stay where they were. The log line `Tool in hand: <tool>; equipment point
-  ...` shows the hierarchy once per tool.
+  ...` shows the hierarchy, offsets and muzzle once per tool (and cutter mode).
+- Aiming from the muzzle: the aim camera (and the beam) sits on the muzzle of the tool in the hand, pointing along the
+  aim pose: grapple `GrapplingHook.m_GrapplingGunBarrel`, Splitsaw `CuttingFXController.m_CutOriginTransform` +
+  `m_CutOriginOffset`, Stinger `ScalpelFXController.m_CutOriginTransform` + `m_CutOriginOffset`. The muzzle's offset to
+  the point is measured in `Place` and applied to the current hand pose in `VrAim` (which runs in the game's update,
+  before `Place`). Without a tool model the aim stays on the hand's aim pose.
 - Tool belt (`VrToolBelt`): zones relative to the head in tracking space, turned with the head's heading (x right,
   y up, z forward): hips below -0.45 m and less than 0.25 m forward, right of +0.08 m grapple, left of -0.08 m demo
   charges; the right side of the helmet (within 0.22 m, x > 0.06, z > -0.05) scanner; over the shoulder (y > -0.12,
   z < -0.05, x > -0.1) cutter. A short buzz on entering a zone, logged as `Tool belt: hand at <zone> (x, y, z m from
-  the head)`. Grip pressed in a zone without the trigger pulses the game's `SelectGrapple`/`SelectCutter`/
-  `SelectDemoCharge`/`ActivateScanner`, or `UnequipCurrentEquipment` if that tool is already in the hand
-  (`EquipmentController.Update`, now in the input patch list); `CanEquip` and `IsEquipmentBlocked` are checked first,
-  because virtual presses bypass the action blocker.
+  the head)`. The first test hit all four; the right hip sat at about (0.1, -0.5, 0.1), the shoulder at (0.2, -0.1,
+  -0.06), the helmet at (0.2, -0.07, 0). Grip pressed in a zone without the trigger pulses the game's `SelectGrapple`/
+  `SelectCutter`/`SelectDemoCharge`/`ActivateScanner` (`EquipmentController.Update`, now in the input patch list);
+  `CanEquip` and `IsEquipmentBlocked` are checked first, because virtual presses bypass the action blocker.
+- The tool stays in the hand only while the grip is held (Marc's wish): with the grip released and a tool equipped,
+  whatever equipped it, `UnequipCurrentEquipment` is pulsed (at most 10 times per tool, only while
+  `CanUnequipCurrentEquipment`); the game ignores that key for the scanner, which goes through the private
+  `EquipmentController.SetEquipment(None)` instead (allowed for the scanner only). Since the grip is now taken, reeling in
+  moved from grip + trigger to B + trigger (latched at B's press, like A's throw).
 
 ## Body follows head
 - The body rotates in `OrientationController.HandleAxisRotation` via `Rigidbody.MoveRotation(rotation * mouseDelta)`.

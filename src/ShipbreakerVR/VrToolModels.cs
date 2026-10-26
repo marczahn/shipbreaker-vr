@@ -7,10 +7,11 @@ namespace ShipbreakerVR
 {
     // The tool models in the right hand while aiming with it (VrAim). The game hangs the equipped tool on the right hand's
     // equipment point (HandGrab.EquipmentGeoTransform, via GrabController.GetHandPositionTransformAndSetEquipment), a fixed
-    // point in front of the head, and moves the game's hand to the tool's grip (m_EquipmentHandTargetTransforms). Right
-    // before rendering, that point goes to the controller: turned like the aim pose, the tool keeps the angle to the hand
-    // that it had to the eye, and shifted so that the tool's grip lies in the controller's grip. The cutter's beam and the
-    // grapple's line start at the model, so they now leave from the hand too. With hand aiming off the point goes back.
+    // point on the player's body to the lower right of the view, and moves the game's hand to the tool's grip
+    // (m_EquipmentHandTargetTransforms). Right before rendering, that point goes to the controller: turned like the aim
+    // pose (the barrels run along the point's forward), and shifted so that the tool's grip lies in the controller's grip.
+    // The tools aim from their muzzle (Muzzle), so beam, cut and grapple line leave from the barrel. With hand aiming off
+    // the point goes back.
     internal static class VrToolModels
     {
         private static readonly AccessTools.FieldRef<HandGrab, List<Transform>> HandTargets =
@@ -23,7 +24,25 @@ namespace ShipbreakerVR
         private static Vector3 restPosition;
         private static Quaternion restRotation;
         private static bool moved;
-        private static readonly HashSet<EquipmentController.Equipment> logged = new HashSet<EquipmentController.Equipment>();
+        // This frame's tool: its grip and muzzle relative to the point, for Muzzle.
+        private static Vector3 gripOffset;
+        private static Vector3 muzzleOffset;
+        private static bool hasMuzzle;
+        private static CuttingToolController cutter;
+        private static CuttingFXController splitsaw;
+        private static ScalpelFXController stinger;
+        private static GrapplingHook grapple;
+        private static readonly AccessTools.FieldRef<CuttingFXController, Transform> SplitsawOrigin =
+            AccessTools.FieldRefAccess<CuttingFXController, Transform>("m_CutOriginTransform");
+        private static readonly AccessTools.FieldRef<CuttingFXController, Vector3> SplitsawOffset =
+            AccessTools.FieldRefAccess<CuttingFXController, Vector3>("m_CutOriginOffset");
+        private static readonly AccessTools.FieldRef<ScalpelFXController, Transform> StingerOrigin =
+            AccessTools.FieldRefAccess<ScalpelFXController, Transform>("m_CutOriginTransform");
+        private static readonly AccessTools.FieldRef<ScalpelFXController, Vector3> StingerOffset =
+            AccessTools.FieldRefAccess<ScalpelFXController, Vector3>("m_CutOriginOffset");
+        private static readonly AccessTools.FieldRef<GrapplingHook, Transform> GrappleBarrel =
+            AccessTools.FieldRefAccess<GrapplingHook, Transform>("m_GrapplingGunBarrel");
+        private static readonly HashSet<int> logged = new HashSet<int>();
 
         // From VrCamera.FollowGameCamera, after the rig has moved.
         public static void Place()
@@ -40,36 +59,66 @@ namespace ShipbreakerVR
                     restRotation = point.localRotation;
                 }
             }
-            var head = LynxCameraController.MainCameraTransform;
-            if (point == null || head == null || point.parent == null || !VrAim.TryGetHand(out var grip, out var aim))
+            if (point == null || point.parent == null || !VrAim.TryGetHand(out var grip, out var aim))
             {
                 Restore();
                 return;
             }
 
-            // Where the point sits without us, relative to the eye.
-            var parent = point.parent;
-            var restWorld = parent.TransformPoint(restPosition);
-            var restWorldRotation = parent.rotation * restRotation;
-            var angle = Quaternion.Inverse(head.rotation) * restWorldRotation;
-
-            // The tool's grip relative to the point (the point at rest if the grip does not move with it).
+            // The tool's grip and muzzle relative to the point, in the point's axes but world units (the point at rest if
+            // the grip does not move with it).
             var equipment = hand.CurrentEquipmentType;
             var gripTarget = GripTarget(hand, equipment);
-            var gripOffset = Vector3.zero;
+            var toPoint = Quaternion.Inverse(point.rotation);
+            gripOffset = Vector3.zero;
             if (gripTarget != null)
             {
                 gripOffset = gripTarget.IsChildOf(point)
-                    ? point.InverseTransformPoint(gripTarget.position)
-                    : Quaternion.Inverse(restWorldRotation) * (gripTarget.position - restWorld);
+                    ? toPoint * (gripTarget.position - point.position)
+                    : Quaternion.Inverse(point.parent.rotation * restRotation) * (gripTarget.position - point.parent.TransformPoint(restPosition));
             }
-            Log(hand, equipment, gripTarget, gripOffset);
+            var muzzle = MuzzleTransform(equipment, out var muzzleWorld);
+            hasMuzzle = muzzle != null && muzzle.IsChildOf(point);
+            if (hasMuzzle) muzzleOffset = toPoint * (muzzleWorld - point.position);
+            Log(hand, equipment, gripTarget, muzzle);
 
-            var rotation = aim * angle;
-            point.rotation = rotation;
-            point.position = grip;
-            point.position = grip - (point.TransformPoint(gripOffset) - point.position);
+            point.rotation = aim;
+            point.position = grip - aim * gripOffset;
             moved = true;
+        }
+
+        // Where the tool in the hand aims from, for a hand at grip pointing along rotation (VrAim, also before Place has
+        // run in a frame).
+        public static bool Muzzle(Vector3 grip, Quaternion rotation, out Vector3 position)
+        {
+            position = grip + rotation * (muzzleOffset - gripOffset);
+            return moved && hasMuzzle && point != null;
+        }
+
+        // The barrel's end of the equipped tool, and the transform it moves with.
+        private static Transform MuzzleTransform(EquipmentController.Equipment equipment, out Vector3 position)
+        {
+            position = Vector3.zero;
+            if (equipment == EquipmentController.Equipment.GrappleHook)
+            {
+                if (grapple == null) grapple = Object.FindObjectOfType<GrapplingHook>();
+                var barrel = grapple != null ? GrappleBarrel(grapple) : null;
+                if (barrel != null) position = barrel.position;
+                return barrel;
+            }
+            if (equipment != EquipmentController.Equipment.CuttingTool) return null;
+            if (cutter == null) cutter = Object.FindObjectOfType<CuttingToolController>();
+            if (cutter != null && cutter.CurrentMode == CuttingToolController.CutterMode.Scalpel)
+            {
+                if (stinger == null) stinger = Object.FindObjectOfType<ScalpelFXController>();
+                var origin = stinger != null ? StingerOrigin(stinger) : null;
+                if (origin != null) position = origin.TransformPoint(StingerOffset(stinger));
+                return origin;
+            }
+            if (splitsaw == null) splitsaw = Object.FindObjectOfType<CuttingFXController>();
+            var cut = splitsaw != null ? SplitsawOrigin(splitsaw) : null;
+            if (cut != null) position = cut.TransformPoint(SplitsawOffset(splitsaw));
+            return cut;
         }
 
         private static HandGrab RightHand()
@@ -93,6 +142,7 @@ namespace ShipbreakerVR
 
         private static void Restore()
         {
+            hasMuzzle = false;
             if (!moved) return;
             moved = false;
             if (point == null) return;
@@ -101,14 +151,16 @@ namespace ShipbreakerVR
         }
 
         // Once per tool: where the game keeps it, for judging the fit in the headset.
-        private static void Log(HandGrab hand, EquipmentController.Equipment equipment, Transform gripTarget, Vector3 gripOffset)
+        private static void Log(HandGrab hand, EquipmentController.Equipment equipment, Transform gripTarget, Transform muzzle)
         {
-            if (equipment == EquipmentController.Equipment.None || !logged.Add(equipment)) return;
+            var key = equipment == EquipmentController.Equipment.CuttingTool && cutter != null ? (int)equipment * 10 + (int)cutter.CurrentMode : (int)equipment;
+            if (equipment == EquipmentController.Equipment.None || !logged.Add(key)) return;
             var models = new List<string>();
             foreach (Transform child in point) models.Add($"'{child.name}'");
             Plugin.Log.LogInfo($"Tool in hand: {equipment}; equipment point {Chain(point)}, rest {restPosition} {restRotation.eulerAngles}; " +
                 $"models on it: {string.Join(", ", models)}; grip {(gripTarget == null ? "none" : Chain(gripTarget))}, " +
-                $"{(gripTarget != null && gripTarget.IsChildOf(point) ? "moves with the tool" : "stays")}, offset {gripOffset}; hand target {Chain(hand.HandPositionTransform)}");
+                $"{(gripTarget != null && gripTarget.IsChildOf(point) ? "moves with the tool" : "stays")}, offset {gripOffset} m, scale {point.lossyScale}; " +
+                $"muzzle {(muzzle == null ? "none" : $"{Chain(muzzle)} at {muzzleOffset} m, {Vector3.Angle(muzzle.forward, point.forward):0}° off the point's forward")}; hand target {Chain(hand.HandPositionTransform)}");
         }
 
         private static string Chain(Transform transform)
@@ -124,6 +176,10 @@ namespace ShipbreakerVR
             Restore();
             point = null;
             grab = null;
+            cutter = null;
+            splitsaw = null;
+            stinger = null;
+            grapple = null;
             logged.Clear();
         }
     }
