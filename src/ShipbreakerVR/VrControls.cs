@@ -303,21 +303,21 @@ namespace ShipbreakerVR
         private static readonly LynxControls.ActionSetAndId Left = GameplayActions.GameplayActionSet.ThrustBrakeLeft;
         private static readonly LynxControls.ActionSetAndId Right = GameplayActions.GameplayActionSet.ThrustBrakeRight;
 
-        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
         {
-            var original = AccessTools.Method(typeof(LynxControlExtensions), nameof(LynxControlExtensions.GetInputIsPressed));
+            var target = AccessTools.Method(typeof(LynxControlExtensions), nameof(LynxControlExtensions.GetInputIsPressed));
             var replacement = AccessTools.Method(typeof(BrakePatch), nameof(GetInputIsPressed));
             var replaced = 0;
             foreach (var instruction in instructions)
             {
-                if (instruction.Calls(original))
+                if (instruction.Calls(target))
                 {
                     instruction.operand = replacement;
                     replaced++;
                 }
                 yield return instruction;
             }
-            Plugin.Log.LogInfo($"ThrustController: {replaced} input call(s) redirected for braking");
+            PatchReport.Count("Braking", original, replaced, "input call(s)");
         }
 
         private static bool GetInputIsPressed(LynxControls controls, LynxControls.ActionSetAndId actionSetAndId)
@@ -334,14 +334,14 @@ namespace ShipbreakerVR
     [HarmonyPatch(typeof(ThrustController), "Update")]
     internal static class GrappleThrustPatch
     {
-        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
         {
-            var original = AccessTools.PropertyGetter(typeof(GrapplingHook), nameof(GrapplingHook.IsSwinging));
+            var target = AccessTools.PropertyGetter(typeof(GrapplingHook), nameof(GrapplingHook.IsSwinging));
             var replacement = AccessTools.Method(typeof(GrappleThrustPatch), nameof(IsSwinging));
             var replaced = 0;
             foreach (var instruction in instructions)
             {
-                if (instruction.Calls(original))
+                if (instruction.Calls(target))
                 {
                     instruction.opcode = OpCodes.Call;
                     instruction.operand = replacement;
@@ -349,7 +349,7 @@ namespace ShipbreakerVR
                 }
                 yield return instruction;
             }
-            Plugin.Log.LogInfo($"ThrustController: {replaced} grapple swing check(s) redirected");
+            PatchReport.Count("Grapple swing", original, replaced, "grapple swing check(s)");
         }
 
         private static bool IsSwinging(GrapplingHook hook) => !VrControls.Flying && hook.IsSwinging;

@@ -250,7 +250,7 @@ interacting, the grapple and the "entity of interest".
   The second tool is put away when the option or hand aiming goes off, outside gameplay (not on pause) and on unload.
   Logs: `Two tools: <hand> hand keeps the <tool>, the other hand draws the <tool>`, `... adds the <tool> to the
   DemoCharge`, `... is put away`, `... becomes the game's tool`, `the scanner hides the <tool>`, `... comes back into
-  the <hand> hand`, `Two tools: <Class>.<Method>: N equipment check(s) redirected`; F8 shows `second tool: ...`.
+  the <hand> hand`, `Patch Two tools: N call(s) redirected in M method(s)`; F8 shows `second tool: ...`.
 - The game has two hands (`GrabController.LeftHand`/`RightHand`, both `HandGrab`): each with its own hand target
   (`m_HandTarget`), grab/rest/miss targets, equipment point and equipment grip targets, animator parameters of its own
   (`LGrab`/`RGrab`, `LPrepGrab`, `LReact`, ...) and its own grab action (`LeftHandGrab`/`RightHandGrab`); the flat game
@@ -675,7 +675,7 @@ scene data shows (`scenes-gameplay_scenes_all`, Hab scene CAB-11cf266b; profile 
 
 `VrPerformance` adds a global volume on our pass layer (priority 1000, only the VR camera has the layer in its mask)
 that sets the occlusion quality back to Low (`[Bild] Umgebungsverdeckung`, also in the options menu: Low, Off, Game
-default). It also logs frame times every 30 s and whenever the place or a setting changes, and once per camera switch
+default). With `Debug/Diagnose` on it also logs frame times every 30 s and whenever the place or a setting changes, and once per camera switch
 which other cameras render, to compare bay and Hab from one Player.log.
 
 With the occlusion at Low the Hab still ran at a steady 22.2 ms per frame (45 fps), and `XRDevice.refreshRate` read
@@ -744,6 +744,14 @@ before the boundary could change anything, so a different ship is the likelier c
 parked the change for a later performance audit; the PR is closed, its commits stay under `refs/pull/24/head`.
 
 ## Diagnostics
+The tools below are off by default, so players' logs stay readable: config `Debug/Diagnose` turns on F8, the automatic
+dump in the Hab, the load trace and the frame time statistics (`VrPerformance`); `Debug/WerkzeugExport` turns on
+Shift+F8.
+
+After patching, `PatchReport` logs one line per transpiler, `Patch <name>: N call(s) redirected in M method(s)`. It
+warns when a transpiler reached fewer methods than with game 1.3.0.1263554, or redirected nothing in one of them: a
+game update that renamed a type or changed a method body. The per-method counts are at Debug level.
+
 F8 (`VrDiagnostics`) is for things only seen in the headset. It writes into the log: game state, head pose, the camera
 the rig follows, where the UI canvas hangs, every active root canvas (render mode, camera, layer, whether `VrCanvases`
 attached it, direction and distance from the head for the non-overlay ones, and its dark, large or specially shaded

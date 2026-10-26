@@ -515,7 +515,7 @@ namespace ShipbreakerVR
                 instruction.opcode = OpCodes.Call;
                 replaced++;
             }
-            Plugin.Log.LogInfo($"Aim: {original.DeclaringType?.Name}.{original.Name}: {replaced} camera call(s) redirected to the hand");
+            PatchReport.Count("Aim", original, replaced, "camera call(s)");
             return list;
         }
     }

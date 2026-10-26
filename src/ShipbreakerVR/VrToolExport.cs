@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace ShipbreakerVR
 {
-    // Shift+F8: saves the model of the tool in the hand (cutter or grapple) for judging and retexturing it: per renderer
+    // Shift+F8, with Debug/WerkzeugExport on: saves the model of the tool in the hand (cutter or grapple) for judging and retexturing it: per renderer
     // its mesh, materials and textures go into the log, the textures as PNG files and, where the mesh can be read, the
     // mesh as an OBJ file plus a picture of its UV layout over the base color, the triangles colored by the side of the
     // tool they face (right red, left blue, top/bottom green, front/back gray, in the equipment point's axes). The log

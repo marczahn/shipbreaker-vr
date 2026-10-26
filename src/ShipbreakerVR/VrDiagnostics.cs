@@ -11,7 +11,7 @@ using UnityEngine.UI;
 
 namespace ShipbreakerVR
 {
-    // F8: writes what is drawn around the player into the log, for things only seen in the headset. Directions are
+    // F8, with Debug/Diagnose on: writes what is drawn around the player into the log, for things only seen in the headset. Directions are
     // relative to the head: "ahead 10, up 60" is 10 degrees to the right of the gaze's heading and 60 degrees above the
     // horizon. Also saves the UI texture (what the canvas in front shows) and the game window (the headset's mirror)
     // as PNG files next to the log. Also runs on its own a few seconds after the rig enters the Hab (Schedule), since
@@ -33,7 +33,12 @@ namespace ShipbreakerVR
 
         public static void Update(VrCamera vr)
         {
-            VrToolExport.Update();
+            if (Plugin.ToolExport.Value) VrToolExport.Update();
+            if (!Plugin.Diagnostics.Value)
+            {
+                dueAt = -1f;
+                return;
+            }
             var shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
             if (Input.GetKeyDown(KeyCode.F8) && !shift) Dump(vr, "F8");
             else if (dueAt >= 0f && Time.unscaledTime >= dueAt)

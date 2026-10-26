@@ -160,9 +160,15 @@ namespace ShipbreakerVR
         // Scene objects only; FindObjectsOfTypeAll also returns prefabs.
         private static bool InScene(Canvas canvas) => canvas.gameObject.scene.IsValid();
 
-        // isRootCanvas is only kept up to date for active canvases.
-        private static bool IsRoot(Canvas canvas) =>
-            canvas.isActiveAndEnabled ? canvas.isRootCanvas : canvas.GetComponentsInParent<Canvas>(true).Length == 1;
+        // isRootCanvas is only kept up to date for active canvases. For inactive ones walk the parents, which unlike
+        // GetComponentsInParent allocates nothing (the scan sees every canvas, prefabs included, twice a second).
+        private static bool IsRoot(Canvas canvas)
+        {
+            if (canvas.isActiveAndEnabled) return canvas.isRootCanvas;
+            for (var t = canvas.transform.parent; t != null; t = t.parent)
+                if (t.GetComponent<Canvas>() != null) return false;
+            return true;
+        }
 
         public void Restore()
         {
