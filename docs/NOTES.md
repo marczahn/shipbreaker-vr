@@ -774,6 +774,8 @@ The steps later in the frame hang on the VR camera's callbacks and are listed in
 trace and F8 in `Update`; `VrClimb` in `FixedUpdate`; the demo charge arm, the suit's hands and the crosshair at the
 start of `LateUpdate`, before the rig; `VrClimb.RigPlaced` and the tool models once the rig is placed before
 rendering. Each step runs in its own try/catch, so one that throws no longer stops the rest of the camera's update.
+`VrUi` and `VrHelmet` sit on the VR camera's object but have no `LateUpdate` of their own: `VrCamera.LateUpdate` calls
+them at its end, UI first, so their order no longer depends on Unity's.
 
 `VrHand` keeps what each hand does as one state: `Empty`, `GameTool` (the game's equipped tool, aimed and worked with
 that hand), `SecondTool` (`VrDualTools`), `HiddenTool` (hidden by the scanner in the other hand) or `Holding`
