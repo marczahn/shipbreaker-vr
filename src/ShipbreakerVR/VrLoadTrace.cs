@@ -6,7 +6,7 @@ using UnityEngine.Rendering;
 
 namespace ShipbreakerVR
 {
-    // Load screens in VR, frame by frame, for what is too short to see in the headset (a view of the station flashing
+    // With Debug/Diagnose on: load screens in VR, frame by frame, for what is too short to see in the headset (a view of the station flashing
     // up, a blink of black). While the rig hides the world, and for a few seconds after, it logs each frame in which the
     // picture changes: which cameras rendered (the rig's as "VR"), whether our pass drew the UI canvas, the eye texture
     // size, the load screen and which camera the rig follows. Frames that took long get a line of their own.
@@ -29,6 +29,11 @@ namespace ShipbreakerVR
         // From VrCamera.LateUpdate: hidden is true while only the UI shows on black.
         public static void Track(bool hidden)
         {
+            if (!Plugin.Diagnostics.Value)
+            {
+                tracing = false;
+                return;
+            }
             var now = Time.unscaledTime;
             if (hidden)
             {

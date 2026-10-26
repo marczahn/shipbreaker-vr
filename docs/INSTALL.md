@@ -16,8 +16,10 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
 - **F4** (or pressing the **left stick** on the controllers) recenters the view on the headset: position, and in menus also view direction and the menu canvas.
   Menus always appear at eye height, also when you look up or down.
   The row "Center view" at the top of the VR tab does the same.
-- **F7** at one of the station's monitors switches its screen look. **F8** writes what is drawn around you into the log,
-  for bug reports. **Shift+F8** saves the model of the tool in your hand (textures, mesh, UV layout) to
+- **F7** at one of the station's monitors switches its screen look.
+- For bug reports, set `Diagnose = true` under `[Debug]` in `BepInEx\config\de.marczahn.shipbreakervr.cfg`. Then
+  **F8** writes what is drawn around you into the log, and load screens and frame times are logged too. With
+  `WerkzeugExport = true`, **Shift+F8** saves the model of the tool in your hand (textures, mesh, UV layout) to
   `BepInEx\ShipbreakerVR-tools`, for modding work.
 - The station between shifts has its own render resolution, the row "Station resolution" in the VR tab. If the view wobbles
   slightly at the monitors when you move your head, the graphics card misses the headset's frame rate there; lower it

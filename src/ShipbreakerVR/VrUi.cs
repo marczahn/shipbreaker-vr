@@ -1,3 +1,5 @@
+using System;
+using System.Linq.Expressions;
 using System.Reflection;
 using BBI.Unity.Game;
 using HarmonyLib;
@@ -16,10 +18,14 @@ namespace ShipbreakerVR
     // visor display; in menus and pause it stays fixed in the world. If there is no UI camera (main menu), we use our own.
     internal class VrUi : MonoBehaviour
     {
-        private static readonly PropertyInfo XrProperty = AccessTools.Property(typeof(HDCamera), "xr");
-        private static MethodInfo getViewMatrix;
-        private static MethodInfo getProjMatrix;
-        private static MethodInfo getMultipassId;
+        // HDCamera.xr and its XRPass are internal: compiled once into delegates, so the render path neither boxes
+        // nor allocates. GetEye runs for each eye from VrAim.Draw and Draw; the matrices are cached per eye and frame.
+        private static Func<HDCamera, Matrix4x4> xrViewMatrix;
+        private static Func<HDCamera, Matrix4x4> xrProjMatrix;
+        private static Func<HDCamera, int> xrMultipassId;
+        private static readonly int[] eyeFrame = { -1, -1, -1, -1, -1, -1, -1, -1 };
+        private static readonly Matrix4x4[] eyeView = new Matrix4x4[8];
+        private static readonly Matrix4x4[] eyeProj = new Matrix4x4[8];
 
         public static VrUi Instance { get; private set; }
 
@@ -37,6 +43,7 @@ namespace ShipbreakerVR
         private bool loggedGameFade;
         private Mesh quad;
         private int renderedFrame = -1;
+        private float nextUiCameraSearch;
         private int loggedEyes;
         private readonly VrCanvases canvases = new VrCanvases();
 
@@ -156,8 +163,11 @@ namespace ShipbreakerVR
                 Plugin.Log.LogInfo($"Monitor look {(Plugin.MonitorLook.Value ? "on" : "off")} (F7)");
             }
 
-            if (uiCamera == null || uiCamera == ownUiCamera)
+            // Until the game has its UI camera (main menu) we use our own; look for the game's twice a second, not
+            // every frame.
+            if (uiCamera == null || (uiCamera == ownUiCamera && Time.unscaledTime >= nextUiCameraSearch))
             {
+                nextUiCameraSearch = Time.unscaledTime + 0.5f;
                 var go = GameObject.FindGameObjectWithTag("UI_Camera");
                 var found = go != null ? go.GetComponent<Camera>() : null;
                 if (found != null)
@@ -177,7 +187,11 @@ namespace ShipbreakerVR
             var height = Mathf.Max(Screen.height, 360);
             if (texture == null || texture.width != width || texture.height != height)
             {
-                if (texture != null) texture.Release();
+                if (texture != null)
+                {
+                    texture.Release();
+                    Destroy(texture);
+                }
                 texture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGBHalf) { name = "ShipbreakerVR UI" };
                 texture.Create();
                 if (material == null)
@@ -432,18 +446,32 @@ namespace ShipbreakerVR
         // Matrices of the eye HDRP is currently rendering (MultiPass: one pass per eye).
         internal static int GetEye(HDCamera hdCamera, out Matrix4x4 view, out Matrix4x4 proj)
         {
-            var xr = XrProperty.GetValue(hdCamera);
-            if (getViewMatrix == null)
+            if (xrMultipassId == null) CompileXrAccess();
+            var eye = Mathf.Clamp(xrMultipassId(hdCamera), 0, 7);
+            if (eyeFrame[eye] != Time.frameCount)
             {
-                var type = xr.GetType();
-                getViewMatrix = AccessTools.Method(type, "GetViewMatrix");
-                getProjMatrix = AccessTools.Method(type, "GetProjMatrix");
-                getMultipassId = AccessTools.PropertyGetter(type, "multipassId");
+                eyeFrame[eye] = Time.frameCount;
+                eyeView[eye] = xrViewMatrix(hdCamera);
+                eyeProj[eye] = xrProjMatrix(hdCamera);
             }
-            var args = new object[] { 0 };
-            view = (Matrix4x4)getViewMatrix.Invoke(xr, args);
-            proj = (Matrix4x4)getProjMatrix.Invoke(xr, args);
-            return Mathf.Clamp((int)getMultipassId.Invoke(xr, null), 0, 7);
+            view = eyeView[eye];
+            proj = eyeProj[eye];
+            return eye;
+        }
+
+        // camera => camera.xr.GetViewMatrix(0) and so on.
+        private static void CompileXrAccess()
+        {
+            var xrProperty = AccessTools.Property(typeof(HDCamera), "xr");
+            var passType = xrProperty.PropertyType;
+            var camera = Expression.Parameter(typeof(HDCamera), "camera");
+            var xr = Expression.Property(camera, xrProperty);
+            xrViewMatrix = Expression.Lambda<Func<HDCamera, Matrix4x4>>(
+                Expression.Call(xr, AccessTools.Method(passType, "GetViewMatrix"), Expression.Constant(0)), camera).Compile();
+            xrProjMatrix = Expression.Lambda<Func<HDCamera, Matrix4x4>>(
+                Expression.Call(xr, AccessTools.Method(passType, "GetProjMatrix"), Expression.Constant(0)), camera).Compile();
+            xrMultipassId = Expression.Lambda<Func<HDCamera, int>>(
+                Expression.Property(xr, AccessTools.Property(passType, "multipassId")), camera).Compile();
         }
 
         // The monitor look's textures for a canvas of this aspect (width / height). Distances are in screen heights.

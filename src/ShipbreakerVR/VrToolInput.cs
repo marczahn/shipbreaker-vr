@@ -32,7 +32,9 @@ namespace ShipbreakerVR
 
         private const float TriggerPress = 0.5f;
         private const float TriggerRelease = 0.4f;
+        // The same grip thresholds as VrClimb, VrHands and VrToolFit, so a grip resting in between counts as held for all.
         private const float GripPress = 0.5f;
+        private const float GripRelease = 0.4f;
         private const float LongPress = 0.4f;
 
         private static readonly int Count = System.Enum.GetValues(typeof(Action)).Length;
@@ -242,7 +244,7 @@ namespace ShipbreakerVR
             hand.Device.TryGetFeatureValue(CommonUsages.trigger, out var trigger);
             hand.Trigger = trigger >= (hand.Trigger ? TriggerRelease : TriggerPress);
             hand.Device.TryGetFeatureValue(CommonUsages.grip, out var grip);
-            var down = grip >= GripPress;
+            var down = grip >= (hand.GripDown ? GripRelease : GripPress);
             hand.GripPressed = active && down && !hand.GripDown;
             hand.GripDown = down;
             // No buzz while the trigger is held: the grip does not draw then (flying with the left hand, or firing).
@@ -477,7 +479,7 @@ namespace ShipbreakerVR
                 }
                 yield return instruction;
             }
-            Plugin.Log.LogInfo($"Tool control: {original.DeclaringType?.Name}.{original.Name}: {replaced} input poll(s) redirected");
+            PatchReport.Count("Tool control", original, replaced, "input poll(s)");
         }
     }
 }

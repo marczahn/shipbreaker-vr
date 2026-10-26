@@ -117,7 +117,7 @@ namespace ShipbreakerVR
                 ambientOcclusion.quality.overrideState = running && mode == Occlusion.Niedrig;
                 ambientOcclusion.intensity.overrideState = running && mode == Occlusion.Aus;
             }
-            RecordFrame(running && !worldHidden ? Label(followed, inHab) : null);
+            RecordFrame(Plugin.Diagnostics.Value && running && !worldHidden ? Label(followed, inHab) : null);
         }
 
         private static string Label(Camera followed, bool inHab)
@@ -135,7 +135,7 @@ namespace ShipbreakerVR
             return statsLabel;
         }
 
-        // Frame times per place and setting, logged every 30 s and whenever either changes. In VR the frame rate is tied
+        // With Debug/Diagnose on: frame times per place and setting, logged every 30 s and whenever either changes. In VR the frame rate is tied
         // to the headset's: a frame the GPU doesn't finish in time takes two refresh intervals.
         private static void RecordFrame(string label)
         {

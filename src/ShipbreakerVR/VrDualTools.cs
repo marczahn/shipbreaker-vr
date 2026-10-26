@@ -538,7 +538,7 @@ namespace ShipbreakerVR
                 }
                 yield return instruction;
             }
-            Plugin.Log.LogInfo($"Two tools: {original.DeclaringType?.Name}.{original.Name}: {replaced} equipment check(s) redirected ({VrDualTools.FamilyOf(original.DeclaringType)})");
+            PatchReport.Count("Two tools", original, replaced, $"equipment check(s) ({VrDualTools.FamilyOf(original.DeclaringType)})");
         }
     }
 }
