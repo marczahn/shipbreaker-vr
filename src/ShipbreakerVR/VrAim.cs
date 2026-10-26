@@ -20,7 +20,8 @@ namespace ShipbreakerVR
     // rolling the hand rolls the cutter's line.
     // A thin laser from the muzzle with a dot on what it hits shows where the hand points, the same with every tool; the dot
     // takes the color the game gives its reticle for the tool (in range, cooling down). The game's crosshair in the middle
-    // of the view is hidden meanwhile (VrCrosshair).
+    // of the view is hidden meanwhile (VrCrosshair). With an empty hand there is nothing to aim, as Marc found: no laser
+    // then, and interacting aims at the middle of the view as in the flat game, where the game's dot marks it (Aiming).
     // The buttons of the tool hand's controller work the tools while aiming with the hand (VrToolInput).
     // The tool models go into the hand (VrToolModels).
     internal static class VrAim
@@ -32,7 +33,7 @@ namespace ShipbreakerVR
         // and of its bright core.
         private const float DotSize = 0.009f;
         private const float CoreSize = 0.4f;
-        // The laser, and its dot without a tool reticle to take the color from (scanner, demo charges, empty hand). Tinting
+        // The laser, and its dot without a tool reticle to take the color from (scanner, demo charges). Tinting
         // the whole laser in the reticle's orange made it look like another thing than the laser of the empty hand.
         private static readonly Color LaserColor = new Color(0.55f, 0.95f, 1f);
 
@@ -49,6 +50,7 @@ namespace ShipbreakerVR
         private static Transform throwOrigin;
         private static int updatedFrame = -1;
         private static bool active;
+        private static bool withTool;
         private static bool loggedPose;
 
         private static int beamFrame = -1;
@@ -75,23 +77,34 @@ namespace ShipbreakerVR
             }
         }
 
-        // What the patched tool code uses instead of LynxCameraController.MainCamera and MainCameraTransform.
-        public static Camera Camera => Active ? aim : LynxCameraController.MainCamera;
+        // True while a tool in the hand aims (Active, with a tool drawn): the game's code then aims through the aim camera,
+        // and the laser shows. With an empty hand it aims through the main camera, at the middle of the view.
+        public static bool Aiming
+        {
+            get
+            {
+                Update();
+                return active && withTool;
+            }
+        }
 
-        public static Transform CameraTransform => Active ? aim.transform : LynxCameraController.MainCameraTransform;
+        // What the patched tool code uses instead of LynxCameraController.MainCamera and MainCameraTransform.
+        public static Camera Camera => Aiming ? aim : LynxCameraController.MainCamera;
+
+        public static Transform CameraTransform => Aiming ? aim.transform : LynxCameraController.MainCameraTransform;
 
         // The aim camera in the place of another one the game's code holds (GrappleCrosshairPatch).
-        public static Camera Instead(Camera camera) => Active ? aim : camera;
+        public static Camera Instead(Camera camera) => Aiming ? aim : camera;
 
         // Where the cutter's line starts in CuttingFXController.StartCutLine (the tool's own transform in the flat game).
-        public static Transform CutOrigin(Component tool) => Active ? aim.transform : tool.transform;
+        public static Transform CutOrigin(Component tool) => Aiming ? aim.transform : tool.transform;
 
         // A thrown demo charge leaves from just in front of the hand (DemoChargeController.ThrowDemoCharge, ThrowOffset in
         // front of the head in the flat game) and flies where the hand points (DemoChargeAsset.SetComponentData, the
         // player's forward in the flat game). Placed charges are jointed to the ship, which drops that velocity.
         public static Transform ThrowOrigin(Transform offset)
         {
-            if (!Active) return offset;
+            if (!Aiming) return offset;
             if (throwOrigin == null)
             {
                 throwOrigin = new GameObject("ShipbreakerVR Throw origin").transform;
@@ -101,7 +114,7 @@ namespace ShipbreakerVR
             return throwOrigin;
         }
 
-        public static Vector3 ThrowDirection(Transform player) => Active ? aim.transform.forward : player.forward;
+        public static Vector3 ThrowDirection(Transform player) => Aiming ? aim.transform.forward : player.forward;
 
         private static void Update()
         {
@@ -127,6 +140,7 @@ namespace ShipbreakerVR
             aim.aspect = main.aspect;
             aim.nearClipPlane = main.nearClipPlane;
             aim.farClipPlane = main.farClipPlane;
+            withTool = VrToolModels.Equipped != EquipmentController.Equipment.None;
             active = true;
         }
 
@@ -251,7 +265,7 @@ namespace ShipbreakerVR
             if (beamFrame == Time.frameCount) return;
             beamFrame = Time.frameCount;
             var rotation = Quaternion.identity;
-            beamVisible = LynxCameraController.MainCamera != null && TryGetAim(out beamStart, out rotation);
+            beamVisible = Aiming && TryGetAim(out beamStart, out rotation);
             if (!beamVisible) return;
             dotColor = VrCrosshair.TryGetColor(out var reticle) ? new Color(reticle.r, reticle.g, reticle.b) : LaserColor;
             if (pointerMask == 0) pointerMask = PointerMask();
@@ -261,12 +275,14 @@ namespace ShipbreakerVR
             beamTarget = beamHit ? $"'{hit.collider.name}' (layer {LayerMask.LayerToName(hit.collider.gameObject.layer)}) at {hit.distance:0.00} m" : "nothing";
         }
 
-        // Whether the hand points at anything within the beam's range (VrToolInput: B held without a target recalls the tethers).
+        // Whether the hand points at anything within the beam's range, with an empty hand the middle of the view (VrToolInput:
+        // B held without a target recalls the tethers).
         public static bool PointsAtSomething()
         {
-            if (!Active) return false;
+            var from = CameraTransform;
+            if (!Active || from == null) return false;
             if (pointerMask == 0) pointerMask = PointerMask();
-            return Physics.Raycast(aim.transform.position, aim.transform.forward, BeamRange * VrCamera.WorldScale, pointerMask, QueryTriggerInteraction.Ignore);
+            return Physics.Raycast(from.position, from.forward, BeamRange * VrCamera.WorldScale, pointerMask, QueryTriggerInteraction.Ignore);
         }
 
         // Everything a ray hits by default, except the player's own layers and the UI.
@@ -338,7 +354,7 @@ namespace ShipbreakerVR
         // For the F8 dump.
         public static string Describe(Transform head)
         {
-            var text = $"aim with hand: option {Plugin.AimWithHand.Value}, active {Active}";
+            var text = $"aim with hand: option {Plugin.AimWithHand.Value}, active {Active}, tool {withTool}";
             if (active) text += $", hand at {VrDiagnostics.Direction(head, aim.transform.position)} {Vector3.Distance(head.position, aim.transform.position):0.00} m, pointing {VrDiagnostics.Direction(head, head.position + aim.transform.forward)}, beam on {beamTarget}";
             return text + CutterModel();
         }

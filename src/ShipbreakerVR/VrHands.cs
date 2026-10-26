@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using BBI.Unity.Game;
 using UnityEngine;
@@ -13,8 +14,9 @@ namespace ShipbreakerVR
     // points, thumb side up. The tools are placed in the hand that holds them (VrToolModels, VrToolFit). The game itself
     // keeps the tool on its right hand; with the tool in the left hand the right one follows its controller empty.
     // A hand that is busy with something of the game's (grabbing, a gesture, damage) is left to the game. Demo charges
-    // hang on the right hand's bone, so that arm is posed for them by VrToolModels.PoseArm, also with the charge in the
-    // left hand; the left arm stays with the game then.
+    // hang on the right hand's bone, so that arm is posed for them by VrToolModels.PoseArm. With the charge in the left
+    // hand, the left arm follows its controller like any other, the right one its own, and the charge's pieces go over to
+    // the left hand (Charges).
     // The fingers come from the animation too: a hand that follows its controller closes while its grip is held (around
     // the tool in the left hand, or into a fist), through the animator's own grab pose (Fingers).
     internal static class VrHands
@@ -74,17 +76,18 @@ namespace ShipbreakerVR
             var rightWasDriven = RightArm.Driven;
             var active = VrAim.Active;
             var equipment = grab.RightHand.CurrentEquipmentType;
-            var leftHolds = VrToolInput.LeftHoldsTool;
-            Drive(LeftArm, active && Idle(grab.LeftHand) && !(leftHolds && equipment == EquipmentController.Equipment.DemoCharge));
+            var chargeLeft = VrToolModels.ChargeInLeftHand;
+            Drive(LeftArm, active && Idle(grab.LeftHand));
             var rightBusy = VrToolModels.PosesRightArm;
             Drive(RightArm, active && !rightBusy && (Idle(grab.RightHand)
-                || (grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped && equipment != EquipmentController.Equipment.DemoCharge)));
+                || (grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped && (equipment != EquipmentController.Equipment.DemoCharge || chargeLeft))));
             // The demo charge's arm is bent there; another bend on top would fight it.
             if (rightBusy) RightArm.Weight = 0f;
             Fingers(LeftArm, leftWasDriven);
             Fingers(RightArm, rightWasDriven);
             Pose(LeftArm);
             Pose(RightArm);
+            Charges(active && chargeLeft);
         }
 
         // Closes the hand while its grip is held, as long as it follows its controller: the same parameters HandGrab sets
@@ -96,6 +99,8 @@ namespace ShipbreakerVR
             bool closed;
             if (arm.Driven)
             {
+                // The game's right hand with the charge in the left one: its fingers stay with the charge's animation.
+                if (arm.Hand.CurrentEquipmentType == EquipmentController.Equipment.DemoCharge) return;
                 if (!arm.Device.isValid) arm.Device = InputDevices.GetDeviceAtXRNode(arm.Node);
                 arm.Device.TryGetFeatureValue(CommonUsages.grip, out var grip);
                 arm.Gripping = grip >= (arm.Gripping ? GripRelease : GripPress);
@@ -152,19 +157,88 @@ namespace ShipbreakerVR
         // finger bones the hand keeps the angle to the eye that the animation gave it.
         private static Quaternion HandRotation(Arm arm, Quaternion aim, Quaternion animated)
         {
-            if (arm.Index != null && arm.Middle != null && arm.Little != null)
+            if (Frame(arm, out _, out var current))
             {
-                var knuckles = arm.Middle.position - arm.Wrist.position;
-                var thumbSide = arm.Index.position - arm.Little.position;
-                if (knuckles.sqrMagnitude > 1e-8f && thumbSide.sqrMagnitude > 1e-8f)
-                {
-                    var current = Quaternion.LookRotation(knuckles, thumbSide);
-                    var wanted = Quaternion.LookRotation(aim * Vector3.forward, aim * Vector3.up);
-                    return wanted * Quaternion.Inverse(current) * arm.Wrist.rotation;
-                }
+                var wanted = Quaternion.LookRotation(aim * Vector3.forward, aim * Vector3.up);
+                return wanted * Quaternion.Inverse(current) * arm.Wrist.rotation;
             }
             var camera = VrCamera.Instance != null ? VrCamera.Instance.GameCamera : null;
             return camera == null ? animated : aim * (Quaternion.Inverse(camera.transform.rotation) * animated);
+        }
+
+        // The hand's own axes: forward along the knuckles (wrist to middle finger), up towards the thumb side (little to
+        // index finger), from the wrist. The same on either hand, so a pose relative to one hand mirrors onto the other by
+        // negating x (the cross product of the two flips with the mirror).
+        private static bool Frame(Arm arm, out Vector3 wrist, out Quaternion frame)
+        {
+            wrist = Vector3.zero;
+            frame = Quaternion.identity;
+            if (arm.Wrist == null || arm.Index == null || arm.Middle == null || arm.Little == null) return false;
+            var knuckles = arm.Middle.position - arm.Wrist.position;
+            var thumbSide = arm.Index.position - arm.Little.position;
+            if (knuckles.sqrMagnitude <= 1e-8f || thumbSide.sqrMagnitude <= 1e-8f) return false;
+            wrist = arm.Wrist.position;
+            frame = Quaternion.LookRotation(knuckles, thumbSide);
+            return true;
+        }
+
+        private struct Moved
+        {
+            public Vector3 Position;
+            public Quaternion Rotation;
+            public Vector3 SetPosition;
+            public Quaternion SetRotation;
+        }
+
+        private static readonly List<Transform> chargePieces = new List<Transform>();
+        private static readonly Dictionary<Transform, Moved> moved = new Dictionary<Transform, Moved>();
+        private static Transform chargesOn;
+        private static float nextChargeSearch;
+        private static int chargeLogs;
+
+        // The demo charge and the detonator (PRF_Demo_Charge, PRF_Tool_ExplosiveChargeDetonator) hang on the bone of the
+        // game's right hand, which its animation holds them with. With the charge in the left hand they are moved to the
+        // left hand every frame, after both arms are posed: mirrored, relative to the hands' own axes (Frame), so the left
+        // hand holds them as the right one would. Each piece starts from the animation's pose, or the one it had before
+        // being moved, if nothing has set it since; it gets that pose back when the charge leaves the left hand.
+        private static void Charges(bool left)
+        {
+            if (!left || !Frame(RightArm, out var rightWrist, out var rightFrame) || !Frame(LeftArm, out var leftWrist, out var leftFrame))
+            {
+                if (moved.Count == 0) return;
+                foreach (var entry in moved)
+                    if (entry.Key != null) SetLocal(entry.Key, entry.Value.Position, entry.Value.Rotation);
+                moved.Clear();
+                return;
+            }
+            if (chargesOn != RightArm.Wrist || (chargePieces.Count == 0 && Time.unscaledTime >= nextChargeSearch))
+            {
+                chargesOn = RightArm.Wrist;
+                nextChargeSearch = Time.unscaledTime + 2f;
+                chargePieces.Clear();
+                foreach (Transform child in chargesOn)
+                    if (child.name.IndexOf("Charge", System.StringComparison.OrdinalIgnoreCase) >= 0) chargePieces.Add(child);
+                Plugin.Log.LogInfo($"Hands: demo charge pieces on the right hand: {string.Join(", ", chargePieces.Select(p => $"'{p.name}'"))}");
+            }
+            var toRight = Quaternion.Inverse(rightFrame);
+            foreach (var piece in chargePieces)
+            {
+                if (piece == null) continue;
+                if (moved.TryGetValue(piece, out var last) && piece.localPosition == last.SetPosition && piece.localRotation == last.SetRotation)
+                    SetLocal(piece, last.Position, last.Rotation);
+                var original = new Moved { Position = piece.localPosition, Rotation = piece.localRotation };
+                var position = toRight * (piece.position - rightWrist);
+                var rotation = toRight * piece.rotation;
+                // Mirrored in the hand's axes, and the piece turned over its own x so that the result is a rotation again.
+                position.x = -position.x;
+                rotation = new Quaternion(rotation.x, -rotation.y, -rotation.z, rotation.w);
+                piece.SetPositionAndRotation(leftWrist + leftFrame * position, leftFrame * rotation);
+                original.SetPosition = piece.localPosition;
+                original.SetRotation = piece.localRotation;
+                moved[piece] = original;
+            }
+            if (chargeLogs++ == 0)
+                Plugin.Log.LogInfo($"Hands: demo charge pieces moved to the left hand ({chargePieces.Count})");
         }
 
         private static bool Find()
@@ -198,6 +272,12 @@ namespace ShipbreakerVR
             arm.Driven = false;
         }
 
+        private static void SetLocal(Transform transform, Vector3 position, Quaternion rotation)
+        {
+            transform.localPosition = position;
+            transform.localRotation = rotation;
+        }
+
         private static string Name(Transform transform) => transform == null ? "none" : $"'{transform.name}'";
 
         // On unload (hot reload).
@@ -210,6 +290,9 @@ namespace ShipbreakerVR
             LeftArm.Weight = RightArm.Weight = 0f;
             LeftArm.Driven = RightArm.Driven = false;
             LeftArm.Gripping = RightArm.Gripping = false;
+            Charges(false);
+            chargePieces.Clear();
+            chargesOn = null;
         }
     }
 }

@@ -9,15 +9,15 @@ using UnityEngine.UI;
 
 namespace ShipbreakerVR
 {
-    // While the tools aim from the hand (VrAim), the game's crosshair in the middle of the view marks where the head
-    // looks, which no tool uses any more: the center dot (CentreDotUIController), the grapple's reticle with its thrust
+    // While a tool aims from the hand (VrAim.Aiming), the game's crosshair in the middle of the view marks where the head
+    // looks, which that tool does not use: the center dot (CentreDotUIController), the grapple's reticle with its thrust
     // indicators and distance (GrappleCrosshairController), and the cutter's reticle, cut lines and edge points
     // (CuttingUIController), and the scanner's dot (ScannerUIController). A center dot was still left over, from none of
     // these as far as the log tells, so the HUD is also searched now and then for small graphics in the middle of a canvas
     // (Scan), which go too. They are made invisible through their CanvasRenderer's alpha, which the game never sets, so
-    // its own switching and coloring go on untouched; with hand aiming off they come back. The color the game gives the
-    // reticle for what the tool aims at (in range, out of range, cooling down) goes to the laser's dot instead
-    // (TryGetColor).
+    // its own switching and coloring go on untouched. With an empty hand or hand aiming off they come back: then
+    // interacting aims at the middle of the view, and the dot marks it. The color the game gives the reticle for what
+    // the tool aims at (in range, out of range, cooling down) goes to the laser's dot instead (TryGetColor).
     internal static class VrCrosshair
     {
         private static readonly AccessTools.FieldRef<GrappleCrosshairController, Image> GrappleSnap =
@@ -64,7 +64,7 @@ namespace ShipbreakerVR
         // From VrCamera.LateUpdate: after the game's UI has updated, before the canvases are drawn.
         public static void LateUpdate()
         {
-            if (!VrAim.Active)
+            if (!VrAim.Aiming)
             {
                 Show();
                 return;

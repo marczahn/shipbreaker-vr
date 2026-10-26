@@ -81,6 +81,14 @@ namespace ShipbreakerVR
         // While the left hand holds a tool its controller works the tool, so it does not fly (VrControls).
         public static bool LeftHoldsTool => ToolNode == XRNode.LeftHand && VrAim.Active;
 
+        // Whether that controller's grip is held this frame (VrToolModels: a right hand that takes the demo charges over
+        // from the left one holds its grip).
+        public static bool GripHeld(XRNode node)
+        {
+            Update();
+            return (node == XRNode.LeftHand ? LeftHand : RightHand).GripDown;
+        }
+
         private static int updatedFrame = -1;
         // A decides at its press whether it throws (trigger held) or interacts, and keeps that until released.
         private static bool aDown;

@@ -45,7 +45,8 @@ where you pressed it, its surface full thrust, the small inner globe the deadzon
 
 With the row "Aim with the hand" in the VR tab on (the default), the tools aim where the controller that holds them
 points, from the tool's muzzle. A thin laser shows where; its dot takes the color the game gives its crosshair (for
-example when the grapple has a target in range); the crosshair in the middle of the view is hidden meanwhile.
+example when the grapple has a target in range); the crosshair in the middle of the view is hidden meanwhile. With an
+empty hand there is no laser: A uses what is in the middle of your view, marked by the game's dot, as in the flat game.
 - Squeeze the grip at your body to take a tool: grapple at the right hip, demo charges at the left hip, cutter over the
   right shoulder, scanner at the right side of the helmet. The controller buzzes when it is in such a spot. Keep the
   grip squeezed to hold the tool; let go to put it away.

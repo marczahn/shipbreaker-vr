@@ -15,7 +15,7 @@ namespace ShipbreakerVR
     // tool and hand (VrToolFit). The tools aim from their muzzle along their barrel (Muzzle), so laser, cut and
     // grapple line leave from the barrel. With hand aiming off the point goes back. Demo charges have no model on the
     // point: the game's hand holds them, animated, so for them the arm is bent after the animation until the hand reaches
-    // the controller (PoseArm); with them in the left hand that arm reaches over.
+    // the controller (PoseArm); with them in the left hand VrHands moves them over to that hand.
     internal static class VrToolModels
     {
         private static readonly AccessTools.FieldRef<HandGrab, List<Transform>> HandTargets =
@@ -220,10 +220,12 @@ namespace ShipbreakerVR
             var hand = RightHand();
             var holding = hand != null ? hand.CurrentEquipmentType : EquipmentController.Equipment.None;
             var aiming = VrAim.Active;
+            var chargeLeft = ChargeInLeftHand;
             if (heldBefore == EquipmentController.Equipment.DemoCharge && holding == EquipmentController.Equipment.None && aiming)
             {
                 StowCharge(true);
-                stowingSince = Time.time;
+                // From the left hand the right arm was with its own controller; it stays there.
+                stowingSince = chargeLeft ? -1f : Time.time;
             }
             else if (heldBefore != EquipmentController.Equipment.DemoCharge && holding == EquipmentController.Equipment.DemoCharge)
             {
@@ -234,11 +236,17 @@ namespace ShipbreakerVR
             holdingAtHide = holding;
             HideProps(aiming && hand != null && holding != EquipmentController.Equipment.DemoCharge && FindArm(hand));
 
-            // Fully at the controller while the charge is held; after letting go the arm blends back into the stow
-            // animation, starting from the hand instead of the flat game's spot at the right.
+            // The charge in the left hand: VrHands moves it over to that hand. The tool hand switches back to the right one
+            // only once the charge is gone; a right hand that takes the charge over holds its grip.
+            var charge = hand != null && hand.Hand == HandGrab.PlayerHand.Right && hand.CurrentHandState == HandGrab.HandState.Equipped
+                && holding == EquipmentController.Equipment.DemoCharge;
+            ChargeInLeftHand = aiming && charge && (VrToolInput.ToolNode == XRNode.LeftHand
+                || (chargeLeft && !VrToolInput.GripHeld(XRNode.RightHand)));
+
+            // Fully at the controller while the charge is held in the right hand; after letting go the arm blends back
+            // into the stow animation, starting from the hand instead of the flat game's spot at the right.
             var weight = 0f;
-            if (hand != null && hand.Hand == HandGrab.PlayerHand.Right && hand.CurrentHandState == HandGrab.HandState.Equipped
-                && holding == EquipmentController.Equipment.DemoCharge) weight = 1f;
+            if (charge && !ChargeInLeftHand) weight = 1f;
             else if (stowingSince >= 0f && Time.time - stowingSince < StowBlend) weight = 1f - (Time.time - stowingSince) / StowBlend;
             PosesRightArm = weight > 0f;
             if (weight <= 0f || vr == null || hand == null || !rigKnown) return;
@@ -264,6 +272,9 @@ namespace ShipbreakerVR
 
         // True while PoseArm bends the right arm (VrHands leaves it alone then).
         public static bool PosesRightArm { get; private set; }
+
+        // True while the left hand holds the demo charges, which hang on the game's right hand (VrHands moves them).
+        public static bool ChargeInLeftHand { get; private set; }
 
         // A pose in tracking space in the world, for code that runs after the animation (LateUpdate), before the rig
         // follows the game camera (onBeforeRender): the rig is moved by as much as the game camera moved since then.
@@ -481,6 +492,7 @@ namespace ShipbreakerVR
         {
             HideProps(false);
             PosesRightArm = false;
+            ChargeInLeftHand = false;
             stowingSince = -1f;
             Restore();
             point = null;

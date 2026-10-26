@@ -542,3 +542,22 @@ The grab-and-move fitting worked on the first try, which after this day felt alm
 around a few times per hand until it sat in the fist, and was happy enough with the idea to keep it: the setting stays
 in the VR tab for anyone whose hands disagree with his, and his values are the new defaults. The hidden center dot
 turned out to be a plain image called Center Dot on one of the HUD canvases, found on the first search.
+
+<a id="empty-hand"></a>
+## 2026-10-26 · An empty hand, and the charge on the left
+
+Two last wishes before the release. Demo charges taken with the left hand were still held by the right arm, reaching
+across the chest. And with nothing in the hand, the [laser](#laser-pointer) pointed anyway. Marc wanted it only with a
+tool, and the game's little dot back in the middle otherwise.
+
+The charge is a right-handed affair in the game. It hangs on the right hand's bone and only the right arm has the
+animations for it. Teaching the game a left-handed charge was not on the menu, so now each arm simply follows its own
+controller, and every frame, once both arms are in place, the mod moves the charge from the right hand over to the left
+one. It takes how the charge sits relative to the right hand's knuckles and thumb and puts the mirror image of that
+into the left fist. The right hand meanwhile goes on clutching a charge that is no longer there, which nobody will
+notice.
+
+The dot needed one more thought. A dot in the middle while the hand does the aiming would be exactly the useless
+crosshair Marc had asked me to remove in the first place. So with an empty hand the hand stops aiming altogether:
+interacting goes back to the middle of the view, as in the flat game, and the dot means what it shows. The moment a
+tool comes out of the belt, the hand takes over again and the laser appears.
