@@ -1,0 +1,107 @@
+using BBI.Unity.Game;
+using UnityEngine;
+using UnityEngine.XR;
+
+namespace ShipbreakerVR
+{
+    // A second mode for the grapple, like the cutter's, as Marc asked: B tap switches between grappling and placing
+    // tethers (VrToolInput). In the tether mode the trigger places a tether: pressed it starts where the hand points,
+    // released it ends where the hand points then; B held recalls the tethers. The mode is the mod's own, the game only
+    // gets the tether actions instead of the grapple's. The game's own grapple modes (GunController: Grapple and an
+    // unreleased Magnet) are left alone; B tap no longer sends ToolMode to the grapple.
+    // Shown by the laser, orange instead of blue, a ring where the laser meets something, a line from where the tether
+    // started to where the hand points while the trigger is held (VrAim), and by the controller: one buzz when the grapple
+    // mode comes back, two for the tether mode.
+    internal static class VrTetherMode
+    {
+        private const float PulseAmplitude = 0.4f;
+        private const float PulseDuration = 0.05f;
+        private const float PulseGap = 0.12f;
+
+        static VrTetherMode() => VrSession.OnUnload("tether mode", Release);
+
+        public static bool On { get; private set; }
+
+        private static InputDevice pendingDevice;
+        private static float pendingPulseAt = -1f;
+        private static bool loggedModes;
+
+        // Where the tether being placed with each hand's trigger started, on what it hit there, so the line follows a
+        // part that drifts.
+        private static Transform leftOn, rightOn;
+        private static Vector3 leftAt, rightAt;
+
+        // Whether that tool works in the tether mode.
+        public static bool Applies(EquipmentController.Equipment tool) => On && tool == EquipmentController.Equipment.GrappleHook;
+
+        // B tap on the grapple.
+        public static void Toggle(InputDevice device)
+        {
+            On = !On;
+            Plugin.Log.LogInfo($"Grapple mode: {(On ? "tethers" : "grapple")}");
+            LogGameModes();
+            if (!device.isValid) return;
+            device.SendHapticImpulse(0, PulseAmplitude, PulseDuration);
+            pendingDevice = device;
+            pendingPulseAt = On ? Time.unscaledTime + PulseGap : -1f;
+        }
+
+        // The second buzz of the tether mode (VrToolInput.Update, once per frame).
+        public static void Update()
+        {
+            if (pendingPulseAt < 0f || Time.unscaledTime < pendingPulseAt) return;
+            pendingPulseAt = -1f;
+            if (pendingDevice.isValid) pendingDevice.SendHapticImpulse(0, PulseAmplitude, PulseDuration);
+        }
+
+        // The trigger in the tether mode, pressed while pointing at something (VrToolInput).
+        public static void Begin(XRNode node, RaycastHit hit)
+        {
+            var on = hit.collider.transform;
+            var at = on.InverseTransformPoint(hit.point);
+            if (node == XRNode.LeftHand)
+            {
+                leftOn = on;
+                leftAt = at;
+            }
+            else
+            {
+                rightOn = on;
+                rightAt = at;
+            }
+        }
+
+        // That trigger released, or the hand no longer works the grapple.
+        public static void End(XRNode node)
+        {
+            if (node == XRNode.LeftHand) leftOn = null;
+            else rightOn = null;
+        }
+
+        // Where the tether being placed by that hand starts (VrAim draws a line from there).
+        public static bool TryGetStart(XRNode node, out Vector3 start)
+        {
+            var on = node == XRNode.LeftHand ? leftOn : rightOn;
+            start = on != null ? on.TransformPoint(node == XRNode.LeftHand ? leftAt : rightAt) : Vector3.zero;
+            return on != null;
+        }
+
+        // On unload (hot reload).
+        public static void Release()
+        {
+            leftOn = rightOn = null;
+            pendingPulseAt = -1f;
+        }
+
+        // Whether the game would cycle the grapple through more than one mode of its own, which B tap no longer reaches.
+        private static void LogGameModes()
+        {
+            if (loggedModes) return;
+            loggedModes = true;
+            var gun = Object.FindObjectOfType<GunController>();
+            if (gun == null) return;
+            var modes = HarmonyLib.Traverse.Create(gun).Property("HasMultipleModes");
+            Plugin.Log.LogInfo($"Grapple mode: the game's grapple has {(modes.PropertyExists() && modes.GetValue<bool>() ? "several modes (magnet available, B tap does not reach it)" : "one mode")}");
+        }
+    }
+}

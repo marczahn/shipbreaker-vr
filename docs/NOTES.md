@@ -112,7 +112,15 @@ interacting, the grapple and the "entity of interest".
   grapple charges while `Throw` is held and throws on release); B with the trigger held = `RetractionModifier` (reel in;
   the game only knows reeling in at a fixed speed, there is no reeling out); B tap = `ToolMode` (sent on release); B
   held 0.4 s = `PlaceTether` held until B is released (the tether runs from where the hand points at the start to where
-  it points at the release), or one `RecallTethers` press if the hand points at nothing. (Until pause and centering
+  it points at the release), or one `RecallTethers` press if the hand points at nothing. On the grapple B tap switches
+  the mod's own tether mode instead (`VrTetherMode`, Marc's wish, like the cutter's mode switch): there the trigger
+  sends `PlaceTether` instead of `GrappleFire` (decided at the press, only if the hand points at something), A does not
+  throw, B does not reel, and B held always recalls. The game's grapple has modes of its own (`GunController`,
+  `GunMode` Grapple/Magnet, `CycleGunMode` on `ToolMode`, only through the modes in `m_AvailableGunModes`); the
+  magnet (`MagnetController`, fixed magnets that hold parts on springs) seems unreleased. B tap no longer sends
+  `ToolMode` to the grapple; the first switch logs whether the game's grapple has more than one mode. The mode shows as
+  an orange laser, a ring where it hits and a line from the tether's start while the trigger is held (`VrAim`), and
+  one buzz back to grappling, two into the tether mode. (Until pause and centering
   moved to the stick presses, a button counted only without its twin on the other controller.) The throwing gesture was considered and dropped: an
   accidental throw would look like a bug. The stick press was dropped too: it is imprecise and wears out.
 - The game polls actions through `LynxControlExtensions.GetInputWasPressed/IsPressed/IsHolding/WasReleased`, which

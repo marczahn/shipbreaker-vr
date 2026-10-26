@@ -22,9 +22,12 @@ namespace ShipbreakerVR
     //                   otherwise interact (doors, switches, containers, airlock consoles), from either hand, also
     //                   one without a tool; the grip never does (it holds on, VrClimb)
     //   B / Y           with the trigger held: reel in what the grapple holds, while the button is held
-    //   B / Y tap       tool mode (cutter Stinger/Splitsaw, grapple/magnet, demo charge mode)
+    //   B / Y tap       tool mode (cutter Stinger/Splitsaw, demo charge mode); on the grapple grappling or placing
+    //                   tethers (VrTetherMode)
     //   B / Y held      place a tether from where the hand points when the hold starts to where it points on release;
-    //                   held while pointing at nothing: recall all tethers
+    //                   held while pointing at nothing, or in the grapple's tether mode: recall all tethers
+    //   trigger         in the grapple's tether mode: place a tether, from where the hand points at the press to where
+    //                   it points at the release
     // The game polls its actions through LynxControlExtensions; those methods are small enough for Mono to inline, so the
     // calls in the tool classes are redirected (ToolInputPatch) to versions that add these presses to the real ones.
     internal static class VrToolInput
@@ -73,6 +76,12 @@ namespace ShipbreakerVR
             public bool BTether;
             // B decides at its press whether it reels in (trigger held) or works as tap/hold, and keeps that until released.
             public bool BReels;
+            // The trigger decides at its press whether it places a tether (the grapple's tether mode) and keeps that until
+            // released, so switching the mode never turns a held grapple into a tether or back.
+            public bool TriggerDown;
+            public bool TriggerTethers;
+            // Whether that press pointed at something; one that pointed at nothing places no tether.
+            public bool TriggerAnchored;
 
             public Hand(VrHand vr)
             {
@@ -115,12 +124,16 @@ namespace ShipbreakerVR
                 System.Array.Clear(each.Now, 0, Count);
             }
             VrDualTools.Check();
+            VrTetherMode.Update();
             var active = VrHand.Update(FindEquipment() && !equipment.IsNothingEquipped ? equipment.CurrentEquipment : EquipmentController.Equipment.None);
             Read(LeftHand, active);
             Read(RightHand, active);
             if (!active)
             {
                 LeftHand.ADown = LeftHand.BDown = RightHand.ADown = RightHand.BDown = false;
+                LeftHand.TriggerDown = RightHand.TriggerDown = false;
+                VrTetherMode.End(XRNode.LeftHand);
+                VrTetherMode.End(XRNode.RightHand);
                 VrToolBelt.Reset();
                 return;
             }
@@ -146,7 +159,8 @@ namespace ShipbreakerVR
             var empty = !FindEquipment() || equipment.IsNothingEquipped;
             foreach (var each in Hands)
             {
-                if (each == second || (each == tool && !empty)) Buttons(each);
+                if (each == second) Buttons(each, VrDualTools.Second);
+                else if (each == tool && !empty) Buttons(each, equipment.CurrentEquipment);
                 else if (each == tool) Interact(each);
                 else Interact(each);
             }
@@ -157,9 +171,23 @@ namespace ShipbreakerVR
         }
 
         // The tool actions of one hand's buttons, for the tool it holds.
-        private static void Buttons(Hand hand)
+        private static void Buttons(Hand hand, EquipmentController.Equipment held)
         {
-            var trigger = hand.Trigger;
+            var tethers = VrTetherMode.Applies(held);
+            if (hand.Trigger && !hand.TriggerDown)
+            {
+                hand.TriggerTethers = tethers;
+                hand.TriggerAnchored = false;
+                if (tethers && VrAim.PointsAt(VrDualTools.Holds(hand.Node), out var hit))
+                {
+                    hand.TriggerAnchored = true;
+                    VrTetherMode.Begin(hand.Node, hit);
+                }
+            }
+            if (!hand.Trigger || !hand.TriggerTethers) VrTetherMode.End(hand.Node);
+            hand.TriggerDown = hand.Trigger;
+            // A trigger that places a tether neither grapples nor makes A throw or B reel in.
+            var trigger = hand.Trigger && !hand.TriggerTethers;
             var now = hand.Now;
             now[(int)Action.Fire] = trigger;
 
@@ -184,13 +212,20 @@ namespace ShipbreakerVR
             if (b && !hand.BLong && Time.unscaledTime - hand.BDownAt >= LongPress)
             {
                 hand.BLong = true;
-                hand.BTether = VrAim.PointsAtSomething(VrHand.SecondHand == hand.Vr);
-                // Recalling is a single press.
-                now[(int)Action.Recall] = !hand.BTether;
+                // In the tether mode the trigger places the tethers, so B held only recalls them.
+                hand.BTether = !tethers && VrAim.PointsAtSomething(VrHand.SecondHand == hand.Vr);
+                // Recalling is a single press, and waits for a tether being placed with the trigger.
+                now[(int)Action.Recall] = !hand.BTether && !(hand.Trigger && hand.TriggerTethers);
             }
-            now[(int)Action.Tether] = b && hand.BTether;
-            // A tap switches the mode when it ends, so a long press never does.
-            now[(int)Action.ToolMode] = !b && hand.BDown && !hand.BLong;
+            now[(int)Action.Tether] = (b && hand.BTether) || (hand.Trigger && hand.TriggerTethers && hand.TriggerAnchored);
+            // A tap switches the mode when it ends, so a long press never does. The grapple switches the mod's own mode
+            // (VrTetherMode), not while its trigger is held.
+            var tap = !b && hand.BDown && !hand.BLong;
+            if (held == EquipmentController.Equipment.GrappleHook)
+            {
+                if (tap && !hand.Trigger) VrTetherMode.Toggle(hand.Input.Device);
+            }
+            else now[(int)Action.ToolMode] = tap;
             hand.BDown = b;
         }
 
@@ -200,7 +235,8 @@ namespace ShipbreakerVR
             var a = hand.Input.Primary.Down;
             hand.AThrows = false;
             hand.ADown = a;
-            hand.BDown = false;
+            hand.BDown = hand.TriggerDown = false;
+            VrTetherMode.End(hand.Node);
             hand.Now[(int)Action.Interact] = a;
         }
 

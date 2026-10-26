@@ -101,9 +101,9 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | Use what I point at | Press A or X, with either hand. With an empty hand it uses what is in the middle of your view, marked by the game's dot. Without a tool the trigger and B do nothing. |
 | Turn the cutter's line | Roll your wrist. The cutter starts with horizontal cuts, and its switch to vertical cuts has no button. |
 | Throw | Hold the trigger and press A. |
-| Switch the tool's mode | Press B (demo charges: switch to the detonator). |
-| Place a tether | Hold B while pointing at the start, let go at the end. |
-| Recall the tethers | Hold B while pointing at nothing. |
+| Switch the tool's mode | Press B (demo charges: switch to the detonator; grapple: switch between grappling and placing tethers). |
+| Place a tether | Hold B while pointing at the start, let go at the end. Or, with the grapple in its tether mode (orange laser), pull the trigger at the start and let go at the end. |
+| Recall the tethers | Hold B while pointing at nothing, or hold B with the grapple in its tether mode. |
 | Hold on and climb | Squeeze the grip of a hand without a tool close to anything: the hand holds on there. Move the hand to pull yourself along, with both hands hand over hand, or with one while the other works a tool. Light parts come to your hand instead; the station and fixed hulls stay put. Let go while moving the hand to push off. |
 | Work an airlock console or a switch | Look at it and press A or X. The grip only holds on, also there. |
 | Use a tool with the left hand | Take it with the left hand. X and Y then do what A and B do, and flying pauses until you let go. |
