@@ -97,6 +97,7 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | Scan with a tool in the other hand | Take the scanner with your free hand. The other tool disappears while you scan; keep its grip squeezed and it comes back when you let go of the scanner. |
 | Use it | Point the controller and pull the trigger: cut, grapple, place or detonate demo charges. |
 | Reel in what the grapple holds | Hold the trigger and press B. |
+| Fly while the grapple holds something big | Fly and brake as usual. If you fly farther away than the grapple reaches, the rope snaps. |
 | Use what I point at | Press A. With an empty hand it uses what is in the middle of your view, marked by the game's dot. |
 | Turn the cutter's line | Roll your wrist. The cutter starts with horizontal cuts, and its switch to vertical cuts has no button. |
 | Throw | Hold the trigger and press A. |

@@ -41,6 +41,10 @@ The right stick turns (left/right) and pitches (up/down), the further, the faste
 switches turning to steps of 30, 45 or 90 degrees per flick. Y brakes. Pressing the right stick opens the pause menu
 (also in the station), pressing the left stick recenters the view. Mouse, keyboard and gamepad keep working.
 
+While the grapple holds something heavy, the flat game stops thrust and brake and lets you swing on the rope instead.
+With controller flying you keep flying and braking as usual; the rope keeps pulling, and it snaps if you fly farther
+away than the grapple reaches.
+
 A small globe at the bottom of the visor shows where the left controller is while you hold the trigger: its center is
 where you pressed it, its surface full thrust, the small inner globe the deadzone, and a small cross in it moves and turns with your hand. The row
 "Flight globe" shows it always, only while flying, or never.
@@ -55,7 +59,11 @@ flat game.
 - Squeeze the grip at your body to take a tool: grapple at the right hip, demo charges at the left hip, cutter over the
   right shoulder, scanner at the right side of the helmet. The controller buzzes when it is in such a spot. Keep the
   grip squeezed to hold the tool; let go to put it away.
-- Either hand can take a tool, one at a time. Reaching for the tool in one hand with the other one hands it over.
+- Each hand can hold a tool, so two of the cutter, the grapple and the demo charges can be out at once; each hand's
+  trigger and buttons work its own tool. Every tool exists only once: reaching for the tool in one hand with the other
+  one hands it over. The scanner hides the other hand's tool while you scan; keep that hand's grip squeezed and its tool
+  comes back when you let go of the scanner. The row "Two tools at once" in the VR tab switches this off, so a tool taken
+  with one hand replaces the one in the other hand.
 - On the controller that holds the tool: trigger = use the tool (cut, grapple, place or detonate demo charges), A =
   use what you point at, trigger + A = throw, B = switch the tool's mode, trigger + B = reel in, hold B = place a tether
   from where you point to where you let go, hold B pointing at nothing = recall the tethers. In the left hand X and Y
