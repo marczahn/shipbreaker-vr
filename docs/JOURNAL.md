@@ -568,3 +568,10 @@ controller. So the left hand now borrows the right hand's animated turn as well,
 The fingers stay in a fist, which is fine for a throw that is mostly wrist anyway. And the dots at the end of the laser
 had to go. With them went the crosshair colors they carried, which ends my half of a better idea from earlier in the
 day. The laser is plain now, and Marc wants to rethink it later anyway.
+
+The very last wish before the release was about the cutter. The part at its front that shows whether the cut runs
+horizontally or vertically always stood crosswise, and Marc wanted it lengthwise. That one stands crosswise for a reason:
+the game starts with horizontal cuts, and the button that switches them sits on the right mouse button, which no
+controller reaches. In VR the wrist turns the line instead. Turning the part alone would have made it show the wrong
+angle, and turning the cut with it would have changed how cutting feels. Marc had asked me to talk before changing
+anything, and after the talk we left it as it is. Not every wish needs code.

@@ -95,7 +95,8 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | Put it away | Let go of the grip. |
 | Use it | Point the controller and pull the trigger: cut, grapple, place or detonate demo charges. |
 | Reel in what the grapple holds | Hold the trigger and press B. |
-| Use what I point at | Press A. |
+| Use what I point at | Press A. With an empty hand it uses what is in the middle of your view, marked by the game's dot. |
+| Turn the cutter's line | Roll your wrist. The cutter starts with horizontal cuts, and its switch to vertical cuts has no button. |
 | Throw | Hold the trigger and press A. |
 | Switch the tool's mode | Press B (demo charges: switch to the detonator). |
 | Place a tether | Hold B while pointing at the start, let go at the end. |
@@ -171,6 +172,7 @@ That has not been tested.
 ## What does not work yet
 
 - You cannot grab things with the suit's hands yet; the grip only takes tools.
+- The cutter's switch between horizontal and vertical cuts has no button; roll your wrist instead.
 - There is no laser pointer for the menus yet; you move through them with the sticks.
 - During loading screens the view can go dark for a moment.
 - Above 1.0, the render resolution can crash the game after loading (see above).

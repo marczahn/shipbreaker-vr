@@ -55,6 +55,8 @@ flat game.
   use what you point at, trigger + A = throw, B = switch the tool's mode, trigger + B = reel in, hold B = place a tether
   from where you point to where you let go, hold B pointing at nothing = recall the tethers. In the left hand X and Y
   stand for A and B, and controller flying pauses until you let go; the right stick still turns.
+- The cutter's line turns with your wrist. It starts out horizontal; the game's switch to vertical cuts has no button,
+  so roll your wrist for vertical cuts.
 - The suit's hands follow your controllers and close while you squeeze the grip.
 - If the cutter or the grapple does not sit right in your hand, switch on "Fit tools in the hand" in the VR tab. While
   one hand holds the tool, squeeze the grip of the other hand at the tool to grab it, then move and turn it into place;

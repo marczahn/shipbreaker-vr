@@ -89,6 +89,14 @@ interacting, the grapple and the "entity of interest".
   directions is hidden too, logged as `Crosshair: search N for graphics in the middle of the view: '<path>' (<type>)`.
   Back to alpha 1 with an empty hand or hand aiming off. Log `Crosshair hidden while aiming with the hand: N
   graphic(s): ...` once.
+- The cutter's angle: the Splitsaw cuts along `CuttingController.mCutRotation` in the aim camera's screen space,
+  `Vector2.right` (horizontal, the default, `mHorizontalCutNext = true`) or `Vector2.up`, switched by `CutterAltFire`
+  (right mouse button) and, with `AutoAlternate`, after every cut. The part at the front of the model that shows it is
+  `CuttingFXController.m_CuttingRail` (and `m_CuttingRailReticles`, `m_CuttingRailShadow`), turned in
+  `UpdateToolRotation` to `LookRotation(forward, CutRotation)`: crosswise for horizontal cuts. `CutterAltFire` has no
+  controller button in VR, so the rail stays crosswise and the line turns with the wrist. Marc asked for the rail
+  lengthwise, but kept it as it is once it was clear that only switching the cut to vertical would keep the rail
+  telling the truth.
 - Tool buttons (`VrToolInput`, only while hand aiming is active): all on the controller of the hand that holds the tool
   (the right one by default; on the left X stands for A and Y for B), the right stick stays with turning. Trigger =
   `GrappleFire`/`CutterFire`/`DemoChargeFire`; A = `Interact`, or `Throw` if the trigger was held when A went down (the
