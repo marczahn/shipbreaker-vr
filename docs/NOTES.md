@@ -258,16 +258,6 @@ interacting, the grapple and the "entity of interest".
   they stay as set. Handed back to the game, the hand gets closed for `Success` and `Equipped` (not demo charges), open
   otherwise; this restores the grip pose when a tool goes back from the left to the right hand. Log `Hands: <hand>
   closes | opens`.
-- That grab pose reaches out with the fingers stretched (the game grabs handholds with it), so an empty hand looked
-  as if it opened when gripping. Bending the finger bones by hand looked wrong (they bent sideways), so an empty hand
-  keeps the animator's grab pose off and takes its fingers from one of the game's closed-hand clips instead
-  (`VrHands.Fist`): once, `anim_player_holdgrab`, `anim_player_tools_holdtool` and `anim_player_grab` are sampled onto
-  the player (`AnimationClip.SampleAnimation`, everything put back right after), and each hand takes the clip whose
-  four fingers bend most from the idle pose. While the grip is held the finger bones blend to it over 0.12 s, after the
-  animation (which sets them again every frame). A hand holding a tool keeps the grab pose. The player's animator is
-  `AnimCtl_UnitPlayer` with the layers Base Layer, Left Arm, Right Arm, Legs; its clips are logged once
-  (`Hands: animator ...`), and what plays on each layer half a second after a hand changes state. Logs
-  `Hands: closed hand from ...`, `Hands: <hand> hand makes a fist (<clip>)`.
 
 ## Body follows head
 - The body rotates in `OrientationController.HandleAxisRotation` via `Rigidbody.MoveRotation(rotation * mouseDelta)`.
