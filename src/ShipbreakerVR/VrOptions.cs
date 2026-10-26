@@ -223,6 +223,7 @@ namespace ShipbreakerVR
         // templateRoot, so every row type is available. Returns the height of the added rows and their number.
         public static (float height, int count) AddRows(Transform parent, Transform templateRoot, bool firstIsTop)
         {
+            Prune();
             var all = templateRoot.GetComponentsInChildren<OptionEntry>(true);
             var boolTemplate = PickTemplate<OptionEntryBool>(all);
             var sliderTemplate = PickTemplate<OptionEntrySlider>(all);
@@ -272,6 +273,14 @@ namespace ShipbreakerVR
                 }
                 if (pair.Key != null) TryRefresh(pair.Key);
             }
+        }
+
+        // Rows whose options screen was destroyed (a scene change) leave the table, so Refresh and ResetToDefaults
+        // only go through the rows that exist. Before, the table grew with every options screen built in a session.
+        private static void Prune()
+        {
+            var gone = Rows.Keys.Where(entry => entry == null).ToList();
+            foreach (var entry in gone) Rows.Remove(entry);
         }
 
         public static bool IsOurs(OptionEntry entry) => entry != null && Rows.ContainsKey(entry);
