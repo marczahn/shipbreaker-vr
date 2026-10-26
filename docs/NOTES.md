@@ -457,7 +457,13 @@ by place: sticks = sticks, A/B/X/Y = A/B/X/Y, triggers = bumpers, grips = analog
 R3. A + X together is Menu (Start), only in `Gameplay` and `LoadingInProgress` (it cycles the loading tips; A and X then
 send nothing else): the left menu button belongs to Virtual Desktop, the left stick press (the first choice) was too easy
 to hit while steering with the left stick, and in menus the Doozy button bridges read Start like Confirm on the
-selected button. No View button (Back; `BackButtonService` treats Decline/B the same, so B covers Esc in menus) and no D-pad. In
+selected button. In the Hab (`GameState.Hab`) A + X opens the station's pause menu, but not as Start: the Hab is a
+`FrontEnd` state, where Start is bound to both `FrontEndActionSet.Pause` (read by `Hab3DController.Update`) and
+`FrontEndActionSet.Start` (read by the Doozy bridges like Confirm). So the combo sets `VrMenuInput.HabPauseRequested`
+and a postfix on `Hab3DController.Update` (`HabPausePatch`) does what the game does for Pause: post `HabPauseEvent`
+and call `ToggleHabPaused(true)`, with the game's conditions (not in a navigable screen, past the splash) plus
+`ActionBlockerService` not blocking Pause (the game blocks it while going to sleep). Logged as `Menu control: A + X
+opens the station's pause menu` or `... ignored (...)`. Before, the combo sent A and X in the Hab. No View button (Back; `BackButtonService` treats Decline/B the same, so B covers Esc in menus) and no D-pad. In
 `Gameplay` it reports only A + X, which opens the pause menu; everything else stays with controller flying. A press held across a game state change is ignored until released, so the
 press that opens the pause menu does not close it again. B + Y together centers the view (`VrCamera.CenterComboHeld`,
 from the press until both are up again): then B and Y send nothing and Y does not brake. Pressed buttons are logged as `Menu control: ...`.

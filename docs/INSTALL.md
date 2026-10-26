@@ -73,8 +73,9 @@ button prompts:
 - sticks = sticks (left: navigate, right: scroll), right stick pressed = R3
 - A/B/X/Y = A/B/X/Y (A confirms, B goes back)
 - triggers = shoulder buttons (switch tabs), grips = triggers
-- A + X together = Start: in gameplay it opens the pause menu, on loading screens it cycles the tips. In menus it is
-  just A and X, since the game would read Start as "confirm".
+- A + X together = Start: in gameplay and in the station it opens the pause menu, on loading screens it cycles the
+  tips. In the station it works where Esc does, not inside a terminal screen. In menus it is just A and X, since the
+  game would read Start as "confirm".
 - B + Y together recenters the view, like F4, everywhere (also in gameplay, where Y alone brakes).
 
 There is no View button and no D-pad; the left menu button stays with Virtual Desktop. In gameplay only A + X
