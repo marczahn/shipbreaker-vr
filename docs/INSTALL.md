@@ -86,6 +86,17 @@ flat game.
   the other hand does not take tools from the body). The values are in `BepInEx\config\de.marczahn.shipbreakervr.cfg`
   under `[Justierung]`; delete one to get its default back.
 
+### Cutter and demo charges
+![Cutter](images/cutter.svg)
+
+![Demo charges](images/charges.svg)
+
+- Cutter: the trigger cuts, B switches between the Splitsaw (a line, horizontal at first; roll your wrist to turn it)
+  and the Stinger (the point the laser shows).
+- Demo charges: the trigger places a charge where you point, or throws it where your hand points if you point at
+  nothing. B takes the detonator (and goes back to the charges while you have some left); with the detonator the
+  trigger detonates.
+
 ### Grapple and tethers
 ![Grapple and tethers](images/grapple.svg)
 

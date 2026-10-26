@@ -25,8 +25,8 @@ OpenXR at runtime. Tested with a Meta Quest via Virtual Desktop (VDXR runtime). 
 - `docs/INSTALL.md` – user install guide; `docs/releases/<version>.md` – release notes.
 - `tests/ShipbreakerVR.Tests/` – tests for the logic that runs without the engine; `tools/check.sh` builds and runs them.
 - `tools/build-release.sh` and `.claude/skills/release/` – building a release ZIP.
-- `tools/control-images.py` – draws the control overviews in `docs/images` (flying, hands, tool buttons, grapple,
-  menus). When a control changes, update its texts there, in `README.md`, in `docs/INSTALL.md` and in the setting's
+- `tools/control-images.py` – draws the control overviews in `docs/images` (flying, hands, tool buttons, cutter,
+  demo charges, grapple, menus). When a control changes, update its texts there, in `README.md`, in `docs/INSTALL.md` and in the setting's
   description (`VrSettings`), then run it.
 - `licenses/`, `THIRD-PARTY-NOTICES.md`, `LICENSE` (MIT), `DISCLAIMER.md`.
 

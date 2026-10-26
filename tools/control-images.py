@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draws the control overviews in docs/images (flying, hands, tool buttons, grapple, menus) as SVG.
+"""Draws the control overviews in docs/images (flying, hands, tool buttons, cutter, demo charges, grapple, menus) as SVG.
 
 Run it after changing a control: python3 tools/control-images.py
 The texts here are the players' view of the controls; keep them in line with README.md and docs/INSTALL.md.
@@ -101,6 +101,10 @@ def two_buttons(a, b):
             + text(54, 34, b, size=15, bold=True, anchor="middle"))
 
 
+def two_tools():
+    return controller(tilt=-15, dx=-14) + controller(tilt=15, dx=14)
+
+
 def hands_swap():
     return (controller(tilt=-15, dx=-14) + controller(tilt=15, dx=14)
             + arrow("M24 8 Q38 -2 52 8"))
@@ -126,6 +130,41 @@ def console():
     return (f'<rect x="8" y="10" width="42" height="56" rx="6" fill="{PART_DARK}"/>'
             f'<rect x="16" y="20" width="26" height="16" rx="3" fill="{PART}" stroke="{ACCENT}" stroke-width="2"/>'
             + arrow("M74 50 H52"))
+
+
+def cut_line(vertical=False):
+    line = "M38 6 V70" if vertical else "M6 38 H70"
+    return (f'<rect x="14" y="14" width="48" height="48" rx="6" fill="{PART_DARK}"/>'
+            f'<path d="{line}" stroke="{LASER}" stroke-width="3" stroke-dasharray="6 4"/>')
+
+
+def stinger():
+    return (f'<rect x="14" y="14" width="48" height="48" rx="6" fill="{PART_DARK}"/>'
+            f'<circle cx="38" cy="38" r="8" fill="none" stroke="{LASER}" stroke-width="3"/>'
+            f'<circle cx="38" cy="38" r="2.5" fill="{LASER}"/>')
+
+
+def heat():
+    return (f'<rect x="10" y="30" width="56" height="16" rx="5" fill="{PART_DARK}"/>'
+            f'<rect x="12" y="32" width="36" height="12" rx="4" fill="{ACCENT}"/>'
+            f'<rect x="48" y="32" width="16" height="12" rx="4" fill="#d1453b"/>')
+
+
+def charge(thrown=False):
+    parts = [f'<rect x="{8 if thrown else 22}" y="{40 if thrown else 26}" width="32" height="24" rx="5" fill="{PART}" '
+             f'stroke="{ACCENT}" stroke-width="2"/>',
+             f'<circle cx="{24 if thrown else 38}" cy="{52 if thrown else 38}" r="4" fill="#d1453b"/>']
+    if thrown:
+        parts.append(arrow("M44 44 Q60 30 70 12"))
+    else:
+        parts.append(f'<rect x="10" y="50" width="56" height="12" rx="3" fill="{PART_DARK}"/>')
+    return "".join(parts)
+
+
+def detonator():
+    return (f'<rect x="24" y="18" width="28" height="46" rx="8" fill="{PART}" stroke="{ACCENT}" stroke-width="2"/>'
+            f'<circle cx="38" cy="30" r="6" fill="#d1453b"/>'
+            f'<path d="M58 16 L66 8 M60 28 L72 26 M14 16 L8 8" stroke="{ACCENT}" stroke-width="2.5"/>')
 
 
 def card(x, y, icon, title, line, note):
@@ -186,7 +225,7 @@ def main():
               f'<circle cx="52" cy="58" r="4" fill="{ACCENT}"/><circle cx="24" cy="58" r="4" fill="{ACCENT}"/>',
               "Where the tools are", "Right hip grapple · left hip demo charges",
               "Over the right shoulder cutter · right side of the helmet scanner"),
-             (controller(tilt=-15, dx=-14) + controller(tilt=15, dx=14),
+             (two_tools(),
               "Two tools at once", "Take a second tool with the other hand.",
               "Cutter, grapple, demo charges; each hand works its own."),
              (hands_swap(), "Hand a tool over", "Reach for the tool in one hand with the other one",
@@ -219,6 +258,38 @@ def main():
               "The cutter starts with horizontal cuts; vertical has no button."),
              (two_buttons("X", "Y"), "Left hand", "X works as A, Y as B.",
               "Flying pauses while the left hand holds a tool."),
+         ])
+
+    page("cutter.svg", "ShipbreakerVR cutter", "Cutter",
+         "Over the right shoulder. B switches between the Splitsaw (a line) and the Stinger (a point).", [
+             (cut_line(), "Splitsaw", "Trigger: cut along the line.",
+              "Starts with horizontal cuts."),
+             (wrist(), "Turn the line", "Roll your wrist; the line turns with it.",
+              "The game's switch to vertical cuts has no button."),
+             (stinger(), "Stinger", "B: switch to the Stinger, B again: back.",
+              "Trigger: cut the point the laser shows."),
+             (heat(), "Heat", "The cutter heats up while it cuts.",
+              "The heat bar shows it; let go before it overheats."),
+             (two_tools(), "Cutter and grapple", "Hold the grapple in the other hand.",
+              "Each hand's trigger and buttons work its own tool."),
+             (grip(), "Fit it into the hand", "VR tab: Fit tools in the hand.",
+              "The other hand's grip moves it; switch the row off when done."),
+         ])
+
+    page("charges.svg", "ShipbreakerVR demo charges", "Demo charges",
+         "At the left hip. The charge sits in your hand; the laser shows where it goes.", [
+             (charge(), "Place a charge", "Trigger while pointing at a surface.",
+              "The game's marker shows where it sticks."),
+             (charge(thrown=True), "Throw a charge", "Trigger while pointing at nothing.",
+              "It flies where your hand points."),
+             (button("B"), "Detonator", "B: take the detonator, B again: back to charges.",
+              "Back only while charges are left."),
+             (detonator(), "Detonate", "Trigger with the detonator in the hand.",
+              "Blows all placed charges."),
+             (two_tools(), "Charges and another tool", "Take the cutter or grapple with the other hand.",
+              "Each hand's trigger and buttons work its own tool."),
+             (two_buttons("X", "Y"), "Left hand", "Charges in the left hand: X works as A, Y as B.",
+              "Flying pauses until you let go."),
          ])
 
     page("grapple.svg", "ShipbreakerVR grapple and tethers", "Grapple and tethers",

@@ -116,6 +116,27 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | Switch the tool's mode | Press B (demo charges: switch to the detonator; grapple: see below). |
 | Turn the cutter's line | Roll your wrist. The cutter starts with horizontal cuts, and its switch to vertical cuts has no button. |
 
+### Cutter
+
+![Cutter](docs/images/cutter.svg)
+
+| I want to … | How |
+|---|---|
+| Cut with the Splitsaw | Pull the trigger. It cuts along a line, horizontal at first. |
+| Turn the line | Roll your wrist. The game's switch to vertical cuts has no button. |
+| Switch to the Stinger and back | Press B. The Stinger cuts the point the laser shows. |
+
+### Demo charges
+
+![Demo charges](docs/images/charges.svg)
+
+| I want to … | How |
+|---|---|
+| Place a charge | Point at a surface and pull the trigger. |
+| Throw a charge | Point at nothing and pull the trigger. It flies where your hand points. |
+| Take the detonator | Press B. B again goes back to the charges, while you have some left. |
+| Detonate | Pull the trigger with the detonator in your hand. |
+
 ### Grapple and tethers
 
 ![Grapple and tethers](docs/images/grapple.svg)
