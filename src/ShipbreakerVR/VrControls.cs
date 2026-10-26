@@ -274,19 +274,26 @@ namespace ShipbreakerVR
         }
     }
 
-    // Adds the controller thrust to the game's thrust axes.
+    // Adds the controller thrust to the game's thrust axes. Hanging on something heavy from the grapple the game does not
+    // thrust (ThrustController skips it while GrapplingHook.IsSwinging) but swings around the anchor with the swing axes
+    // (WASD in the flat game: W up, S down, A and D sideways); the controller's sideways and up/down offsets feed those, so
+    // flying does not just stop there.
     [HarmonyPatch(typeof(LynxControlExtensions), nameof(LynxControlExtensions.GetOneAxisInputControlValue))]
     internal static class ThrustAxisPatch
     {
         private static readonly LynxControls.ActionSetAndId LeftRight = GameplayActions.GameplayActionSet.ThrustMoveLeftRightComposite;
         private static readonly LynxControls.ActionSetAndId UpDown = GameplayActions.GameplayActionSet.ThrustMoveUpDownComposite;
         private static readonly LynxControls.ActionSetAndId BackForward = GameplayActions.GameplayActionSet.ThrustMoveBackForwardComposite;
+        private static readonly LynxControls.ActionSetAndId SwingLeftRight = GameplayActions.GameplayActionSet.SwingLeftRightComposite;
+        private static readonly LynxControls.ActionSetAndId SwingUpDown = GameplayActions.GameplayActionSet.SwingUpDownComposite;
 
         private static void Postfix(LynxControls.ActionSetAndId actionSetAndId, ref float __result)
         {
-            if (!actionSetAndId.Equals(LeftRight) && !actionSetAndId.Equals(UpDown) && !actionSetAndId.Equals(BackForward)) return;
+            var sideways = actionSetAndId.Equals(LeftRight) || actionSetAndId.Equals(SwingLeftRight);
+            var upDown = actionSetAndId.Equals(UpDown) || actionSetAndId.Equals(SwingUpDown);
+            if (!sideways && !upDown && !actionSetAndId.Equals(BackForward)) return;
             if (!VrControls.TryGetThrust(out var local)) return;
-            var value = actionSetAndId.Equals(LeftRight) ? local.x : actionSetAndId.Equals(UpDown) ? local.y : local.z;
+            var value = sideways ? local.x : upDown ? local.y : local.z;
             __result = Mathf.Clamp(__result + value, -1f, 1f);
         }
     }

@@ -474,6 +474,14 @@ Config `Steuerung/Controllersteuerung` (Aus/Vtol; the earlier "point and twist" 
 The grip stays free for grabbing later. The left controller's name and features are logged once. OpenXR only reports
 controllers because `VrXr` enables the Oculus Touch interaction profile, which the AssetBundle's settings carry disabled.
 
+Hanging on the grapple: grappling something heavy (or reeling in something medium) makes the game swing instead of
+thrust (`GrapplingHook.IsSwinging`; `ThrustController` skips the thrust then), around the anchor with the swing axes
+(`SwingLeftRightComposite`, `SwingUpDownComposite`; W, S, A, D in the flat game, which move the rope's end on the
+player's right and up, `LaserRope.SetSwingOffset`). The controller fed only the thrust axes, so Marc found he could
+not fly while the grapple held on to something although the controller and the flight globe still worked. The
+controller's sideways and up/down offsets now feed the swing axes too (`ThrustAxisPatch`); forward and back have no
+swing axis.
+
 ### Flight globe
 `VrFlightGlobe` draws a small globe at the bottom of the visor (config `Anzeige/Flugkugel`: Immer/BeimFliegen/Aus;
 `FlugkugelGroesse` = radius relative to the visor height, `FlugkugelX/Y` = position on the visor from -0.5 to 0.5). The
