@@ -17,7 +17,8 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
   Menus always appear at eye height, also when you look up or down.
   The row "Center view" at the top of the VR tab does the same.
 - **F7** at one of the station's monitors switches its screen look. **F8** writes what is drawn around you into the log,
-  for bug reports.
+  for bug reports. **Shift+F8** saves the model of the tool in your hand (textures, mesh, UV layout) to
+  `BepInEx\ShipbreakerVR-tools`, for modding work.
 - The station between shifts has its own render resolution, the row "Station resolution" in the VR tab. If the view wobbles
   slightly at the monitors when you move your head, the graphics card misses the headset's frame rate there; lower it
   until that stops.
@@ -62,6 +63,9 @@ flat game.
 - The cutter's line turns with your wrist. It starts out horizontal; the game's switch to vertical cuts has no button,
   so roll your wrist for vertical cuts.
 - The suit's hands follow your controllers and close while you squeeze the grip.
+- The flat game never showed the cutter's right side, which is coarse and plain. The mod copies the detailed left side
+  onto it, mirrored (small print there reads backwards). `CutterSpiegeln = false` under `[Bild]` in the config file
+  switches this off.
 - If the cutter or the grapple does not sit right in your hand, switch on "Fit tools in the hand" in the VR tab. While
   one hand holds the tool, squeeze the grip of the other hand at the tool to grab it, then move and turn it into place;
   letting go stores it, separately for each tool and hand. Switch the row off again when you are done (while it is on,

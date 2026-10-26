@@ -43,6 +43,7 @@ namespace ShipbreakerVR
         internal static ConfigEntry<float> FlightGlobeX;
         internal static ConfigEntry<float> FlightGlobeY;
         internal static ConfigEntry<bool> AimWithHand;
+        internal static ConfigEntry<bool> MirrorCutter;
 
         private void Awake()
         {
@@ -73,6 +74,8 @@ namespace ShipbreakerVR
             FlightGlobeY = Config.Bind("Anzeige", "FlugkugelY", -0.38f, "Vertical position of the flight globe on the visor, from -0.5 (bottom edge) to 0.5 (top edge).");
             AimWithHand = Config.Bind("Steuerung", "ZielenMitHand", true,
                 "The tools (cutter, grapple, scanner, demo charges), grabbing and interacting aim where the controller of the hand holding the tool points (the right one unless the left one drew it) instead of at the center of the view, from the muzzle of the tool in the hand. A laser shows where, and the game's crosshair is hidden from the center of the view meanwhile; with an empty hand there is no laser, and interacting aims at the center of the view, marked by the game's dot. The grip at the body draws a tool with either hand: right hip grapple, left hip demo charges, over the right shoulder cutter, right side of the helmet scanner; it stays in the hand while the grip is held, and reaching for it with the other hand takes it over. Trigger fires or grapples, A interacts (with the trigger held: throws), B with the trigger held reels in, B switches the tool mode (held: places a tether, held while pointing at nothing: recalls the tethers). In the left hand X and Y do what A and B do, and controller flying pauses until it lets go. The suit's hands follow the controllers.");
+            MirrorCutter = Config.Bind("Bild", "CutterSpiegeln", true,
+                "Copy the detailed left side of the cutter's model onto its plain right side, which the flat game never showed.");
             VrToolFit.Bind(Config);
             UiInVr = Config.Bind("Anzeige", "UiImRaum", true,
                 "Show HUD and menus on a canvas in the world instead of flat over the image.");

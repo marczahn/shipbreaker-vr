@@ -33,7 +33,9 @@ namespace ShipbreakerVR
 
         public static void Update(VrCamera vr)
         {
-            if (Input.GetKeyDown(KeyCode.F8)) Dump(vr, "F8");
+            VrToolExport.Update();
+            var shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            if (Input.GetKeyDown(KeyCode.F8) && !shift) Dump(vr, "F8");
             else if (dueAt >= 0f && Time.unscaledTime >= dueAt)
             {
                 dueAt = -1f;
