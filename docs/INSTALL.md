@@ -33,6 +33,9 @@ Switch it in the options row "Controller flying" in the VR tab. Hold the left tr
 - move the controller away from where it was when you pressed it to fly that way,
 - tilt it sideways to roll; the further, the faster.
 
+Thrust starts 2 cm away from that point and is full at 10 cm. The rows "Thrust deadzone" and "Full thrust at" change
+both; full thrust always stays at least 5 cm beyond the deadzone.
+
 The right stick turns (left/right) and pitches (up/down), the further, the faster; it needs no trigger. The row "Turning"
 switches turning to steps of 30, 45 or 90 degrees per flick. Y brakes. Mouse, keyboard and gamepad keep working.
 
