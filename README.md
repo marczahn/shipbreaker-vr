@@ -82,8 +82,8 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | Turn left or right | Push the right stick left or right. |
 | Look up or down | Push the right stick up or down. |
 | Brake | Press Y. |
-| Open the pause menu | Press X and A together. |
-| Put the view back in front of me | Press B and Y together (or F4 on the keyboard). |
+| Open the pause menu | Press the right stick (also in the station). |
+| Put the view back in front of me | Press the left stick (or F4 on the keyboard). |
 
 **Tools:**
 

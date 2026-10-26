@@ -264,7 +264,7 @@ namespace ShipbreakerVR
             VrPerformance.FrameStart();
             VrLoadTrace.EndFrame(this);
             if (VrXr.IsRunning && Input.GetKeyDown(KeyCode.F4)) Recenter(true);
-            UpdateCenterCombo();
+            UpdateCenterPress();
             VrDiagnostics.Update(this);
         }
 
@@ -607,34 +607,25 @@ namespace ShipbreakerVR
             return forward.sqrMagnitude < 1e-8f ? Quaternion.identity : Quaternion.LookRotation(forward, Vector3.up);
         }
 
-        // B + Y together on the controllers: the same as F4. From the press until both buttons are up again they count as
-        // the combo, so neither acts on its own meanwhile (Y brakes, B is Back in menus; VrControls, VrMenuInput).
-        public static bool CenterComboHeld { get; private set; }
-        private static InputDevice comboLeft;
-        private static InputDevice comboRight;
+        // Pressing the left stick: the same as F4. Nothing else uses that press (VrMenuInput sends no L3).
+        private static bool centerHeld;
+        private static InputDevice centerDevice;
 
-        private void UpdateCenterCombo()
+        private void UpdateCenterPress()
         {
             if (!VrXr.IsRunning)
             {
-                CenterComboHeld = false;
+                centerHeld = false;
                 return;
             }
-            var y = Pressed(ref comboLeft, XRNode.LeftHand);
-            var b = Pressed(ref comboRight, XRNode.RightHand);
-            if (y && b && !CenterComboHeld)
+            if (!centerDevice.isValid) centerDevice = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
+            var pressed = centerDevice.isValid && centerDevice.TryGetFeatureValue(CommonUsages.primary2DAxisClick, out var click) && click;
+            if (pressed && !centerHeld)
             {
-                CenterComboHeld = true;
-                Plugin.Log.LogInfo("B + Y pressed: centering the view");
+                Plugin.Log.LogInfo("Left stick pressed: centering the view");
                 Recenter(true);
             }
-            else if (!y && !b) CenterComboHeld = false;
-        }
-
-        private static bool Pressed(ref InputDevice device, XRNode node)
-        {
-            if (!device.isValid) device = InputDevices.GetDeviceAtXRNode(node);
-            return device.isValid && device.TryGetFeatureValue(CommonUsages.secondaryButton, out var pressed) && pressed;
+            centerHeld = pressed;
         }
 
         // "Center view" in the VR options: the same as F4.
