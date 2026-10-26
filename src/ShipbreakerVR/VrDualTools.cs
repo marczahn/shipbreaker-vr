@@ -1,0 +1,438 @@
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Reflection.Emit;
+using BBI.Unity.Game;
+using HarmonyLib;
+using UnityEngine;
+using UnityEngine.XR;
+
+namespace ShipbreakerVR
+{
+    // One tool in each hand, as Marc asked: the cutter in one, the grapple in the other. The game knows a single equipped
+    // tool (EquipmentController.CurrentEquipment); drawing another one puts the old one away (SetEquipment). Here the hand
+    // that draws the second tool gets it as the game's own, and the tool the other hand holds stays out: its unequip is
+    // skipped (UnequipPatch), and the code of that tool's family sees it as equipped (GatePatch). Each tool exists once,
+    // so a hand that reaches for the tool the other hand holds takes it over, as before. Only the cutter and the grapple
+    // pair up; the scanner and the demo charges still replace the tool in the other hand.
+    // The second tool works from its own hand: its family's input polls read that hand's buttons (VrToolInput), its aim
+    // goes through a camera of its own on its muzzle (VrAim.CameraFor), and its model hangs on a point of its own that
+    // follows that controller (Place), fitted like the first (VrToolFit). Letting go of the game's tool hands the game the
+    // second one (Promote); letting go of the second one puts it away through its own controller (PutAway).
+    internal static class VrDualTools
+    {
+        // Which tool's code a game class belongs to: its input, its aim and its "is it equipped" checks.
+        public enum Family { Other, Cutter, Grapple }
+
+        // The tool the second hand holds (None, CuttingTool or GrappleHook) and that hand.
+        public static EquipmentController.Equipment Second { get; private set; }
+        public static XRNode SecondNode { get; private set; } = XRNode.LeftHand;
+
+        private static EquipmentController equipment;
+        private static CuttingToolController cutter;
+        private static GunController gun;
+        private static readonly MethodInfo SetEquipment = AccessTools.Method(typeof(EquipmentController), "SetEquipment");
+        private static readonly MethodInfo PlayEquipAudio = AccessTools.Method(typeof(EquipmentController), "PlayEquipAudio");
+        private static readonly MethodInfo PlayUnequipAudio = AccessTools.Method(typeof(EquipmentController), "PlayUnequipAudio");
+        private static readonly AccessTools.FieldRef<CuttingToolController, Transform> CutterModel =
+            AccessTools.FieldRefAccess<CuttingToolController, Transform>("m_CuttingTool");
+        private static readonly AccessTools.FieldRef<GunController, Transform> GrappleModel =
+            AccessTools.FieldRefAccess<GunController, Transform>("m_GrapplingGun");
+        private static int logs;
+
+        public static bool Enabled => Plugin.TwoTools != null && Plugin.TwoTools.Value;
+
+        private static readonly Dictionary<string, Family> Families = new Dictionary<string, Family>
+        {
+            { "BBI.Unity.Game.CuttingController", Family.Cutter },
+            { "BBI.Unity.Game.CuttingFXController", Family.Cutter },
+            { "BBI.Unity.Game.CuttingToolController", Family.Cutter },
+            { "BBI.Unity.Game.ScalpelController", Family.Cutter },
+            { "BBI.Unity.Game.ScalpelFXController", Family.Cutter },
+            { "BBI.Unity.Game.ScalpelTarget", Family.Cutter },
+            { "BBI.Unity.Game.CutterHeatBarUIController", Family.Cutter },
+            { "GrapplingHook", Family.Grapple },
+            { "TetherController", Family.Grapple },
+            { "BBI.Unity.Game.Tether", Family.Grapple },
+            { "BBI.Unity.Game.MagnetController", Family.Grapple },
+            { "BBI.Unity.Game.GunController", Family.Grapple },
+            { "BBI.Unity.Game.GrappleRaycastSystem", Family.Grapple },
+            { "BBI.Unity.Game.GrapplePushRaycastSystem", Family.Grapple },
+        };
+
+        // The family of a game class (or of the class a nested type, a job or a lambda, sits in).
+        public static Family FamilyOf(System.Type type)
+        {
+            for (var t = type; t != null; t = t.DeclaringType)
+                if (Families.TryGetValue(t.FullName ?? "", out var family)) return family;
+            return Family.Other;
+        }
+
+        // For code shared by several families (RaycastSystem): the family of the instance running it.
+        public static int FamilyOfInstance(object instance) => instance == null ? 0 : (int)FamilyOf(instance.GetType());
+
+        private static EquipmentController.Equipment ToolOf(Family family) =>
+            family == Family.Cutter ? EquipmentController.Equipment.CuttingTool
+            : family == Family.Grapple ? EquipmentController.Equipment.GrappleHook
+            : EquipmentController.Equipment.None;
+
+        // Whether that family's code works from the second hand (its tool is the second one).
+        public static bool Routes(int family) => Second != EquipmentController.Equipment.None && ToolOf((Family)family) == Second;
+
+        // Whether a hand that draws next while the other hand holds held may keep both.
+        public static bool CanPair(EquipmentController.Equipment held, EquipmentController.Equipment next) =>
+            Enabled && held != next && IsPairable(held) && IsPairable(next);
+
+        private static bool IsPairable(EquipmentController.Equipment tool) =>
+            tool == EquipmentController.Equipment.CuttingTool || tool == EquipmentController.Equipment.GrappleHook;
+
+        // What the tool classes read instead of EquipmentController.CurrentEquipment: their own tool while it is the
+        // second one, the game's otherwise.
+        public static EquipmentController.Equipment CurrentEquipment(EquipmentController controller, int family)
+        {
+            if (Routes(family)) return Second;
+            return controller.CurrentEquipment;
+        }
+
+        // TetherController.IsEquipped is small enough for Mono to inline, so its callers get this instead.
+        public static bool TetherEquipped(TetherController tether) =>
+            Routes((int)Family.Grapple) || (Find() && equipment.CurrentEquipment == EquipmentController.Equipment.GrappleHook);
+
+        // From UnequipPatch: the game puts away the tool the second hand holds (drawing the other tool into the first
+        // hand); it stays out.
+        public static bool Keeps(EquipmentController.Equipment tool) => Second != EquipmentController.Equipment.None && tool == Second;
+
+        // The hand that held the game's tool keeps it as the second one, and the drawing hand gets the new tool from the
+        // game, without the game putting the kept one away.
+        public static void Draw(EquipmentController controller, EquipmentController.Equipment kept, XRNode keptBy, EquipmentController.Equipment next)
+        {
+            equipment = controller;
+            Second = kept;
+            SecondNode = keptBy;
+            Invoke(SetEquipment, next);
+            Invoke(PlayEquipAudio, next);
+            if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: {Name(keptBy)} hand keeps the {kept}, the other hand draws the {next}");
+        }
+
+        // The second tool changes hands (the other hand reached for it).
+        public static void TakeOver(XRNode node)
+        {
+            if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: {Name(node)} hand takes the {Second} over");
+            SecondNode = node;
+        }
+
+        // The game's tool was let go while the second hand still holds its own: that one becomes the game's tool.
+        public static void Promote()
+        {
+            if (!Find()) return;
+            var tool = Second;
+            if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: the {equipment.CurrentEquipment} is put away, the {tool} in the {Name(SecondNode)} hand becomes the game's tool");
+            Second = EquipmentController.Equipment.None;
+            Invoke(PlayUnequipAudio, equipment.CurrentEquipment);
+            Invoke(SetEquipment, tool);
+        }
+
+        // The second hand let go: its tool goes back to the belt through its own controller, which the game's
+        // EquipmentController no longer looks after. Waits while the tool may not be put away (the cutter mid-cut).
+        public static void PutAway(bool force = false)
+        {
+            var tool = Second;
+            if (tool == EquipmentController.Equipment.None) return;
+            if (tool == EquipmentController.Equipment.CuttingTool)
+            {
+                if (!FindTools() || cutter == null) { Second = EquipmentController.Equipment.None; return; }
+                if (!force && !cutter.CanBeUnequipped()) return;
+                Second = EquipmentController.Equipment.None;
+                if (Find()) Invoke(PlayUnequipAudio, tool);
+                cutter.UnequipCutter();
+            }
+            else
+            {
+                if (!FindTools() || gun == null) { Second = EquipmentController.Equipment.None; return; }
+                if (!force && !gun.CanBeUnequipped()) return;
+                Second = EquipmentController.Equipment.None;
+                if (Find()) Invoke(PlayUnequipAudio, tool);
+                gun.UnequipGun();
+            }
+            if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: the {tool} in the {Name(SecondNode)} hand is put away");
+        }
+
+        // Once a frame from VrToolInput: the second tool ends with the option, outside gameplay (pausing keeps it), and
+        // when the game itself took it as its tool.
+        public static void Check()
+        {
+            if (Second == EquipmentController.Equipment.None) return;
+            var state = GameSession.CurrentGameState;
+            if (!Enabled || !Plugin.AimWithHand.Value || (state != GameSession.GameState.Gameplay && state != GameSession.GameState.Paused))
+            {
+                PutAway(true);
+                return;
+            }
+            if (Find() && !equipment.IsNothingEquipped && equipment.CurrentEquipment == Second)
+            {
+                if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: the game took the {Second} as its tool");
+                Second = EquipmentController.Equipment.None;
+            }
+        }
+
+        private static void Invoke(MethodInfo method, EquipmentController.Equipment tool)
+        {
+            try { method.Invoke(equipment, new object[] { tool }); }
+            catch (System.Exception e) { Plugin.Log.LogWarning($"Two tools: {method.Name}({tool}) failed: {e.InnerException ?? e}"); }
+        }
+
+        private static bool Find()
+        {
+            if (equipment == null) equipment = Object.FindObjectOfType<EquipmentController>();
+            return equipment != null;
+        }
+
+        private static bool FindTools()
+        {
+            if (cutter == null) cutter = Object.FindObjectOfType<CuttingToolController>();
+            if (gun == null) gun = Object.FindObjectOfType<GunController>();
+            return cutter != null || gun != null;
+        }
+
+        private static string Name(XRNode node) => node == XRNode.LeftHand ? "left" : "right";
+
+        // ---- The second tool's model, aim and laser ----
+
+        private static Transform point;
+        private static Transform model;
+        private static bool placed;
+        private static Vector3 mount;
+        private static Quaternion turn = Quaternion.identity;
+        private static Vector3 muzzleOffset;
+        private static bool hasMuzzle;
+        private static float nextMirror;
+        private static InputDevice device;
+        private static XRNode deviceNode;
+        private static Camera aim;
+        private static int aimFrame = -1;
+        private static bool aimValid;
+
+        // The game's model of the second tool.
+        private static Transform Model(EquipmentController.Equipment tool)
+        {
+            if (!FindTools()) return null;
+            if (tool == EquipmentController.Equipment.CuttingTool) return cutter != null ? CutterModel(cutter) : null;
+            if (tool == EquipmentController.Equipment.GrappleHook) return gun != null ? GrappleModel(gun) : null;
+            return null;
+        }
+
+        private static bool GetDevice()
+        {
+            if (deviceNode != SecondNode || !device.isValid)
+            {
+                deviceNode = SecondNode;
+                device = InputDevices.GetDeviceAtXRNode(SecondNode);
+            }
+            return device.isValid;
+        }
+
+        // From VrToolModels.Place, right before rendering, after the first tool is placed: the second tool's model onto
+        // its own point (a sibling of the game's equipment point, so it lives and scales with the player), which goes to
+        // the second hand as the first tool's point goes to the first one.
+        public static void Place(Transform equipmentPoint)
+        {
+            placed = false;
+            hasMuzzle = false;
+            if (Second == EquipmentController.Equipment.None || equipmentPoint == null || equipmentPoint.parent == null) return;
+            var tool = Model(Second);
+            if (tool == null || !GetDevice() || !VrAim.TryGetHand(device, out var grip, out var rotation)) return;
+            if (point == null || point.parent != equipmentPoint.parent)
+            {
+                if (point != null) Object.Destroy(point.gameObject);
+                point = new GameObject("ShipbreakerVR Second tool point").transform;
+                point.SetParent(equipmentPoint.parent, false);
+                point.localScale = equipmentPoint.localScale;
+            }
+            if (tool != model || tool.parent != point)
+            {
+                model = tool;
+                tool.SetParent(point, false);
+                tool.localPosition = Vector3.zero;
+                tool.localRotation = Quaternion.identity;
+                Plugin.Log.LogInfo($"Two tools: '{tool.name}' into the {Name(SecondNode)} hand");
+            }
+            if (Second == EquipmentController.Equipment.CuttingTool && Time.unscaledTime >= nextMirror)
+            {
+                nextMirror = Time.unscaledTime + 1f;
+                VrToolMirror.Apply(point);
+            }
+
+            var muzzle = VrToolModels.MuzzleTransform(Second, out var muzzleWorld);
+            hasMuzzle = muzzle != null && muzzle.IsChildOf(point);
+            if (hasMuzzle) muzzleOffset = Quaternion.Inverse(point.rotation) * (muzzleWorld - point.position);
+            var fitted = VrToolFit.TryGet(Second, SecondNode == XRNode.LeftHand, out var offset, out turn);
+            mount = fitted ? VrToolModels.WristBehindGrip * VrCamera.WorldScale + offset : Vector3.zero;
+            point.rotation = rotation * turn;
+            point.position = grip + rotation * mount;
+            placed = true;
+        }
+
+        // Where the second tool aims from and along: its muzzle along its barrel, or the hand's aim pose until its model
+        // is in the hand.
+        public static bool TryGetAim(out Vector3 position, out Quaternion rotation)
+        {
+            position = Vector3.zero;
+            rotation = Quaternion.identity;
+            if (Second == EquipmentController.Equipment.None || !GetDevice() || !VrAim.TryGetPose(device, out position, out rotation)) return false;
+            if (placed && hasMuzzle && VrAim.TryGetHand(device, out var grip, out var hand))
+            {
+                rotation = hand * turn;
+                position = grip + hand * mount + rotation * muzzleOffset;
+            }
+            return true;
+        }
+
+        // The camera the second tool's code aims through (VrAim.CameraFor), null without a second tool.
+        public static Camera AimCamera
+        {
+            get
+            {
+                if (aimFrame != Time.frameCount)
+                {
+                    aimFrame = Time.frameCount;
+                    aimValid = UpdateAim();
+                }
+                return aimValid ? aim : null;
+            }
+        }
+
+        private static bool UpdateAim()
+        {
+            var main = LynxCameraController.MainCamera;
+            if (main == null || !TryGetAim(out var position, out var rotation)) return false;
+            if (aim == null)
+            {
+                var go = new GameObject("ShipbreakerVR Second aim");
+                Object.DontDestroyOnLoad(go);
+                aim = go.AddComponent<Camera>();
+                aim.enabled = false;
+                aim.stereoTargetEye = StereoTargetEyeMask.None;
+            }
+            aim.transform.SetPositionAndRotation(position, rotation);
+            aim.fieldOfView = main.fieldOfView;
+            aim.rect = main.rect;
+            aim.aspect = main.aspect;
+            aim.nearClipPlane = main.nearClipPlane;
+            aim.farClipPlane = main.farClipPlane;
+            return true;
+        }
+
+        // On unload (hot reload): the second tool goes back to the belt, so the new instance starts from the game's state.
+        public static void Release()
+        {
+            PutAway(true);
+            if (point != null) Object.Destroy(point.gameObject);
+            if (aim != null) Object.Destroy(aim.gameObject);
+            point = null;
+            model = null;
+            aim = null;
+            equipment = null;
+            cutter = null;
+            gun = null;
+        }
+
+        // For the F8 dump.
+        public static string Describe() =>
+            Second == EquipmentController.Equipment.None ? "second tool: none" : $"second tool: {Second} in the {Name(SecondNode)} hand{(placed ? "" : " (not placed)")}";
+
+        // Puts the instructions that load a family in front of a redirected call, keeping the call's labels and blocks on
+        // the first of them: the method's own family, or for code shared by several (RaycastSystem) its instance's.
+        public static IEnumerable<CodeInstruction> LoadFamily(CodeInstruction call, MethodBase original)
+        {
+            var shared = !original.IsStatic && original.DeclaringType != null && original.DeclaringType.FullName == "BBI.Unity.Game.RaycastSystem";
+            var load = shared
+                ? new[] { new CodeInstruction(OpCodes.Ldarg_0), new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(VrDualTools), nameof(FamilyOfInstance))) }
+                : new[] { new CodeInstruction(OpCodes.Ldc_I4, (int)FamilyOf(original.DeclaringType)) };
+            load[0].labels.AddRange(call.labels);
+            load[0].blocks.AddRange(call.blocks);
+            call.labels.Clear();
+            call.blocks.Clear();
+            return load;
+        }
+    }
+
+    // The game puts away the tool the second hand keeps (see VrDualTools).
+    [HarmonyPatch]
+    internal static class UnequipPatch
+    {
+        private static MethodBase TargetMethod() => AccessTools.Method(typeof(EquipmentController), "UnequipEquipment");
+
+        private static bool Prefix(EquipmentController.Equipment equipmentType) => !VrDualTools.Keeps(equipmentType);
+    }
+
+    // The tool classes check whether their tool is the equipped one; the second tool's family gets its own (VrDualTools).
+    // A transpiler on the callers, because the getter is small enough for Mono to inline.
+    [HarmonyPatch]
+    internal static class GatePatch
+    {
+        private static readonly MethodInfo CurrentEquipment = AccessTools.PropertyGetter(typeof(EquipmentController), nameof(EquipmentController.CurrentEquipment));
+        private static readonly MethodInfo TetherIsEquipped = AccessTools.PropertyGetter(typeof(TetherController), nameof(TetherController.IsEquipped));
+        private static readonly MethodInfo Current = AccessTools.Method(typeof(VrDualTools), nameof(VrDualTools.CurrentEquipment));
+        private static readonly MethodInfo TetherEquipped = AccessTools.Method(typeof(VrDualTools), nameof(VrDualTools.TetherEquipped));
+
+        private static readonly string[] Types =
+        {
+            "BBI.Unity.Game.CuttingController", "BBI.Unity.Game.CuttingToolController", "BBI.Unity.Game.ScalpelController",
+            "BBI.Unity.Game.ScalpelFXController", "BBI.Unity.Game.CutterHeatBarUIController", "GrapplingHook",
+            "TetherController", "BBI.Unity.Game.GunController",
+        };
+
+        private static IEnumerable<MethodBase> TargetMethods()
+        {
+            foreach (var name in Types)
+            {
+                var type = AccessTools.TypeByName(name);
+                if (type == null)
+                {
+                    Plugin.Log.LogWarning($"Two tools: type {name} not found");
+                    continue;
+                }
+                foreach (var nested in new[] { type }.Concat(type.GetNestedTypes(AccessTools.all)))
+                    foreach (var method in AccessTools.GetDeclaredMethods(nested))
+                        if (!method.IsAbstract && !method.ContainsGenericParameters && method.GetMethodBody() != null && Checks(method))
+                            yield return method;
+            }
+        }
+
+        private static bool Checks(MethodBase method)
+        {
+            try
+            {
+                return PatchProcessor.ReadMethodBody(method).Any(i => i.Value is MethodInfo called && (called == CurrentEquipment || called == TetherIsEquipped));
+            }
+            catch (System.Exception e)
+            {
+                Plugin.Log.LogWarning($"Two tools: could not read {method.DeclaringType?.Name}.{method.Name}: {e.Message}");
+                return false;
+            }
+        }
+
+        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
+        {
+            var replaced = 0;
+            foreach (var instruction in instructions)
+            {
+                if (instruction.Calls(CurrentEquipment))
+                {
+                    foreach (var load in VrDualTools.LoadFamily(instruction, original)) yield return load;
+                    instruction.opcode = OpCodes.Call;
+                    instruction.operand = Current;
+                    replaced++;
+                }
+                else if (instruction.Calls(TetherIsEquipped))
+                {
+                    instruction.opcode = OpCodes.Call;
+                    instruction.operand = TetherEquipped;
+                    replaced++;
+                }
+                yield return instruction;
+            }
+            Plugin.Log.LogInfo($"Two tools: {original.DeclaringType?.Name}.{original.Name}: {replaced} equipment check(s) redirected ({VrDualTools.FamilyOf(original.DeclaringType)})");
+        }
+    }
+}

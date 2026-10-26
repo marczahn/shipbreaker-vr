@@ -51,6 +51,9 @@ namespace ShipbreakerVR
         private static bool beamHit;
         private static Vector3 beamStart;
         private static Vector3 beamEnd;
+        private static bool secondBeamVisible;
+        private static Vector3 secondBeamStart;
+        private static Vector3 secondBeamEnd;
         private static string beamTarget = "-";
         private static int pointerMask;
         private static Mesh beamMesh;
@@ -82,8 +85,26 @@ namespace ShipbreakerVR
 
         public static Transform CameraTransform => Aiming ? aim.transform : LynxCameraController.MainCameraTransform;
 
+        // The same for the code of one tool family (VrDualTools.Family): the second tool's own aim camera while that
+        // family's tool is in the second hand.
+        public static Camera CameraFor(int family)
+        {
+            var second = VrDualTools.Routes(family) && Active ? VrDualTools.AimCamera : null;
+            return second != null ? second : Camera;
+        }
+
+        public static Transform CameraTransformFor(int family)
+        {
+            var second = VrDualTools.Routes(family) && Active ? VrDualTools.AimCamera : null;
+            return second != null ? second.transform : CameraTransform;
+        }
+
         // Where the cutter's line starts in CuttingFXController.StartCutLine (the tool's own transform in the flat game).
-        public static Transform CutOrigin(Component tool) => Aiming ? aim.transform : tool.transform;
+        public static Transform CutOrigin(Component tool, int family)
+        {
+            var second = VrDualTools.Routes(family) && Active ? VrDualTools.AimCamera : null;
+            return second != null ? second.transform : Aiming ? aim.transform : tool.transform;
+        }
 
         // A thrown demo charge leaves from just in front of the hand (DemoChargeController.ThrowDemoCharge, ThrowOffset in
         // front of the head in the flat game) and flies where the hand points (DemoChargeAsset.SetComponentData, the
@@ -156,6 +177,27 @@ namespace ShipbreakerVR
             return true;
         }
 
+        // The same for another controller (the second tool's, VrDualTools).
+        public static bool TryGetHand(InputDevice device, out Vector3 grip, out Quaternion rotation)
+        {
+            grip = Vector3.zero;
+            if (!TryGetPose(device, out _, out rotation)) return false;
+            if (!device.TryGetFeatureValue(CommonUsages.devicePosition, out var local)) return false;
+            grip = VrCamera.Instance.transform.parent.TransformPoint(local);
+            return true;
+        }
+
+        public static bool TryGetPose(InputDevice device, out Vector3 position, out Quaternion rotation)
+        {
+            position = Vector3.zero;
+            rotation = Quaternion.identity;
+            if (!Usable() || !TryGetDevicePose(device, out var local, out var localRotation, out _)) return false;
+            var rig = VrCamera.Instance.transform.parent;
+            position = rig.TransformPoint(local);
+            rotation = rig.rotation * localRotation;
+            return true;
+        }
+
         // The tool hand's aim pose in the world (it points where the controller points; the grip pose runs along
         // the handle). Poses are in tracking space, i.e. relative to the rig.
         private static bool TryGetPose(out Vector3 position, out Quaternion rotation)
@@ -181,9 +223,7 @@ namespace ShipbreakerVR
         {
             local = Vector3.zero;
             localRotation = Quaternion.identity;
-            var vr = VrCamera.Instance;
-            if (!VrXr.IsRunning || !Plugin.AimWithHand.Value || vr == null || vr.FollowsHab) return false;
-            if (GameSession.CurrentGameState != GameSession.GameState.Gameplay) return false;
+            if (!Usable()) return false;
             var node = VrToolInput.ToolNode;
             if (node != handNode || !hand.isValid)
             {
@@ -191,17 +231,33 @@ namespace ShipbreakerVR
                 handNode = node;
                 hand = InputDevices.GetDeviceAtXRNode(node);
             }
-            if (!hand.isValid) return false;
-            if (hand.TryGetFeatureValue(CommonUsages.isTracked, out var tracked) && !tracked) return false;
-            var pointer = hand.TryGetFeatureValue(PointerPosition, out local) && hand.TryGetFeatureValue(PointerRotation, out localRotation);
-            if (!pointer && !(hand.TryGetFeatureValue(CommonUsages.devicePosition, out local) && hand.TryGetFeatureValue(CommonUsages.deviceRotation, out localRotation)))
-                return false;
+            if (!TryGetDevicePose(hand, out local, out localRotation, out var pointer)) return false;
             if (!loggedPose)
             {
                 loggedPose = true;
                 Plugin.Log.LogInfo($"Aiming with the {(handNode == XRNode.LeftHand ? "left" : "right")} hand ('{hand.name}', {(pointer ? "aim pose" : "grip pose, no aim pose")})");
             }
             return true;
+        }
+
+        // VR in gameplay with the option on.
+        private static bool Usable()
+        {
+            var vr = VrCamera.Instance;
+            if (!VrXr.IsRunning || !Plugin.AimWithHand.Value || vr == null || vr.FollowsHab) return false;
+            return GameSession.CurrentGameState == GameSession.GameState.Gameplay;
+        }
+
+        // A tracked controller's aim pose (or its grip pose without one) in tracking space.
+        private static bool TryGetDevicePose(InputDevice device, out Vector3 local, out Quaternion localRotation, out bool pointer)
+        {
+            local = Vector3.zero;
+            localRotation = Quaternion.identity;
+            pointer = false;
+            if (!device.isValid) return false;
+            if (device.TryGetFeatureValue(CommonUsages.isTracked, out var tracked) && !tracked) return false;
+            pointer = device.TryGetFeatureValue(PointerPosition, out local) && device.TryGetFeatureValue(PointerRotation, out localRotation);
+            return pointer || (device.TryGetFeatureValue(CommonUsages.devicePosition, out local) && device.TryGetFeatureValue(CommonUsages.deviceRotation, out localRotation));
         }
 
         // Called from our UI pass for each eye, before the UI: the laser from the hand to what it hits. Drawn over
@@ -221,42 +277,61 @@ namespace ShipbreakerVR
             cmd.SetViewport(new Rect(0, 0, context.hdCamera.actualWidth, context.hdCamera.actualHeight));
             cmd.SetViewProjectionMatrices(view, proj);
 
-            // The beam is a strip along its direction, turned to face the eye.
-            var along = beamEnd - beamStart;
-            var length = along.magnitude;
-            if (length > 0.01f)
-            {
-                var direction = along / length;
-                var toEye = Vector3.ProjectOnPlane(eye - beamStart, direction);
-                if (toEye.sqrMagnitude < 1e-8f) toEye = Vector3.ProjectOnPlane(Vector3.up, direction);
-                var matrix = Matrix4x4.TRS(beamStart, Quaternion.LookRotation(toEye, direction), new Vector3(BeamWidth * scale, length, 1f));
-                cmd.DrawMesh(beamMesh, matrix, beamMaterial, 0, 0);
-            }
+            DrawBeam(cmd, eye, scale, beamStart, beamEnd);
+            if (secondBeamVisible) DrawBeam(cmd, eye, scale, secondBeamStart, secondBeamEnd);
             context.renderContext.ExecuteCommandBuffer(cmd);
             cmd.Clear();
             context.renderContext.SetupCameraProperties(context.hdCamera.camera, true);
         }
 
-        // Once per frame at render time, with the latest hand pose and the rig where it is drawn.
+        // The beam is a strip along its direction, turned to face the eye.
+        private static void DrawBeam(CommandBuffer cmd, Vector3 eye, float scale, Vector3 start, Vector3 end)
+        {
+            var along = end - start;
+            var length = along.magnitude;
+            if (length <= 0.01f) return;
+            var direction = along / length;
+            var toEye = Vector3.ProjectOnPlane(eye - start, direction);
+            if (toEye.sqrMagnitude < 1e-8f) toEye = Vector3.ProjectOnPlane(Vector3.up, direction);
+            var matrix = Matrix4x4.TRS(start, Quaternion.LookRotation(toEye, direction), new Vector3(BeamWidth * scale, length, 1f));
+            cmd.DrawMesh(beamMesh, matrix, beamMaterial, 0, 0);
+        }
+
+        // Once per frame at render time, with the latest hand pose and the rig where it is drawn; a second beam from the
+        // second tool (VrDualTools).
         private static void UpdateBeam()
         {
             if (beamFrame == Time.frameCount) return;
             beamFrame = Time.frameCount;
             var rotation = Quaternion.identity;
+            var secondRotation = Quaternion.identity;
+            secondBeamVisible = Active && VrDualTools.TryGetAim(out secondBeamStart, out secondRotation);
+            if (secondBeamVisible) Cast(secondBeamStart, secondRotation, out secondBeamEnd, out _);
             beamVisible = Aiming && TryGetAim(out beamStart, out rotation);
-            if (!beamVisible) return;
-            if (pointerMask == 0) pointerMask = PointerMask();
-            var forward = rotation * Vector3.forward;
-            beamHit = Physics.Raycast(beamStart, forward, out var hit, BeamRange * VrCamera.WorldScale, pointerMask, QueryTriggerInteraction.Ignore);
-            beamEnd = beamHit ? hit.point : beamStart + forward * BeamMiss * VrCamera.WorldScale;
+            if (!beamVisible)
+            {
+                beamVisible = secondBeamVisible;
+                beamStart = beamEnd = secondBeamStart;
+                return;
+            }
+            beamHit = Cast(beamStart, rotation, out beamEnd, out var hit);
             beamTarget = beamHit ? $"'{hit.collider.name}' (layer {LayerMask.LayerToName(hit.collider.gameObject.layer)}) at {hit.distance:0.00} m" : "nothing";
         }
 
-        // Whether the hand points at anything within the beam's range, with an empty hand the middle of the view (VrToolInput:
-        // B held without a target recalls the tethers).
-        public static bool PointsAtSomething()
+        private static bool Cast(Vector3 start, Quaternion rotation, out Vector3 end, out RaycastHit hit)
         {
-            var from = CameraTransform;
+            if (pointerMask == 0) pointerMask = PointerMask();
+            var forward = rotation * Vector3.forward;
+            var hits = Physics.Raycast(start, forward, out hit, BeamRange * VrCamera.WorldScale, pointerMask, QueryTriggerInteraction.Ignore);
+            end = hits ? hit.point : start + forward * BeamMiss * VrCamera.WorldScale;
+            return hits;
+        }
+
+        // Whether the hand points at anything within the beam's range, with an empty hand the middle of the view (VrToolInput:
+        // B held without a target recalls the tethers); second: the second tool's hand (VrDualTools).
+        public static bool PointsAtSomething(bool second = false)
+        {
+            var from = second && VrDualTools.AimCamera != null ? VrDualTools.AimCamera.transform : CameraTransform;
             if (!Active || from == null) return false;
             if (pointerMask == 0) pointerMask = PointerMask();
             return Physics.Raycast(from.position, from.forward, BeamRange * VrCamera.WorldScale, pointerMask, QueryTriggerInteraction.Ignore);
@@ -314,7 +389,7 @@ namespace ShipbreakerVR
         {
             var text = $"aim with hand: option {Plugin.AimWithHand.Value}, active {Active}, tool {withTool}";
             if (active) text += $", hand at {VrDiagnostics.Direction(head, aim.transform.position)} {Vector3.Distance(head.position, aim.transform.position):0.00} m, pointing {VrDiagnostics.Direction(head, head.position + aim.transform.forward)}, beam on {beamTarget}";
-            return text + CutterModel();
+            return text + "; " + VrDualTools.Describe() + CutterModel();
         }
 
         // Where the game keeps the cutter's model, for moving the tools into the hand later.
@@ -354,8 +429,8 @@ namespace ShipbreakerVR
 
         private static readonly MethodInfo MainCamera = AccessTools.PropertyGetter(typeof(LynxCameraController), nameof(LynxCameraController.MainCamera));
         private static readonly MethodInfo MainCameraTransform = AccessTools.PropertyGetter(typeof(LynxCameraController), nameof(LynxCameraController.MainCameraTransform));
-        private static readonly MethodInfo AimCamera = AccessTools.PropertyGetter(typeof(VrAim), nameof(VrAim.Camera));
-        private static readonly MethodInfo AimCameraTransform = AccessTools.PropertyGetter(typeof(VrAim), nameof(VrAim.CameraTransform));
+        private static readonly MethodInfo AimCamera = AccessTools.Method(typeof(VrAim), nameof(VrAim.CameraFor));
+        private static readonly MethodInfo AimCameraTransform = AccessTools.Method(typeof(VrAim), nameof(VrAim.CameraTransformFor));
         private static readonly MethodInfo GetTransform = AccessTools.PropertyGetter(typeof(Component), nameof(Component.transform));
         private static readonly MethodInfo CutOrigin = AccessTools.Method(typeof(VrAim), nameof(VrAim.CutOrigin));
         private static readonly MethodInfo ThrowOrigin = AccessTools.Method(typeof(VrAim), nameof(VrAim.ThrowOrigin));
@@ -416,9 +491,18 @@ namespace ShipbreakerVR
             for (var i = 0; i < list.Count; i++)
             {
                 var instruction = list[i];
-                if (instruction.Calls(MainCamera)) instruction.operand = AimCamera;
-                else if (instruction.Calls(MainCameraTransform)) instruction.operand = AimCameraTransform;
-                else if (cutLine && instruction.Calls(GetTransform) && i > 0 && list[i - 1].opcode == OpCodes.Ldarg_0) instruction.operand = CutOrigin;
+                // The camera calls and the cut origin take the family of the code (VrDualTools), loaded right before them.
+                var redirect = instruction.Calls(MainCamera) ? AimCamera
+                    : instruction.Calls(MainCameraTransform) ? AimCameraTransform
+                    : cutLine && instruction.Calls(GetTransform) && i > 0 && list[i - 1].opcode == OpCodes.Ldarg_0 ? CutOrigin
+                    : null;
+                if (redirect != null)
+                {
+                    var load = VrDualTools.LoadFamily(instruction, original).ToList();
+                    list.InsertRange(i, load);
+                    i += load.Count;
+                    instruction.operand = redirect;
+                }
                 else if (throwSpeed && instruction.Calls(GetForward)) instruction.operand = ThrowDirection;
                 else if (thrown && instruction.operand is MethodInfo m && m.Name == "get_ThrowOffset")
                 {

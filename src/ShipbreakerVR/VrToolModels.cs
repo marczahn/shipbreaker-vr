@@ -81,6 +81,8 @@ namespace ShipbreakerVR
                 nextMirror = Time.unscaledTime + 1f;
                 VrToolMirror.Apply(point);
             }
+            // The second tool goes to its own hand (VrDualTools).
+            VrDualTools.Place(point);
             if (point == null || point.parent == null || !VrAim.TryGetHand(out var grip, out var aim))
             {
                 Restore();
@@ -143,8 +145,8 @@ namespace ShipbreakerVR
             return moved && hasMuzzle && point != null;
         }
 
-        // The barrel's end of the equipped tool, and the transform it moves with.
-        private static Transform MuzzleTransform(EquipmentController.Equipment equipment, out Vector3 position)
+        // The barrel's end of that tool, and the transform it moves with.
+        public static Transform MuzzleTransform(EquipmentController.Equipment equipment, out Vector3 position)
         {
             position = Vector3.zero;
             if (equipment == EquipmentController.Equipment.GrappleHook)

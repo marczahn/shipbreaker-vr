@@ -11,7 +11,8 @@ namespace ShipbreakerVR
     // The controller of the hand that holds the tool works it while the tools aim with that hand (VrAim), all on one hand,
     // as Marc asked. That is the right hand, unless the left one drew the tool; the left controller then works it like the
     // right one, with X for A and Y for B, and flying rests until it lets go (VrControls). The right stick stays with
-    // turning. One tool at a time: a hand that draws a tool, or takes the one the other hand holds, holds it from then on.
+    // turning. A hand that draws a tool, or takes the one the other hand holds, holds it from then on. The cutter and the
+    // grapple can be held one in each hand (VrDualTools): each hand's buttons then work its own tool.
     //   grip at the body  draw a tool (VrToolBelt): right hip grapple, left hip demo charges, over the right shoulder
     //                   cutter, right side of the helmet scanner; the tool stays in the hand while the grip is held and
     //                   goes back to the belt when it is let go. Either hand can draw; reaching for the tool the other
@@ -35,6 +36,7 @@ namespace ShipbreakerVR
         private const float LongPress = 0.4f;
 
         private static readonly int Count = System.Enum.GetValues(typeof(Action)).Length;
+        // Drawing and putting away (the select actions and Holster); the tool actions are per hand (Hand.Now).
         private static readonly bool[] now = new bool[Count];
         private static readonly bool[] before = new bool[Count];
         private static readonly Dictionary<LynxControls.ActionSetAndId, Action> Actions = new Dictionary<LynxControls.ActionSetAndId, Action>
@@ -55,7 +57,8 @@ namespace ShipbreakerVR
             { GameplayActions.GameplayActionSet.UnequipCurrentEquipment, Action.Holster },
         };
 
-        // One controller: its trigger (with hysteresis), its grip and the belt zone it is in this frame.
+        // One controller: its trigger (with hysteresis), its grip and the belt zone it is in this frame, and the tool
+        // actions its buttons press for the tool it holds.
         private class Hand
         {
             public readonly XRNode Node;
@@ -64,6 +67,17 @@ namespace ShipbreakerVR
             public bool GripDown;
             public bool GripPressed;
             public VrToolBelt.Zone Zone;
+            public readonly bool[] Now = new bool[Count];
+            public readonly bool[] Before = new bool[Count];
+            // A decides at its press whether it throws (trigger held) or interacts, and keeps that until released.
+            public bool ADown;
+            public bool AThrows;
+            public bool BDown;
+            public float BDownAt;
+            public bool BLong;
+            public bool BTether;
+            // B decides at its press whether it reels in (trigger held) or works as tap/hold, and keeps that until released.
+            public bool BReels;
 
             public Hand(XRNode node) => Node = node;
 
@@ -78,7 +92,8 @@ namespace ShipbreakerVR
         public static XRNode ToolNode { get; private set; } = XRNode.RightHand;
 
         // While the left hand holds a tool its controller works the tool, so it does not fly (VrControls).
-        public static bool LeftHoldsTool => ToolNode == XRNode.LeftHand && VrAim.Active;
+        public static bool LeftHoldsTool => VrAim.Active && (ToolNode == XRNode.LeftHand
+            || (VrDualTools.Second != EquipmentController.Equipment.None && VrDualTools.SecondNode == XRNode.LeftHand));
 
         // Whether that controller's grip is held this frame (VrToolModels: a right hand that takes the demo charges over
         // from the left one holds its grip).
@@ -89,15 +104,6 @@ namespace ShipbreakerVR
         }
 
         private static int updatedFrame = -1;
-        // A decides at its press whether it throws (trigger held) or interacts, and keeps that until released.
-        private static bool aDown;
-        private static bool aThrows;
-        private static bool bDown;
-        private static float bDownAt;
-        private static bool bLong;
-        private static bool bTether;
-        // B decides at its press whether it reels in (trigger held) or works as tap/hold, and keeps that until released.
-        private static bool bReels;
         private static int holsterPulses;
         private static EquipmentController.Equipment lastEquipment;
         private static EquipmentController equipment;
@@ -113,14 +119,20 @@ namespace ShipbreakerVR
             updatedFrame = Time.frameCount;
             System.Array.Copy(now, before, Count);
             System.Array.Clear(now, 0, Count);
+            foreach (var each in new[] { LeftHand, RightHand })
+            {
+                System.Array.Copy(each.Now, each.Before, Count);
+                System.Array.Clear(each.Now, 0, Count);
+            }
             // A left controller that is gone (switched off) holds nothing.
             if (ToolNode == XRNode.LeftHand && !Get(LeftHand)) ToolNode = XRNode.RightHand;
+            VrDualTools.Check();
             var active = VrAim.Active;
             Read(LeftHand, active);
             Read(RightHand, active);
             if (!active)
             {
-                aDown = bDown = false;
+                LeftHand.ADown = LeftHand.BDown = RightHand.ADown = RightHand.BDown = false;
                 VrToolBelt.Reset();
                 return;
             }
@@ -129,45 +141,59 @@ namespace ShipbreakerVR
             // are being fitted the other hand's grip moves the tool instead (VrToolFit).
             if (RightHand.GripPressed && !RightHand.Trigger && RightHand.Zone != VrToolBelt.Zone.None && !VrToolFit.Blocks(RightHand.Node)) Draw(RightHand);
             if (LeftHand.GripPressed && !LeftHand.Trigger && LeftHand.Zone != VrToolBelt.Zone.None && !VrToolFit.Blocks(LeftHand.Node)) Draw(LeftHand);
+            // The second hand letting go puts its tool away; the first one hands the game the second tool, if there is one.
+            var second = VrDualTools.Second != EquipmentController.Equipment.None ? (VrDualTools.SecondNode == XRNode.LeftHand ? LeftHand : RightHand) : null;
+            if (second != null && !second.GripDown) VrDualTools.PutAway();
             var tool = ToolNode == XRNode.LeftHand ? LeftHand : RightHand;
             if (tool.GripPressed) holsterPulses = 0;
             else if (!tool.GripDown) Holster();
 
-            var trigger = tool.Trigger;
+            second = VrDualTools.Second != EquipmentController.Equipment.None ? (VrDualTools.SecondNode == XRNode.LeftHand ? LeftHand : RightHand) : null;
+            tool = ToolNode == XRNode.LeftHand ? LeftHand : RightHand;
+            foreach (var each in new[] { LeftHand, RightHand })
+            {
+                if (each == tool || each == second) Buttons(each);
+                else each.ADown = each.BDown = false;
+            }
+            LogChanges();
+        }
+
+        // The tool actions of one hand's buttons, for the tool it holds.
+        private static void Buttons(Hand hand)
+        {
+            var trigger = hand.Trigger;
+            var now = hand.Now;
             now[(int)Action.Fire] = trigger;
 
-            var a = Button(tool.Device, CommonUsages.primaryButton);
-            if (a && !aDown) aThrows = trigger;
-            aDown = a;
-            now[(int)(aThrows ? Action.Throw : Action.Interact)] = a;
+            var a = Button(hand.Device, CommonUsages.primaryButton);
+            if (a && !hand.ADown) hand.AThrows = trigger;
+            hand.ADown = a;
+            now[(int)(hand.AThrows ? Action.Throw : Action.Interact)] = a;
 
-            var b = Button(tool.Device, CommonUsages.secondaryButton);
-            if (b && !bDown)
+            var b = Button(hand.Device, CommonUsages.secondaryButton);
+            if (b && !hand.BDown)
             {
-                bDownAt = Time.unscaledTime;
-                bLong = bTether = false;
-                bReels = trigger;
+                hand.BDownAt = Time.unscaledTime;
+                hand.BLong = hand.BTether = false;
+                hand.BReels = trigger;
             }
-            now[(int)Action.Retract] = b && bReels;
-            if (bReels)
+            now[(int)Action.Retract] = b && hand.BReels;
+            if (hand.BReels)
             {
-                bDown = b;
-                LogChanges();
+                hand.BDown = b;
                 return;
             }
-            if (b && !bLong && Time.unscaledTime - bDownAt >= LongPress)
+            if (b && !hand.BLong && Time.unscaledTime - hand.BDownAt >= LongPress)
             {
-                bLong = true;
-                bTether = VrAim.PointsAtSomething();
+                hand.BLong = true;
+                hand.BTether = VrAim.PointsAtSomething(VrDualTools.Second != EquipmentController.Equipment.None && hand.Node == VrDualTools.SecondNode);
                 // Recalling is a single press.
-                now[(int)Action.Recall] = !bTether;
+                now[(int)Action.Recall] = !hand.BTether;
             }
-            now[(int)Action.Tether] = b && bTether;
+            now[(int)Action.Tether] = b && hand.BTether;
             // A tap switches the mode when it ends, so a long press never does.
-            now[(int)Action.ToolMode] = !b && bDown && !bLong;
-            bDown = b;
-
-            LogChanges();
+            now[(int)Action.ToolMode] = !b && hand.BDown && !hand.BLong;
+            hand.BDown = b;
         }
 
         // The hand's trigger and grip this frame, and the belt zone it is in. The grip is followed also while the tools do
@@ -193,7 +219,8 @@ namespace ShipbreakerVR
 
         // Grip pressed at a zone of the tool belt: that tool goes into this hand. Through the game's own selection keys
         // (EquipmentController.Update), which check whether the tool may change; a tool that is already out (in the other
-        // hand) only changes hands.
+        // hand) only changes hands. With the cutter or the grapple in the other hand, the other one of the two joins it
+        // in this hand (VrDualTools).
         private static void Draw(Hand hand)
         {
             if (!FindEquipment()) return;
@@ -203,7 +230,22 @@ namespace ShipbreakerVR
                 : zone == VrToolBelt.Zone.DemoCharge ? EquipmentController.Equipment.DemoCharge
                 : EquipmentController.Equipment.Scanner;
             if (!equipment.CanEquip(tool) || equipment.IsEquipmentBlocked(tool)) return;
-            var taken = !equipment.IsNothingEquipped && equipment.CurrentEquipment == tool;
+            if (VrDualTools.Second == tool)
+            {
+                VrDualTools.TakeOver(hand.Node);
+                return;
+            }
+            var current = equipment.IsNothingEquipped ? EquipmentController.Equipment.None : equipment.CurrentEquipment;
+            var other = hand == LeftHand ? RightHand : LeftHand;
+            if (VrDualTools.Second == EquipmentController.Equipment.None && other.Node == ToolNode && other.GripDown
+                && VrDualTools.CanPair(current, tool))
+            {
+                VrDualTools.Draw(equipment, current, other.Node, tool);
+                ToolNode = hand.Node;
+                holsterPulses = 0;
+                return;
+            }
+            var taken = current == tool;
             if (!taken)
                 now[(int)(zone == VrToolBelt.Zone.Grapple ? Action.Grapple
                     : zone == VrToolBelt.Zone.Cutter ? Action.Cutter
@@ -230,6 +272,15 @@ namespace ShipbreakerVR
             if (current != lastEquipment) holsterPulses = 0;
             lastEquipment = current;
             if (holsterPulses >= MaxHolsterPulses || before[(int)Action.Holster] || !equipment.CanUnequipCurrentEquipment()) return;
+            // The other hand still holds the second tool: it becomes the game's tool, and that hand the tool hand.
+            if (VrDualTools.Second != EquipmentController.Equipment.None)
+            {
+                var node = VrDualTools.SecondNode;
+                VrDualTools.Promote();
+                ToolNode = node;
+                holsterPulses = 0;
+                return;
+            }
             holsterPulses++;
             if (current == EquipmentController.Equipment.Scanner)
             {
@@ -261,32 +312,55 @@ namespace ShipbreakerVR
         private static void LogChanges()
         {
             if (logs >= 60) return;
+            Log(now, before, "");
+            Log(LeftHand.Now, LeftHand.Before, " (left)");
+            Log(RightHand.Now, RightHand.Before, " (right)");
+        }
+
+        private static void Log(bool[] current, bool[] previous, string hand)
+        {
             for (var i = 0; i < Count; i++)
             {
-                if (now[i] == before[i]) continue;
+                if (current[i] == previous[i]) continue;
                 logs++;
-                Plugin.Log.LogInfo($"Tool control: {(Action)i} {(now[i] ? "pressed" : "released")}");
+                Plugin.Log.LogInfo($"Tool control: {(Action)i} {(current[i] ? "pressed" : "released")}{hand}");
             }
         }
 
-        private static bool Virtual(LynxControls.ActionSetAndId actionSetAndId, out Action action)
+        // The presses for that action as the code of a tool family sees them (VrDualTools.Family): drawing and putting
+        // away from both hands, the tool actions from the second hand for the second tool's family, from the tool hand
+        // otherwise.
+        private static bool Virtual(LynxControls.ActionSetAndId actionSetAndId, int family, out bool[] current, out bool[] previous, out int index)
         {
-            if (!Actions.TryGetValue(actionSetAndId, out action)) return false;
+            current = previous = null;
+            index = 0;
+            if (!Actions.TryGetValue(actionSetAndId, out var action)) return false;
             Update();
+            index = (int)action;
+            if (action >= Action.Grapple)
+            {
+                current = now;
+                previous = before;
+                return true;
+            }
+            var node = VrDualTools.Routes(family) ? VrDualTools.SecondNode : ToolNode;
+            var hand = node == XRNode.LeftHand ? LeftHand : RightHand;
+            current = hand.Now;
+            previous = hand.Before;
             return true;
         }
 
-        public static bool GetInputWasPressed(LynxControls controls, LynxControls.ActionSetAndId actionSetAndId) =>
-            controls.GetInputWasPressed(actionSetAndId) || (Virtual(actionSetAndId, out var a) && now[(int)a] && !before[(int)a]);
+        public static bool GetInputWasPressed(LynxControls controls, LynxControls.ActionSetAndId actionSetAndId, int family) =>
+            controls.GetInputWasPressed(actionSetAndId) || (Virtual(actionSetAndId, family, out var n, out var b, out var i) && n[i] && !b[i]);
 
-        public static bool GetInputIsPressed(LynxControls controls, LynxControls.ActionSetAndId actionSetAndId) =>
-            controls.GetInputIsPressed(actionSetAndId) || (Virtual(actionSetAndId, out var a) && now[(int)a]);
+        public static bool GetInputIsPressed(LynxControls controls, LynxControls.ActionSetAndId actionSetAndId, int family) =>
+            controls.GetInputIsPressed(actionSetAndId) || (Virtual(actionSetAndId, family, out var n, out _, out var i) && n[i]);
 
-        public static bool GetInputIsHolding(LynxControls controls, LynxControls.ActionSetAndId actionSetAndId) =>
-            controls.GetInputIsHolding(actionSetAndId) || (Virtual(actionSetAndId, out var a) && now[(int)a] && before[(int)a]);
+        public static bool GetInputIsHolding(LynxControls controls, LynxControls.ActionSetAndId actionSetAndId, int family) =>
+            controls.GetInputIsHolding(actionSetAndId) || (Virtual(actionSetAndId, family, out var n, out var b, out var i) && n[i] && b[i]);
 
-        public static bool GetInputWasReleased(LynxControls controls, LynxControls.ActionSetAndId actionSetAndId) =>
-            controls.GetInputWasReleased(actionSetAndId) || (Virtual(actionSetAndId, out var a) && !now[(int)a] && before[(int)a]);
+        public static bool GetInputWasReleased(LynxControls controls, LynxControls.ActionSetAndId actionSetAndId, int family) =>
+            controls.GetInputWasReleased(actionSetAndId) || (Virtual(actionSetAndId, family, out var n, out var b, out var i) && !n[i] && b[i]);
     }
 
     // Redirects the input polls in the tool classes to VrToolInput (see there).
@@ -348,6 +422,8 @@ namespace ShipbreakerVR
             {
                 if (instruction.operand is MethodInfo called && Replacements.TryGetValue(called, out var replacement))
                 {
+                    // The replacements take the family of the code polling (VrDualTools) as a third argument.
+                    foreach (var load in VrDualTools.LoadFamily(instruction, original)) yield return load;
                     instruction.operand = replacement;
                     replaced++;
                 }

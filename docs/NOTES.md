@@ -197,7 +197,7 @@ interacting, the grapple and the "entity of interest".
   `EquipmentController.SetEquipment(None)` instead (allowed for the scanner only). Since the grip is now taken, reeling in
   moved from grip + trigger to B + trigger (latched at B's press, like A's throw).
 - Both hands (Marc's wish, one of the zones is at the left hip): either hand draws from the belt, with the same zones;
-  one tool at a time. `VrToolInput.ToolNode` is the hand that holds it: set by a grip press in a zone, back to the right
+  one tool at a time (except cutter and grapple, below). `VrToolInput.ToolNode` is the hand that holds it: set by a grip press in a zone, back to the right
   once nothing is equipped and that hand's grip is open (or the left controller is gone). A grip press at the zone of
   the tool that is already out only moves it to that hand (no select key). This replaced "the same zone again puts the
   tool away", which grip-hold had made pointless. Only the tool hand's grip holsters. While the left hand holds a tool
@@ -207,6 +207,30 @@ interacting, the grapple and the "entity of interest".
   draw then, and flying passes the left hip): the buzz comes when the trigger is let go inside the zone. The grips are
   read also while hand aiming is inactive, so a grip held through a tracking loss no longer counts as a new press
   afterwards. Log: `Tool control: <left|right> hand draws|takes the <tool>`, `Tool belt: <left|right> hand at <zone>`.
+- Two tools at once (`VrDualTools`, config `Steuerung/ZweiWerkzeuge`, Marc's wish: the cutter in one hand, the grapple
+  in the other, each tool only once). The game knows one equipped tool (`EquipmentController.CurrentEquipment`), and
+  `SetEquipment` puts the old one away (`UnequipEquipment`) before equipping the next. The tool controllers are
+  separate, though, with their own fire actions (`CutterFire`, `GrappleFire`), and gate their work on
+  `CurrentEquipment == <their tool>` (`GunController.Update`, `GrapplingHook`, `TetherController`,
+  `CuttingToolController.Update`, `CuttingController`/`ScalpelController.IsCurrentEquipment`, `ScalpelFXController`,
+  `CutterHeatBarUIController`). So: an empty hand that draws the cutter or the grapple while the other hand holds the
+  other one calls `SetEquipment` directly (no select key, which would also check `CanUnequip` of the kept tool), and a
+  prefix on `UnequipEquipment` skips the kept tool. The kept tool is `VrDualTools.Second` in `SecondNode`; the drawing
+  hand becomes the tool hand with the game's tool. `GatePatch` redirects the `CurrentEquipment` reads in those classes
+  (and `TetherController.IsEquipped`, small enough to inline) so that the second tool's family sees its tool as
+  equipped. Each game class belongs to a family (cutter, grapple, other; `VrDualTools.FamilyOf`, nested types by their
+  outer class, `RaycastSystem.OnUpdate` by the instance's class), and the input polls (`ToolInputPatch`) and camera
+  reads (`AimPatch`) pass that family on: the second tool's family reads the second hand's buttons and aims through a
+  second aim camera on its muzzle, everything else the tool hand's. The tool actions are per hand now
+  (`VrToolInput.Hand.Now`), drawing and putting away stay global. The second model is moved off the game's equipment
+  point onto a point of its own (a sibling of it under `Right Hand Targets`), placed at the second controller with that
+  tool's fit for that hand (`VrToolFit`), and gets its own laser. Letting go: the second hand puts its tool away
+  through its controller (`UnequipCutter`/`UnequipGun`, after `CanBeUnequipped`); the tool hand hands the game the
+  second tool (`SetEquipment(second)`, which unequips the first and re-equips the second onto the right hand's point),
+  and that hand becomes the tool hand. The scanner and the demo charges do not pair; they replace the tool as before.
+  The second tool is put away when the option or hand aiming goes off, outside gameplay (not on pause) and on unload.
+  Logs: `Two tools: <hand> hand keeps the <tool>, the other hand draws the <tool>`, `... is put away`, `... becomes the
+  game's tool`, `Two tools: <Class>.<Method>: N equipment check(s) redirected`; F8 shows `second tool: ...`.
 - The game has two hands (`GrabController.LeftHand`/`RightHand`, both `HandGrab`): each with its own hand target
   (`m_HandTarget`), grab/rest/miss targets, equipment point and equipment grip targets, animator parameters of its own
   (`LGrab`/`RGrab`, `LPrepGrab`, `LReact`, ...) and its own grab action (`LeftHandGrab`/`RightHandGrab`); the flat game
