@@ -27,11 +27,15 @@ namespace ShipbreakerVR
         // Size of the dot on what the hand points at, as a fraction of its distance from the eye (about 0.7 degrees).
         private const float DotSize = 0.012f;
 
+        // How far in front of the hand a thrown demo charge starts, clear of the player's collider.
+        private const float ThrowAhead = 0.2f;
+
         private static readonly InputFeatureUsage<Vector3> PointerPosition = new InputFeatureUsage<Vector3>("PointerPosition");
         private static readonly InputFeatureUsage<Quaternion> PointerRotation = new InputFeatureUsage<Quaternion>("PointerRotation");
 
         private static InputDevice right;
         private static Camera aim;
+        private static Transform throwOrigin;
         private static int updatedFrame = -1;
         private static bool active;
         private static bool loggedPose;
@@ -65,6 +69,35 @@ namespace ShipbreakerVR
 
         // Where the cutter's line starts in CuttingFXController.StartCutLine (the tool's own transform in the flat game).
         public static Transform CutOrigin(Component tool) => Active ? aim.transform : tool.transform;
+
+        // The cutter's rail (CuttingFXController.UpdateToolRotation) turns to the cut's direction in the space of the tool
+        // model in front of the head. The cut itself rolls with the hand, so the rail gets the hand's cut direction as
+        // seen from the head.
+        public static Vector2 RailRotation(Vector2 cutRotation)
+        {
+            var head = LynxCameraController.MainCameraTransform;
+            if (!Active || head == null) return cutRotation;
+            var direction = head.InverseTransformDirection(aim.transform.TransformDirection(cutRotation));
+            var flat = new Vector2(direction.x, direction.y);
+            return flat.sqrMagnitude > 0.01f ? flat.normalized : cutRotation;
+        }
+
+        // A thrown demo charge leaves from just in front of the hand (DemoChargeController.ThrowDemoCharge, ThrowOffset in
+        // front of the head in the flat game) and flies where the hand points (DemoChargeAsset.SetComponentData, the
+        // player's forward in the flat game). Placed charges are jointed to the ship, which drops that velocity.
+        public static Transform ThrowOrigin(Transform offset)
+        {
+            if (!Active) return offset;
+            if (throwOrigin == null)
+            {
+                throwOrigin = new GameObject("ShipbreakerVR Throw origin").transform;
+                throwOrigin.SetParent(aim.transform, false);
+                throwOrigin.localPosition = new Vector3(0f, 0f, ThrowAhead);
+            }
+            return throwOrigin;
+        }
+
+        public static Vector3 ThrowDirection(Transform player) => Active ? aim.transform.forward : player.forward;
 
         private static void Update()
         {
@@ -242,6 +275,7 @@ namespace ShipbreakerVR
             foreach (var o in new Object[] { beamMesh, dotMesh, beamMaterial, dotMaterial })
                 if (o != null) Object.Destroy(o);
             aim = null;
+            throwOrigin = null;
             beamMesh = dotMesh = null;
             beamMaterial = dotMaterial = null;
         }
@@ -278,7 +312,16 @@ namespace ShipbreakerVR
         {
             "BBI.Unity.Game.CuttingController", "BBI.Unity.Game.CuttingFXController", "TetherController", "GrapplingHook",
             "BBI.Unity.Game.MagnetController", "BBI.Unity.Game.Scanner", "BBI.Unity.Game.ThrowController",
-            "BBI.Unity.Game.DemoChargeController", "BBI.Unity.Game.RaycastSystem",
+            "BBI.Unity.Game.DemoChargeController", "BBI.Unity.Game.RaycastSystem", "BBI.Unity.Game.ScalpelController",
+            "BBI.Unity.Game.ScalpelFXController", "BBI.Unity.Game.ScalpelTarget",
+        };
+
+        // Methods that aim without the main camera: the cutter's rail, and where thrown demo charges start and fly.
+        private static readonly (string Type, string Method)[] Extra =
+        {
+            ("BBI.Unity.Game.CuttingFXController", "UpdateToolRotation"),
+            ("BBI.Unity.Game.DemoChargeController", "ThrowDemoCharge"),
+            ("BBI.Unity.Game.DemoChargeAsset", "SetComponentData"),
         };
 
         private static readonly MethodInfo MainCamera = AccessTools.PropertyGetter(typeof(LynxCameraController), nameof(LynxCameraController.MainCamera));
@@ -287,8 +330,25 @@ namespace ShipbreakerVR
         private static readonly MethodInfo AimCameraTransform = AccessTools.PropertyGetter(typeof(VrAim), nameof(VrAim.CameraTransform));
         private static readonly MethodInfo GetTransform = AccessTools.PropertyGetter(typeof(Component), nameof(Component.transform));
         private static readonly MethodInfo CutOrigin = AccessTools.Method(typeof(VrAim), nameof(VrAim.CutOrigin));
+        private static readonly MethodInfo GetCutRotation = AccessTools.PropertyGetter(typeof(CuttingController), nameof(CuttingController.CutRotation));
+        private static readonly MethodInfo RailRotation = AccessTools.Method(typeof(VrAim), nameof(VrAim.RailRotation));
+        private static readonly MethodInfo ThrowOrigin = AccessTools.Method(typeof(VrAim), nameof(VrAim.ThrowOrigin));
+        private static readonly MethodInfo ThrowDirection = AccessTools.Method(typeof(VrAim), nameof(VrAim.ThrowDirection));
+        private static readonly MethodInfo GetForward = AccessTools.PropertyGetter(typeof(Transform), nameof(Transform.forward));
 
         private static IEnumerable<MethodBase> TargetMethods()
+        {
+            var methods = new HashSet<MethodBase>(MainCameraUsers());
+            foreach (var (type, name) in Extra)
+            {
+                var method = AccessTools.Method(AccessTools.TypeByName(type), name);
+                if (method == null) Plugin.Log.LogWarning($"Aim: {type}.{name} not found");
+                else methods.Add(method);
+            }
+            return methods;
+        }
+
+        private static IEnumerable<MethodBase> MainCameraUsers()
         {
             foreach (var name in Types)
             {
@@ -325,12 +385,23 @@ namespace ShipbreakerVR
             // In StartCutLine the line's ends lie along the aim rays, measured from the tool's own position (this.transform);
             // they have to start at the hand instead.
             var cutLine = original.Name == "StartCutLine";
+            var rail = original.Name == "UpdateToolRotation";
+            var thrown = original.Name == "ThrowDemoCharge";
+            var throwSpeed = original.Name == "SetComponentData";
             for (var i = 0; i < list.Count; i++)
             {
                 var instruction = list[i];
                 if (instruction.Calls(MainCamera)) instruction.operand = AimCamera;
                 else if (instruction.Calls(MainCameraTransform)) instruction.operand = AimCameraTransform;
                 else if (cutLine && instruction.Calls(GetTransform) && i > 0 && list[i - 1].opcode == OpCodes.Ldarg_0) instruction.operand = CutOrigin;
+                else if (throwSpeed && instruction.Calls(GetForward)) instruction.operand = ThrowDirection;
+                else if ((rail && instruction.Calls(GetCutRotation)) || (thrown && instruction.operand is MethodInfo m && m.Name == "get_ThrowOffset"))
+                {
+                    // Pass the value through the hand's version of it.
+                    list.Insert(++i, new CodeInstruction(OpCodes.Call, rail ? RailRotation : ThrowOrigin));
+                    replaced++;
+                    continue;
+                }
                 else continue;
                 instruction.opcode = OpCodes.Call;
                 replaced++;

@@ -428,3 +428,11 @@ imprecise and wears out; and the tools should stay on one hand, or the controls 
 gesture was on the table for a minute too, until Marc pointed out that an accidental throw would look exactly like a
 bug. What is left is small: the trigger fires, A uses things or, with the trigger held, throws, the grip reels in while
 the trigger holds, and B switches the mode or, held down, strings a tether from where you point to where you let go.
+
+Marc's first round with all tools found three holes. The Stinger, the cutter's plain laser, ignored the trigger
+completely while the mouse worked. It turned out to be a controller of its own that I had simply not put on my lists, so
+it neither heard the trigger nor aimed with the hand. The cutter's angle did not seem to follow the wrist either. The cut
+itself does roll, but the rail on the tool model in front of the helmet kept showing the flat game's angle, so it now
+turns to what the hand is doing. And the demo charges flew only roughly where Marc looked. That one had a twist:
+the game throws them from in front of the head and along the body's forward, not even the head's.
+Now they leave from just in front of the hand and fly where it points.

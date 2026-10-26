@@ -34,8 +34,9 @@ interacting, the grapple and the "entity of interest".
 - A disabled camera (`ShipbreakerVR Aim`, never renders, `stereoTargetEye` None) sits on the right controller's aim
   pose (`PointerPosition`/`PointerRotation`, grip pose as fallback) in the rig's space, with the main camera's field of
   view, rect, aspect and clip planes, so screen points map to the same angles as from the eye.
-- `AimPatch` is a transpiler over every method of `CuttingController`, `CuttingFXController`, `TetherController`,
-  `GrapplingHook`, `MagnetController`, `Scanner`, `ThrowController`, `DemoChargeController` and `RaycastSystem` (and
+- `AimPatch` is a transpiler over every method of `CuttingController`, `CuttingFXController`, `ScalpelController`,
+  `ScalpelFXController`, `ScalpelTarget`, `TetherController`, `GrapplingHook`, `MagnetController`, `Scanner`,
+  `ThrowController`, `DemoChargeController` and `RaycastSystem` (and
   nested types) that calls `get_MainCamera` or `get_MainCameraTransform`; the calls go to `VrAim.Camera` /
   `VrAim.CameraTransform`, which return the aim camera only in gameplay with VR, the option on and the controller
   tracked. `PushOff` keeps the head: it moves the body.
@@ -43,7 +44,18 @@ interacting, the grapple and the "entity of interest".
   LastMinCutLength`, and `LastMinCutLength` is now measured from the hand; `this.transform` there is redirected to the
   aim camera too. The beam itself still starts at `m_CutOriginTransform` on the tool model in front of the head. The
   beam's line colliders (`m_CuttingBeamColliderA/B`) may take part in the cut, so the ends matter.
-- The cut pattern is defined in screen space around `ScreenCenter`, so rolling the hand rolls the cut line.
+- The cut pattern is defined in screen space around `ScreenCenter`, so rolling the hand rolls the cut line. The rail
+  on the tool model in front of the head (`CuttingFXController.UpdateToolRotation`, `LookRotation(forward,
+  CutRotation)` in the model's local space) would not show that, so `CutRotation` there goes through
+  `VrAim.RailRotation`: the hand's cut direction as seen from the head.
+- The Stinger (`CutterMode.Scalpel`) is a separate controller: `ScalpelController` (polls `CutterFire`, raycasts along
+  `MainCameraTransform`), `ScalpelFXController` and `ScalpelTarget`. They are in both patch lists; without them the
+  Stinger ignored the trigger while the Splitsaw worked.
+- Thrown demo charges: `DemoChargeController.ThrowDemoCharge` spawns the charge at `ThrowOffset` (a transform in front
+  of the head), and `DemoChargeAsset.SetComponentData` gives it `InitDemoChargeVelocity.Direction` = the local player's
+  `Transform.forward`, the body, not the head, which is why they flew only roughly where one looked. With hand aiming
+  `ThrowOffset` becomes a point 0.2 m in front of the hand and the direction the hand's forward. Placed charges are
+  jointed and drop the velocity component, so the direction does not matter for them.
 - Pointer: a beam (4 mm, fading) from the hand to the first hit of a plain raycast (default layers minus layers whose
   name contains "Player", "UI" and our pass layer), with a dot of about 0.7 degrees on the hit, 5 m long without a hit.
   Drawn with `UI/Default` in our after-post-process pass (`VrUiPass`) per eye, without depth, under the UI.
