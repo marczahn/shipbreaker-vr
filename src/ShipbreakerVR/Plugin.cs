@@ -150,6 +150,7 @@ namespace ShipbreakerVR
             Unload("tool models", VrToolModels.Release);
             Unload("hands", VrHands.Release);
             Unload("climbing", VrClimb.Release);
+            Unload("interaction trace", VrInteractionTrace.Detach);
             Unload("crosshair", VrCrosshair.Release);
             Unload("aim camera", VrAim.Release);
             Unload("patches", () => harmony?.UnpatchSelf());
