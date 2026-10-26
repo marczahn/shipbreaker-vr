@@ -14,7 +14,7 @@ namespace ShipbreakerVR
         private static readonly Dictionary<string, int> Expected = new Dictionary<string, int>
         {
             ["Aim"] = 23,
-            ["Tool control"] = 29,
+            ["Tool control"] = 34,
             ["Two tools"] = 11,
             ["Body rotation"] = 1,
             ["Braking"] = 1,
