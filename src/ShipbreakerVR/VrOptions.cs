@@ -160,7 +160,7 @@ namespace ShipbreakerVR
             var boolTemplate = PickTemplate<OptionEntryBool>(all);
             var sliderTemplate = PickTemplate<OptionEntrySlider>(all);
             var listTemplate = PickTemplate<OptionEntryList>(all);
-            Plugin.Log.LogInfo($"Options '{Path(parent)}': templates from '{templateRoot.name}': toggle {Describe(boolTemplate)}, slider {Describe(sliderTemplate)}, list {Describe(listTemplate)}");
+            Plugin.Log.LogInfo($"Options '{VrUtil.Path(parent)}': templates from '{templateRoot.name}': toggle {Describe(boolTemplate)}, slider {Describe(sliderTemplate)}, list {Describe(listTemplate)}");
 
             var addedHeight = 0f;
             var added = 0;
@@ -349,7 +349,6 @@ namespace ShipbreakerVR
 
         private static string Describe(OptionEntry e) => e == null ? "none" : $"'{e.name}'";
 
-        private static string Path(Transform t) => t.parent == null ? t.name : Path(t.parent) + "/" + t.name;
     }
 
     [HarmonyPatch]

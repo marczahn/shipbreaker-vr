@@ -125,7 +125,7 @@ namespace ShipbreakerVR
             // The video view has not been shown yet when it is copied, so its state still reads the default "visible".
             // UIView.Show returns early for a visible view and never switches its canvas on: the tab could be selected,
             // but its page stayed empty. Start the copy hidden, and keep its first Start from hiding it again.
-            Plugin.Log.LogInfo($"Options: video view '{Path(source.transform)}' {source.Visibility}, at start {source.BehaviorAtStart}, hide disables object {source.DisableGameObjectWhenHidden}");
+            Plugin.Log.LogInfo($"Options: video view '{VrUtil.Path(source.transform)}' {source.Visibility}, at start {source.BehaviorAtStart}, hide disables object {source.DisableGameObjectWhenHidden}");
             view.Visibility = VisibilityState.NotVisible;
             view.BehaviorAtStart = UIViewStartBehavior.DoNothing;
             // Views are also found by category and name; the copy must not answer to the video tab's name. A view shows
@@ -203,7 +203,6 @@ namespace ShipbreakerVR
             return text;
         }
 
-        private static string Path(Transform t) => t.parent == null ? t.name : Path(t.parent) + "/" + t.name;
 
         // The list content has a fixed height for the video rows in the game's prefab; make it fit ours.
         private static void FitContent(RectTransform content)

@@ -196,12 +196,7 @@ namespace ShipbreakerVR
                 }
                 texture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGBHalf) { name = "ShipbreakerVR UI" };
                 texture.Create();
-                if (material == null)
-                {
-                    material = new Material(Shader.Find("UI/Default"));
-                    // Always draw on top of the world, like a display in the helmet.
-                    material.SetInt("unity_GUIZTestMode", (int)CompareFunction.Always);
-                }
+                if (material == null) material = VrUtil.OverlayMaterial();
                 material.mainTexture = texture;
                 Plugin.Log.LogInfo($"UI texture {width}x{height} created");
             }
@@ -370,7 +365,7 @@ namespace ShipbreakerVR
             // as in the flat game, where subtitles and prompts stay on top of them.
             if (gameFade > 0f)
             {
-                if (gameFadeMaterial == null) gameFadeMaterial = OverlayMaterial();
+                if (gameFadeMaterial == null) gameFadeMaterial = VrUtil.OverlayMaterial();
                 gameFadeMaterial.color = new Color(0f, 0f, 0f, gameFade);
                 cmd.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
                 cmd.DrawMesh(quad, Matrix4x4.Scale(new Vector3(2f, 2f, 1f)), gameFadeMaterial, 0, 0);
@@ -402,7 +397,7 @@ namespace ShipbreakerVR
         {
             var fade = VrHab.Fade;
             if (fade <= 0f || !VrXr.IsRunning || vr == null || context.hdCamera.camera != vr.Camera) return;
-            if (fadeMaterial == null) fadeMaterial = OverlayMaterial();
+            if (fadeMaterial == null) fadeMaterial = VrUtil.OverlayMaterial();
             if (quad == null) quad = CreateQuad(quadFlipped = VrSettings.FlipUi.Value);
             fadeMaterial.color = new Color(0f, 0f, 0f, fade);
 
@@ -415,15 +410,6 @@ namespace ShipbreakerVR
             context.renderContext.ExecuteCommandBuffer(cmd);
             cmd.Clear();
             context.renderContext.SetupCameraProperties(context.hdCamera.camera, true);
-        }
-
-        // UI/Default drawn over everything. For the fades its color sets how dark, drawn on a quad with identity
-        // matrices, whose corners at +-1 are the corners of the view.
-        private static Material OverlayMaterial()
-        {
-            var overlay = new Material(Shader.Find("UI/Default"));
-            overlay.SetInt("unity_GUIZTestMode", (int)CompareFunction.Always);
-            return overlay;
         }
 
         // Like the game's HUDCustomPass, but into our texture and with a fixed aspect ratio.
@@ -539,7 +525,7 @@ namespace ShipbreakerVR
 
         private static Material LookMaterial(Material material, Texture2D texture, Color color)
         {
-            if (material == null) material = OverlayMaterial();
+            if (material == null) material = VrUtil.OverlayMaterial();
             else if (material.mainTexture != null) Destroy(material.mainTexture);
             material.mainTexture = texture;
             material.color = color;

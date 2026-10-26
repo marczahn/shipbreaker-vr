@@ -70,7 +70,7 @@ namespace ShipbreakerVR
                 // Remember the helmet pose relative to the game camera while the game still positions it itself.
                 relativePosition = cam.InverseTransformPoint(container.position);
                 relativeRotation = Quaternion.Inverse(cam.rotation) * container.rotation;
-                Plugin.Log.LogInfo($"Helmet found: '{Path(container)}', relative to camera {relativePosition} / {relativeRotation.eulerAngles}");
+                Plugin.Log.LogInfo($"Helmet found: '{VrUtil.Path(container)}', relative to camera {relativePosition} / {relativeRotation.eulerAngles}");
             }
 
             var mode = CurrentMode;
@@ -116,6 +116,5 @@ namespace ShipbreakerVR
             if (mesh != null) mesh.SetActive(!hide);
         }
 
-        private static string Path(Transform t) => t.parent == null ? t.name : Path(t.parent) + "/" + t.name;
     }
 }

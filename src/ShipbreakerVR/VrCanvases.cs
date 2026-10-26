@@ -134,23 +134,10 @@ namespace ShipbreakerVR
                     if (!graphic.enabled) continue;
                     var c = graphic.color;
                     var darkness = 1f - Mathf.Max(c.r, Mathf.Max(c.g, c.b));
-                    alpha = Mathf.Max(alpha, c.a * darkness * graphic.canvasRenderer.GetAlpha() * GroupAlpha(graphic.transform));
+                    alpha = Mathf.Max(alpha, c.a * darkness * graphic.canvasRenderer.GetAlpha() * VrUtil.GroupAlpha(graphic.transform));
                 }
             }
             return Mathf.Clamp01(alpha);
-        }
-
-        private static float GroupAlpha(Transform t)
-        {
-            var alpha = 1f;
-            for (; t != null; t = t.parent)
-            {
-                var group = t.GetComponent<CanvasGroup>();
-                if (group == null || !group.enabled) continue;
-                alpha *= group.alpha;
-                if (group.ignoreParentGroups) break;
-            }
-            return alpha;
         }
 
         private static bool IsFade(Canvas canvas) => FadeNames.Contains(canvas.name);

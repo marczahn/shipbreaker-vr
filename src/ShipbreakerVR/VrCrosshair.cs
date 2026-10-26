@@ -146,7 +146,7 @@ namespace ShipbreakerVR
                 found.Add(graphic);
             }
             Plugin.Log.LogInfo($"Crosshair: search {scans} for graphics in the middle of the view: " +
-                (found.Count == 0 ? "none" : string.Join(", ", found.Select(g => $"'{Path(g.transform)}' ({g.GetType().Name})"))));
+                (found.Count == 0 ? "none" : string.Join(", ", found.Select(g => $"'{VrUtil.Chain(g.transform, 6)}' ({g.GetType().Name})"))));
             if (found.Count > 0) nextCollect = 0f;
         }
 
@@ -166,13 +166,6 @@ namespace ShipbreakerVR
             var height = rect.height;
             return Mathf.Abs(center.x) <= MiddleOffset * height && Mathf.Abs(center.y) <= MiddleOffset * height
                 && Mathf.Abs(size.x) <= MiddleSize * height && Mathf.Abs(size.y) <= MiddleSize * height;
-        }
-
-        private static string Path(Transform transform)
-        {
-            var names = new List<string>();
-            for (var t = transform; t != null && names.Count < 6; t = t.parent) names.Add(t.name);
-            return string.Join(" < ", names);
         }
 
         // The crosshair back as the game has it.

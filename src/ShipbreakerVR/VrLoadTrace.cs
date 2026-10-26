@@ -61,7 +61,7 @@ namespace ShipbreakerVR
             var vr = VrCamera.Instance;
             var name = vr != null && camera == vr.Camera
                 ? "VR"
-                : $"'{VrDiagnostics.Path(camera.transform)}' depth {camera.depth}{(camera.targetTexture != null ? $" into {camera.targetTexture.width}x{camera.targetTexture.height}" : "")}";
+                : $"'{VrUtil.Path(camera.transform)}' depth {camera.depth}{(camera.targetTexture != null ? $" into {camera.targetTexture.width}x{camera.targetTexture.height}" : "")}";
             if (!cameras.Contains(name)) cameras.Add(name);
         }
 
@@ -95,7 +95,7 @@ namespace ShipbreakerVR
             text.Append($", eye {UnityEngine.XR.XRSettings.eyeTextureWidth}x{UnityEngine.XR.XRSettings.eyeTextureHeight}");
             text.Append($", load screen {(SceneLoader.Instance != null && SceneLoader.Instance.LoadScreenVisible ? "on" : "off")}");
             text.Append($", world {(vr.WorldHidden ? "hidden" : "shown")}");
-            text.Append($", follows {(vr.GameCamera != null ? $"'{VrDiagnostics.Path(vr.GameCamera.transform)}'" : "-")}");
+            text.Append($", follows {(vr.GameCamera != null ? $"'{VrUtil.Path(vr.GameCamera.transform)}'" : "-")}");
             var line = text.ToString();
             if (line == last) return;
             last = line;
