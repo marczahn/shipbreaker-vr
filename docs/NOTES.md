@@ -503,13 +503,15 @@ far the body moved since. Letting go of the last hold keeps the body's velocity 
 80 ms, capped at 5 m/s, so a push off flies on; a hand held back more than 0.5 m from its hold lets go without it.
 While the left hand holds on, controller flying rests. Log lines start with "Climbing:".
 
-The grip near one of the game's controls works it instead of holding on. Controls are `InteractableObject`s; the
-airlock console (`SM_AirlockConsole_LockPanel`) has a trigger collider "Interaction Volume" with activation
-`LineOfSight`, progress `Press`, `WaitForRelease` and a `HandTarget` the game's hand reaches for. The flat game starts
-the interaction when the control is in the middle of the view (`InteractionController.HandleLineOfSightActivation`)
-and works it while interact is held. The grip looks for such a control within 15 cm (triggers included), starts the
-interaction on it through `InteractionController.StartInteraction` and presses interact through `VrToolInput` while it
-is held; `LineOfSightActivationPatch` keeps the interaction on that control meanwhile, wherever one looks.
+Controls are `InteractableObject`s; the airlock console (`SM_AirlockConsole_LockPanel`) has a trigger collider
+"Interaction Volume" with activation `LineOfSight`, progress `Press`, `WaitForRelease` and a `HandTarget` the game's
+hand reaches for. The flat game starts the interaction when the control is in the middle of the view
+(`InteractionController.HandleLineOfSightActivation`) and works it while interact is held. For a while (0.18.0) the
+grip near such a control (within 15 cm, triggers included) started the interaction through
+`InteractionController.StartInteraction` and pressed interact while held. Marc wanted the grip to always hold on, so
+that was removed: the grip holds on at controls too (`TryHold` ignores trigger colliders, so it takes the console's
+solid collider), and A or X of either hand interacts (`VrToolInput` adds a free hand's interact to the tool hand's,
+which `InteractionController` reads).
 
 Empty hand: the demo charges keep their last equipment state after being put away (`DemoChargeController` takes
 `mCurrentEquipment` from `EquipmentChangedEvent`) and equip themselves on `DemoChargeFire`

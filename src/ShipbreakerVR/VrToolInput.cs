@@ -19,7 +19,8 @@ namespace ShipbreakerVR
     //                   hand holds takes it over.
     //   trigger         the tool's main action: cut, grapple (hold to keep hold), place or detonate a demo charge
     //   A / X           with the trigger held: throw what the grapple holds (hold to charge, release to throw);
-    //                   otherwise interact (doors, switches, containers)
+    //                   otherwise interact (doors, switches, containers, airlock consoles), from either hand, also
+    //                   one without a tool; the grip never does (it holds on, VrClimb)
     //   B / Y           with the trigger held: reel in what the grapple holds, while the button is held
     //   B / Y tap       tool mode (cutter Stinger/Splitsaw, grapple/magnet, demo charge mode)
     //   B / Y held      place a tether from where the hand points when the hold starts to where it points on release;
@@ -167,10 +168,11 @@ namespace ShipbreakerVR
             {
                 if (each == second || (each == tool && !empty)) Buttons(each);
                 else if (each == tool) Interact(each);
-                else each.ADown = each.BDown = false;
+                else Interact(each);
             }
-            // A grip on one of the game's controls works it like A (VrClimb).
-            if (VrClimb.WorksControl) tool.Now[(int)Action.Interact] = true;
+            // Interacting reaches the game from either hand: the game's interaction code reads the tool hand's actions.
+            foreach (var each in Hands)
+                if (each != tool && each.Now[(int)Action.Interact]) tool.Now[(int)Action.Interact] = true;
             LogChanges();
         }
 
