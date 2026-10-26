@@ -12,6 +12,7 @@ OpenXR at runtime. Tested with Meta Quest via Virtual Desktop (VDXR runtime). Fo
   XR/OpenXR settings and collects the OpenXR DLLs (menu *ShipbreakerVR → Build for the game*).
   The XR settings are derived from [ShipbreakerVR by Raicuparta](licenses/ShipbreakerVr-Raicuparta-MIT.txt) (MIT).
 - `tools/build-release.sh` – builds the release ZIP
+- `tools/control-images.py` – draws the control overviews in `docs/images`; run it after changing a control
 
 ## Building
 ```
