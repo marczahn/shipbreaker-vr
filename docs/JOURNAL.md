@@ -462,3 +462,8 @@ away from reeling in, which moved to B with the trigger held, next to A for thro
 
 The demo charges stayed behind once more. They have no model of their own: the game's hand holds them, animated, so
 there was nothing on the tool point to move. Now the hand itself goes to the controller while it holds a charge.
+
+One fix from the first round had to go again. Back then I had taught the cutter's rail, floating in front of the
+helmet, to turn along with the wrist. Now that the cutter sits in the hand, the rail turns with it anyway, and my old
+correction turned it a second time. Marc pointed out that the extra turn was no longer needed.
+

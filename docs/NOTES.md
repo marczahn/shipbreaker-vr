@@ -45,9 +45,10 @@ interacting, the grapple and the "entity of interest".
   aim camera too. The beam itself still starts at `m_CutOriginTransform` on the tool model in front of the head. The
   beam's line colliders (`m_CuttingBeamColliderA/B`) may take part in the cut, so the ends matter.
 - The cut pattern is defined in screen space around `ScreenCenter`, so rolling the hand rolls the cut line. The rail
-  on the tool model in front of the head (`CuttingFXController.UpdateToolRotation`, `LookRotation(forward,
-  CutRotation)` in the model's local space) would not show that, so `CutRotation` there goes through
-  `VrAim.RailRotation`: the hand's cut direction as seen from the head.
+  (`CuttingFXController.UpdateToolRotation`, `LookRotation(forward, CutRotation)` in the model's local space) rolls
+  along now that the model is in the hand. Before that, with the model in front of the head, `CutRotation` there went
+  through a conversion to the hand's cut direction as seen from the head; with the model in the hand that turned the
+  rail twice and was removed.
 - The Stinger (`CutterMode.Scalpel`) is a separate controller: `ScalpelController` (polls `CutterFire`, raycasts along
   `MainCameraTransform`), `ScalpelFXController` and `ScalpelTarget`. They are in both patch lists; without them the
   Stinger ignored the trigger while the Splitsaw worked.
