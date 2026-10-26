@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Reflection;
+using System.Reflection.Emit;
 using BBI.Unity.Game;
 using HarmonyLib;
 using UnityEngine;
@@ -274,26 +276,19 @@ namespace ShipbreakerVR
         }
     }
 
-    // Adds the controller thrust to the game's thrust axes. Hanging on something heavy from the grapple the game does not
-    // thrust (ThrustController skips it while GrapplingHook.IsSwinging) but swings around the anchor with the swing axes
-    // (WASD in the flat game: W up, S down, A and D sideways); the controller's sideways and up/down offsets feed those, so
-    // flying does not just stop there.
+    // Adds the controller thrust to the game's thrust axes.
     [HarmonyPatch(typeof(LynxControlExtensions), nameof(LynxControlExtensions.GetOneAxisInputControlValue))]
     internal static class ThrustAxisPatch
     {
         private static readonly LynxControls.ActionSetAndId LeftRight = GameplayActions.GameplayActionSet.ThrustMoveLeftRightComposite;
         private static readonly LynxControls.ActionSetAndId UpDown = GameplayActions.GameplayActionSet.ThrustMoveUpDownComposite;
         private static readonly LynxControls.ActionSetAndId BackForward = GameplayActions.GameplayActionSet.ThrustMoveBackForwardComposite;
-        private static readonly LynxControls.ActionSetAndId SwingLeftRight = GameplayActions.GameplayActionSet.SwingLeftRightComposite;
-        private static readonly LynxControls.ActionSetAndId SwingUpDown = GameplayActions.GameplayActionSet.SwingUpDownComposite;
 
         private static void Postfix(LynxControls.ActionSetAndId actionSetAndId, ref float __result)
         {
-            var sideways = actionSetAndId.Equals(LeftRight) || actionSetAndId.Equals(SwingLeftRight);
-            var upDown = actionSetAndId.Equals(UpDown) || actionSetAndId.Equals(SwingUpDown);
-            if (!sideways && !upDown && !actionSetAndId.Equals(BackForward)) return;
+            if (!actionSetAndId.Equals(LeftRight) && !actionSetAndId.Equals(UpDown) && !actionSetAndId.Equals(BackForward)) return;
             if (!VrControls.TryGetThrust(out var local)) return;
-            var value = sideways ? local.x : upDown ? local.y : local.z;
+            var value = actionSetAndId.Equals(LeftRight) ? local.x : actionSetAndId.Equals(UpDown) ? local.y : local.z;
             __result = Mathf.Clamp(__result + value, -1f, 1f);
         }
     }
@@ -328,6 +323,56 @@ namespace ShipbreakerVR
         {
             if (controls.GetInputIsPressed(actionSetAndId)) return true;
             return (actionSetAndId.Equals(Left) || actionSetAndId.Equals(Right)) && VrControls.IsBraking();
+        }
+    }
+
+    // Keeps thrust and brake working while the grapple holds something heavy. The game skips both then
+    // (ThrustController.Update checks GrapplingHook.IsSwinging) and lets the player swing around the anchor with the swing
+    // axes instead, which the controller does not feed: moving on you drifted on without braking, standing still you could
+    // not get going. While flying with the controller the check is answered with false; the rope keeps pulling.
+    [HarmonyPatch(typeof(ThrustController), "Update")]
+    internal static class GrappleThrustPatch
+    {
+        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        {
+            var original = AccessTools.PropertyGetter(typeof(GrapplingHook), nameof(GrapplingHook.IsSwinging));
+            var replacement = AccessTools.Method(typeof(GrappleThrustPatch), nameof(IsSwinging));
+            var replaced = 0;
+            foreach (var instruction in instructions)
+            {
+                if (instruction.Calls(original))
+                {
+                    instruction.opcode = OpCodes.Call;
+                    instruction.operand = replacement;
+                    replaced++;
+                }
+                yield return instruction;
+            }
+            Plugin.Log.LogInfo($"ThrustController: {replaced} grapple swing check(s) redirected");
+        }
+
+        private static bool IsSwinging(GrapplingHook hook) => !VrControls.Flying && hook.IsSwinging;
+    }
+
+    // Snaps the rope when the player flies further from something heavy on the grapple than the grapple reaches, since
+    // GrappleThrustPatch lets them fly against the rope. The game's own snap (TriggerRopeBreak with OutOfBounds, as when a
+    // grappled object leaves the view too long) plays the break effects and sound.
+    [HarmonyPatch(typeof(GrapplingHook), "Update")]
+    internal static class GrappleSnapPatch
+    {
+        private static readonly AccessTools.FieldRef<GrapplingHook, LaserRope> Rope =
+            AccessTools.FieldRefAccess<GrapplingHook, LaserRope>("m_GrapplingRope");
+        private static readonly MethodInfo Break = AccessTools.Method(typeof(GrapplingHook), "TriggerRopeBreak");
+
+        private static void Postfix(GrapplingHook __instance)
+        {
+            if (!VrControls.Flying || !__instance.IsGrapplingHeavy) return;
+            var rope = Rope(__instance);
+            if (rope == null || !rope.IsInitialized) return;
+            var distance = Vector3.Distance(rope.StartPoint, rope.EndPoint);
+            if (distance <= __instance.MaxDistance) return;
+            Plugin.Log.LogInfo($"Grapple: rope snapped at {distance:0.0} m (grapple reach {__instance.MaxDistance:0.0} m)");
+            Break.Invoke(__instance, new object[] { LaserRope.RopeReleaseType.OutOfBounds, rope.VisualEndPoint });
         }
     }
 }

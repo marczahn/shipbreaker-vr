@@ -474,13 +474,17 @@ Config `Steuerung/Controllersteuerung` (Aus/Vtol; the earlier "point and twist" 
 The grip stays free for grabbing later. The left controller's name and features are logged once. OpenXR only reports
 controllers because `VrXr` enables the Oculus Touch interaction profile, which the AssetBundle's settings carry disabled.
 
-Hanging on the grapple: grappling something heavy (or reeling in something medium) makes the game swing instead of
-thrust (`GrapplingHook.IsSwinging`; `ThrustController` skips the thrust then), around the anchor with the swing axes
-(`SwingLeftRightComposite`, `SwingUpDownComposite`; W, S, A, D in the flat game, which move the rope's end on the
-player's right and up, `LaserRope.SetSwingOffset`). The controller fed only the thrust axes, so Marc found he could
-not fly while the grapple held on to something although the controller and the flight globe still worked. The
-controller's sideways and up/down offsets now feed the swing axes too (`ThrustAxisPatch`); forward and back have no
-swing axis.
+Hanging on the grapple: grappling something heavy (`GrappledMassRatio >= 1`, or reeling in something medium) makes the
+game skip thrust and brake alike (`GrapplingHook.IsSwinging`, checked in `ThrustController.Update`); the player swings
+around the anchor with the swing axes instead (`SwingLeftRightComposite`, `SwingUpDownComposite`; W, S, A, D in the flat
+game, `LaserRope.SetSwingOffset`). The controller does not feed those, so Marc drifted on without braking when already
+moving and could not get going when standing still. While flying with the controller `GrappleThrustPatch` answers that
+check with false, so thrust and brake work as with light objects and the rope keeps pulling. Flying away against the
+rope is limited by `GrappleSnapPatch`: beyond the grapple's reach (`GrapplingHook.MaxDistance`) the rope snaps through the
+game's own `TriggerRopeBreak(OutOfBounds)`, with its effects and the durability damage the game applies to a snapped
+rope (log: "Grapple: rope snapped at ..."). The game skips its out-of-view snap for heavy objects, so this is the only
+snap there apart from the rope passing through something. Holding something heavy with a hand still blocks thrust
+(`GrabController.IsGrabPreventingThrust`).
 
 ### Flight globe
 `VrFlightGlobe` draws a small globe at the bottom of the visor (config `Anzeige/Flugkugel`: Immer/BeimFliegen/Aus;
