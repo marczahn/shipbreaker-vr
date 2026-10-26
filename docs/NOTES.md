@@ -666,6 +666,15 @@ enters the Hab, for things that show right after waking up. Directions are relat
 is 10 degrees right of where the head points and 60 degrees above the horizon. It also saves the UI texture and the
 game window as PNG files to `BepInEx\ShipbreakerVR-F8`.
 
+Shift+F8 (`VrToolExport`) saves the model of the tool in the hand to `BepInEx\ShipbreakerVR-tools\<time>-<tool>`, for
+retexturing it: the log lists each renderer under the equipment point with its mesh, materials (shader, keywords, the
+main HDRP Lit values) and textures (size, format, filtering). The textures are saved as PNG (through a render texture,
+since the game's are not CPU-readable; normal, mask and detail maps as linear data). Where the mesh is readable it is
+also saved as OBJ, and per submesh the log gives the texture resolution per side of the tool (texels per cm, by the
+face normal in the equipment point's axes) and a PNG shows the UV layout over the base color, right side red, left
+blue, top/bottom green, front/back gray. That shows whether the right side has its own texture space or shares the
+left side's.
+
 `VrLoadTrace` covers what happens too fast to see. While the rig hides the world (load screens, intro) and for 3 s
 after, it logs every frame in which the picture changes (`Load trace frame N: ...`): the cameras that rendered (from
 `RenderPipelineManager.beginCameraRendering`, the rig's own as `VR`, others with their path and depth), whether our UI
