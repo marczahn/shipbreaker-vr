@@ -93,8 +93,11 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 |---|---|
 | Take a tool | Reach to where it sits and squeeze the grip: grapple at the right hip, demo charges at the left hip, cutter over the right shoulder, scanner at the right side of the helmet. The controller buzzes when you are there. |
 | Put it away | Let go of the grip. |
+| Hold two tools at once | While one hand holds the cutter, the grapple or the demo charges, take another of them with your other hand. Each hand's trigger and buttons work its own tool. |
+| Scan with a tool in the other hand | Take the scanner with your free hand. The other tool disappears while you scan; keep its grip squeezed and it comes back when you let go of the scanner. |
 | Use it | Point the controller and pull the trigger: cut, grapple, place or detonate demo charges. |
 | Reel in what the grapple holds | Hold the trigger and press B. |
+| Fly while the grapple holds something big | Fly and brake as usual. If you fly farther away than the grapple reaches, the rope snaps. |
 | Use what I point at | Press A. With an empty hand it uses what is in the middle of your view, marked by the game's dot. |
 | Turn the cutter's line | Roll your wrist. The cutter starts with horizontal cuts, and its switch to vertical cuts has no button. |
 | Throw | Hold the trigger and press A. |
@@ -120,6 +123,7 @@ likely to need:
 - **Head height** and **Head sideways:** move your view if you seem to sit too low or off to one side in the suit.
 - **Controller flying:** switch it off if you fly with mouse and keyboard or a gamepad.
 - **Aim with the hand:** switch it off to aim your tools at the center of your view again, as in the flat game.
+- **Two tools at once:** switch it off if you want a tool from one hand to replace the one in the other hand.
 - **Fit tools in the hand:** if the cutter or the grapple does not sit right in your hand, switch this on, grab the
   tool with your other hand and move it into place. Letting go stores it. Switch it off again when you are done.
 

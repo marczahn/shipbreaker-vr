@@ -197,7 +197,7 @@ interacting, the grapple and the "entity of interest".
   `EquipmentController.SetEquipment(None)` instead (allowed for the scanner only). Since the grip is now taken, reeling in
   moved from grip + trigger to B + trigger (latched at B's press, like A's throw).
 - Both hands (Marc's wish, one of the zones is at the left hip): either hand draws from the belt, with the same zones;
-  one tool at a time. `VrToolInput.ToolNode` is the hand that holds it: set by a grip press in a zone, back to the right
+  one tool at a time (except cutter and grapple, below). `VrToolInput.ToolNode` is the hand that holds it: set by a grip press in a zone, back to the right
   once nothing is equipped and that hand's grip is open (or the left controller is gone). A grip press at the zone of
   the tool that is already out only moves it to that hand (no select key). This replaced "the same zone again puts the
   tool away", which grip-hold had made pointless. Only the tool hand's grip holsters. While the left hand holds a tool
@@ -207,6 +207,50 @@ interacting, the grapple and the "entity of interest".
   draw then, and flying passes the left hip): the buzz comes when the trigger is let go inside the zone. The grips are
   read also while hand aiming is inactive, so a grip held through a tracking loss no longer counts as a new press
   afterwards. Log: `Tool control: <left|right> hand draws|takes the <tool>`, `Tool belt: <left|right> hand at <zone>`.
+- Two tools at once (`VrDualTools`, config `Steuerung/ZweiWerkzeuge`, Marc's wish: the cutter in one hand, the grapple
+  in the other, each tool only once; then the demo charges with either of them). The game knows one equipped tool (`EquipmentController.CurrentEquipment`), and
+  `SetEquipment` puts the old one away (`UnequipEquipment`) before equipping the next. The tool controllers are
+  separate, though, with their own fire actions (`CutterFire`, `GrappleFire`), and gate their work on
+  `CurrentEquipment == <their tool>` (`GunController.Update`, `GrapplingHook`, `TetherController`,
+  `CuttingToolController.Update`, `CuttingController`/`ScalpelController.IsCurrentEquipment`, `ScalpelFXController`,
+  `CutterHeatBarUIController`). So: an empty hand that draws the cutter or the grapple while the other hand holds the
+  other one calls `SetEquipment` directly (no select key, which would also check `CanUnequip` of the kept tool), and a
+  prefix on `UnequipEquipment` skips the kept tool. The kept tool is `VrDualTools.Second` in `SecondNode`; the drawing
+  hand becomes the tool hand with the game's tool. `GatePatch` redirects the `CurrentEquipment` reads in those classes
+  (and `TetherController.IsEquipped`, small enough to inline) so that the second tool's family sees its tool as
+  equipped. Each game class belongs to a family (cutter, grapple, other; `VrDualTools.FamilyOf`, nested types by their
+  outer class, `RaycastSystem.OnUpdate` by the instance's class), and the input polls (`ToolInputPatch`) and camera
+  reads (`AimPatch`) pass that family on: the second tool's family reads the second hand's buttons and aims through a
+  second aim camera on its muzzle, everything else the tool hand's. The tool actions are per hand now
+  (`VrToolInput.Hand.Now`), drawing and putting away stay global. The second model is moved off the game's equipment
+  point onto a point of its own (a sibling of it under `Right Hand Targets`), placed at the second controller with that
+  tool's fit for that hand (`VrToolFit`), and gets its own laser. Letting go: the second hand puts its tool away
+  through its controller (`UnequipCutter`/`UnequipGun`, after `CanBeUnequipped`); the tool hand hands the game the
+  second tool (`SetEquipment(second)`, which unequips the first and re-equips the second onto the right hand's point),
+  and that hand becomes the tool hand.
+  The first test (cutter and grapple) worked, holding a part with the grapple while cutting another, but the log showed
+  the second grapple's model taken back onto the game's right hand on every shot: the tools re-equip themselves while
+  working (`GrapplingHook`/`TetherController` call `EquipGun`, `CuttingController`/`ScalpelController` call
+  `EquipCutter`), and those call `GrabController.GetHandPositionTransformAndSetEquipment`, which hands the right hand
+  to that tool (`EndGrab`, `StartEquipment`). For the second tool a prefix (`HandPatch`) returns its own point and leaves
+  the right hand alone, and `EquipPatch` suppresses the `EquipmentChangedEvent` they post.
+  Demo charges pair too, but stay the game's tool whichever hand drew first: their arm (`VrToolModels.PoseArm`), hand
+  animation and pieces hang on the game's right hand. A cutter or grapple drawn next to them is added through its own
+  controller (`EquipCutter(false)`/`EquipGun(false)`, onto its own point via `HandPatch`, `VrDualTools.Add`), without
+  `SetEquipment`, which would put the charges away; `DemoChargeController` gates on its own copy of the equipped tool
+  from `EquipmentChangedEvent`, hence the suppressed events. In the first test the charge vanished from its hand as soon as the other hand
+  drew: `VrHands.Fingers` closed the game's right hand around the second tool, and the grab parameters (`RPrepGrab`,
+  `RGrab`) are on the same animator as the charge's states; the right hand's fingers are left to the charge's
+  animation again while the game's right hand holds the charges (a guess from the log, not confirmed). The scanner does not pair: it does its raycasts whenever
+  it is activated, but its outlines and info panel follow the game's equipped tool, and with a tool in each hand no hand
+  is free to draw it anyway. Drawn while the other hand holds the game's tool, that tool is remembered
+  (`VrDualTools.Suspend`) and put away by the game as usual; when the scanner is put away and that hand still holds its
+  grip, the tool comes back (`SetEquipment(tool)` instead of `SetEquipment(None)`, `Resume`), and the hand becomes the
+  tool hand again. Letting go of that grip during the scan forgets it.
+  The second tool is put away when the option or hand aiming goes off, outside gameplay (not on pause) and on unload.
+  Logs: `Two tools: <hand> hand keeps the <tool>, the other hand draws the <tool>`, `... adds the <tool> to the
+  DemoCharge`, `... is put away`, `... becomes the game's tool`, `the scanner hides the <tool>`, `... comes back into
+  the <hand> hand`, `Two tools: <Class>.<Method>: N equipment check(s) redirected`; F8 shows `second tool: ...`.
 - The game has two hands (`GrabController.LeftHand`/`RightHand`, both `HandGrab`): each with its own hand target
   (`m_HandTarget`), grab/rest/miss targets, equipment point and equipment grip targets, animator parameters of its own
   (`LGrab`/`RGrab`, `LPrepGrab`, `LReact`, ...) and its own grab action (`LeftHandGrab`/`RightHandGrab`); the flat game
@@ -429,6 +473,18 @@ Config `Steuerung/Controllersteuerung` (Aus/Vtol; the earlier "point and twist" 
   `ThrustController.Update`.
 The grip stays free for grabbing later. The left controller's name and features are logged once. OpenXR only reports
 controllers because `VrXr` enables the Oculus Touch interaction profile, which the AssetBundle's settings carry disabled.
+
+Hanging on the grapple: grappling something heavy (`GrappledMassRatio >= 1`, or reeling in something medium) makes the
+game skip thrust and brake alike (`GrapplingHook.IsSwinging`, checked in `ThrustController.Update`); the player swings
+around the anchor with the swing axes instead (`SwingLeftRightComposite`, `SwingUpDownComposite`; W, S, A, D in the flat
+game, `LaserRope.SetSwingOffset`). The controller does not feed those, so Marc drifted on without braking when already
+moving and could not get going when standing still. While flying with the controller `GrappleThrustPatch` answers that
+check with false, so thrust and brake work as with light objects and the rope keeps pulling. Flying away against the
+rope is limited by `GrappleSnapPatch`: beyond the grapple's reach (`GrapplingHook.MaxDistance`) the rope snaps through the
+game's own `TriggerRopeBreak(OutOfBounds)`, with its effects and the durability damage the game applies to a snapped
+rope (log: "Grapple: rope snapped at ..."). The game skips its out-of-view snap for heavy objects, so this is the only
+snap there apart from the rope passing through something. Holding something heavy with a hand still blocks thrust
+(`GrabController.IsGrabPreventingThrust`).
 
 ### Flight globe
 `VrFlightGlobe` draws a small globe at the bottom of the visor (config `Anzeige/Flugkugel`: Immer/BeimFliegen/Aus;
