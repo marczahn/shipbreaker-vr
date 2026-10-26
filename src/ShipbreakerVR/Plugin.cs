@@ -27,7 +27,7 @@ namespace ShipbreakerVR
         internal static ConfigEntry<bool> FlipUi;
         internal static ConfigEntry<bool> MonitorLook;
         internal static ConfigEntry<VrHelmet.Mode> Helmet;
-        internal static ConfigEntry<VrCamera.AntiAliasing> AntiAliasing;
+        internal static ConfigEntry<VrResolution.AntiAliasing> AntiAliasing;
         internal static ConfigEntry<float> ResolutionScale;
         internal static ConfigEntry<float> StationResolution;
         internal static ConfigEntry<float> WorldScale;
@@ -103,7 +103,7 @@ namespace ShipbreakerVR
                 "Screen look for the menus on the station's monitors: a little dimmer, fine scan lines, darker edges, a faint reflection on the glass and light on the frame. F7 switches it on and off.");
             Helmet = Config.Bind("Anzeige", "Helm", VrHelmet.Mode.Kopf,
                 "Kopf: the helmet follows the VR head. Aus: hide the helmet model. Spiel: the helmet stays on the body.");
-            AntiAliasing = Config.Bind("Bild", "Kantenglaettung", VrCamera.AntiAliasing.SMAA,
+            AntiAliasing = Config.Bind("Bild", "Kantenglaettung", VrResolution.AntiAliasing.SMAA,
                 "SMAA: smooths edges, stays sharp. TAA: looks blurry in VR and makes objects jitter. FXAA: cheap and soft. Keine: none. Spiel: use the game's setting.");
             ResolutionScale = Config.Bind("Bild", "Aufloesung", 1.0f,
                 "Render resolution per eye relative to the headset's default (0.5 to 2). Above 1 smooths further but costs significant performance and video memory; it is limited to what should fit into the graphics card's memory. Applied one second after the last change.");

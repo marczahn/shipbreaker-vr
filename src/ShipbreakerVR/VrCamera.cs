@@ -18,10 +18,7 @@ namespace ShipbreakerVR
 
         private const float RecenterDelay = 0.5f;
 
-        public enum AntiAliasing { TAA, SMAA, FXAA, Keine, Spiel }
-
         private HDAdditionalCameraData vrHd;
-        private HDAdditionalCameraData.AntialiasingMode gameAntialiasing;
 
         public static VrCamera Instance { get; private set; }
 
@@ -67,49 +64,10 @@ namespace ShipbreakerVR
 
         private float loggedScale = -1f;
 
-        // Rough estimate: HDRP needs about 250 bytes of render targets per pixel and eye (G-buffer, depth, color,
-        // history, post effects, and the old targets while the new ones are allocated). Half of the video memory stays
-        // free for the game's own textures and meshes. Calibrated on an RTX 4070 Ti (12 GB, 2688x2880 per eye):
-        // 1.55 and 2.0 ran out of memory, 1.0 works; the estimate gives 1.25.
-        private const float BytesPerPixelAndEye = 250f;
-        private const float VideoMemoryShare = 0.5f;
-        public const float ResolutionSliderMax = 2f;
-
-        private static float maxResolutionScale = -1f;
-
-        private float pendingResolution = -1f;
-        private float resolutionChangedAt;
-        private float shrinkAt = -1f;
-
-        // Render resolution while only the loading UI shows: the headset's native one, so the load screen stays sharp
-        // while the level being loaded gets the video memory (at 1.25x the level start ran out of it and crashed).
-        private const float LoadingResolution = 1f;
-
-        // Highest render resolution in the Hab. The bay stays loaded next to it, and at 1.25x the 12 GB card ran out of
-        // video memory each time the Hab appeared (Failed to create RenderTexture ... 0x8007000e). It also leaves the
-        // Hab more room to reach the headset's frame rate.
-        private const float HabResolution = 1f;
-
-        // The Hab costs the GPU more than the bay: on an RTX 4070 Ti at 2688x2880 per eye it ran at 45 fps at 1.0x and at
-        // the headset's 90 at 0.7x. Below the headset's rate Virtual Desktop halves it and synthesizes every second frame,
-        // and even a few missed frames (3 % at 0.8x) wobble close to the monitors. So the Hab has its own resolution
-        // setting ([Bild] AufloesungStation), independent of the one for everywhere else, at most HabResolution.
-        private static float HabScale => Mathf.Clamp(Plugin.StationResolution.Value, 0.5f, HabResolution);
-        private bool habScaleLogged;
-
         public bool BodyFollowsHead => VrXr.IsRunning;
 
         // True while loading (no game camera, or the game's load screen covers the image): only the UI canvas on black.
         private bool worldHidden;
-
-        private const int UiLayer = 5;
-
-        // UI-only game cameras switched off while VR runs (see SilenceUiCameras), back on when it stops.
-        private readonly HashSet<Camera> silenced = new HashSet<Camera>();
-        private Camera[] cameraBuffer = new Camera[16];
-
-        // A camera that draws nothing but the UI layer, like the load screen's. Not a view for the VR camera to follow.
-        public static bool IsUiOnly(Camera camera) => camera.cullingMask != 0 && (camera.cullingMask & ~(1 << UiLayer)) == 0;
 
         // Creates the rig on first use, afterwards switches it to another game camera (main menu -> game).
         // gameCamera may be null (loading screen, intro without a camera yet).
@@ -150,19 +108,12 @@ namespace ShipbreakerVR
         private void Retarget(Camera camera)
         {
             // Hand the screen back to the previous camera if it still exists and the game wants it on. While VR runs it
-            // stays off until VR stops, like the cameras SilenceOtherCameras switches off: every active camera without a
-            // target texture also renders into the headset. Loading the bay, the rig first follows a 'Main Camera' the
-            // scene brings along, then LynxCameraController's; the first one, switched back on, rendered next to the
-            // rig behind the load screen (log: Other cameras rendering next to 'Main Camera': 'Main Camera').
+            // stays off until VR stops, like the other cameras VrCameraSilencer switches off: every active camera
+            // without a target texture also renders into the headset.
             if (gameCamera != null && gameCamera != camera)
             {
-                if (VrXr.IsRunning)
-                {
-                    gameCamera.enabled = false;
-                    silenced.RemoveWhere(c => c == null);
-                    silenced.Add(gameCamera);
-                }
-                else gameCamera.enabled = GameWantsEnabled(gameCamera);
+                if (VrXr.IsRunning) VrCameraSilencer.Keep(gameCamera);
+                else gameCamera.enabled = VrCameraSilencer.GameWantsEnabled(gameCamera);
             }
             gameCamera = camera;
             FollowsHab = VrHab.IsHabCamera(camera);
@@ -193,7 +144,7 @@ namespace ShipbreakerVR
             // Our UI pass must stay visible whatever volume layers the game camera uses.
             vrHd.volumeLayerMask |= 1 << VrUi.PassLayer;
             vrHd.xrRendering = true;
-            gameAntialiasing = vrHd.antialiasing;
+            VrResolution.Retargeted(vrHd.antialiasing);
 
             // Like starting VR: recenter on the new camera and let the body sync again.
             if (VrXr.IsRunning)
@@ -219,14 +170,7 @@ namespace ShipbreakerVR
             vrHd.volumeLayerMask = 1 << VrUi.PassLayer;
             vrHd.xrRendering = true;
             Plugin.Log.LogInfo(gameCamera == null ? "No game camera (loading): VR shows only the UI" : "Load screen: VR shows only the UI");
-
-            var current = UnityEngine.XR.XRSettings.eyeTextureResolutionScale;
-            if (VrXr.IsRunning && current > LoadingResolution + 0.01f)
-            {
-                UnityEngine.XR.XRSettings.eyeTextureResolutionScale = LoadingResolution;
-                shrinkAt = Time.unscaledTime + 0.5f;
-                Plugin.Log.LogInfo($"Render resolution per eye while loading: {LoadingResolution:0.00}x (was {current:0.00}x)");
-            }
+            VrResolution.Loading();
         }
 
         private void OnEnable()
@@ -254,8 +198,8 @@ namespace ShipbreakerVR
             var vr = Instance;
             if (vr != null)
             {
-                if (vr.gameCamera != null) vr.gameCamera.enabled = GameWantsEnabled(vr.gameCamera);
-                vr.SilenceOtherCameras(false);
+                if (vr.gameCamera != null) vr.gameCamera.enabled = VrCameraSilencer.GameWantsEnabled(vr.gameCamera);
+                VrCameraSilencer.Restore();
                 VrHab.Calm(false);
                 VrHab.CutBlends(false);
                 VrPerformance.Update(false, null, false, true);
@@ -267,20 +211,16 @@ namespace ShipbreakerVR
 
         private void Update()
         {
-            VrPerformance.FrameStart();
-            VrLoadTrace.EndFrame(this);
+            VrFrame.Update();
             if (VrXr.IsRunning && Input.GetKeyDown(KeyCode.F4)) Recenter(true);
             UpdateCenterPress();
-            VrDiagnostics.Update(this);
         }
 
-        private void FixedUpdate() => VrClimb.FixedUpdate();
+        private void FixedUpdate() => VrFrame.Fixed();
 
         private void LateUpdate()
         {
-            VrToolModels.PoseArm();
-            VrHands.LateUpdate();
-            VrCrosshair.LateUpdate();
+            VrFrame.Late();
             var running = VrXr.IsRunning;
             // The game may switch to the Hab and hide its load screen in the same frame, after Plugin.Update looked.
             // Without this the bay showed for a frame and the resolution went up for it.
@@ -306,25 +246,25 @@ namespace ShipbreakerVR
             {
                 recenterAt = Time.unscaledTime + RecenterDelay;
                 VrBody.Resync();
-                LowerResolutionAtStart();
-                shrinkAt = Time.unscaledTime + 2f;
+                VrResolution.Started();
             }
             // Don't blindly re-enable on stop: in the Hab the game disabled its camera itself.
             if (!running && wasRunning)
             {
-                if (gameCamera != null) gameCamera.enabled = GameWantsEnabled(gameCamera);
-                shrinkAt = Time.unscaledTime + 2f;
+                if (gameCamera != null) gameCamera.enabled = VrCameraSilencer.GameWantsEnabled(gameCamera);
+                VrResolution.Stopped();
             }
             wasRunning = running;
-            SilenceOtherCameras(running);
+            VrCameraSilencer.Update(running, vrCamera, gameCamera);
             VrHab.Calm(running && FollowsHab);
             VrHab.CutBlends(running && FollowsHab);
             VrPerformance.Update(running, gameCamera, FollowsHab, worldHidden);
-            ShrinkRenderTargets(running);
+            VrResolution.Update(running, vrHd, gameCamera, FollowsHab, worldHidden);
 
             if (running)
             {
-                ApplyQuality();
+                // The near plane scales with the player, so close things are cut off as far as before.
+                vrCamera.nearClipPlane = 0.05f * WorldScale;
                 LogEyeSeparation();
             }
             vrCamera.enabled = running;
@@ -339,204 +279,13 @@ namespace ShipbreakerVR
             FollowGameCamera();
         }
 
-        // Whether the game itself has this camera on. It switches the main camera off while it shows the Hab with its own.
-        private static bool GameWantsEnabled(Camera camera) => camera != LynxCameraController.MainCamera || !VrHab.MainCameraOff;
-
-        // Every active game camera without a target texture also renders into the headset (HDRP's XRSystem only checks
-        // that and xrRendering). The load screen's camera (depth 10, after ours) thus covered our image with its grey
-        // background and its CRT and scanline effects, which are not made for VR. In VR its canvas is on our UI canvas,
-        // so UI-only cameras stay off while VR runs. So does the Hab's camera (depth 2) while the rig follows another
-        // one: the Hab scene is loaded behind the load screen, and its camera painted the Hab over the load screen and
-        // its "press a key" prompt, fixed to the face as if the game had frozen.
-        private void SilenceOtherCameras(bool running)
-        {
-            if (!running)
-            {
-                if (silenced.Count == 0) return;
-                foreach (var camera in silenced)
-                    if (camera != null) camera.enabled = GameWantsEnabled(camera);
-                silenced.Clear();
-                return;
-            }
-            if (Camera.allCamerasCount > cameraBuffer.Length) cameraBuffer = new Camera[Camera.allCamerasCount * 2];
-            var count = Camera.GetAllCameras(cameraBuffer);
-            for (var i = 0; i < count; i++)
-            {
-                var camera = cameraBuffer[i];
-                cameraBuffer[i] = null;
-                if (camera == vrCamera || camera == gameCamera || camera.cameraType != CameraType.Game || camera.targetTexture != null) continue;
-                if (camera.CompareTag("UI_Camera") || camera.name.StartsWith("ShipbreakerVR")) continue;
-                var uiOnly = IsUiOnly(camera);
-                if (!uiOnly && !VrHab.IsHabCamera(camera)) continue;
-                var hd = camera.GetComponent<HDAdditionalCameraData>();
-                if (hd != null && !hd.xrRendering) continue;
-                camera.enabled = false;
-                silenced.RemoveWhere(c => c == null);
-                if (silenced.Add(camera)) Plugin.Log.LogInfo($"Camera '{camera.name}' ({(uiOnly ? "UI only" : "Hab")}, depth {camera.depth}) switched off while VR runs");
-            }
-        }
-
-        private void ApplyQuality()
-        {
-            var mode = Plugin.AntiAliasing.Value switch
-            {
-                AntiAliasing.TAA => HDAdditionalCameraData.AntialiasingMode.TemporalAntialiasing,
-                AntiAliasing.SMAA => HDAdditionalCameraData.AntialiasingMode.SubpixelMorphologicalAntiAliasing,
-                AntiAliasing.FXAA => HDAdditionalCameraData.AntialiasingMode.FastApproximateAntialiasing,
-                AntiAliasing.Keine => HDAdditionalCameraData.AntialiasingMode.None,
-                _ => gameAntialiasing,
-            };
-            if (vrHd.antialiasing != mode)
-            {
-                vrHd.antialiasing = mode;
-                Plugin.Log.LogInfo($"VR camera anti-aliasing: {mode} (game: {gameAntialiasing})");
-            }
-            // While loading the resolution stays at LoadingResolution (HideWorld); once the world shows again it goes
-            // back to the configured one, through the memory probe below.
-            if (worldHidden) return;
-            // Each change reallocates every render target. Wait until the slider has rested, otherwise dragging it
-            // through all steps fragments video memory until allocations fail and the image smears.
-            var max = MaxResolutionScale();
-            if (max > 0f && Plugin.ResolutionScale.Value > max)
-            {
-                Plugin.ResolutionScale.Value = max;
-                VrOptions.Refresh(Plugin.ResolutionScale);
-            }
-            var scale = Mathf.Clamp(FollowsHab ? HabScale : Plugin.ResolutionScale.Value, 0.5f, max > 0f ? max : 1f);
-            if (FollowsHab != habScaleLogged)
-            {
-                habScaleLogged = FollowsHab;
-                if (FollowsHab) Plugin.Log.LogInfo($"Render resolution in the Hab: {scale:0.00}x (station setting, at most {HabResolution:0.00}x since the bay stays in video memory next to it)");
-            }
-            if (!Mathf.Approximately(scale, pendingResolution))
-            {
-                pendingResolution = scale;
-                resolutionChangedAt = Time.unscaledTime;
-            }
-            if (Time.unscaledTime - resolutionChangedAt < 1f) return;
-            var current = UnityEngine.XR.XRSettings.eyeTextureResolutionScale;
-            if (!Mathf.Approximately(current, scale))
-            {
-                // Going up: first check that the new targets can be allocated while the old ones still exist,
-                // otherwise stay at the previous value instead of ending up with a black or smeared image.
-                if (scale > current && !FitsIntoMemory(scale))
-                {
-                    Plugin.Log.LogWarning($"Render resolution {scale:0.00}x does not fit into video memory, staying at {current:0.00}x");
-                    var entry = FollowsHab ? Plugin.StationResolution : Plugin.ResolutionScale;
-                    entry.Value = current;
-                    pendingResolution = current;
-                    VrOptions.Refresh(entry);
-                    return;
-                }
-                UnityEngine.XR.XRSettings.eyeTextureResolutionScale = scale;
-                Plugin.Log.LogInfo($"Render resolution per eye: {scale:0.00}x");
-                if (scale < current) shrinkAt = Time.unscaledTime + 1f;
-            }
-        }
-
-        // When VR starts the eye textures are created at 1.0 and, a second later, again at the configured scale.
-        // During a mission load that second allocation ran out of video memory. So lower the scale right away;
-        // raising above the current value still waits and goes through the memory probe in ApplyQuality.
-        private void LowerResolutionAtStart()
-        {
-            var max = MaxResolutionScale();
-            var scale = Mathf.Clamp(Plugin.ResolutionScale.Value, 0.5f, max > 0f ? max : 1f);
-            var current = UnityEngine.XR.XRSettings.eyeTextureResolutionScale;
-            if (scale >= current || Mathf.Approximately(scale, current)) return;
-            UnityEngine.XR.XRSettings.eyeTextureResolutionScale = scale;
-            Plugin.Log.LogInfo($"Render resolution per eye at VR start: {scale:0.00}x");
-        }
-
-        // HDRP's shared render targets only grow: they keep the largest width and height any camera rendered at
-        // (RTHandleSystem), and the game never shrinks them. After VR starts or stops, or the render resolution goes
-        // down, shrink them once to what is rendered now, so memory held for the flat view or a higher resolution is
-        // freed. A camera that needs more simply grows them again.
-        private void ShrinkRenderTargets(bool running)
-        {
-            if (shrinkAt < 0f || Time.unscaledTime < shrinkAt) return;
-            shrinkAt = -1f;
-            int width, height;
-            if (running)
-            {
-                width = UnityEngine.XR.XRSettings.eyeTextureWidth;
-                height = UnityEngine.XR.XRSettings.eyeTextureHeight;
-            }
-            else if (gameCamera != null)
-            {
-                width = gameCamera.pixelWidth;
-                height = gameCamera.pixelHeight;
-            }
-            else
-            {
-                width = Screen.width;
-                height = Screen.height;
-            }
-            int maxWidth = RTHandles.maxWidth, maxHeight = RTHandles.maxHeight;
-            // Compare with what they grow to once this size renders, and skip resets that would free next to nothing.
-            if (width <= 0 || height <= 0 || (float)Mathf.Max(maxWidth, width) * Mathf.Max(maxHeight, height) < 1.05f * width * height) return;
-            // Only the shared targets: each camera's history goes away with the camera (HDCamera.CleanUnused), and
-            // HDRenderPipeline.ResetRTHandleReferenceSize would also stretch other cameras' history to this size.
-            RTHandles.ResetReferenceSize(width, height);
-            Plugin.Log.LogInfo($"HDRP render targets reduced from {maxWidth}x{maxHeight} to {width}x{height} ({(running ? "eye" : "screen")} size)");
-        }
-
         private static readonly List<XRDisplaySubsystem> Displays = new List<XRDisplaySubsystem>();
-
-        // Highest render resolution that should fit into video memory, rounded down to 0.05; -1 until the headset's
-        // native eye size is known.
-        private static float MaxResolutionScale()
-        {
-            if (maxResolutionScale > 0f) return maxResolutionScale;
-            var current = UnityEngine.XR.XRSettings.eyeTextureResolutionScale;
-            var width = UnityEngine.XR.XRSettings.eyeTextureWidth / current;
-            var height = UnityEngine.XR.XRSettings.eyeTextureHeight / current;
-            if (width <= 0f || height <= 0f || SystemInfo.graphicsMemorySize <= 0) return -1f;
-            var budget = SystemInfo.graphicsMemorySize * 1024f * 1024f * VideoMemoryShare;
-            var fit = Mathf.Sqrt(budget / (width * height * 2f * BytesPerPixelAndEye));
-            maxResolutionScale = Mathf.Clamp(Mathf.Floor(fit * 20f) / 20f, 0.5f, ResolutionSliderMax);
-            Plugin.Log.LogInfo($"{SystemInfo.graphicsDeviceName}, {SystemInfo.graphicsMemorySize} MB video memory, {width:0}x{height:0} per eye: render resolution limited to {maxResolutionScale:0.00}x");
-            return maxResolutionScale;
-        }
-
-        // Allocates test textures as large as the render targets at this scale would be (about 160 bytes per pixel
-        // and eye) and frees them again. Fails if the graphics driver refuses one of them.
-        private static bool FitsIntoMemory(float scale)
-        {
-            var current = UnityEngine.XR.XRSettings.eyeTextureResolutionScale;
-            var width = Mathf.CeilToInt(UnityEngine.XR.XRSettings.eyeTextureWidth / current * scale);
-            var height = Mathf.CeilToInt(UnityEngine.XR.XRSettings.eyeTextureHeight / current * scale);
-            if (width <= 0 || height <= 0) return true;
-            const int bytesPerTexel = 8;
-            var count = Mathf.CeilToInt(160f * 2f / bytesPerTexel);
-            var probes = new List<RenderTexture>();
-            var ok = true;
-            try
-            {
-                for (var i = 0; i < count && ok; i++)
-                {
-                    var rt = new RenderTexture(width, height, 0, RenderTextureFormat.ARGBHalf) { name = "ShipbreakerVR memory probe" };
-                    probes.Add(rt);
-                    ok = rt.Create();
-                }
-            }
-            finally
-            {
-                foreach (var rt in probes)
-                {
-                    rt.Release();
-                    Destroy(rt);
-                }
-            }
-            Plugin.Log.LogInfo($"Video memory probe for {scale:0.00}x ({width}x{height}, {probes.Count} of {count} textures): {(ok ? "fits" : "too large")}");
-            return ok;
-        }
 
         // Logs once per scale how far apart the eyes are in the world, to confirm the scale reaches the stereo rendering.
         // Reads the view matrices HDRP renders with; they only exist once the display has render passes, so retry each frame.
         private void LogEyeSeparation()
         {
             var scale = WorldScale;
-            vrCamera.nearClipPlane = 0.05f * scale;
             if (Mathf.Approximately(scale, loggedScale)) return;
             SubsystemManager.GetSubsystems(Displays);
             if (Displays.Count == 0) return;
@@ -587,8 +336,7 @@ namespace ShipbreakerVR
             rig.localScale = new Vector3(scale, scale, scale);
             rig.rotation = Playspace;
             rig.position = position - Playspace * (recenterPosition * scale) + WorldHeadOffset;
-            VrClimb.RigPlaced();
-            VrToolModels.Place();
+            VrFrame.RigPlaced();
         }
 
         // Lying in bed (waking up, the monitor above the bed) the Hab camera looks up at the ceiling. There the playspace

@@ -16,8 +16,14 @@ namespace ShipbreakerVR
     //   3. VrAim        the aim camera on the tool hand that step 2 settled
     //   4. VrDualTools  the second tool's aim camera
     //   5. VrControls   flying, braking and turning, which rest while the left hand holds a tool or holds on
-    // Later in the frame VrCamera.LateUpdate poses the arms and hides the crosshair, and the tool models and the laser
-    // follow the latest pose right before rendering.
+    // The rest of the frame hangs on the VR camera's callbacks (VrCamera), which run the phases below, each step on its
+    // own as here, so the whole order is in this file:
+    //   Update        frame statistics, load trace, F8 (diagnostics only)
+    //   FixedUpdate   VrClimb: holding on, each physics step
+    //   LateUpdate    after the game's animation: VrToolModels bends the arm for the demo charge, VrHands poses the
+    //                 suit's hands, VrCrosshair hides the crosshair; then the rig itself (VrCamera)
+    //   before render the rig is placed on the game camera (VrCamera.FollowGameCamera, also in LateUpdate); then VrClimb
+    //                 measures the hands on it and VrToolModels puts the tool models into the hands at the latest pose
     internal static class VrFrame
     {
         static VrFrame() => VrSession.OnUnload("frame update", Uninstall);
@@ -31,6 +37,37 @@ namespace ShipbreakerVR
             ("flying", VrControls.Update),
         };
 
+        private static readonly (string Name, System.Action Step)[] UpdateSteps =
+        {
+            ("frame statistics", VrPerformance.FrameStart),
+            ("load trace", () => VrLoadTrace.EndFrame(VrCamera.Instance)),
+            ("diagnostics", () => VrDiagnostics.Update(VrCamera.Instance)),
+        };
+
+        private static readonly (string Name, System.Action Step)[] FixedSteps =
+        {
+            ("climbing", VrClimb.FixedUpdate),
+        };
+
+        private static readonly (string Name, System.Action Step)[] LateSteps =
+        {
+            ("demo charge arm", VrToolModels.PoseArm),
+            ("hands", VrHands.LateUpdate),
+            ("crosshair", VrCrosshair.LateUpdate),
+        };
+
+        private static readonly (string Name, System.Action Step)[] PlacedSteps =
+        {
+            ("climbing", VrClimb.RigPlaced),
+            ("tool models", VrToolModels.Place),
+        };
+
+        // From the VR camera's Update, FixedUpdate and LateUpdate, and from FollowGameCamera once the rig is placed.
+        public static void Update() => RunAll(UpdateSteps);
+        public static void Fixed() => RunAll(FixedSteps);
+        public static void Late() => RunAll(LateSteps);
+        public static void RigPlaced() => RunAll(PlacedSteps);
+
         private static int ranFrame = -1;
         private static int errors;
         private static float nextCheck;
@@ -40,7 +77,12 @@ namespace ShipbreakerVR
         {
             if (ranFrame == Time.frameCount) return;
             ranFrame = Time.frameCount;
-            foreach (var (name, step) in Steps)
+            RunAll(Steps);
+        }
+
+        private static void RunAll((string Name, System.Action Step)[] steps)
+        {
+            foreach (var (name, step) in steps)
             {
                 try { step(); }
                 catch (System.Exception e)

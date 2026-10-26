@@ -104,7 +104,7 @@ namespace ShipbreakerVR
             Camera best = null;
             foreach (var cam in Camera.allCameras)
             {
-                if (cam.targetTexture != null || cam.CompareTag("UI_Camera") || cam.name.StartsWith("ShipbreakerVR") || VrCamera.IsUiOnly(cam)) continue;
+                if (cam.targetTexture != null || cam.CompareTag("UI_Camera") || cam.name.StartsWith("ShipbreakerVR") || VrCameraSilencer.IsUiOnly(cam)) continue;
                 // Only while the game shows the Hab (VrHab.Camera); a leftover Hab camera during a load is not a menu.
                 if (VrHab.IsHabCamera(cam)) continue;
                 if (best == null || cam.depth > best.depth) best = cam;

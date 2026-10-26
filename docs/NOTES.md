@@ -359,7 +359,7 @@ always adds to its volume mask; while the world is hidden the mask holds only th
 At 1.25x per eye (RTX 4070 Ti, 12 GB, 2688x2880 native) the level start ran out of video memory
 (`Failed to create RenderTexture ... 0x8007000e` right after "Initializing Session 1", then a native crash). While the
 world is hidden the eye resolution drops to 1.0x (native, still sharp; 0.5x made the load screen blurry) and the
-shared HDRP targets shrink; afterwards `ApplyQuality` raises it again through the memory probe.
+shared HDRP targets shrink; afterwards `VrResolution` raises it again through the memory probe.
 
 Loading the bay, the rig switches cameras twice behind the load screen: first to a `Main Camera` that `Plugin.Update`
 finds while `LynxCameraController.MainCamera` is not set yet, then, from the `LynxCameraController.Start` postfix, to
@@ -367,7 +367,7 @@ the controller's main camera. `Retarget` used to switch the previously followed 
 and the next line in every bay load read `Other cameras rendering next to 'Main Camera': 'Main Camera' (depth -1,
 screen)`: a second world camera rendering into the headset next to the rig's black. Marc saw a view of the station
 flash up about two thirds into the load screen. While VR runs the previous camera now stays off and joins the
-cameras `SilenceOtherCameras` restores when VR stops (each as far as `GameWantsEnabled` says). Not yet confirmed in
+cameras `VrCameraSilencer` restores when VR stops (each as far as `GameWantsEnabled` says). Not yet confirmed in
 the headset. A second effect, the view going dark for a blink at another point of the load, is still open; see the
 load trace under Diagnostics.
 
@@ -760,6 +760,11 @@ results. Before, each module computed its state on the first read in a frame, so
 method asked first: `VrAim` could cache the old tool hand for a frame after the other hand took the tool. If the step
 goes missing from the player loop (the game's ECS world can rebuild it), `Plugin.Update` runs the frame instead and puts
 the step back within a second, with a warning in the log.
+
+The steps later in the frame hang on the VR camera's callbacks and are listed in `VrFrame` too: frame statistics, load
+trace and F8 in `Update`; `VrClimb` in `FixedUpdate`; the demo charge arm, the suit's hands and the crosshair at the
+start of `LateUpdate`, before the rig; `VrClimb.RigPlaced` and the tool models once the rig is placed before
+rendering. Each step runs in its own try/catch, so one that throws no longer stops the rest of the camera's update.
 
 `VrHand` keeps what each hand does as one state: `Empty`, `GameTool` (the game's equipped tool, aimed and worked with
 that hand), `SecondTool` (`VrDualTools`), `HiddenTool` (hidden by the scanner in the other hand) or `Holding`
