@@ -561,3 +561,10 @@ The dot needed one more thought. A dot in the middle while the hand does the aim
 crosshair Marc had asked me to remove in the first place. So with an empty hand the hand stops aiming altogether:
 interacting goes back to the middle of the view, as in the flat game, and the dot means what it shows. The moment a
 tool comes out of the belt, the hand takes over again and the laser appears.
+
+Marc called it almost perfect, with two exceptions. Throwing a charge with the left hand showed no throw at all. In the
+right hand the throw lives only in how the animation turns the hand, and the left hand simply pointed along its
+controller. So the left hand now borrows the right hand's animated turn as well, mirrored, and throws along with it.
+The fingers stay in a fist, which is fine for a throw that is mostly wrist anyway. And the dots at the end of the laser
+had to go. With them went the crosshair colors they carried, which ends my half of a better idea from earlier in the
+day. The laser is plain now, and Marc wants to rethink it later anyway.

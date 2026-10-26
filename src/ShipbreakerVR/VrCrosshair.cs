@@ -1,7 +1,5 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using System.Reflection.Emit;
 using BBI.Unity.Game;
 using HarmonyLib;
 using UnityEngine;
@@ -16,8 +14,7 @@ namespace ShipbreakerVR
     // these as far as the log tells, so the HUD is also searched now and then for small graphics in the middle of a canvas
     // (Scan), which go too. They are made invisible through their CanvasRenderer's alpha, which the game never sets, so
     // its own switching and coloring go on untouched. With an empty hand or hand aiming off they come back: then
-    // interacting aims at the middle of the view, and the dot marks it. The color the game gives the reticle for what
-    // the tool aims at (in range, out of range, cooling down) goes to the laser's dot instead (TryGetColor).
+    // interacting aims at the middle of the view, and the dot marks it.
     internal static class VrCrosshair
     {
         private static readonly AccessTools.FieldRef<GrappleCrosshairController, Image> GrappleSnap =
@@ -32,10 +29,6 @@ namespace ShipbreakerVR
             AccessTools.FieldRefAccess<CuttingUIController, GameObject>("m_EdgeDetectionPointContainer");
         private static readonly AccessTools.FieldRef<CuttingUIController, List<CutLineUIObject>> CutLines =
             AccessTools.FieldRefAccess<CuttingUIController, List<CutLineUIObject>>("mCutLines");
-        private static readonly AccessTools.FieldRef<CuttingUIController, CuttingController> Cutter =
-            AccessTools.FieldRefAccess<CuttingUIController, CuttingController>("m_CuttingController");
-        private static readonly AccessTools.FieldRef<CuttingUIController, ScalpelController> Scalpel =
-            AccessTools.FieldRefAccess<CuttingUIController, ScalpelController>("m_ScalpelController");
         private static readonly AccessTools.FieldRef<ScannerUIController, Image> ScannerDot =
             AccessTools.FieldRefAccess<ScannerUIController, Image>("m_CenterDot");
 
@@ -49,7 +42,6 @@ namespace ShipbreakerVR
         private static CuttingUIController cutting;
         private static CentreDotUIController centre;
         private static ScannerUIController scanner;
-        private static EquipmentController equipment;
         private static float nextSearch;
         private static float nextCollect;
         private static float nextScan;
@@ -59,7 +51,6 @@ namespace ShipbreakerVR
         private static readonly Vector3[] corners = new Vector3[4];
         private static readonly HashSet<Graphic> hidden = new HashSet<Graphic>();
         private static bool logged;
-        private static readonly HashSet<string> loggedColors = new HashSet<string>();
 
         // From VrCamera.LateUpdate: after the game's UI has updated, before the canvases are drawn.
         public static void LateUpdate()
@@ -81,46 +72,15 @@ namespace ShipbreakerVR
             }
         }
 
-        // The color of the game's reticle for the equipped tool, for the laser: false without a tool that has one.
-        public static bool TryGetColor(out Color color)
-        {
-            color = Color.white;
-            if (equipment == null) return false;
-            string what;
-            switch (equipment.CurrentEquipment)
-            {
-                case EquipmentController.Equipment.GrappleHook:
-                    if (grapple == null || grapple.CrosshairIcon == null) return false;
-                    color = grapple.CrosshairIcon.color;
-                    what = "grapple";
-                    break;
-                case EquipmentController.Equipment.CuttingTool:
-                    if (cutting == null) return false;
-                    var scalpel = Scalpel(cutting);
-                    var reticle = scalpel != null && scalpel.IsCurrentEquipment ? ScalpelReticle(cutting) : CutterReticle(cutting);
-                    if (reticle == null) return false;
-                    color = reticle.color;
-                    what = scalpel != null && scalpel.IsCurrentEquipment ? "scalpel" : "cutter";
-                    break;
-                default:
-                    return false;
-            }
-            // Each color the reticles take, once, for judging them on the laser.
-            if (loggedColors.Count < 20 && loggedColors.Add($"{what} {ColorUtility.ToHtmlStringRGB(color)}"))
-                Plugin.Log.LogInfo($"Laser: {what} reticle color #{ColorUtility.ToHtmlStringRGBA(color)}");
-            return true;
-        }
-
         private static void Find()
         {
-            if (grapple != null && cutting != null && centre != null && scanner != null && equipment != null) return;
+            if (grapple != null && cutting != null && centre != null && scanner != null) return;
             if (Time.unscaledTime < nextSearch) return;
             var hadHud = grapple != null || cutting != null;
             if (grapple == null) grapple = Object.FindObjectOfType<GrappleCrosshairController>();
             if (cutting == null) cutting = Object.FindObjectOfType<CuttingUIController>();
             if (centre == null) centre = Object.FindObjectOfType<CentreDotUIController>(true);
             if (scanner == null) scanner = Object.FindObjectOfType<ScannerUIController>(true);
-            if (equipment == null) equipment = Object.FindObjectOfType<EquipmentController>();
             // Searching the scene costs a moment; once the HUD is there, a part it lacks is looked for only now and then.
             var hud = grapple != null || cutting != null;
             nextSearch = Time.unscaledTime + (hud ? 15f : 2f);
@@ -234,33 +194,6 @@ namespace ShipbreakerVR
             cutting = null;
             centre = null;
             scanner = null;
-            equipment = null;
-        }
-    }
-
-    // Where the grapple has no target of its own, its reticle judges what is aimed at (hookable, out of range) with a ray
-    // from the player's camera, a field of its own (GrappleCrosshairController.PlayerCamera) that AimPatch does not
-    // reach. With hand aiming that ray leaves from the hand, so the laser's color matches what the hand points at.
-    [HarmonyPatch]
-    internal static class GrappleCrosshairPatch
-    {
-        private static readonly MethodInfo Instead = AccessTools.Method(typeof(VrAim), nameof(VrAim.Instead));
-
-        private static MethodBase TargetMethod() => AccessTools.Method(AccessTools.TypeByName("GrappleCrosshairController"), "Update");
-
-        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
-        {
-            var field = AccessTools.Field(AccessTools.TypeByName("GrappleCrosshairController"), "PlayerCamera");
-            var list = instructions.ToList();
-            var replaced = 0;
-            for (var i = 0; i < list.Count; i++)
-            {
-                if (!list[i].LoadsField(field)) continue;
-                list.Insert(++i, new CodeInstruction(OpCodes.Call, Instead));
-                replaced++;
-            }
-            Plugin.Log.LogInfo($"Aim: GrappleCrosshairController.Update: {replaced} player camera read(s) redirected to the hand");
-            return list;
         }
     }
 }

@@ -85,8 +85,8 @@ namespace ShipbreakerVR
             if (rightBusy) RightArm.Weight = 0f;
             Fingers(LeftArm, leftWasDriven);
             Fingers(RightArm, rightWasDriven);
-            Pose(LeftArm);
-            Pose(RightArm);
+            Pose(LeftArm, active && chargeLeft && Mirrored(out var hold) ? hold : Quaternion.identity);
+            Pose(RightArm, Quaternion.identity);
             Charges(active && chargeLeft);
         }
 
@@ -136,8 +136,8 @@ namespace ShipbreakerVR
                 Plugin.Log.LogInfo($"Hands: {arm.Name} arm {(driven ? "follows the controller" : "back to the game")} (hand {arm.Hand.CurrentHandState}, {grab.RightHand.CurrentEquipmentType} on the right hand)");
         }
 
-        // The wrist to the controller, the hand along it.
-        private static void Pose(Arm arm)
+        // The wrist to the controller, the hand along it, turned against it by hold.
+        private static void Pose(Arm arm, Quaternion hold)
         {
             var weight = arm.Weight;
             if (weight <= 0f || arm.Wrist == null || arm.Upper == null || arm.Lower == null) return;
@@ -149,7 +149,21 @@ namespace ShipbreakerVR
 
             var animated = arm.Wrist.rotation;
             VrToolModels.Bend(arm.Upper, arm.Lower, arm.Wrist, Vector3.Lerp(arm.Wrist.position, wrist, weight));
-            arm.Wrist.rotation = Quaternion.Slerp(animated, HandRotation(arm, aim, animated), weight);
+            arm.Wrist.rotation = Quaternion.Slerp(animated, HandRotation(arm, aim * hold, animated), weight);
+        }
+
+        // With the charge in the left hand, that hand takes over how the animation turns the game's right hand, mirrored:
+        // relative to the controller as the right hand is to the eye, as VrToolModels.PoseArm holds it in the right hand.
+        // So the charge sits in the left hand as in the right one, and the hand moves with the charge's animations,
+        // throwing included. Read before the right arm is posed, in the hand's own axes (Frame), and mirrored there.
+        private static bool Mirrored(out Quaternion hold)
+        {
+            hold = Quaternion.identity;
+            var camera = VrCamera.Instance != null ? VrCamera.Instance.GameCamera : null;
+            if (camera == null || !Frame(RightArm, out _, out var right)) return false;
+            var relative = Quaternion.Inverse(camera.transform.rotation) * right;
+            hold = new Quaternion(relative.x, -relative.y, -relative.z, relative.w);
+            return true;
         }
 
         // The hand's knuckles (wrist to the middle finger) along the controller's aim, the thumb side (little finger to

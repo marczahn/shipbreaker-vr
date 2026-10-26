@@ -62,22 +62,22 @@ interacting, the grapple and the "entity of interest".
   `Transform.forward`, the body, not the head, which is why they flew only roughly where one looked. With hand aiming
   `ThrowOffset` becomes a point 0.2 m in front of the hand and the direction the hand's forward. Placed charges are
   jointed and drop the velocity component, so the direction does not matter for them.
-- Pointer, only with a tool drawn (`VrAim.Aiming`): a laser (2 mm, fading slightly) from the muzzle to the first hit of a plain raycast (default layers minus
-  layers whose name contains "Player", "UI" and our pass layer), with a dot of about 0.5 degrees and a white core on the
-  hit, 5 m long without a hit. Drawn with `UI/Default` in our after-post-process pass (`VrUiPass`) per eye, without
-  depth, under the UI. The first version was a 4 mm cyan beam that faded out; Marc wanted something more like a laser
-  pointer. The laser is cyan with every tool; the dot takes the color the game gives the reticle of the tool in the
-  hand: `GrappleCrosshairController.CrosshairIcon` (lerped to `HookableInRange`, `HookableOutOfRange`,
-  `NotHookableColor`, `NothingColor`), the cutter's `CuttingUIController.m_AimedCenterReticleIcon` (cuttable in range,
-  cooling down, nothing to cut) or the Stinger's `m_ScalpelReticle`; cyan for the other tools and the empty hand. At
-  first the whole laser took that color: grapple `#FFC300`, Stinger `#DBB332` fading to grey, and Marc took the orange
-  laser for the old beam, a different thing than the laser of the empty hand. Log `Laser: <tool> reticle color #...`
-  once per color. The grapple's own in-world reticle (`GrapplingHook.m_ReticleObject`, placed by
-  `HandleAimingReticle` on the closest grapple point and scaled with distance) stays: it is in the world, and its
-  point comes from the hand.
+- Pointer, only with a tool drawn (`VrAim.Aiming`): a cyan laser (2 mm, fading slightly) from the muzzle to the first
+  hit of a plain raycast (default layers minus layers whose name contains "Player", "UI" and our pass layer), 5 m long
+  without a hit. Drawn with `UI/Default` in our after-post-process pass (`VrUiPass`) per eye, without depth, under the
+  UI. The first version was a 4 mm cyan beam that faded out; Marc wanted something more like a laser pointer. For a
+  while it took the color the game gives the tool's reticle (`GrappleCrosshairController.CrosshairIcon`, lerped to
+  `HookableInRange`, `HookableOutOfRange`, `NotHookableColor`, `NothingColor`; the cutter's
+  `CuttingUIController.m_AimedCenterReticleIcon`; the Stinger's `m_ScalpelReticle`; grapple `#FFC300`, Stinger
+  `#DBB332` fading to grey), first the whole laser, which Marc took for the old beam, then only a dot of about 0.5
+  degrees with a white core on the hit. Marc did not want the dots either, so the laser is plain now. For the grapple's
+  color, `GrappleCrosshairController.Update` had to judge its target from the hand (its own camera field
+  `PlayerCamera`, which `AimPatch` does not reach, swapped by a transpiler); that went with the color. The grapple's
+  own in-world reticle (`GrapplingHook.m_ReticleObject`, placed by `HandleAimingReticle` on the closest grapple point
+  and scaled with distance) stays: it is in the world, and its point comes from the hand.
 - The game's crosshair (`VrCrosshair`): while a tool aims from the hand (`VrAim.Aiming`), the reticles in the middle of
-  the view mark where the head looks, which that tool does not use. Hidden through `CanvasRenderer.SetAlpha(0)` (the game never touches that alpha, so
-  its own enabling and coloring go on): the center dot (`CentreDotUIController`, which the game only switches off for
+  the view mark where the head looks, which that tool does not use. Hidden through `CanvasRenderer.SetAlpha(0)` (the
+  game never touches that alpha, so its own enabling and coloring go on): the center dot (`CentreDotUIController`, which the game only switches off for
   the tool menu), the grapple's icon, grips, denied image, center dot, snap image, thrust indicators and distance text
   (`GrappleCrosshairController`), the cutter's center reticle, cooldown ring, cut lines (`mCutLines`, created as needed,
   so the list is collected every second) and edge points, and the Stinger's reticle (`CuttingUIController`). The cut
@@ -88,9 +88,7 @@ interacting, the grapple and the "entity of interest".
   center lies within 2 % of the canvas height of the canvas's center and which is at most 6 % of the height in both
   directions is hidden too, logged as `Crosshair: search N for graphics in the middle of the view: '<path>' (<type>)`.
   Back to alpha 1 with an empty hand or hand aiming off. Log `Crosshair hidden while aiming with the hand: N
-  graphic(s): ...` once. Where the grapple has no target of its own, `GrappleCrosshairController.Update` judges what is
-  aimed at with a ray from its own camera field `PlayerCamera`, which `AimPatch` does not reach; `GrappleCrosshairPatch`
-  puts the aim camera in its place (`VrAim.Instead`), so the laser's color follows the hand.
+  graphic(s): ...` once.
 - Tool buttons (`VrToolInput`, only while hand aiming is active): all on the controller of the hand that holds the tool
   (the right one by default; on the left X stands for A and Y for B), the right stick stays with turning. Trigger =
   `GrappleFire`/`CutterFire`/`DemoChargeFire`; A = `Interact`, or `Throw` if the trigger was held when A went down (the
@@ -234,7 +232,12 @@ interacting, the grapple and the "entity of interest".
   rotation turned over the piece's x to stay a rotation, quaternion (x, -y, -z, w)). Each piece starts from the
   animation's local pose, or from its earlier one if the local pose is still what was set the frame before; that pose
   comes back when the charge leaves the left hand. No stow blend for the right arm then. Logs `Hands: demo charge
-  pieces on the right hand: ...` and `Hands: demo charge pieces moved to the left hand (N)`. Logs: `Hands: <left|right> arm ...` once (bones,
+  pieces on the right hand: ...` and `Hands: demo charge pieces moved to the left hand (N)`. Marc found the charge well
+  placed, but the left hand did not throw: the right hand's throw shows only in how the animation turns it (PoseArm
+  keeps the animation's angle to the eye), and the left hand was turned along its controller. So with the charge in
+  the left hand, that hand takes the right hand's animated axes relative to the eye, read before the right arm is
+  posed and mirrored (quaternion (x, -y, -z, w) in eye space), as its axes relative to the controller
+  (`VrHands.Mirrored`). Its fingers stay in the grab pose. Logs: `Hands: <left|right> arm ...` once (bones,
   fingers) and `Hands: <arm> follows the controller | back to the game`. Marc found both hands looking good in the first
   test.
 - Fingers: a hand that follows its controller closes while its grip is held (fist, or around the tool), through the
