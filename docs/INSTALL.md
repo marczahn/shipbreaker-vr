@@ -37,7 +37,8 @@ Thrust starts 2 cm away from that point and is full at 10 cm. The rows "Thrust d
 both; full thrust always stays at least 5 cm beyond the deadzone.
 
 The right stick turns (left/right) and pitches (up/down), the further, the faster; it needs no trigger. The row "Turning"
-switches turning to steps of 30, 45 or 90 degrees per flick. Y brakes. Mouse, keyboard and gamepad keep working.
+switches turning to steps of 30, 45 or 90 degrees per flick. Y brakes. Pressing the right stick opens the pause menu
+(also in the station), pressing the left stick recenters the view. Mouse, keyboard and gamepad keep working.
 
 A small globe at the bottom of the visor shows where the left controller is while you hold the trigger: its center is
 where you pressed it, its surface full thrust, the small inner globe the deadzone, and a small cross in it moves and turns with your hand. The row
