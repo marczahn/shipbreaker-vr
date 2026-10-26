@@ -360,7 +360,16 @@ namespace ShipbreakerVR
         {
             PutAway(true);
             VrHand.Unhide();
-            if (point != null) Object.Destroy(point.gameObject);
+            if (point != null)
+            {
+                // The game's tool model still hangs on the point: back onto the game's equipment point, where the game
+                // equips it again, instead of being destroyed with the point.
+                var grab = GameRefs.Grab;
+                var home = grab != null && grab.RightHand != null && grab.RightHand.EquipmentGeoTransform != null
+                    ? grab.RightHand.EquipmentGeoTransform : point.parent;
+                for (var i = point.childCount - 1; i >= 0; i--) point.GetChild(i).SetParent(home, false);
+                Object.Destroy(point.gameObject);
+            }
             if (aim != null) Object.Destroy(aim.gameObject);
             point = null;
             model = null;
