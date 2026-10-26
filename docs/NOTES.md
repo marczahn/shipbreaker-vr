@@ -17,6 +17,15 @@ Findings about the game and decisions made while building the mod. Newest sectio
   `OpenXRSettings.renderMode` is forced to MultiPass before the loader initializes.
 - Patching an HDRP type by name with `[HarmonyPatch("Type", "Method")]` threw a `TypeLoadException` that aborted
   `PatchAll`; patches now use `TargetMethod()` + `AccessTools.TypeByName` and are applied class by class in a try/catch.
+- A missing or broken AssetBundle used to throw from `VrXr.LoadSettings` on every F3. Now the first try logs
+  `VR cannot start: ...` as an error with a hint to reinstall, and later F3 presses repeat it as a warning (the bundle
+  cannot be loaded a second time in one game session anyway).
+- The runtime can end the session on its own (Virtual Desktop closed, the link to the headset lost). OpenXR 1.2.8's
+  `OpenXRRestarter` then stops the loader and either restarts it (session loss) or calls `Application.Quit` (the runtime
+  exits) unless its `ShouldCancelQuit` returns false. `VrXr.Watch` (every frame) follows the loader: gone for 3 s, VR
+  counts as stopped and the flat view comes back (`VR session ended by the runtime ...`); back after a restart, VR
+  counts as running again (`VR session restarted by the runtime ...`). `ShouldCancelQuit` is set to return false, so the
+  game keeps running instead of quitting. Not yet seen in the headset.
 
 ## Tool aiming
 All tools raycast through `LynxCameraController.MainCamera.ScreenPointToRay(...)`:

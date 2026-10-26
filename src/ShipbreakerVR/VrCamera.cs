@@ -19,6 +19,7 @@ namespace ShipbreakerVR
         private const float RecenterDelay = 0.5f;
 
         private HDAdditionalCameraData vrHd;
+        private VrHelmet helmet;
 
         public static VrCamera Instance { get; private set; }
 
@@ -101,7 +102,7 @@ namespace ShipbreakerVR
 
             vr.Retarget(gameCamera);
             VrUi.Attach(vr);
-            VrHelmet.Attach(vr);
+            vr.helmet = VrHelmet.Attach(vr);
             VrPerformance.Attach(vr);
         }
 
@@ -277,6 +278,9 @@ namespace ShipbreakerVR
             }
 
             FollowGameCamera();
+            // The UI and the helmet sit on this object too; called from here, their order no longer depends on Unity's.
+            if (VrUi.Instance != null) VrUi.Instance.Late();
+            if (helmet != null) helmet.Late();
         }
 
         private static readonly List<XRDisplaySubsystem> Displays = new List<XRDisplaySubsystem>();

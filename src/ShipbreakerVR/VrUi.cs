@@ -149,7 +149,8 @@ namespace ShipbreakerVR
             visorPlaced = false;
         }
 
-        private void LateUpdate()
+        // From VrCamera.LateUpdate, after the rig's own update (before the helmet), so the order is fixed.
+        public void Late()
         {
             if (!Active)
             {
