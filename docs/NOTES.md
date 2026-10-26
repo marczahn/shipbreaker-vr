@@ -25,14 +25,15 @@ With XR enabled, `LynxCameraController.UpdateScreenDimensions` takes the eye tex
 `ScreenWidth/ScreenCenter`, while the rays go through the flat camera (e.g. 2560x1440), so the cutter fired upwards.
 `ScreenSizePatch` always uses the flat camera's pixel size.
 
-### Aiming with the right hand (`VrAim`, config `Steuerung/ZielenMitHand`)
+### Aiming with the hand (`VrAim`, config `Steuerung/ZielenMitHand`)
 Besides `ScreenPointToRay`, the tools use `MainCameraTransform.position/forward` (tether, grapple throw, magnet, demo
 charge placement, throwing, the cutter's single ray and cut distance), `WorldToViewportPoint`/`WorldToScreenPoint`
 (tether and grapple pick the hit closest to the screen center), and `RaycastSystem.OnUpdate` passes the camera's
 matrices into jobs (`PrepareScreenDualRaycastCommandsJob`, `ScoreRaycastHits`); its subclasses feed grabbing,
 interacting, the grapple and the "entity of interest".
-- A disabled camera (`ShipbreakerVR Aim`, never renders, `stereoTargetEye` None) sits on the right controller's aim
-  pose (`PointerPosition`/`PointerRotation`, grip pose as fallback) in the rig's space, with the main camera's field of
+- A disabled camera (`ShipbreakerVR Aim`, never renders, `stereoTargetEye` None) sits on the aim pose of the controller
+  that holds the tool (`VrToolInput.ToolNode`, the right one unless the left one drew the tool; `PointerPosition`/
+  `PointerRotation`, grip pose as fallback) in the rig's space, with the main camera's field of
   view, rect, aspect and clip planes, so screen points map to the same angles as from the eye.
 - `AimPatch` is a transpiler over every method of `CuttingController`, `CuttingFXController`, `ScalpelController`,
   `ScalpelFXController`, `ScalpelTarget`, `TetherController`, `GrapplingHook`, `MagnetController`, `Scanner`,
@@ -60,14 +61,15 @@ interacting, the grapple and the "entity of interest".
 - Pointer: a beam (4 mm, fading) from the hand to the first hit of a plain raycast (default layers minus layers whose
   name contains "Player", "UI" and our pass layer), with a dot of about 0.7 degrees on the hit, 5 m long without a hit.
   Drawn with `UI/Default` in our after-post-process pass (`VrUiPass`) per eye, without depth, under the UI.
-- Tool buttons (`VrToolInput`, only while hand aiming is active): all on the right controller, the right stick stays
-  with turning. Trigger = `GrappleFire`/`CutterFire`/`DemoChargeFire`; A = `Interact`, or `Throw` if the trigger was
-  held when A went down (the grapple charges while `Throw` is held and throws on release); grip with the trigger held =
-  `RetractionModifier` (reel in; the game only knows reeling in at a fixed speed, there is no reeling out); B tap =
-  `ToolMode` (sent on release); B held 0.4 s = `PlaceTether` held until B is released (the tether runs from where the
-  hand points at the start to where it points at the release), or one `RecallTethers` press if the hand points at
-  nothing. A and B count only without X and Y (pause and centering combos). The throwing gesture was considered and
-  dropped: an accidental throw would look like a bug. The stick press was dropped too: it is imprecise and wears out.
+- Tool buttons (`VrToolInput`, only while hand aiming is active): all on the controller of the hand that holds the tool
+  (the right one by default; on the left X stands for A and Y for B), the right stick stays with turning. Trigger =
+  `GrappleFire`/`CutterFire`/`DemoChargeFire`; A = `Interact`, or `Throw` if the trigger was held when A went down (the
+  grapple charges while `Throw` is held and throws on release); B with the trigger held = `RetractionModifier` (reel in;
+  the game only knows reeling in at a fixed speed, there is no reeling out); B tap = `ToolMode` (sent on release); B
+  held 0.4 s = `PlaceTether` held until B is released (the tether runs from where the hand points at the start to where
+  it points at the release), or one `RecallTethers` press if the hand points at nothing. A button counts only without
+  its twin on the other controller (A + X pause, B + Y centering). The throwing gesture was considered and dropped: an
+  accidental throw would look like a bug. The stick press was dropped too: it is imprecise and wears out.
 - The game polls actions through `LynxControlExtensions.GetInputWasPressed/IsPressed/IsHolding/WasReleased`, which
   Mono inlines; `ToolInputPatch` redirects those calls in the tool classes (grapple, tether, magnet, cutter, demo charge,
   scanner, interaction, throw, hand grab) to versions that OR in the virtual presses. Earlier the trigger went through
@@ -89,29 +91,29 @@ interacting, the grapple and the "entity of interest".
   barrels 10° off the beam. Its rest local pose is restored when hand aiming is inactive and on unload. The tools' shadow
   copies (`m_...Shadow`, `ShadowActivePoint`) stay where they were. The log line `Tool in hand: <tool>; equipment point
   ...` shows the hierarchy, offsets and muzzle once per tool (and cutter mode).
-- Demo charges have no model on the equipment point: the game's right hand holds them (and later the detonator),
-  driven by its animator (`DemoChargeController.m_HandAnimatorController`, triggers like `DemoChargeEquipParameter`) and
+- Demo charges have no model on the equipment point: the game's right hand holds them (and later the detonator), driven
+  by its animator (`DemoChargeController.m_HandAnimatorController`, triggers like `DemoChargeEquipParameter`) and
   Animation Rigging IK towards `HandGrab.m_HandTarget` (`rig_RHand_Target`). Moving that target in a postfix on
   `HandGrab.UpdateHandTarget` had no visible effect (the log confirmed the postfix ran). Now `VrToolModels.PoseArm`
   bends the arm after the animation, from `VrCamera.LateUpdate` (after Animation Rigging, before skinning;
   `onBeforeRender` would be too late for skinned meshes): the bones come from the `TwoBoneIKConstraint` whose target is
   `rig_RHand_Target` (read by reflection from the field `m_Data`: `RigConstraint.data` returns by reference, which
-  reflection cannot call; the first try threw there and never bent anything), or else the humanoid bones of the
-  player's animator. The player has no Animation Rigging constraints: the humanoid fallback found `rig_right_shoulder`
-  > `rig_right_elbow` > `rig_right_hand` on `unit_player`, and the detonator (`PRF_Tool_ExplosiveChargeDetonator`) is a
+  reflection cannot call; the first try threw there and never bent anything), or else the humanoid bones of the player's
+  animator. The player has no Animation Rigging constraints: the humanoid fallback found `rig_right_shoulder` >
+  `rig_right_elbow` > `rig_right_hand` on `unit_player`, and the detonator (`PRF_Tool_ExplosiveChargeDetonator`) is a
   child of `rig_right_hand`. A charge put away with the grip stayed in the animated hand: the game leaves the charge
   state only by drawing another tool (its grab animation takes over), and the animator's stow triggers
   (`AnimationParameters.DemoChargeStowParameter`/`DetonatorStowParameter`) are never fired by the game's code. The mod
-  fires the matching one when the right hand goes from demo charge to nothing (log `Tool in hand: demo charge put
-  away`) and resets them when the charge is drawn again. Stopping the arm pose at once showed the charge for a moment
-  at the flat game's spot at the right, where the stow animation starts; now the renderers on the hand bone are
-  disabled at once (log `hid N renderer(s) on the hand`, re-enabled when the charge is drawn again) and the arm blends
-  from the controller into the animation over 0.35 s. a two-bone solve puts the wrist 8 cm behind the grip pose, and the hand keeps
-  the animation's angle to the game camera. The rig only follows the game camera in `onBeforeRender`, so the hand is
-  placed relative to the rig shifted by the game camera's movement since. The log line `Tool in hand: arm for the demo
-  charge ...` lists all rig constraints, and `Tool in hand: demo charge; wrist ...` whether the detonator hangs on the
-  hand. The equip log of the other tools is written a second after drawing, since the models first slide in from their
-  rest points (the first frame showed offsets over a meter).
+  fires the matching one when the right hand goes from demo charge to nothing (log `Tool in hand: demo charge put away`)
+  and resets them when the charge is drawn again. Stopping the arm pose at once showed the charge for a moment at the
+  flat game's spot at the right, where the stow animation starts; now the renderers on the hand bone are disabled at
+  once (log `hid N renderer(s) on the hand`, re-enabled when the charge is drawn again) and the arm blends from the
+  controller into the animation over 0.35 s. A two-bone solve puts the wrist 8 cm behind the grip pose, and the hand
+  keeps the animation's angle to the game camera. The rig only follows the game camera in `onBeforeRender`, so the hand
+  is placed relative to the rig shifted by the game camera's movement since. The log line `Tool in hand: game arm ...`
+  lists all rig constraints, and `Tool in hand: demo charge; wrist ...` whether the detonator hangs on the hand. The
+  equip log of the other tools is written a second after drawing, since the models first slide in from their rest points
+  (the first frame showed offsets over a meter).
 - Aiming from the muzzle: the aim camera (and the beam) sits on the muzzle of the tool in the hand, pointing along the
   aim pose: grapple `GrapplingHook.m_GrapplingGunBarrel`, Splitsaw `CuttingFXController.m_CutOriginTransform` +
   `m_CutOriginOffset`, Stinger `ScalpelFXController.m_CutOriginTransform` + `m_CutOriginOffset`. The muzzle's offset to
@@ -130,6 +132,25 @@ interacting, the grapple and the "entity of interest".
   `CanUnequipCurrentEquipment`); the game ignores that key for the scanner, which goes through the private
   `EquipmentController.SetEquipment(None)` instead (allowed for the scanner only). Since the grip is now taken, reeling in
   moved from grip + trigger to B + trigger (latched at B's press, like A's throw).
+- Both hands (Marc's wish, one of the zones is at the left hip): either hand draws from the belt, with the same zones;
+  one tool at a time. `VrToolInput.ToolNode` is the hand that holds it: set by a grip press in a zone, back to the right
+  once nothing is equipped and that hand's grip is open (or the left controller is gone). A grip press at the zone of
+  the tool that is already out only moves it to that hand (no select key). This replaced "the same zone again puts the
+  tool away", which grip-hold had made pointless. Only the tool hand's grip holsters. While the left hand holds a tool
+  (`VrToolInput.LeftHoldsTool`, with hand aiming active) its controller works the tool like the right one would, and
+  `VrControls` neither flies nor brakes; the right stick still turns. A left trigger still held when the tool goes
+  flies only after a new press. The belt buzzes per hand, but not while that hand's trigger is held (the grip does not
+  draw then, and flying passes the left hip): the buzz comes when the trigger is let go inside the zone. The grips are
+  read also while hand aiming is inactive, so a grip held through a tracking loss no longer counts as a new press
+  afterwards. Log: `Tool control: <left|right> hand draws|takes the <tool>`, `Tool belt: <left|right> hand at <zone>`.
+- The game's arm is a right arm. With the grapple or cutter in the left hand it would reach for the tool's grip across
+  the body (the grip target moves with the model), so `VrToolModels.Fold` scales the upper arm bone (`armRoot`,
+  `rig_right_shoulder`) to 0.001 in `VrCamera.LateUpdate`, after the animation and before skinning: arm and hand shrink
+  into the shoulder. The scale goes back at `RenderPipelineManager.endFrameRendering` of a render that included the VR
+  camera (the end of a single camera's render may come after the first eye only, with multi-pass), at the latest with
+  the next fold, so the game's code and animation see the arm as usual. Log `Tool in hand: tool in the left hand, right arm folded at ...`.
+  Demo charges and the detonator hang on that hand, so for them the arm is bent across to the left controller instead,
+  the same way as to the right one.
 
 ## Body follows head
 - The body rotates in `OrientationController.HandleAxisRotation` via `Rigidbody.MoveRotation(rotation * mouseDelta)`.

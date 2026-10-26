@@ -2,17 +2,20 @@ using System.Collections.Generic;
 using BBI.Unity.Game;
 using HarmonyLib;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace ShipbreakerVR
 {
-    // The tool models in the right hand while aiming with it (VrAim). The game hangs the equipped tool on the right hand's
-    // equipment point (HandGrab.EquipmentGeoTransform, via GrabController.GetHandPositionTransformAndSetEquipment), a fixed
-    // point on the player's body to the lower right of the view, and moves the game's hand to the tool's grip
-    // (m_EquipmentHandTargetTransforms). Right before rendering, that point goes to the controller: turned like the aim
-    // pose (the barrels run along the point's forward), and shifted so that the tool's grip lies in the controller's grip.
-    // The tools aim from their muzzle (Muzzle), so beam, cut and grapple line leave from the barrel. With hand aiming off
-    // the point goes back. Demo charges have no model on the point: the game's hand holds them, animated, so for them the
-    // arm is bent after the animation until the hand reaches the controller (PoseArm).
+    // The tool models in the hand that holds the tool (VrToolInput.ToolNode) while aiming with it (VrAim). The game hangs
+    // the equipped tool on the right hand's equipment point (HandGrab.EquipmentGeoTransform, via
+    // GrabController.GetHandPositionTransformAndSetEquipment), a fixed point on the player's body to the lower right of the
+    // view, and moves the game's hand to the tool's grip (m_EquipmentHandTargetTransforms). Right before rendering, that
+    // point goes to the controller: turned like the aim pose (the barrels run along the point's forward), and shifted so
+    // that the tool's grip lies in the controller's grip. The tools aim from their muzzle (Muzzle), so beam, cut and
+    // grapple line leave from the barrel. With hand aiming off the point goes back. Demo charges have no model on the
+    // point: the game's hand holds them, animated, so for them the arm is bent after the animation until the hand reaches
+    // the controller (PoseArm). The game's arm is a right arm; with a tool in the left hand it is folded away (Fold),
+    // except for demo charges, which it reaches over for.
     internal static class VrToolModels
     {
         private static readonly AccessTools.FieldRef<HandGrab, List<Transform>> HandTargets =
@@ -210,6 +213,12 @@ namespace ShipbreakerVR
             }
             heldBefore = holding;
 
+            // A grapple or cutter in the left hand: the game's right hand still reaches for the tool's grip, across the
+            // body, so the right arm is folded away. The demo charges hang on that hand, so for them it reaches over.
+            Fold(hand != null && VrToolInput.LeftHoldsTool
+                && (holding == EquipmentController.Equipment.GrappleHook || holding == EquipmentController.Equipment.CuttingTool)
+                && FindArm(hand));
+
             // Fully at the controller while the charge is held; after letting go the arm blends back into the stow
             // animation, starting from the hand instead of the flat game's spot at the right.
             var weight = 0f;
@@ -239,6 +248,45 @@ namespace ShipbreakerVR
             if (weight >= 1f) LogArm(hand, head);
             Bend(armRoot, armMid, armTip, Vector3.Lerp(armTip.position, wrist, weight));
             armTip.rotation = Quaternion.Slerp(animated, wristRotation, weight);
+        }
+
+        // The arm folded away for this frame: scaled down to nothing at the upper arm, after the animation and before
+        // skinning, so arm and hand shrink into the shoulder. Its scale goes back once the VR camera has drawn the frame,
+        // before the game's code or animation sees the arm again; or at the latest with the next fold.
+        private static Transform folded;
+        private static Vector3 foldedScale;
+        private static bool foldHooked;
+        private static bool loggedFold;
+        private const float FoldScale = 0.001f;
+
+        private static void Fold(bool fold)
+        {
+            Unfold();
+            if (!fold) return;
+            folded = armRoot;
+            foldedScale = armRoot.localScale;
+            armRoot.localScale = foldedScale * FoldScale;
+            if (!foldHooked)
+            {
+                foldHooked = true;
+                RenderPipelineManager.endFrameRendering += OnEndFrame;
+            }
+            if (loggedFold) return;
+            loggedFold = true;
+            Plugin.Log.LogInfo($"Tool in hand: tool in the left hand, right arm folded at '{armRoot.name}'");
+        }
+
+        private static void OnEndFrame(ScriptableRenderContext context, Camera[] cameras)
+        {
+            var camera = VrCamera.Instance != null ? VrCamera.Instance.Camera : null;
+            if (camera == null || System.Array.IndexOf(cameras, camera) >= 0) Unfold();
+        }
+
+        private static void Unfold()
+        {
+            if (folded == null) return;
+            folded.localScale = foldedScale;
+            folded = null;
         }
 
         // How long the arm takes to blend from the controller into the stow animation.
@@ -383,7 +431,7 @@ namespace ShipbreakerVR
                 armRoot = armMid = armTip = null;
             }
             if (armRoot == null || armMid == null) armTip = null;
-            Plugin.Log.LogInfo($"Tool in hand: arm for the demo charge {(armTip != null ? $"{Chain(armTip)}, from '{armRoot.name}' over '{armMid.name}'" : "not found")}; rig constraints: {string.Join("; ", constraints)}");
+            Plugin.Log.LogInfo($"Tool in hand: game arm {(armTip != null ? $"{Chain(armTip)}, from '{armRoot.name}' over '{armMid.name}'" : "not found")}; rig constraints: {string.Join("; ", constraints)}");
             return armTip != null;
         }
 
@@ -406,6 +454,9 @@ namespace ShipbreakerVR
         // On unload (hot reload): the equipment point goes back to the game.
         public static void Release()
         {
+            Unfold();
+            if (foldHooked) RenderPipelineManager.endFrameRendering -= OnEndFrame;
+            foldHooked = loggedFold = false;
             HideProps(false);
             stowingSince = -1f;
             Restore();

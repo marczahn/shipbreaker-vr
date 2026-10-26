@@ -11,14 +11,15 @@ using UnityEngine.XR;
 
 namespace ShipbreakerVR
 {
-    // Aiming with the right hand. Every tool aims through the game's main camera: rays through screen points
+    // Aiming with the hand. Every tool aims through the game's main camera: rays through screen points
     // (ScreenPointToRay), its position and forward, and its matrices for the ray grids of grabbing and the grapple.
-    // A camera that never renders sits on the muzzle of the tool in the right hand (the hand's aim pose without a tool
-    // model), pointing where the controller points, with the main camera's lens, and takes the main camera's place in the
-    // tools' code (AimPatch). The screen-space patterns (the cutter's line, the grapple's
-    // search grid) then fan out from the hand as they did from the eye, and rolling the hand rolls the cutter's line.
+    // A camera that never renders sits on the muzzle of the tool in the hand that holds it, the right one unless the left
+    // one drew it (VrToolInput.ToolNode; the hand's aim pose without a tool model), pointing where the controller points,
+    // with the main camera's lens, and takes the main camera's place in the tools' code (AimPatch). The screen-space
+    // patterns (the cutter's line, the grapple's search grid) then fan out from the hand as they did from the eye, and
+    // rolling the hand rolls the cutter's line.
     // A beam from the hand to what it points at shows where that is; the visor's crosshair still marks the head's center.
-    // The buttons of the right controller work the tools while aiming with the hand (VrToolInput).
+    // The buttons of the tool hand's controller work the tools while aiming with the hand (VrToolInput).
     // The tool models go into the hand (VrToolModels).
     internal static class VrAim
     {
@@ -34,7 +35,9 @@ namespace ShipbreakerVR
         private static readonly InputFeatureUsage<Vector3> PointerPosition = new InputFeatureUsage<Vector3>("PointerPosition");
         private static readonly InputFeatureUsage<Quaternion> PointerRotation = new InputFeatureUsage<Quaternion>("PointerRotation");
 
-        private static InputDevice right;
+        // The controller that holds the tool (VrToolInput.ToolNode), the right one unless the left hand drew the tool.
+        private static InputDevice hand;
+        private static XRNode handNode = XRNode.RightHand;
         private static Camera aim;
         private static Transform throwOrigin;
         private static int updatedFrame = -1;
@@ -53,7 +56,7 @@ namespace ShipbreakerVR
         private static Material beamMaterial;
         private static Material dotMaterial;
 
-        // True while the tools aim from the right hand: VR in gameplay, the option on and the controller tracked.
+        // True while the tools aim from the hand: VR in gameplay, the option on and the tool hand's controller tracked.
         public static bool Active
         {
             get
@@ -103,7 +106,7 @@ namespace ShipbreakerVR
                 aim = go.AddComponent<Camera>();
                 aim.enabled = false;
                 aim.stereoTargetEye = StereoTargetEyeMask.None;
-                Plugin.Log.LogInfo("Aim camera created on the right hand");
+                Plugin.Log.LogInfo("Aim camera created");
             }
             aim.transform.SetPositionAndRotation(position, rotation);
             // The main camera's lens and screen rectangle, so screen points map to the same angles as from the eye.
@@ -120,7 +123,7 @@ namespace ShipbreakerVR
         private static bool TryGetAim(out Vector3 position, out Quaternion rotation)
         {
             if (!TryGetPose(out position, out rotation)) return false;
-            if (right.TryGetFeatureValue(CommonUsages.devicePosition, out var local)
+            if (hand.TryGetFeatureValue(CommonUsages.devicePosition, out var local)
                 && VrToolModels.Muzzle(VrCamera.Instance.transform.parent.TransformPoint(local), rotation, out var muzzle))
                 position = muzzle;
             return true;
@@ -132,7 +135,7 @@ namespace ShipbreakerVR
         {
             grip = Vector3.zero;
             if (!TryGetPose(out _, out rotation)) return false;
-            if (!right.TryGetFeatureValue(CommonUsages.devicePosition, out var local)) return false;
+            if (!hand.TryGetFeatureValue(CommonUsages.devicePosition, out var local)) return false;
             grip = VrCamera.Instance.transform.parent.TransformPoint(local);
             return true;
         }
@@ -155,7 +158,7 @@ namespace ShipbreakerVR
         public static bool TryGetHandLocal(out Vector3 grip, out Quaternion rotation)
         {
             grip = Vector3.zero;
-            return TryGetPoseLocal(out _, out rotation) && right.TryGetFeatureValue(CommonUsages.devicePosition, out grip);
+            return TryGetPoseLocal(out _, out rotation) && hand.TryGetFeatureValue(CommonUsages.devicePosition, out grip);
         }
 
         private static bool TryGetPoseLocal(out Vector3 local, out Quaternion localRotation)
@@ -165,16 +168,22 @@ namespace ShipbreakerVR
             var vr = VrCamera.Instance;
             if (!VrXr.IsRunning || !Plugin.AimWithHand.Value || vr == null || vr.FollowsHab) return false;
             if (GameSession.CurrentGameState != GameSession.GameState.Gameplay) return false;
-            if (!right.isValid) right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
-            if (!right.isValid) return false;
-            if (right.TryGetFeatureValue(CommonUsages.isTracked, out var tracked) && !tracked) return false;
-            var pointer = right.TryGetFeatureValue(PointerPosition, out local) && right.TryGetFeatureValue(PointerRotation, out localRotation);
-            if (!pointer && !(right.TryGetFeatureValue(CommonUsages.devicePosition, out local) && right.TryGetFeatureValue(CommonUsages.deviceRotation, out localRotation)))
+            var node = VrToolInput.ToolNode;
+            if (node != handNode || !hand.isValid)
+            {
+                if (node != handNode) loggedPose = false;
+                handNode = node;
+                hand = InputDevices.GetDeviceAtXRNode(node);
+            }
+            if (!hand.isValid) return false;
+            if (hand.TryGetFeatureValue(CommonUsages.isTracked, out var tracked) && !tracked) return false;
+            var pointer = hand.TryGetFeatureValue(PointerPosition, out local) && hand.TryGetFeatureValue(PointerRotation, out localRotation);
+            if (!pointer && !(hand.TryGetFeatureValue(CommonUsages.devicePosition, out local) && hand.TryGetFeatureValue(CommonUsages.deviceRotation, out localRotation)))
                 return false;
             if (!loggedPose)
             {
                 loggedPose = true;
-                Plugin.Log.LogInfo($"Aiming with the right hand ('{right.name}', {(pointer ? "aim pose" : "grip pose, no aim pose")})");
+                Plugin.Log.LogInfo($"Aiming with the {(handNode == XRNode.LeftHand ? "left" : "right")} hand ('{hand.name}', {(pointer ? "aim pose" : "grip pose, no aim pose")})");
             }
             return true;
         }

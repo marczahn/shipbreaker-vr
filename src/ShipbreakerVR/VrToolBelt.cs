@@ -3,10 +3,10 @@ using UnityEngine.XR;
 
 namespace ShipbreakerVR
 {
-    // Picking the tools off the body instead of the flat game's wheel, as Marc wanted: reaching there with the right hand
-    // and pressing the grip draws the tool, doing it again at the same place puts it away. The zones are measured from the
-    // head in tracking space (real meters), turned with the head's heading, so they stay at the body whichever way one
-    // looks or the playspace turns. Entering a zone gives a short buzz.
+    // Picking the tools off the body instead of the flat game's wheel, as Marc wanted: reaching there with either hand and
+    // pressing the grip draws the tool (VrToolInput), letting go puts it back. The zones are measured from the head in
+    // tracking space (real meters), turned with the head's heading, so they stay at the body whichever way one looks or
+    // the playspace turns; they are the same for both hands. Entering a zone gives that hand a short buzz.
     //   right hip            grapple
     //   left hip             demo charges (drawn across the body)
     //   over the right shoulder  cutter
@@ -25,30 +25,32 @@ namespace ShipbreakerVR
         private const float HelmetReach = 0.22f;
         private const float HelmetSide = 0.06f;
 
-        private static Zone current;
+        // The zone each hand last buzzed for (left, right).
+        private static readonly Zone[] announced = new Zone[2];
         private static int logs;
 
-        // The zone the right hand is in this frame (None without tracking).
-        public static Zone Update(InputDevice right)
+        // The zone the hand is in this frame (None without tracking). Quiet (while its trigger is held) it does not buzz;
+        // the buzz comes when the trigger is let go inside the zone.
+        public static Zone Update(XRNode node, InputDevice device, bool quiet)
         {
-            var zone = Find(right, out var local);
-            if (zone != current)
+            var zone = Find(device, out var local);
+            var index = node == XRNode.LeftHand ? 0 : 1;
+            if (zone == Zone.None) announced[index] = Zone.None;
+            else if (zone != announced[index] && !quiet)
             {
-                current = zone;
-                if (zone != Zone.None)
-                {
-                    right.SendHapticImpulse(0, 0.25f, 0.04f);
-                    if (logs++ < 40) Plugin.Log.LogInfo($"Tool belt: hand at {zone} ({local.x:0.00}, {local.y:0.00}, {local.z:0.00} m from the head)");
-                }
+                announced[index] = zone;
+                device.SendHapticImpulse(0, 0.25f, 0.04f);
+                if (logs++ < 40)
+                    Plugin.Log.LogInfo($"Tool belt: {(index == 0 ? "left" : "right")} hand at {zone} ({local.x:0.00}, {local.y:0.00}, {local.z:0.00} m from the head)");
             }
             return zone;
         }
 
-        private static Zone Find(InputDevice right, out Vector3 local)
+        private static Zone Find(InputDevice device, out Vector3 local)
         {
             local = Vector3.zero;
             var vr = VrCamera.Instance;
-            if (vr == null || !right.TryGetFeatureValue(CommonUsages.devicePosition, out var hand)) return Zone.None;
+            if (vr == null || !device.TryGetFeatureValue(CommonUsages.devicePosition, out var hand)) return Zone.None;
             var head = vr.transform;
             var forward = head.localRotation * Vector3.forward;
             forward.y = 0f;
@@ -68,6 +70,6 @@ namespace ShipbreakerVR
             return Zone.None;
         }
 
-        public static void Reset() => current = Zone.None;
+        public static void Reset() => announced[0] = announced[1] = Zone.None;
     }
 }
