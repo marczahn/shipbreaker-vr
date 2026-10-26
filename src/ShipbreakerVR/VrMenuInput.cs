@@ -82,9 +82,12 @@ namespace ShipbreakerVR
         }
 
         // Unloading (ScriptEngine reload): InControl would otherwise keep a device of the old instance next to the new one.
+        // The game takes a detached controller for an unplugged gamepad and opens the pause menu
+        // (InputHandlerGameplay.OnDeviceDetachedGameplay), unless the device is passive; so it goes as a passive one.
         public static void Detach()
         {
             if (instance == null) return;
+            instance.Passive = true;
             if (InputManager.IsSetup && InputManager.Devices.Contains(instance)) InputManager.DetachDevice(instance);
             instance = null;
             Plugin.Log.LogInfo("Menu control: controllers detached from InControl");
