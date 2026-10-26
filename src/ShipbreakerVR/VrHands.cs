@@ -88,6 +88,7 @@ namespace ShipbreakerVR
                 || (grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped && (equipment != EquipmentController.Equipment.DemoCharge || chargeLeft))));
             // The demo charge's arm is bent there; another bend on top would fight it.
             if (rightBusy) RightArm.Weight = 0f;
+            LogStates();
             Fingers(LeftArm, leftWasDriven);
             Fingers(RightArm, rightWasDriven);
             Pose(LeftArm, active && chargeLeft && Mirrored(out var hold) ? hold : Quaternion.identity);
@@ -305,6 +306,47 @@ namespace ShipbreakerVR
                 Plugin.Log.LogInfo($"Hands: demo charge pieces moved to the left hand ({chargePieces.Count})");
         }
 
+        // For finding a closed hand pose: every clip of the player's animator once, and on each change of a hand's state
+        // (grabbing a handhold is Success) the clips playing on each layer, half a second after the change.
+        private static void LogClips()
+        {
+            var controller = animator != null ? animator.runtimeAnimatorController : null;
+            if (controller == null) return;
+            var layers = new List<string>();
+            for (var i = 0; i < animator.layerCount; i++) layers.Add($"{i} '{animator.GetLayerName(i)}'");
+            Plugin.Log.LogInfo($"Hands: animator '{controller.name}', layers {string.Join(", ", layers)}; clips: " +
+                string.Join(", ", controller.animationClips.Where(c => c != null).Select(c => c.name).Distinct().OrderBy(n => n)));
+        }
+
+        private static HandGrab.HandState leftState, rightState;
+        private static int stateLogs;
+        private static float stateLogAt = -1f;
+
+        private static void LogStates()
+        {
+            var left = grab.LeftHand.CurrentHandState;
+            var right = grab.RightHand.CurrentHandState;
+            if (left != leftState || right != rightState)
+            {
+                leftState = left;
+                rightState = right;
+                // Half a second later, once the animator has blended into the new state.
+                stateLogAt = Time.unscaledTime + 0.5f;
+                return;
+            }
+            if (stateLogAt < 0f || Time.unscaledTime < stateLogAt) return;
+            stateLogAt = -1f;
+            if (animator == null || stateLogs++ >= 40) return;
+            var playing = new List<string>();
+            for (var i = 0; i < animator.layerCount; i++)
+            {
+                var clips = animator.GetCurrentAnimatorClipInfo(i).Concat(animator.GetNextAnimatorClipInfo(i))
+                    .Where(c => c.clip != null && c.weight > 0.01f).Select(c => $"{c.clip.name} {c.weight:0.00}").ToList();
+                if (clips.Count > 0) playing.Add($"{animator.GetLayerName(i)} ({animator.GetLayerWeight(i):0.00}): {string.Join(", ", clips)}");
+            }
+            Plugin.Log.LogInfo($"Hands: left {left}, right {right}; playing {string.Join("; ", playing)}");
+        }
+
         private static bool Find()
         {
             if (grab != null) return true;
@@ -317,6 +359,7 @@ namespace ShipbreakerVR
                 HumanBodyBones.LeftIndexProximal, HumanBodyBones.LeftMiddleProximal, HumanBodyBones.LeftLittleProximal);
             Setup(RightArm, grab.RightHand, animator, HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand,
                 HumanBodyBones.RightIndexProximal, HumanBodyBones.RightMiddleProximal, HumanBodyBones.RightLittleProximal);
+            LogClips();
             foreach (var arm in new[] { LeftArm, RightArm })
                 Plugin.Log.LogInfo($"Hands: {arm.Name} arm {Name(arm.Upper)} > {Name(arm.Lower)} > {Name(arm.Wrist)}, fingers {(arm.Index != null && arm.Middle != null && arm.Little != null ? "found" : "missing")}");
             return true;
