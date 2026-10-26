@@ -25,7 +25,7 @@ namespace ShipbreakerVR
             if (Displays.Count == 0) return;
 
             var display = Displays[0];
-            if (Plugin.SeparateEyeTextures.Value) display.textureLayout = XRDisplaySubsystem.TextureLayout.SeparateTexture2Ds;
+            if (VrSettings.SeparateEyeTextures.Value) display.textureLayout = XRDisplaySubsystem.TextureLayout.SeparateTexture2Ds;
 
             if (logged || !display.running) return;
             logged = true;

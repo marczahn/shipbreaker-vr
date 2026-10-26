@@ -29,7 +29,7 @@ namespace ShipbreakerVR
         // From VrCamera.LateUpdate: hidden is true while only the UI shows on black.
         public static void Track(bool hidden)
         {
-            if (!Plugin.Diagnostics.Value)
+            if (!VrSettings.Diagnostics.Value)
             {
                 tracing = false;
                 return;

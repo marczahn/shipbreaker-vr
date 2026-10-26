@@ -113,17 +113,17 @@ namespace ShipbreakerVR
             PauseTruckCamera(running && inHab);
             if (ambientOcclusion != null)
             {
-                var mode = Plugin.AmbientOcclusion.Value;
+                var mode = VrSettings.AmbientOcclusion.Value;
                 ambientOcclusion.quality.overrideState = running && mode == Occlusion.Niedrig;
                 ambientOcclusion.intensity.overrideState = running && mode == Occlusion.Aus;
             }
-            RecordFrame(Plugin.Diagnostics.Value && running && !worldHidden ? Label(followed, inHab) : null);
+            RecordFrame(VrSettings.Diagnostics.Value && running && !worldHidden ? Label(followed, inHab) : null);
         }
 
         private static string Label(Camera followed, bool inHab)
         {
             if (followed == null) return null;
-            var occlusion = Plugin.AmbientOcclusion.Value;
+            var occlusion = VrSettings.AmbientOcclusion.Value;
             var scale = UnityEngine.XR.XRSettings.eyeTextureResolutionScale;
             if (statsLabel == null || followed != labelCamera || occlusion != labelOcclusion || !Mathf.Approximately(scale, labelScale))
             {

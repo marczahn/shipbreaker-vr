@@ -407,6 +407,21 @@ rect, list rows).
 Labels, values and hints are German when the game's language (`LynxGameUserOptions.Language`) starts with "de",
 otherwise English.
 
+The settings themselves (`VrSettings`): every entry is bound there, with its range and texts. A setting with a VR row
+is described once, by its hint in English and German; the menu shows it in the game's language, and the `.cfg` gets the
+English hint, for a list the menu's names of its values (`Values: Kopf = Follows head, ...`) and a note for what only
+the file needs (units). Before, each setting had a `.cfg` description and two hints, and they drifted apart. Number
+settings carry an `AcceptableValueRange`: BepInEx clamps a value edited into the `.cfg` when it loads it (and every
+value set in code), and the sliders take their ends from it, so a range is written down once. Relations between two
+settings stay in code (`VrControls.KeepThrustRange`: full thrust at least 5 cm beyond the deadzone).
+The rows follow their settings through the config file's `SettingChanged`: a value clamped or pushed along by
+another one (thrust range, render resolution limited by video memory) shows at once, without the code that changed it
+knowing about the menu. While a slider is dragged its own value only updates the text, so rounding to the slider's
+step does not fight the drag. The keys (F3, F4, F7, F8, Shift+F8) are settings too (`[Tasten]`); `VrSettings.Pressed`
+checks them like BepInEx's `KeyboardShortcut.IsDown`, except that other held keys (flying with the keyboard) do not
+block them, only an extra Shift, Ctrl or Alt does, so F8 and Shift+F8 stay apart. `Anzeige/UiSpiegeln` takes effect
+at once (the UI quad is rebuilt when it changes).
+
 Keyboard/gamepad navigation (`UIInControlBridge`): Unity's navigation events are off; the selected row's
 bridge reads the arrow keys from its serialized action set (FrontEnd or Paused). `LynxControls` loads only the set of
 the current game state, so a bridge with the wrong set gets no input at all. With explicit navigation the bridge moves

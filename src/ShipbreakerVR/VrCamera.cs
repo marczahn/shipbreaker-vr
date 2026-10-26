@@ -50,14 +50,13 @@ namespace ShipbreakerVR
         public bool FollowsHab { get; private set; }
 
         // Player size relative to the world. Scaling the rig also scales eye distance and tracked head movement.
-        public static float WorldScale => Mathf.Clamp(Plugin.WorldScale.Value, 0.5f, 3f);
+        public static float WorldScale => VrSettings.WorldScale.Value;
 
         // Shift of the eyes against the game camera, in meters of the player's size: right (along the head's heading, so
         // it stays on the same side of the body when turning) and up. For players whose head sits off center or too low.
-        public static Vector3 HeadOffset => new Vector3(
-            Mathf.Clamp(Plugin.HeadSideways.Value, -HeadOffsetRange, HeadOffsetRange) * 0.01f,
-            Mathf.Clamp(Plugin.HeadHeight.Value, -HeadOffsetRange, HeadOffsetRange) * 0.01f, 0f);
+        public static Vector3 HeadOffset => new Vector3(VrSettings.HeadSideways.Value * 0.01f, VrSettings.HeadHeight.Value * 0.01f, 0f);
 
+        // Range of the head offset settings, in centimeters either way.
         public const float HeadOffsetRange = 10f;
 
         // The head offset in the world: how far the eyes sit from where the game puts them (the helmet stays there).
@@ -213,7 +212,7 @@ namespace ShipbreakerVR
         private void Update()
         {
             VrFrame.Update();
-            if (VrXr.IsRunning && Input.GetKeyDown(KeyCode.F4)) Recenter(true);
+            if (VrXr.IsRunning && VrSettings.Pressed(VrSettings.CenterKey)) Recenter(true);
             UpdateCenterPress();
         }
 

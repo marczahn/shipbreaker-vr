@@ -94,7 +94,7 @@ namespace ShipbreakerVR
         // Only while the VR camera is the player's: in the Hab the helmet would otherwise come along from the bay
         // and hang around the head in the player's quarters.
         private Mode CurrentMode => VrXr.IsRunning && vr != null && vr.GameCamera != null && vr.GameCamera == LynxCameraController.MainCamera
-            ? Plugin.Helmet.Value
+            ? VrSettings.Helmet.Value
             : Mode.Spiel;
 
         private void Follow()

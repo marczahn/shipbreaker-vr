@@ -23,7 +23,7 @@ namespace ShipbreakerVR
         public static void Apply(Transform point)
         {
             if (point == null) return;
-            if (!Plugin.MirrorCutter.Value)
+            if (!VrSettings.MirrorCutter.Value)
             {
                 if (replaced.Count > 0) Restore();
                 return;

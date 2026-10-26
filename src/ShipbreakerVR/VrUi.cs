@@ -42,6 +42,7 @@ namespace ShipbreakerVR
         private float gameFade;
         private bool loggedGameFade;
         private Mesh quad;
+        private bool quadFlipped;
         private int renderedFrame = -1;
         private float nextUiCameraSearch;
         private int loggedEyes;
@@ -126,7 +127,7 @@ namespace ShipbreakerVR
             if (quad != null) Destroy(quad);
         }
 
-        public bool Active => VrXr.IsRunning && Plugin.UiInVr.Value && vr != null;
+        public bool Active => VrXr.IsRunning && VrSettings.UiInVr.Value && vr != null;
 
         // For the F8 dump (VrDiagnostics).
         public RenderTexture Texture => texture;
@@ -158,10 +159,10 @@ namespace ShipbreakerVR
                 return;
             }
 
-            if (onMonitor && Input.GetKeyDown(KeyCode.F7))
+            if (onMonitor && VrSettings.Pressed(VrSettings.MonitorLookKey))
             {
-                Plugin.MonitorLook.Value = !Plugin.MonitorLook.Value;
-                Plugin.Log.LogInfo($"Monitor look {(Plugin.MonitorLook.Value ? "on" : "off")} (F7)");
+                VrSettings.MonitorLook.Value = !VrSettings.MonitorLook.Value;
+                Plugin.Log.LogInfo($"Monitor look {(VrSettings.MonitorLook.Value ? "on" : "off")} ({VrSettings.MonitorLookKey.Value})");
             }
 
             // Until the game has its UI camera (main menu) we use our own; look for the game's twice a second, not
@@ -202,8 +203,14 @@ namespace ShipbreakerVR
                     material.SetInt("unity_GUIZTestMode", (int)CompareFunction.Always);
                 }
                 material.mainTexture = texture;
-                if (quad == null) quad = CreateQuad();
                 Plugin.Log.LogInfo($"UI texture {width}x{height} created");
+            }
+            // UiSpiegeln takes effect at once: the quad is built again when it changes.
+            if (quad == null || quadFlipped != VrSettings.FlipUi.Value)
+            {
+                if (quad != null) Destroy(quad);
+                quadFlipped = VrSettings.FlipUi.Value;
+                quad = CreateQuad(quadFlipped);
             }
 
             // Canvas size follows the UI camera; set it early in the frame so the layout fits.
@@ -258,9 +265,9 @@ namespace ShipbreakerVR
             {
                 // Visor: in front of the head, as large as the game camera's field of view.
                 // In world units, so the visor keeps its felt distance at any world scale.
-                var distance = Plugin.HudDistance.Value * VrCamera.WorldScale;
+                var distance = VrSettings.HudDistance.Value * VrCamera.WorldScale;
                 var fov = LynxCameraController.MainCamera != null ? LynxCameraController.MainCamera.fieldOfView : 60f;
-                var h = 2f * distance * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad) * Plugin.HudScale.Value;
+                var h = 2f * distance * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad) * VrSettings.HudScale.Value;
                 // Stays centered on the head, only its rotation lags; the rig's rotation (turning the body) applies at once.
                 var rotation = head.parent.rotation * SteadyVisor(head.localRotation);
                 screenMatrix = Matrix4x4.TRS(head.position + rotation * new Vector3(0, 0, distance), rotation, new Vector3(h * aspect, h, 1f));
@@ -272,7 +279,7 @@ namespace ShipbreakerVR
             if (monitor != null)
             {
                 onMonitor = true;
-                if (Plugin.MonitorLook.Value) material.color = MonitorTint;
+                if (VrSettings.MonitorLook.Value) material.color = MonitorTint;
                 VrHab.MonitorScreen(monitor, out var center, out var rotation, out var size);
                 var fit = Mathf.Min(size.x, size.y * aspect);
                 var height = fit / aspect;
@@ -292,7 +299,7 @@ namespace ShipbreakerVR
                 menuFollowing = false;
                 // Turned to the head's yaw, so looking far up or down still puts it straight ahead at eye height.
                 menuRotation = Quaternion.Euler(0f, head.localEulerAngles.y, 0f);
-                menuPosition = head.localPosition + menuRotation * Vector3.forward * Plugin.MenuDistance.Value;
+                menuPosition = head.localPosition + menuRotation * Vector3.forward * VrSettings.MenuDistance.Value;
             }
             else
             {
@@ -305,7 +312,7 @@ namespace ShipbreakerVR
                 }
             }
             // menuPosition is in rig space and already scales with the rig; the width is in world units.
-            var w = Plugin.MenuWidth.Value * VrCamera.WorldScale;
+            var w = VrSettings.MenuWidth.Value * VrCamera.WorldScale;
             screenMatrix = Matrix4x4.TRS(rig.TransformPoint(menuPosition), rig.rotation * menuRotation, new Vector3(w, w / aspect, 1f));
         }
 
@@ -314,7 +321,7 @@ namespace ShipbreakerVR
         private Quaternion SteadyVisor(Quaternion head)
         {
             float deadZone, speed, maxLag;
-            switch (Plugin.HudSteadying.Value)
+            switch (VrSettings.HudSteadying.Value)
             {
                 case Steadying.Schwach: deadZone = 1.5f; speed = 8f; maxLag = 8f; break;
                 case Steadying.Stark: deadZone = 4f; speed = 4f; maxLag = 15f; break;
@@ -369,7 +376,7 @@ namespace ShipbreakerVR
                 cmd.DrawMesh(quad, Matrix4x4.Scale(new Vector3(2f, 2f, 1f)), gameFadeMaterial, 0, 0);
             }
             cmd.SetViewProjectionMatrices(view, proj);
-            var look = onMonitor && Plugin.MonitorLook.Value && shadeMaterial != null;
+            var look = onMonitor && VrSettings.MonitorLook.Value && shadeMaterial != null;
             if (look) cmd.DrawMesh(quad, glowMatrix, glowMaterial, 0, 0);
             cmd.DrawMesh(quad, screenMatrix, material, 0, 0);
             if (!menuMode) VrFlightGlobe.Draw(cmd, screenMatrix);
@@ -396,7 +403,7 @@ namespace ShipbreakerVR
             var fade = VrHab.Fade;
             if (fade <= 0f || !VrXr.IsRunning || vr == null || context.hdCamera.camera != vr.Camera) return;
             if (fadeMaterial == null) fadeMaterial = OverlayMaterial();
-            if (quad == null) quad = CreateQuad();
+            if (quad == null) quad = CreateQuad(quadFlipped = VrSettings.FlipUi.Value);
             fadeMaterial.color = new Color(0f, 0f, 0f, fade);
 
             var cmd = context.cmd;
@@ -548,9 +555,8 @@ namespace ShipbreakerVR
             return outside + Mathf.Min(Mathf.Max(qx, qy), 0f) - radius;
         }
 
-        private static Mesh CreateQuad()
+        private static Mesh CreateQuad(bool flip)
         {
-            var flip = Plugin.FlipUi.Value;
             var mesh = new Mesh { name = "ShipbreakerVR UI" };
             mesh.vertices = new[] { new Vector3(-0.5f, -0.5f, 0), new Vector3(0.5f, -0.5f, 0), new Vector3(0.5f, 0.5f, 0), new Vector3(-0.5f, 0.5f, 0) };
             mesh.uv = flip

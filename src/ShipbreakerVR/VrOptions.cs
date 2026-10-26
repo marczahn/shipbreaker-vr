@@ -19,14 +19,18 @@ namespace ShipbreakerVR
         private abstract class Row
         {
             public string Label;
-            // What the setting is for and when to change it, shown below the list in the VR tab.
-            public string Hint;
+            // The setting the row shows (none for an action).
+            public abstract ConfigEntryBase Setting { get; }
+            // What the setting is for and when to change it, shown below the list in the VR tab; it comes with the
+            // setting (VrSettings).
+            public virtual string Hint => VrSettings.Hint(Setting);
             public abstract string ValueText { get; }
         }
 
         private class BoolRow : Row
         {
             public ConfigEntry<bool> Entry;
+            public override ConfigEntryBase Setting => Entry;
             public override string ValueText => Entry.Value ? L("On", "An") : L("Off", "Aus");
         }
 
@@ -34,43 +38,62 @@ namespace ShipbreakerVR
         private class ActionRow : Row
         {
             public Action Run;
+            public Func<string> Explained;
+            public override ConfigEntryBase Setting => null;
+            public override string Hint => Explained();
             public override string ValueText => L("Go", "Los");
         }
 
+        // A number setting; the slider's ends are the setting's range.
         private class SliderRow : Row
         {
             public ConfigEntry<float> Entry;
-            public float Min, Max;
             public string Format;
             // Values snap to multiples of this.
             public float Step = 0.01f;
+            public override ConfigEntryBase Setting => Entry;
+            public float Min => VrSettings.Range(Entry).Min;
+            public float Max => VrSettings.Range(Entry).Max;
             public override string ValueText => Entry.Value.ToString(Format, System.Globalization.CultureInfo.InvariantCulture);
         }
 
         private class ListRow : Row
         {
+            public ConfigEntryBase Entry;
             public Func<int> Get;
             public Action<int> Set;
-            public string[] Names;
-            public Action Reset;
-            public override string ValueText => Names[Mathf.Clamp(Get(), 0, Names.Length - 1)];
+            public override ConfigEntryBase Setting => Entry;
+            public override string ValueText
+            {
+                get
+                {
+                    var names = VrSettings.Names(Entry);
+                    return names.Length > 0 ? names[Mathf.Clamp(Get(), 0, names.Length - 1)] : Entry.BoxedValue.ToString();
+                }
+            }
         }
 
         private static readonly Dictionary<OptionEntry, Row> Rows = new Dictionary<OptionEntry, Row>();
 
+        // The rows show every change of their setting, from the menu or not (a value clamped or pushed along by another
+        // one, as with the thrust range and the render resolution). Before, the code that changed a value had to
+        // refresh the options itself. The config file goes with the plugin instance on a reload, and the handler with it.
+        static VrOptions() => VrSettings.File.SettingChanged += (_, e) => Refresh(e.ChangedSetting);
+
+        // The slider row being dragged: its value only shows as text, so rounding it does not fight the slider.
+        private static OptionEntry sliding;
+
         private static Row[] CreateRows()
         {
-            ListRow EnumRow<T>(string label, ConfigEntry<T> entry, string[] names, string hint) where T : Enum
+            ListRow EnumRow<T>(string label, ConfigEntry<T> entry) where T : Enum
             {
                 var values = (T[])Enum.GetValues(typeof(T));
                 return new ListRow
                 {
                     Label = label,
-                    Hint = hint,
-                    Names = names,
+                    Entry = entry,
                     Get = () => Array.IndexOf(values, entry.Value),
                     Set = i => entry.Value = values[(i % values.Length + values.Length) % values.Length],
-                    Reset = () => entry.Value = (T)entry.DefaultValue,
                 };
             }
 
@@ -79,132 +102,41 @@ namespace ShipbreakerVR
                 new ActionRow
                 {
                     Label = L("Center view", "Ansicht zentrieren"), Run = VrCamera.RecenterView,
-                    Hint = L("Puts the view and the menus in front of you again, like F4 or pressing the left stick. Use it after you turned around or moved away from your spot.",
-                        "Richtet Blick und Menüs wieder vor dir aus, wie F4 oder ein Druck auf den linken Stick. Nutzen, wenn du dich umgedreht oder von deinem Platz entfernt hast."),
+                    Explained = () => L($"Puts the view and the menus in front of you again, like {VrSettings.CenterKey.Value} or pressing the left stick. Use it after you turned around or moved away from your spot.",
+                        $"Richtet Blick und Menüs wieder vor dir aus, wie {VrSettings.CenterKey.Value} oder ein Druck auf den linken Stick. Nutzen, wenn du dich umgedreht oder von deinem Platz entfernt hast."),
                 },
-                new BoolRow
-                {
-                    Label = L("Aim with the hand", "Zielen mit der Hand"), Entry = Plugin.AimWithHand,
-                    Hint = L("Tools, grabbing and interacting aim where the controller with the tool points, from the tool's muzzle; a laser shows where, and the crosshair leaves the middle of the view. With an empty hand: no laser, A uses what is in the middle of the view. Grip at the body draws a tool with either hand and holds it while held: right hip grapple, left hip demo charges, over the right shoulder cutter, side of the helmet scanner. Trigger: fire or grapple, A: use (with the trigger held: throw), B with the trigger held: reel in, B: tool mode, B held: tether. In the left hand X and Y work as A and B, and flying pauses. The suit's hands follow the controllers. Off: aim at the center of your view.",
-                        "Werkzeuge, Greifen und Benutzen zielen dorthin, wohin der Controller mit dem Werkzeug zeigt, vom Lauf des Werkzeugs aus; ein Laser zeigt die Stelle, und das Fadenkreuz verschwindet aus der Blickmitte. Mit leerer Hand: kein Laser, A benutzt, was in der Blickmitte ist. Grip am Körper zieht mit jeder Hand ein Werkzeug und hält es, solange Grip gedrückt bleibt: rechte Hüfte Greifhaken, linke Hüfte Sprengladungen, über die rechte Schulter Cutter, Helmseite Scanner. Trigger: feuern oder greifen, A: benutzen (mit Trigger: werfen), B mit Trigger: einholen, B: Werkzeugmodus, B halten: Tether. In der linken Hand wirken X und Y wie A und B, und das Fliegen ruht. Die Hände des Anzugs folgen den Controllern. Aus: Ziel ist die Blickmitte."),
-                },
-                new BoolRow
-                {
-                    Label = L("Two tools at once", "Zwei Werkzeuge gleichzeitig"), Entry = Plugin.TwoTools,
-                    Hint = L("Two of cutter, grapple and demo charges can be held at once, one in each hand: while one hand holds one of them, draw another with the other hand. Each hand's trigger and buttons work its own tool. The scanner hides the other hand's tool while it is out; keep that hand's grip and the tool comes back after the scan.",
-                        "Zwei von Cutter, Greifhaken und Sprengladungen lassen sich gleichzeitig halten, je eins pro Hand: Während eine Hand eins davon hält, zieht die andere Hand ein weiteres. Trigger und Tasten jeder Hand bedienen ihr eigenes Werkzeug. Der Scanner blendet das Werkzeug der anderen Hand aus; hältst du dort den Grip, kommt es nach dem Scan zurück."),
-                },
-                new BoolRow
-                {
-                    Label = L("Hold on and climb", "Festhalten und Hangeln"), Entry = Plugin.Climbing,
-                    Hint = L("Grip with a hand that holds no tool, close to a surface, holds on there; moving the hand pulls you along it, hand over hand with both. A light part comes to the hand instead, the station and fixed hulls stay put. Letting go keeps your speed, so you can push off. While the left hand holds on, flying rests. At a control (airlock console, switch) the grip holds on too; A or X works it.",
-                        "Grip mit einer Hand ohne Werkzeug, nah an einer Oberfläche, hält dich dort fest; bewegst du die Hand, ziehst du dich daran entlang, mit beiden Händen Hand über Hand. Ein leichtes Teil kommt stattdessen zur Hand, Station und feste Rümpfe bleiben, wo sie sind. Loslassen behält deinen Schwung, so kannst du dich abstoßen. Solange die linke Hand festhält, ruht das Fliegen. An einem Bedienelement (Schleusenkonsole, Schalter) hält der Grip dich ebenfalls fest; bedient wird es mit A oder X."),
-                },
-                new BoolRow
-                {
-                    Label = L("Fit tools in the hand", "Werkzeuge justieren"), Entry = VrToolFit.Adjusting,
-                    Hint = L("While one hand holds the cutter or the grapple, squeeze the other hand's grip to grab the tool and move it until it sits in the hand; letting go stores the place for that tool and hand. Switch it off when they fit.",
-                        "Während eine Hand Cutter oder Greifhaken hält: Grip der anderen Hand greift das Werkzeug, bewege es, bis es in der Hand sitzt. Loslassen speichert die Lage für dieses Werkzeug und diese Hand. Danach wieder ausschalten."),
-                },
-                EnumRow(L("Controller flying", "Controllersteuerung"), Plugin.ControlScheme, new[] { L("Off", "Aus"), L("VTOL (trigger)", "VTOL (Trigger)") },
-                    L("Hold the left trigger: moving the controller thrusts that way, tilting it sideways rolls. Right stick: turn and pitch. Y: brake. Off if you fly with mouse and keyboard or a gamepad.",
-                        "Linken Trigger halten: Controller verschieben gibt Schub in diese Richtung, seitlich Kippen rollt. Rechter Stick: drehen und neigen. Y: Bremse. Aus, wenn du mit Maus und Tastatur oder Gamepad fliegst.")),
-                EnumRow(L("Turning", "Drehen"), Plugin.TurnMode, new[] { L("Smooth", "Fließend"), "30°", "45°", "90°" },
-                    L("How the right stick turns you when flying with the controllers: smoothly, or in steps of 30, 45 or 90 degrees per flick. Steps are easier on the stomach.",
-                        "Wie der rechte Stick dich beim Fliegen mit den Controllern dreht: fließend oder in Schritten von 30, 45 oder 90 Grad pro Antippen. Schritte sind magenfreundlicher.")),
-                new SliderRow
-                {
-                    Label = L("Thrust deadzone (cm)", "Schub-Totzone (cm)"), Entry = Plugin.ThrustDeadzone, Min = 0f, Max = VrControls.DeadzoneMax, Format = "0", Step = 1f,
-                    Hint = L("How far you move the left controller from where you pressed the trigger before thrust starts. Raise it if you drift without meaning to.",
-                        "Wie weit du den linken Controller von dort, wo du den Trigger gedrückt hast, bewegen musst, bevor Schub einsetzt. Erhöhen, wenn du ungewollt driftest."),
-                },
-                new SliderRow
-                {
-                    Label = L("Full thrust at (cm)", "Voller Schub ab (cm)"), Entry = Plugin.ThrustFull, Min = VrControls.MinThrustRange, Max = VrControls.FullMax, Format = "0", Step = 1f,
-                    Hint = L("How far you move the left controller for full thrust. Shorter needs less arm movement, longer gives finer control. Always at least 5 cm beyond the deadzone.",
-                        "Wie weit du den linken Controller für vollen Schub bewegst. Kürzer braucht weniger Armbewegung, länger erlaubt feinere Kontrolle. Immer mindestens 5 cm mehr als die Totzone."),
-                },
-                EnumRow(L("Flight globe", "Flugkugel"), Plugin.FlightGlobe, new[] { L("Off", "Aus"), L("Always", "Immer"), L("While flying", "Beim Fliegen") },
-                    L("A small globe in the visor shows where your left controller is while you hold the trigger: the center is where you pressed it, the surface full thrust. Helps to find the zero point again.",
-                        "Eine kleine Kugel im Visier zeigt, wo dein linker Controller ist, während du den Trigger hältst: die Mitte ist, wo du gedrückt hast, die Oberfläche voller Schub. Hilft, den Nullpunkt wiederzufinden.")),
-                EnumRow(L("Anti-aliasing", "Kantenglättung"), Plugin.AntiAliasing, new[] { "TAA", "SMAA", "FXAA", L("None", "Keine"), L("Game default", "Spielstandard") },
-                    L("Smooths jagged edges. SMAA stays sharp and is the best choice in VR. TAA looks blurry in VR and makes objects jitter, FXAA is cheap but soft.",
-                        "Glättet treppige Kanten. SMAA bleibt scharf und ist in VR die beste Wahl. TAA wirkt in VR unscharf und lässt Objekte zittern, FXAA ist günstig, aber weich.")),
-                new SliderRow
-                {
-                    Label = L("Render resolution", "Renderauflösung"), Entry = Plugin.ResolutionScale, Min = 0.5f, Max = VrResolution.ResolutionSliderMax, Format = "0.00",
-                    Hint = L("Resolution per eye relative to the headset's default. Higher is sharper but costs a lot of performance and video memory. Lower it if the game stutters.",
-                        "Auflösung pro Auge im Verhältnis zum Standard des Headsets. Höher ist schärfer, kostet aber viel Leistung und Grafikspeicher. Senken, wenn das Spiel ruckelt."),
-                },
-                new SliderRow
-                {
-                    Label = L("Station resolution", "Auflösung Station"), Entry = Plugin.StationResolution, Min = 0.5f, Max = 1f, Format = "0.00",
-                    Hint = L("Own resolution for the station between shifts, which is harder on the graphics card. If the view wobbles at the monitors when you move your head, lower it step by step until that stops.",
-                        "Eigene Auflösung für die Station zwischen den Schichten, die die Grafikkarte stärker fordert. Wackelt das Bild an den Monitoren, wenn du den Kopf bewegst, schrittweise senken, bis es aufhört."),
-                },
-                new SliderRow
-                {
-                    Label = L("World scale", "Weltmaßstab"), Entry = Plugin.WorldScale, Min = 0.5f, Max = 3f, Format = "0.00",
-                    Hint = L("Your size relative to the world. Above 1, distant objects keep more depth and are easier to judge, but the world looks smaller; below 1 the opposite. 1 is true to scale.",
-                        "Deine Größe im Verhältnis zur Welt. Über 1 behalten ferne Objekte mehr Tiefe und lassen sich besser einschätzen, die Welt wirkt aber kleiner; unter 1 umgekehrt. 1 ist maßstabsgetreu."),
-                },
-                new SliderRow
-                {
-                    Label = L("Head height (cm)", "Kopfhöhe (cm)"), Entry = Plugin.HeadHeight, Min = -VrCamera.HeadOffsetRange, Max = VrCamera.HeadOffsetRange, Format = "0", Step = 1f,
-                    Hint = L("Moves your eyes up or down against the game's head position. Raise it if your view seems to sit too low in the suit.",
-                        "Verschiebt die Augen gegenüber der Kopfposition des Spiels nach oben oder unten. Erhöhen, wenn du zu tief im Anzug zu sitzen scheinst."),
-                },
-                new SliderRow
-                {
-                    Label = L("Head sideways (cm)", "Kopf seitlich (cm)"), Entry = Plugin.HeadSideways, Min = -VrCamera.HeadOffsetRange, Max = VrCamera.HeadOffsetRange, Format = "0", Step = 1f,
-                    Hint = L("Moves your eyes right (positive) or left (negative) against the game's head position, relative to the direction you face.",
-                        "Verschiebt die Augen gegenüber der Kopfposition des Spiels nach rechts (positiv) oder links (negativ), bezogen auf die Blickrichtung."),
-                },
-                EnumRow(L("Ambient occlusion", "Umgebungsverdeckung"), Plugin.AmbientOcclusion, new[] { L("Low", "Niedrig"), L("Off", "Aus"), L("Game default", "Spielstandard") },
-                    L("Shading in corners and creases. Low looks nearly the same and saves a lot of performance; the game default can stutter on the station. Off for the most performance.",
-                        "Schattierung in Ecken und Fugen. Niedrig sieht fast gleich aus und spart viel Leistung; der Spielstandard kann auf der Station ruckeln. Aus für die meiste Leistung.")),
-                EnumRow(L("Helmet", "Helm"), Plugin.Helmet, new[] { L("Follows head", "Folgt dem Kopf"), L("Hidden", "Ausgeblendet"), L("Game default", "Spielstandard") },
-                    L("Follows head: the helmet frame moves with the headset. Hidden: a clear view without the frame. Game default: the helmet stays on the body.",
-                        "Folgt dem Kopf: der Helmrahmen bewegt sich mit dem Headset. Ausgeblendet: freie Sicht ohne Rahmen. Spielstandard: der Helm bleibt am Körper.")),
-                new BoolRow
-                {
-                    Label = L("HUD and menus in world", "HUD und Menüs im Raum"), Entry = Plugin.UiInVr,
-                    Hint = L("Shows the HUD and the menus on a surface in the room instead of flat over the image. Leave it on; off is only for troubleshooting.",
-                        "Zeigt HUD und Menüs auf einer Fläche im Raum statt flach über dem Bild. An lassen; aus nur zur Fehlersuche."),
-                },
-                EnumRow(L("Visor steadying", "Visierberuhigung"), Plugin.HudSteadying, new[] { L("Off", "Aus"), L("Light", "Leicht"), L("Strong", "Stark") },
-                    L("Keeps the visor display still instead of copying every small head movement. Light follows your gaze quickly, Strong stays put longer. Off: fixed to the head.",
-                        "Hält die Visieranzeige ruhig, statt jede kleine Kopfbewegung mitzumachen. Leicht folgt dem Blick schnell, Stark bleibt länger stehen. Aus: fest am Kopf.")),
-                new SliderRow
-                {
-                    Label = L("Visor size", "Visiergröße"), Entry = Plugin.HudScale, Min = 0.3f, Max = 1f, Format = "0.00",
-                    Hint = L("Size of the visor display. At 1 markers sit exactly on their objects, but the corners are outside your view. Smaller: everything in view, markers slightly offset.",
-                        "Größe der Visieranzeige. Bei 1 sitzen Markierungen genau auf den Objekten, die Ecken liegen aber außerhalb des Blickfelds. Kleiner: alles im Blick, Markierungen leicht versetzt."),
-                },
-                new SliderRow
-                {
-                    Label = L("Visor distance (m)", "Visierabstand (m)"), Entry = Plugin.HudDistance, Min = 0.5f, Max = 3f, Format = "0.0",
-                    Hint = L("How far in front of your eyes the visor display floats. Change it if reading the display or switching focus between it and the world is uncomfortable.",
-                        "Wie weit die Visieranzeige vor den Augen schwebt. Anpassen, wenn das Lesen der Anzeige oder der Blickwechsel zwischen ihr und der Welt unangenehm ist."),
-                },
-                new SliderRow
-                {
-                    Label = L("Menu distance (m)", "Menüabstand (m)"), Entry = Plugin.MenuDistance, Min = 1f, Max = 4f, Format = "0.0",
-                    Hint = L("How far away the menus appear. Together with the width it sets how large the text looks; adjust until it reads comfortably.",
-                        "Wie weit entfernt die Menüs erscheinen. Bestimmt zusammen mit der Breite, wie groß der Text wirkt; anpassen, bis er sich bequem lesen lässt."),
-                },
-                new SliderRow
-                {
-                    Label = L("Menu width (m)", "Menübreite (m)"), Entry = Plugin.MenuWidth, Min = 1f, Max = 4f, Format = "0.0",
-                    Hint = L("Width of the menus. Wider makes the text larger but needs more head movement to see everything.",
-                        "Breite der Menüs. Breiter macht den Text größer, braucht aber mehr Kopfbewegung, um alles zu sehen."),
-                },
+                new BoolRow { Label = L("Aim with the hand", "Zielen mit der Hand"), Entry = VrSettings.AimWithHand },
+                new BoolRow { Label = L("Two tools at once", "Zwei Werkzeuge gleichzeitig"), Entry = VrSettings.TwoTools },
+                new BoolRow { Label = L("Hold on and climb", "Festhalten und Hangeln"), Entry = VrSettings.Climbing },
+                new BoolRow { Label = L("Fit tools in the hand", "Werkzeuge justieren"), Entry = VrToolFit.Adjusting },
+                EnumRow(L("Controller flying", "Controllersteuerung"), VrSettings.ControlScheme),
+                EnumRow(L("Turning", "Drehen"), VrSettings.TurnMode),
+                new SliderRow { Label = L("Thrust deadzone (cm)", "Schub-Totzone (cm)"), Entry = VrSettings.ThrustDeadzone, Format = "0", Step = 1f },
+                new SliderRow { Label = L("Full thrust at (cm)", "Voller Schub ab (cm)"), Entry = VrSettings.ThrustFull, Format = "0", Step = 1f },
+                EnumRow(L("Flight globe", "Flugkugel"), VrSettings.FlightGlobe),
+                EnumRow(L("Anti-aliasing", "Kantenglättung"), VrSettings.AntiAliasing),
+                new SliderRow { Label = L("Render resolution", "Renderauflösung"), Entry = VrSettings.ResolutionScale, Format = "0.00" },
+                new SliderRow { Label = L("Station resolution", "Auflösung Station"), Entry = VrSettings.StationResolution, Format = "0.00" },
+                new SliderRow { Label = L("World scale", "Weltmaßstab"), Entry = VrSettings.WorldScale, Format = "0.00" },
+                new SliderRow { Label = L("Head height (cm)", "Kopfhöhe (cm)"), Entry = VrSettings.HeadHeight, Format = "0", Step = 1f },
+                new SliderRow { Label = L("Head sideways (cm)", "Kopf seitlich (cm)"), Entry = VrSettings.HeadSideways, Format = "0", Step = 1f },
+                EnumRow(L("Ambient occlusion", "Umgebungsverdeckung"), VrSettings.AmbientOcclusion),
+                EnumRow(L("Helmet", "Helm"), VrSettings.Helmet),
+                new BoolRow { Label = L("HUD and menus in world", "HUD und Menüs im Raum"), Entry = VrSettings.UiInVr },
+                EnumRow(L("Visor steadying", "Visierberuhigung"), VrSettings.HudSteadying),
+                new SliderRow { Label = L("Visor size", "Visiergröße"), Entry = VrSettings.HudScale, Format = "0.00" },
+                new SliderRow { Label = L("Visor distance (m)", "Visierabstand (m)"), Entry = VrSettings.HudDistance, Format = "0.0" },
+                new SliderRow { Label = L("Menu distance (m)", "Menüabstand (m)"), Entry = VrSettings.MenuDistance, Format = "0.0" },
+                new SliderRow { Label = L("Menu width (m)", "Menübreite (m)"), Entry = VrSettings.MenuWidth, Format = "0.0" },
             };
         }
 
         // Texts follow the game's language: German, otherwise English.
-        public static string L(string english, string german) =>
-            (LynxGameUserOptions.Language ?? "").StartsWith("de", StringComparison.OrdinalIgnoreCase) ? german : english;
+        public static string L(string english, string german) => German ? german : english;
+
+        public static string[] L(string[] english, string[] german) => German ? german : english;
+
+        private static bool German => (LynxGameUserOptions.Language ?? "").StartsWith("de", StringComparison.OrdinalIgnoreCase);
 
         public static string HintFor(OptionEntry entry) => entry != null && Rows.TryGetValue(entry, out var row) ? row.Hint : null;
 
@@ -263,16 +195,8 @@ namespace ShipbreakerVR
         // Puts every VR setting back to its default and shows it.
         public static void ResetToDefaults()
         {
-            foreach (var pair in Rows)
-            {
-                switch (pair.Value)
-                {
-                    case BoolRow b: b.Entry.Value = (bool)b.Entry.DefaultValue; break;
-                    case SliderRow s: s.Entry.Value = (float)s.Entry.DefaultValue; break;
-                    case ListRow l: l.Reset(); break;
-                }
-                if (pair.Key != null) TryRefresh(pair.Key);
-            }
+            foreach (var setting in Rows.Values.Select(row => row.Setting).Where(setting => setting != null).Distinct().ToList())
+                setting.BoxedValue = setting.DefaultValue;
         }
 
         // Rows whose options screen was destroyed (a scene change) leave the table, so Refresh and ResetToDefaults
@@ -377,11 +301,15 @@ namespace ShipbreakerVR
             return true;
         }
 
-        // Shows a value that was changed from outside the menu (e.g. clamped) in all rows bound to it.
-        public static void Refresh(ConfigEntry<float> config)
+        // Shows a changed setting in all rows bound to it.
+        private static void Refresh(ConfigEntryBase setting)
         {
             foreach (var pair in Rows)
-                if (pair.Key != null && pair.Value is SliderRow s && s.Entry == config) TryRefresh(pair.Key);
+            {
+                if (pair.Key == null || pair.Value.Setting != setting) continue;
+                if (pair.Key == sliding) SetText(Traverse.Create(pair.Key).Field("m_ValueText").GetValue<TextMeshProUGUI>(), pair.Value.ValueText);
+                else TryRefresh(pair.Key);
+            }
         }
 
         public static bool TryToggle(OptionEntry entry)
@@ -394,15 +322,21 @@ namespace ShipbreakerVR
             }
             if (!(row is BoolRow b)) return false;
             b.Entry.Value = !b.Entry.Value;
-            TryRefresh(entry);
             return true;
         }
 
         public static bool TrySlide(OptionEntry entry, float value)
         {
             if (!Rows.TryGetValue(entry, out var row) || !(row is SliderRow s)) return false;
-            s.Entry.Value = Mathf.Round(value / s.Step) * s.Step;
-            SetText(Traverse.Create(entry).Field("m_ValueText").GetValue<TextMeshProUGUI>(), row.ValueText);
+            sliding = entry;
+            try
+            {
+                s.Entry.Value = Mathf.Round(value / s.Step) * s.Step;
+            }
+            finally
+            {
+                sliding = null;
+            }
             return true;
         }
 
@@ -410,7 +344,6 @@ namespace ShipbreakerVR
         {
             if (!Rows.TryGetValue(entry, out var row) || !(row is ListRow l)) return false;
             l.Set(l.Get() + step);
-            TryRefresh(entry);
             return true;
         }
 
