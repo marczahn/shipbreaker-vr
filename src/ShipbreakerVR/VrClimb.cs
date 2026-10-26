@@ -22,8 +22,6 @@ namespace ShipbreakerVR
     // reaches its hold by the end of the step: an impulse between the two, as a joint would apply, without joints.
     internal static class VrClimb
     {
-        private const float GripPress = 0.5f;
-        private const float GripRelease = 0.4f;
         // How far from the controller a surface may be to hold on, and a control to work it, in meters at world scale 1.
         private const float Reach = 0.1f;
         private const float ControlReach = 0.15f;
@@ -47,9 +45,8 @@ namespace ShipbreakerVR
 
         private class Hand
         {
-            public readonly XRNode Node;
-            public readonly string Name;
-            public InputDevice Device;
+            public readonly VrInput.Hand Input;
+            // The grip as this hand last saw it: the physics may step several times in a frame, or not at all.
             public bool GripDown;
             public bool Tracked;
             // The controller's position in tracking space this physics step.
@@ -65,15 +62,14 @@ namespace ShipbreakerVR
             // The control this hand's grip works, instead of holding on.
             public InteractableObject Control;
 
-            public Hand(XRNode node, string name)
-            {
-                Node = node;
-                Name = name;
-            }
+            public Hand(VrInput.Hand input) => Input = input;
+
+            public XRNode Node => Input.Node;
+            public string Name => Input.Name;
         }
 
-        private static readonly Hand LeftHand = new Hand(XRNode.LeftHand, "left");
-        private static readonly Hand RightHand = new Hand(XRNode.RightHand, "right");
+        private static readonly Hand LeftHand = new Hand(VrInput.Left);
+        private static readonly Hand RightHand = new Hand(VrInput.Right);
         private static readonly Hand[] Hands = { LeftHand, RightHand };
         private static readonly Collider[] Found = new Collider[32];
 
@@ -145,16 +141,13 @@ namespace ShipbreakerVR
             return player != null && rigPlaced;
         }
 
-        // The controller's grip and position this step; a grip pressed starts holding on, one let go stops.
+        // The controller's grip (VrInput's for the frame) and position this step; a grip pressed starts holding on, one
+        // let go stops.
         private static void Read(Hand hand)
         {
-            if (!hand.Device.isValid) hand.Device = InputDevices.GetDeviceAtXRNode(hand.Node);
-            var valid = hand.Device.isValid;
-            hand.Tracked = valid && (!hand.Device.TryGetFeatureValue(CommonUsages.isTracked, out var tracked) || tracked)
-                && hand.Device.TryGetFeatureValue(CommonUsages.devicePosition, out hand.Local);
-            var grip = 0f;
-            if (valid) hand.Device.TryGetFeatureValue(CommonUsages.grip, out grip);
-            var down = grip >= (hand.GripDown ? GripRelease : GripPress);
+            var input = hand.Input;
+            hand.Tracked = input.Tracked && input.TryGetPosition(out hand.Local);
+            var down = input.Grip.Down;
             var pressed = down && !hand.GripDown;
             hand.GripDown = down;
             if (hand.Control != null && (!down || !hand.Tracked))
@@ -195,7 +188,7 @@ namespace ShipbreakerVR
             if (best == null) return false;
             StartInteraction.Invoke(interaction, new object[] { best, null });
             hand.Control = best;
-            hand.Device.SendHapticImpulse(0, 0.5f, 0.06f);
+            hand.Input.Buzz(0.5f, 0.06f);
             if (logs++ < 80)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand works the control '{best.name}' < '{(best.transform.parent != null ? best.transform.parent.name : "-")}' ({best.Asset.Data.ProgressType}), {Mathf.Sqrt(bestDistance):0.00} m away");
             return true;
@@ -233,7 +226,7 @@ namespace ShipbreakerVR
             hand.Point = hand.Anchor.InverseTransformPoint(at);
             if (!LeftHand.Holding && !RightHand.Holding) pushOff = Vector3.zero;
             hand.Holding = true;
-            hand.Device.SendHapticImpulse(0, 0.5f, 0.06f);
+            hand.Input.Buzz(0.5f, 0.06f);
             if (logs++ < 80)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds '{best.name}' (layer {best.gameObject.layer}, "
                     + (body == null ? "no rigidbody" : $"rigidbody '{body.name}' {body.mass:0.#} kg{(body.isKinematic ? " kinematic" : "")}")

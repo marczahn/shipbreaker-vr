@@ -132,6 +132,8 @@ namespace ShipbreakerVR
                 catch (System.Exception e) { Log.LogError($"Patch {type.Name} failed: {e}"); }
             }
             PatchReport.LogSummary();
+            try { VrFrame.Install(); }
+            catch (System.Exception e) { Log.LogError($"Installing the frame update failed, running it from Update: {e}"); }
             Application.quitting += OnQuitting;
         }
 
@@ -148,6 +150,7 @@ namespace ShipbreakerVR
             Application.quitting -= OnQuitting;
             if (quitting) return;
             Log.LogInfo($"{Name} unloading");
+            Unload("frame update", VrFrame.Uninstall);
             Unload("options tab", VrOptionsTab.RemoveAll);
             Unload("menu control", VrMenuInput.Detach);
             Unload("VR camera", VrCamera.Unload);
@@ -196,6 +199,7 @@ namespace ShipbreakerVR
                 if (StartVrAtLaunch.Value) VrXr.Toggle();
             }
             if (Input.GetKeyDown(KeyCode.F3)) VrXr.Toggle();
+            VrFrame.Check();
             VrMenuInput.EnsureAttached();
 
             // The main menu has no LynxCameraController yet; the VR camera then attaches to the menu camera.

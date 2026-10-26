@@ -99,9 +99,9 @@ namespace ShipbreakerVR
             // relative to the wrist where VrHands puts the game's; the other tools have no model on the point.
             var left = VrToolInput.ToolNode == XRNode.LeftHand;
             if (VrAim.TryGetHandLocal(out var gripLocal, out var aimLocal))
-                VrToolFit.Adjust(equipment, left, gripLocal + aimLocal * WristBehindGrip, aimLocal);
+                VrToolFit.Adjust(equipment, left, gripLocal + aimLocal * VrInput.WristBehindGrip, aimLocal);
             var fitted = VrToolFit.TryGet(equipment, left, out var offset, out turn);
-            mount = fitted ? WristBehindGrip * VrCamera.WorldScale + offset : Vector3.zero;
+            mount = fitted ? VrInput.WristBehindGrip * VrCamera.WorldScale + offset : Vector3.zero;
             Log(hand, equipment, muzzle, fitted);
 
             point.rotation = aim * turn;
@@ -272,7 +272,7 @@ namespace ShipbreakerVR
             if (weight <= 0f || vr == null || hand == null || !rigKnown) return;
             var camera = vr.GameCamera;
             if (camera == null || !VrAim.TryGetHandLocal(out var gripLocal, out var aimLocal)
-                || !TrackingToWorld(gripLocal + aimLocal * WristBehindGrip, aimLocal, out var wrist, out var aim))
+                || !TrackingToWorld(gripLocal + aimLocal * VrInput.WristBehindGrip, aimLocal, out var wrist, out var aim))
             {
                 if (!loggedArmSkip)
                 {
@@ -408,9 +408,6 @@ namespace ShipbreakerVR
         private static EquipmentController.Equipment heldBefore;
         private static int stowLogs;
         private static bool stowed;
-
-        // The wrist relative to the grip pose, along the aim: an estimate, as in VrControls.
-        public static readonly Vector3 WristBehindGrip = new Vector3(0f, 0f, -0.08f);
 
         // Two-bone IK: the elbow bends until shoulder to wrist is as long as shoulder to target, then the shoulder turns
         // the arm onto the target. The elbow stays in the plane the animation gave it.

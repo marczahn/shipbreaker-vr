@@ -33,11 +33,7 @@ namespace ShipbreakerVR
         // How far in front of the hand a thrown demo charge starts, clear of the player's collider.
         private const float ThrowAhead = 0.2f;
 
-        private static readonly InputFeatureUsage<Vector3> PointerPosition = new InputFeatureUsage<Vector3>("PointerPosition");
-        private static readonly InputFeatureUsage<Quaternion> PointerRotation = new InputFeatureUsage<Quaternion>("PointerRotation");
-
-        // The controller that holds the tool (VrToolInput.ToolNode), the right one unless the left hand drew the tool.
-        private static InputDevice hand;
+        // The hand that held the tool when the aim pose was last logged.
         private static XRNode handNode = XRNode.RightHand;
         private static Camera aim;
         private static Transform throwOrigin;
@@ -60,25 +56,16 @@ namespace ShipbreakerVR
         private static Material beamMaterial;
 
         // True while the tools aim from the hand: VR in gameplay, the option on and the tool hand's controller tracked.
-        public static bool Active
-        {
-            get
-            {
-                Update();
-                return active;
-            }
-        }
+        // Settled once per frame (VrFrame).
+        public static bool Active => active;
 
         // True while a tool in the hand aims (Active, with a tool drawn): the game's code then aims through the aim camera,
         // and the laser shows. With an empty hand it aims through the main camera, at the middle of the view.
-        public static bool Aiming
-        {
-            get
-            {
-                Update();
-                return active && withTool;
-            }
-        }
+        public static bool Aiming => active && withTool;
+
+        // Whether the tools can aim from that hand now (VrToolInput, before it settles the tool hand for the frame).
+        public static bool CanAim(XRNode node) =>
+            Usable() && LynxCameraController.MainCamera != null && VrInput.Of(node).TryGetAimPose(out _, out _, out _);
 
         // What the patched tool code uses instead of LynxCameraController.MainCamera and MainCameraTransform.
         public static Camera Camera => Aiming ? aim : LynxCameraController.MainCamera;
@@ -123,7 +110,8 @@ namespace ShipbreakerVR
 
         public static Vector3 ThrowDirection(Transform player) => Aiming ? aim.transform.forward : player.forward;
 
-        private static void Update()
+        // From VrFrame, once per frame, after VrToolInput settled the tool hand.
+        public static void Update()
         {
             if (updatedFrame == Time.frameCount) return;
             updatedFrame = Time.frameCount;
@@ -157,7 +145,7 @@ namespace ShipbreakerVR
         private static bool TryGetAim(out Vector3 position, out Quaternion rotation)
         {
             if (!TryGetPose(out position, out rotation)) return false;
-            if (hand.TryGetFeatureValue(CommonUsages.devicePosition, out var local)
+            if (Tool.TryGetPosition(out var local)
                 && VrToolModels.Muzzle(VrCamera.Instance.transform.parent.TransformPoint(local), rotation, out var muzzle, out var barrel))
             {
                 position = muzzle;
@@ -172,26 +160,26 @@ namespace ShipbreakerVR
         {
             grip = Vector3.zero;
             if (!TryGetPose(out _, out rotation)) return false;
-            if (!hand.TryGetFeatureValue(CommonUsages.devicePosition, out var local)) return false;
+            if (!Tool.TryGetPosition(out var local)) return false;
             grip = VrCamera.Instance.transform.parent.TransformPoint(local);
             return true;
         }
 
         // The same for another controller (the second tool's, VrDualTools).
-        public static bool TryGetHand(InputDevice device, out Vector3 grip, out Quaternion rotation)
+        public static bool TryGetHand(VrInput.Hand hand, out Vector3 grip, out Quaternion rotation)
         {
             grip = Vector3.zero;
-            if (!TryGetPose(device, out _, out rotation)) return false;
-            if (!device.TryGetFeatureValue(CommonUsages.devicePosition, out var local)) return false;
+            if (!TryGetPose(hand, out _, out rotation)) return false;
+            if (!hand.TryGetPosition(out var local)) return false;
             grip = VrCamera.Instance.transform.parent.TransformPoint(local);
             return true;
         }
 
-        public static bool TryGetPose(InputDevice device, out Vector3 position, out Quaternion rotation)
+        public static bool TryGetPose(VrInput.Hand hand, out Vector3 position, out Quaternion rotation)
         {
             position = Vector3.zero;
             rotation = Quaternion.identity;
-            if (!Usable() || !TryGetDevicePose(device, out var local, out var localRotation, out _)) return false;
+            if (!Usable() || !hand.TryGetAimPose(out var local, out var localRotation, out _)) return false;
             var rig = VrCamera.Instance.transform.parent;
             position = rig.TransformPoint(local);
             rotation = rig.rotation * localRotation;
@@ -216,26 +204,28 @@ namespace ShipbreakerVR
         public static bool TryGetHandLocal(out Vector3 grip, out Quaternion rotation)
         {
             grip = Vector3.zero;
-            return TryGetPoseLocal(out _, out rotation) && hand.TryGetFeatureValue(CommonUsages.devicePosition, out grip);
+            return TryGetPoseLocal(out _, out rotation) && Tool.TryGetPosition(out grip);
         }
+
+        // The controller of the hand that holds the tool (VrToolInput.ToolNode), the right one unless the left hand drew it.
+        private static VrInput.Hand Tool => VrInput.Of(VrToolInput.ToolNode);
 
         private static bool TryGetPoseLocal(out Vector3 local, out Quaternion localRotation)
         {
             local = Vector3.zero;
             localRotation = Quaternion.identity;
             if (!Usable()) return false;
-            var node = VrToolInput.ToolNode;
-            if (node != handNode || !hand.isValid)
+            var hand = Tool;
+            if (hand.Node != handNode)
             {
-                if (node != handNode) loggedPose = false;
-                handNode = node;
-                hand = InputDevices.GetDeviceAtXRNode(node);
+                loggedPose = false;
+                handNode = hand.Node;
             }
-            if (!TryGetDevicePose(hand, out local, out localRotation, out var pointer)) return false;
+            if (!hand.TryGetAimPose(out local, out localRotation, out var pointer)) return false;
             if (!loggedPose)
             {
                 loggedPose = true;
-                Plugin.Log.LogInfo($"Aiming with the {(handNode == XRNode.LeftHand ? "left" : "right")} hand ('{hand.name}', {(pointer ? "aim pose" : "grip pose, no aim pose")})");
+                Plugin.Log.LogInfo($"Aiming with the {hand.Name} hand ('{hand.Device.name}', {(pointer ? "aim pose" : "grip pose, no aim pose")})");
             }
             return true;
         }
@@ -246,18 +236,6 @@ namespace ShipbreakerVR
             var vr = VrCamera.Instance;
             if (!VrXr.IsRunning || !Plugin.AimWithHand.Value || vr == null || vr.FollowsHab) return false;
             return GameSession.CurrentGameState == GameSession.GameState.Gameplay;
-        }
-
-        // A tracked controller's aim pose (or its grip pose without one) in tracking space.
-        private static bool TryGetDevicePose(InputDevice device, out Vector3 local, out Quaternion localRotation, out bool pointer)
-        {
-            local = Vector3.zero;
-            localRotation = Quaternion.identity;
-            pointer = false;
-            if (!device.isValid) return false;
-            if (device.TryGetFeatureValue(CommonUsages.isTracked, out var tracked) && !tracked) return false;
-            pointer = device.TryGetFeatureValue(PointerPosition, out local) && device.TryGetFeatureValue(PointerRotation, out localRotation);
-            return pointer || (device.TryGetFeatureValue(CommonUsages.devicePosition, out local) && device.TryGetFeatureValue(CommonUsages.deviceRotation, out localRotation));
         }
 
         // Called from our UI pass for each eye, before the UI: the laser from the hand to what it hits. Drawn over

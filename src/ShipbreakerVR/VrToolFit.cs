@@ -7,7 +7,7 @@ using UnityEngine.XR;
 namespace ShipbreakerVR
 {
     // Where the cutter and the grapple sit in each hand (VrToolModels.Place): the tool's equipment point relative to the
-    // hand's wrist (the grip pose moved back by VrToolModels.WristBehindGrip, in the aim pose's axes: x right, y up,
+    // hand's wrist (the grip pose moved back by VrInput.WristBehindGrip, in the aim pose's axes: x right, y up,
     // z forward) in centimeters, and its turn as pitch, yaw and roll in degrees, one config entry per tool and hand
     // ("x y z / pitch yaw roll"). The tool turns with it, and so does the aim, which runs along the barrel. Measuring the
     // flat game's hold left the tools off in both hands, each differently, so they are set in the headset: with
@@ -15,8 +15,6 @@ namespace ShipbreakerVR
     // stores where it is (Adjust). The defaults are where Marc put them; the option stays for anyone whose hands differ.
     internal static class VrToolFit
     {
-        private const float GripPress = 0.5f;
-        private const float GripRelease = 0.4f;
 
         private class Fit
         {
@@ -42,8 +40,7 @@ namespace ShipbreakerVR
 
         public static ConfigEntry<bool> Adjusting;
 
-        private static InputDevice otherDevice;
-        private static XRNode otherNode;
+        // The other hand's grip as Adjust last saw it.
         private static bool gripping;
         private static Fit dragged;
         // The tool relative to the grabbing controller, in tracking space.
@@ -81,15 +78,8 @@ namespace ShipbreakerVR
         public static void Adjust(EquipmentController.Equipment tool, bool left, Vector3 wrist, Quaternion aim)
         {
             var fit = Adjusting != null && Adjusting.Value ? Find(tool, left) : null;
-            var node = left ? XRNode.RightHand : XRNode.LeftHand;
-            if (node != otherNode || !otherDevice.isValid)
-            {
-                otherNode = node;
-                otherDevice = InputDevices.GetDeviceAtXRNode(node);
-            }
-            var held = false;
-            if (fit != null && otherDevice.isValid && otherDevice.TryGetFeatureValue(CommonUsages.grip, out var grip))
-                held = grip >= (gripping ? GripRelease : GripPress);
+            var other = left ? VrInput.Right : VrInput.Left;
+            var held = fit != null && other.Grip.Down;
             var pressed = held && !gripping;
             gripping = held;
             if (dragged != null && (dragged != fit || !held))
@@ -98,8 +88,7 @@ namespace ShipbreakerVR
                 dragged = null;
             }
             if (fit == null || !held) return;
-            if (!otherDevice.TryGetFeatureValue(CommonUsages.devicePosition, out var handPosition)
-                || !otherDevice.TryGetFeatureValue(CommonUsages.deviceRotation, out var handRotation)) return;
+            if (!other.TryGetGripPose(out var handPosition, out var handRotation)) return;
             var scale = VrCamera.WorldScale;
             if (pressed)
             {

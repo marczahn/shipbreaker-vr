@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.XR;
 
 namespace ShipbreakerVR
 {
@@ -31,26 +30,26 @@ namespace ShipbreakerVR
 
         // The zone the hand is in this frame (None without tracking). Quiet (while its trigger is held) it does not buzz;
         // the buzz comes when the trigger is let go inside the zone.
-        public static Zone Update(XRNode node, InputDevice device, bool quiet)
+        public static Zone Update(VrInput.Hand hand, bool quiet)
         {
-            var zone = Find(device, out var local);
-            var index = node == XRNode.LeftHand ? 0 : 1;
+            var zone = Find(hand, out var local);
+            var index = hand.IsLeft ? 0 : 1;
             if (zone == Zone.None) announced[index] = Zone.None;
             else if (zone != announced[index] && !quiet)
             {
                 announced[index] = zone;
-                device.SendHapticImpulse(0, 0.25f, 0.04f);
+                hand.Buzz(0.25f, 0.04f);
                 if (logs++ < 40)
-                    Plugin.Log.LogInfo($"Tool belt: {(index == 0 ? "left" : "right")} hand at {zone} ({local.x:0.00}, {local.y:0.00}, {local.z:0.00} m from the head)");
+                    Plugin.Log.LogInfo($"Tool belt: {hand.Name} hand at {zone} ({local.x:0.00}, {local.y:0.00}, {local.z:0.00} m from the head)");
             }
             return zone;
         }
 
-        private static Zone Find(InputDevice device, out Vector3 local)
+        private static Zone Find(VrInput.Hand controller, out Vector3 local)
         {
             local = Vector3.zero;
             var vr = VrCamera.Instance;
-            if (vr == null || !device.TryGetFeatureValue(CommonUsages.devicePosition, out var hand)) return Zone.None;
+            if (vr == null || !controller.TryGetPosition(out var hand)) return Zone.None;
             var head = vr.transform;
             var forward = head.localRotation * Vector3.forward;
             forward.y = 0f;

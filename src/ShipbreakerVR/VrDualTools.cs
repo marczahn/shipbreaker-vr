@@ -225,7 +225,7 @@ namespace ShipbreakerVR
             return point;
         }
 
-        // Once a frame from VrToolInput: the second tool ends with the option, outside gameplay (pausing keeps it), and
+        // Once a frame from VrToolInput.Update: the second tool ends with the option, outside gameplay (pausing keeps it), and
         // when the game itself took it as its tool.
         public static void Check()
         {
@@ -274,10 +274,7 @@ namespace ShipbreakerVR
         private static Vector3 muzzleOffset;
         private static bool hasMuzzle;
         private static float nextMirror;
-        private static InputDevice device;
-        private static XRNode deviceNode;
         private static Camera aim;
-        private static int aimFrame = -1;
         private static bool aimValid;
 
         // The game's model of the second tool.
@@ -289,15 +286,8 @@ namespace ShipbreakerVR
             return null;
         }
 
-        private static bool GetDevice()
-        {
-            if (deviceNode != SecondNode || !device.isValid)
-            {
-                deviceNode = SecondNode;
-                device = InputDevices.GetDeviceAtXRNode(SecondNode);
-            }
-            return device.isValid;
-        }
+        // The controller of the hand that holds the second tool.
+        private static VrInput.Hand Hand => VrInput.Of(SecondNode);
 
         // From VrToolModels.Place, right before rendering, after the first tool is placed: the second tool's model onto
         // its own point (a sibling of the game's equipment point, so it lives and scales with the player), which goes to
@@ -308,7 +298,7 @@ namespace ShipbreakerVR
             hasMuzzle = false;
             if (Second == EquipmentController.Equipment.None || equipmentPoint == null || equipmentPoint.parent == null) return;
             var tool = Model(Second);
-            if (tool == null || !GetDevice() || !VrAim.TryGetHand(device, out var grip, out var rotation)) return;
+            if (tool == null || !VrAim.TryGetHand(Hand, out var grip, out var rotation)) return;
             EnsurePoint(equipmentPoint);
             if (tool != model || tool.parent != point)
             {
@@ -328,7 +318,7 @@ namespace ShipbreakerVR
             hasMuzzle = muzzle != null && muzzle.IsChildOf(point);
             if (hasMuzzle) muzzleOffset = Quaternion.Inverse(point.rotation) * (muzzleWorld - point.position);
             var fitted = VrToolFit.TryGet(Second, SecondNode == XRNode.LeftHand, out var offset, out turn);
-            mount = fitted ? VrToolModels.WristBehindGrip * VrCamera.WorldScale + offset : Vector3.zero;
+            mount = fitted ? VrInput.WristBehindGrip * VrCamera.WorldScale + offset : Vector3.zero;
             point.rotation = rotation * turn;
             point.position = grip + rotation * mount;
             placed = true;
@@ -350,8 +340,8 @@ namespace ShipbreakerVR
         {
             position = Vector3.zero;
             rotation = Quaternion.identity;
-            if (Second == EquipmentController.Equipment.None || !GetDevice() || !VrAim.TryGetPose(device, out position, out rotation)) return false;
-            if (placed && hasMuzzle && VrAim.TryGetHand(device, out var grip, out var hand))
+            if (Second == EquipmentController.Equipment.None || !VrAim.TryGetPose(Hand, out position, out rotation)) return false;
+            if (placed && hasMuzzle && VrAim.TryGetHand(Hand, out var grip, out var hand))
             {
                 rotation = hand * turn;
                 position = grip + hand * mount + rotation * muzzleOffset;
@@ -359,21 +349,14 @@ namespace ShipbreakerVR
             return true;
         }
 
-        // The camera the second tool's code aims through (VrAim.CameraFor), null without a second tool.
-        public static Camera AimCamera
-        {
-            get
-            {
-                if (aimFrame != Time.frameCount)
-                {
-                    aimFrame = Time.frameCount;
-                    aimValid = UpdateAim();
-                }
-                return aimValid ? aim : null;
-            }
-        }
+        // The camera the second tool's code aims through (VrAim.CameraFor), null without a second tool. Placed once per
+        // frame (VrFrame).
+        public static Camera AimCamera => aimValid ? aim : null;
 
-        private static bool UpdateAim()
+        // From VrFrame, after VrAim.
+        public static void UpdateAim() => aimValid = PlaceAim();
+
+        private static bool PlaceAim()
         {
             var main = LynxCameraController.MainCamera;
             if (main == null || !TryGetAim(out var position, out var rotation)) return false;

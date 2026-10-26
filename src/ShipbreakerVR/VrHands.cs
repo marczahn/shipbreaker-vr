@@ -23,16 +23,11 @@ namespace ShipbreakerVR
     {
         // How long an arm takes to move between the game's pose and the controller.
         private const float Blend = 0.2f;
-        private const float GripPress = 0.5f;
-        private const float GripRelease = 0.4f;
-
-        private static readonly InputFeatureUsage<Quaternion> PointerRotation = new InputFeatureUsage<Quaternion>("PointerRotation");
 
         private class Arm
         {
-            public readonly XRNode Node;
+            public readonly VrInput.Hand Input;
             public readonly string Name;
-            public InputDevice Device;
             public HandGrab Hand;
             public Transform Upper;
             public Transform Lower;
@@ -42,24 +37,23 @@ namespace ShipbreakerVR
             public Transform Little;
             public float Weight;
             public bool Driven;
-            public bool Gripping;
             // The animator's grab parameters of this hand, as HandGrab sets them.
             public readonly string Prep;
             public readonly string Grab;
             public readonly string Cancel;
 
-            public Arm(XRNode node, string name, string side)
+            public Arm(VrInput.Hand input, string side)
             {
-                Node = node;
-                Name = name;
+                Input = input;
+                Name = input.Name;
                 Prep = side + "PrepGrab";
                 Grab = side + "Grab";
                 Cancel = side + "CancelGrab";
             }
         }
 
-        private static readonly Arm LeftArm = new Arm(XRNode.LeftHand, "left", "L");
-        private static readonly Arm RightArm = new Arm(XRNode.RightHand, "right", "R");
+        private static readonly Arm LeftArm = new Arm(VrInput.Left, "L");
+        private static readonly Arm RightArm = new Arm(VrInput.Right, "R");
 
         private static GrabController grab;
         private static Animator animator;
@@ -103,10 +97,7 @@ namespace ShipbreakerVR
                 // around a second tool (VrDualTools). The grab pose set here would take the arm's animator out of the
                 // charge's states, and the charge vanished from the other hand.
                 if (arm.Hand.CurrentEquipmentType == EquipmentController.Equipment.DemoCharge) return;
-                if (!arm.Device.isValid) arm.Device = InputDevices.GetDeviceAtXRNode(arm.Node);
-                arm.Device.TryGetFeatureValue(CommonUsages.grip, out var grip);
-                arm.Gripping = grip >= (arm.Gripping ? GripRelease : GripPress);
-                closed = arm.Gripping;
+                closed = arm.Input.Grip.Down;
             }
             else if (wasDriven)
             {
@@ -143,11 +134,8 @@ namespace ShipbreakerVR
         {
             var weight = arm.Weight;
             if (weight <= 0f || arm.Wrist == null || arm.Upper == null || arm.Lower == null) return;
-            if (!arm.Device.isValid) arm.Device = InputDevices.GetDeviceAtXRNode(arm.Node);
-            if (!arm.Device.TryGetFeatureValue(CommonUsages.devicePosition, out var gripLocal)) return;
-            if (!arm.Device.TryGetFeatureValue(PointerRotation, out var aimLocal)
-                && !arm.Device.TryGetFeatureValue(CommonUsages.deviceRotation, out aimLocal)) return;
-            if (!VrToolModels.TrackingToWorld(gripLocal + aimLocal * VrToolModels.WristBehindGrip, aimLocal, out var wrist, out var aim)) return;
+            if (!arm.Input.TryGetPosition(out var gripLocal) || !arm.Input.TryGetAimRotation(out var aimLocal)) return;
+            if (!VrToolModels.TrackingToWorld(gripLocal + aimLocal * VrInput.WristBehindGrip, aimLocal, out var wrist, out var aim)) return;
 
             var animated = arm.Wrist.rotation;
             VrToolModels.Bend(arm.Upper, arm.Lower, arm.Wrist, Vector3.Lerp(arm.Wrist.position, wrist, weight));
@@ -305,7 +293,6 @@ namespace ShipbreakerVR
             grab = null;
             LeftArm.Weight = RightArm.Weight = 0f;
             LeftArm.Driven = RightArm.Driven = false;
-            LeftArm.Gripping = RightArm.Gripping = false;
             Charges(false);
             chargePieces.Clear();
             chargesOn = null;

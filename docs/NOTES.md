@@ -743,6 +743,22 @@ session started), with about 50,000 more loaded objects at the bay load than the
 before the boundary could change anything, so a different ship is the likelier cause, but it was not settled. Marc
 parked the change for a later performance audit; the PR is closed, its commits stay under `refs/pull/24/head`.
 
+## Input and frame order
+`VrInput` reads both controllers once per frame: buttons, triggers, grips and sticks, with one hysteresis for trigger
+and grip (pressed at 0.5, let go below 0.4) and press/release edges. Every module reads that snapshot, so they agree on
+whether a grip is held. Poses are read live through the same devices, because the runtime updates them again right
+before rendering, where the tool models, arms and laser are placed.
+
+`VrFrame` runs the per-frame logic in a fixed order from a step at the end of Unity's `EarlyUpdate` (inserted into the
+player loop, removed on unload): after the runtime delivered the controller state, before the physics steps and before
+any of the game's `Update`s. The order is `VrInput` → `VrToolInput` (drawing, holding and putting away tools, the tool
+hand, the buttons' actions, `VrDualTools.Check`) → `VrAim` (the aim camera on the tool hand) → `VrDualTools.UpdateAim`
+→ `VrControls` (flying, braking, turning). The patched game code and `VrClimb` (in the physics step) only read the
+results. Before, each module computed its state on the first read in a frame, so the order depended on which game
+method asked first: `VrAim` could cache the old tool hand for a frame after the other hand took the tool. If the step
+goes missing from the player loop (the game's ECS world can rebuild it), `Plugin.Update` runs the frame instead and puts
+the step back within a second, with a warning in the log.
+
 ## Diagnostics
 The tools below are off by default, so players' logs stay readable: config `Debug/Diagnose` turns on F8, the automatic
 dump in the Hab, the load trace and the frame time statistics (`VrPerformance`); `Debug/WerkzeugExport` turns on
