@@ -198,7 +198,16 @@ namespace ShipbreakerVR
             if (vr == null || hand == null || !rigKnown || hand.Hand != HandGrab.PlayerHand.Right
                 || hand.CurrentHandState != HandGrab.HandState.Equipped || hand.CurrentEquipmentType != EquipmentController.Equipment.DemoCharge) return;
             var camera = vr.GameCamera;
-            if (camera == null || !VrAim.TryGetHandLocal(out var gripLocal, out var aimLocal) || !FindArm(hand)) return;
+            if (camera == null || !VrAim.TryGetHandLocal(out var gripLocal, out var aimLocal))
+            {
+                if (!loggedArmSkip)
+                {
+                    loggedArmSkip = true;
+                    Plugin.Log.LogInfo($"Tool in hand: demo charge held, but no {(camera == null ? "game camera" : "hand pose")}");
+                }
+                return;
+            }
+            if (!FindArm(hand)) return;
             var head = camera.transform;
             var rig = vr.transform.parent;
             var rigPosition = rig.position + (head.position - lastCameraPosition);
@@ -240,6 +249,7 @@ namespace ShipbreakerVR
         private static Transform armTip;
         private static Transform armFor;
         private static bool loggedArm;
+        private static bool loggedArmSkip;
 
         // The right arm's bones from the IK constraint that aims at the hand target (Unity.Animation.Rigging, read by
         // reflection; the plugin does not reference that assembly).
@@ -250,26 +260,50 @@ namespace ShipbreakerVR
             armFor = target;
             armRoot = armMid = armTip = null;
             if (target == null) return false;
-            var player = target.root;
             var constraints = new List<string>();
-            foreach (var component in player.GetComponentsInChildren<MonoBehaviour>(true))
+            try
             {
-                var type = component.GetType();
-                if (type.Namespace != "UnityEngine.Animations.Rigging") continue;
-                var data = type.GetProperty("data")?.GetValue(component);
-                var weight = type.GetProperty("weight")?.GetValue(component);
-                var constrainedTarget = Bone(data, "target");
-                constraints.Add($"{type.Name} on '{component.name}' (weight {weight}{(constrainedTarget != null ? $", target '{constrainedTarget.name}'" : "")})");
-                if (constrainedTarget == null || constrainedTarget != target) continue;
-                armRoot = Bone(data, "root");
-                armMid = Bone(data, "mid");
-                armTip = Bone(data, "tip");
+                foreach (var component in target.root.GetComponentsInChildren<MonoBehaviour>(true))
+                {
+                    // Missing scripts come back as null.
+                    if (component == null) continue;
+                    var type = component.GetType();
+                    if (type.Namespace != "UnityEngine.Animations.Rigging") continue;
+                    // RigConstraint.data returns by reference, which reflection cannot call; its field can be read.
+                    var data = Field(component, "m_Data");
+                    var constrainedTarget = Field(data, "m_Target") as Transform;
+                    constraints.Add($"{type.Name} on '{component.name}' (weight {Field(component, "m_Weight")}{(constrainedTarget != null ? $", target '{constrainedTarget.name}'" : "")})");
+                    if (constrainedTarget == null || constrainedTarget != target) continue;
+                    armRoot = Field(data, "m_Root") as Transform;
+                    armMid = Field(data, "m_Mid") as Transform;
+                    armTip = Field(data, "m_Tip") as Transform;
+                }
+                // Without such a constraint: the humanoid bones of the player's animator.
+                if (armTip == null)
+                {
+                    foreach (var animator in target.root.GetComponentsInChildren<Animator>(true))
+                    {
+                        if (animator == null || !animator.isHuman) continue;
+                        armRoot = animator.GetBoneTransform(HumanBodyBones.RightUpperArm);
+                        armMid = animator.GetBoneTransform(HumanBodyBones.RightLowerArm);
+                        armTip = animator.GetBoneTransform(HumanBodyBones.RightHand);
+                        constraints.Add($"humanoid animator '{animator.name}'");
+                        if (armTip != null) break;
+                    }
+                }
             }
-            Plugin.Log.LogInfo($"Tool in hand: arm for the demo charge {(armTip != null ? $"{Chain(armTip)}, from '{armRoot?.name}' over '{armMid?.name}'" : "not found")}; rig constraints: {string.Join("; ", constraints)}");
-            return armRoot != null && armMid != null && armTip != null;
+            catch (System.Exception e)
+            {
+                Plugin.Log.LogWarning($"Tool in hand: looking for the arm failed: {e}");
+                armRoot = armMid = armTip = null;
+            }
+            if (armRoot == null || armMid == null) armTip = null;
+            Plugin.Log.LogInfo($"Tool in hand: arm for the demo charge {(armTip != null ? $"{Chain(armTip)}, from '{armRoot.name}' over '{armMid.name}'" : "not found")}; rig constraints: {string.Join("; ", constraints)}");
+            return armTip != null;
         }
 
-        private static Transform Bone(object data, string name) => data?.GetType().GetProperty(name)?.GetValue(data) as Transform;
+        private static object Field(object instance, string name) =>
+            instance == null ? null : AccessTools.Field(instance.GetType(), name)?.GetValue(instance);
 
         // Once: what the demo charge's pieces hang on.
         private static void LogArm(HandGrab hand, Transform head)
@@ -296,7 +330,7 @@ namespace ShipbreakerVR
             grapple = null;
             logged.Clear();
             armRoot = armMid = armTip = armFor = null;
-            loggedArm = false;
+            loggedArm = loggedArmSkip = false;
             rigKnown = false;
         }
     }

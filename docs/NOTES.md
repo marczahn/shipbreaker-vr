@@ -95,7 +95,9 @@ interacting, the grapple and the "entity of interest".
   `HandGrab.UpdateHandTarget` had no visible effect (the log confirmed the postfix ran). Now `VrToolModels.PoseArm`
   bends the arm after the animation, from `VrCamera.LateUpdate` (after Animation Rigging, before skinning;
   `onBeforeRender` would be too late for skinned meshes): the bones come from the `TwoBoneIKConstraint` whose target is
-  `rig_RHand_Target` (read by reflection), a two-bone solve puts the wrist 8 cm behind the grip pose, and the hand keeps
+  `rig_RHand_Target` (read by reflection from the field `m_Data`: `RigConstraint.data` returns by reference, which
+  reflection cannot call; the first try threw there and never bent anything; humanoid bones of the player's animator as
+  a fallback), a two-bone solve puts the wrist 8 cm behind the grip pose, and the hand keeps
   the animation's angle to the game camera. The rig only follows the game camera in `onBeforeRender`, so the hand is
   placed relative to the rig shifted by the game camera's movement since. The log line `Tool in hand: arm for the demo
   charge ...` lists all rig constraints, and `Tool in hand: demo charge; wrist ...` whether the detonator hangs on the
