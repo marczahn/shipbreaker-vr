@@ -467,7 +467,9 @@ finished animating the arm and then bends it itself, elbow and shoulder, until t
 first build of that did nothing either, without a word in the log: looking up the arm's bones tripped over a property
 that reflection cannot read, and the exception went to the game's own log. With that fixed the hand finally followed. Letting go of
 the grip, though, left the charge in the hand. The game never puts a charge away on its own, it only ever swaps it for
-another tool. The animations for stowing exist, nobody calls them, so the mod does.
+another tool. The animations for stowing exist, nobody calls them, so the mod does. Which revealed where they start: for a moment the charge
+popped up at the right of the view, where the flat game keeps it, before it went away. So the charge now vanishes the
+moment the grip opens, and the empty hand drifts from the controller into the animation.
 
 One fix from the first round had to go again. Back then I had taught the cutter's rail, floating in front of the
 helmet, to turn along with the wrist. Now that the cutter sits in the hand, the rail turns with it anyway, and my old

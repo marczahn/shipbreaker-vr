@@ -196,11 +196,27 @@ namespace ShipbreakerVR
             var vr = VrCamera.Instance;
             var hand = RightHand();
             var holding = hand != null ? hand.CurrentEquipmentType : EquipmentController.Equipment.None;
-            if (heldBefore == EquipmentController.Equipment.DemoCharge && holding == EquipmentController.Equipment.None && VrAim.Active) StowCharge(true);
-            else if (heldBefore != EquipmentController.Equipment.DemoCharge && holding == EquipmentController.Equipment.DemoCharge && stowed) StowCharge(false);
+            if (heldBefore == EquipmentController.Equipment.DemoCharge && holding == EquipmentController.Equipment.None && VrAim.Active)
+            {
+                StowCharge(true);
+                HideProps(true);
+                stowingSince = Time.time;
+            }
+            else if (heldBefore != EquipmentController.Equipment.DemoCharge && holding == EquipmentController.Equipment.DemoCharge)
+            {
+                if (stowed) StowCharge(false);
+                HideProps(false);
+                stowingSince = -1f;
+            }
             heldBefore = holding;
-            if (vr == null || hand == null || !rigKnown || hand.Hand != HandGrab.PlayerHand.Right
-                || hand.CurrentHandState != HandGrab.HandState.Equipped || hand.CurrentEquipmentType != EquipmentController.Equipment.DemoCharge) return;
+
+            // Fully at the controller while the charge is held; after letting go the arm blends back into the stow
+            // animation, starting from the hand instead of the flat game's spot at the right.
+            var weight = 0f;
+            if (hand != null && hand.Hand == HandGrab.PlayerHand.Right && hand.CurrentHandState == HandGrab.HandState.Equipped
+                && holding == EquipmentController.Equipment.DemoCharge) weight = 1f;
+            else if (stowingSince >= 0f && Time.time - stowingSince < StowBlend) weight = 1f - (Time.time - stowingSince) / StowBlend;
+            if (weight <= 0f || vr == null || hand == null || !rigKnown) return;
             var camera = vr.GameCamera;
             if (camera == null || !VrAim.TryGetHandLocal(out var gripLocal, out var aimLocal))
             {
@@ -217,11 +233,38 @@ namespace ShipbreakerVR
             var rigPosition = rig.position + (head.position - lastCameraPosition);
             var grip = rigPosition + rig.rotation * Vector3.Scale(rig.localScale, gripLocal);
             var aim = rig.rotation * aimLocal;
-            var wristRotation = aim * (Quaternion.Inverse(head.rotation) * armTip.rotation);
+            var animated = armTip.rotation;
+            var wristRotation = aim * (Quaternion.Inverse(head.rotation) * animated);
             var wrist = grip + aim * (WristBehindGrip * rig.localScale.z);
-            LogArm(hand, head);
-            Bend(armRoot, armMid, armTip, wrist);
-            armTip.rotation = wristRotation;
+            if (weight >= 1f) LogArm(hand, head);
+            Bend(armRoot, armMid, armTip, Vector3.Lerp(armTip.position, wrist, weight));
+            armTip.rotation = Quaternion.Slerp(animated, wristRotation, weight);
+        }
+
+        // How long the arm takes to blend from the controller into the stow animation.
+        private const float StowBlend = 0.35f;
+        private static float stowingSince = -1f;
+        private static readonly List<Renderer> hiddenProps = new List<Renderer>();
+
+        // The charge and the detonator hang on the hand bone; they disappear as soon as the grip lets go instead of riding
+        // along through the stow animation, and come back when the charge is drawn again.
+        private static void HideProps(bool hide)
+        {
+            if (!hide)
+            {
+                foreach (var renderer in hiddenProps)
+                    if (renderer != null) renderer.enabled = true;
+                hiddenProps.Clear();
+                return;
+            }
+            if (armTip == null) return;
+            foreach (var renderer in armTip.GetComponentsInChildren<Renderer>())
+            {
+                if (!renderer.enabled) continue;
+                renderer.enabled = false;
+                hiddenProps.Add(renderer);
+            }
+            if (stowLogs < 5) Plugin.Log.LogInfo($"Tool in hand: hid {hiddenProps.Count} renderer(s) on the hand: {string.Join(", ", hiddenProps.ConvertAll(r => r.name))}");
         }
 
         // Put away with the grip (VrToolInput), the demo charge stays in the animated hand: the game only ever leaves it by
@@ -363,6 +406,8 @@ namespace ShipbreakerVR
         // On unload (hot reload): the equipment point goes back to the game.
         public static void Release()
         {
+            HideProps(false);
+            stowingSince = -1f;
             Restore();
             point = null;
             grab = null;

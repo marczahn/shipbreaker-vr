@@ -103,7 +103,10 @@ interacting, the grapple and the "entity of interest".
   state only by drawing another tool (its grab animation takes over), and the animator's stow triggers
   (`AnimationParameters.DemoChargeStowParameter`/`DetonatorStowParameter`) are never fired by the game's code. The mod
   fires the matching one when the right hand goes from demo charge to nothing (log `Tool in hand: demo charge put
-  away`) and resets them when the charge is drawn again. a two-bone solve puts the wrist 8 cm behind the grip pose, and the hand keeps
+  away`) and resets them when the charge is drawn again. Stopping the arm pose at once showed the charge for a moment
+  at the flat game's spot at the right, where the stow animation starts; now the renderers on the hand bone are
+  disabled at once (log `hid N renderer(s) on the hand`, re-enabled when the charge is drawn again) and the arm blends
+  from the controller into the animation over 0.35 s. a two-bone solve puts the wrist 8 cm behind the grip pose, and the hand keeps
   the animation's angle to the game camera. The rig only follows the game camera in `onBeforeRender`, so the hand is
   placed relative to the rig shifted by the game camera's movement since. The log line `Tool in hand: arm for the demo
   charge ...` lists all rig constraints, and `Tool in hand: demo charge; wrist ...` whether the detonator hangs on the
