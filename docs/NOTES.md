@@ -866,12 +866,16 @@ r11: `ScriptEngine.dll` into `BepInEx\plugins`). The plugin DLL and its PDB then
 assembly with symbols, and Mono.Cecil most likely throws without the PDB, so it goes along. The OpenXR DLLs and the
 AssetBundle stay where they are. Settings in `BepInEx\config\com.bepis.bepinex.scriptengine.cfg`: `LoadOnStart = true`
 (otherwise the mod only loads with the first F6) and, for reloading on every copy of a new DLL,
-`EnableFileSystemWatcher = true` (reload `AutoReloadDelay` seconds after the file changed). F6 reloads by hand.
+`EnableFileSystemWatcher = true` (reload `AutoReloadDelay` seconds after the file changed). F6 reloads by hand, but
+not while a tool is held: ScriptEngine checks its key with BepInEx's `KeyboardShortcut.IsDown`, which refuses while any
+other key or button counts as held, most likely the grip as a joystick button (a guess). Copying the DLL again reloads
+with the tools in the hands.
 
 How a reload goes: ScriptEngine destroys its object with the plugin on it, then a frame later loads the DLL from memory
 under a new assembly name (`ShipbreakerVR-<ticks>`) and adds the new plugin.
 - `Plugin.OnDestroy` (`VrSession.Unload`) hands everything back to the game, as stopping VR does: the VR tab and the VR rows leave the
-  options screen (`VrOptionsTab.RemoveAll`), the InControl device is detached, the game cameras and the silenced ones are
+  options screen (`VrOptionsTab.RemoveAll`), the InControl device is detached (as a passive one: the game opens the
+  pause menu for a detached controller, taking it for an unplugged gamepad), the game cameras and the silenced ones are
   switched on as the game wants them, the Hab's sway and blends come back, the truck viewer renders again, the canvases
   return to their render modes and layers, the helmet goes back onto the body, the rig is destroyed right away (with
   the UI pass and the quality volume), the render pipeline events are removed, and the Harmony patches are undone. Not
