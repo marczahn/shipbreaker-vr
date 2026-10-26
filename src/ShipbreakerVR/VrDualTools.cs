@@ -29,9 +29,9 @@ namespace ShipbreakerVR
         // Which tool's code a game class belongs to: its input, its aim and its "is it equipped" checks.
         public enum Family { Other, Cutter, Grapple }
 
-        // The tool the second hand holds (None, CuttingTool or GrappleHook) and that hand.
-        public static EquipmentController.Equipment Second { get; private set; }
-        public static XRNode SecondNode { get; private set; } = XRNode.LeftHand;
+        // The tool the second hand holds (None, CuttingTool or GrappleHook) and that hand (VrHand keeps both).
+        public static EquipmentController.Equipment Second => VrHand.Second;
+        public static XRNode SecondNode => VrHand.SecondHand?.Node ?? XRNode.LeftHand;
 
         private static EquipmentController equipment;
         private static CuttingToolController cutter;
@@ -116,8 +116,7 @@ namespace ShipbreakerVR
         public static void Draw(EquipmentController controller, EquipmentController.Equipment kept, XRNode keptBy, EquipmentController.Equipment next)
         {
             equipment = controller;
-            Second = kept;
-            SecondNode = keptBy;
+            VrHand.KeepSecond(VrHand.Of(keptBy), kept);
             Invoke(SetEquipment, next);
             Invoke(PlayEquipAudio, next);
             if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: {Name(keptBy)} hand keeps the {kept}, the other hand draws the {next}");
@@ -129,8 +128,7 @@ namespace ShipbreakerVR
         {
             equipment = controller;
             if (!FindTools()) return;
-            Second = tool;
-            SecondNode = node;
+            VrHand.KeepSecond(VrHand.Of(node), tool);
             model = null;
             if (tool == EquipmentController.Equipment.CuttingTool && cutter != null) cutter.EquipCutter(false);
             else if (tool == EquipmentController.Equipment.GrappleHook && gun != null) gun.EquipGun(false);
@@ -142,7 +140,7 @@ namespace ShipbreakerVR
         public static void TakeOver(XRNode node)
         {
             if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: {Name(node)} hand takes the {Second} over");
-            SecondNode = node;
+            VrHand.KeepSecond(VrHand.Of(node), Second);
         }
 
         // The game's tool was let go while the second hand still holds its own: that one becomes the game's tool.
@@ -151,7 +149,7 @@ namespace ShipbreakerVR
             if (!Find()) return;
             var tool = Second;
             if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: the {equipment.CurrentEquipment} is put away, the {tool} in the {Name(SecondNode)} hand becomes the game's tool");
-            Second = EquipmentController.Equipment.None;
+            VrHand.DropSecond(true);
             Invoke(PlayUnequipAudio, equipment.CurrentEquipment);
             Invoke(SetEquipment, tool);
         }
@@ -162,37 +160,37 @@ namespace ShipbreakerVR
         {
             var tool = Second;
             if (tool == EquipmentController.Equipment.None) return;
+            var node = SecondNode;
             if (tool == EquipmentController.Equipment.CuttingTool)
             {
-                if (!FindTools() || cutter == null) { Second = EquipmentController.Equipment.None; return; }
+                if (!FindTools() || cutter == null) { VrHand.DropSecond(); return; }
                 if (!force && !cutter.CanBeUnequipped()) return;
-                Second = EquipmentController.Equipment.None;
+                VrHand.DropSecond();
                 if (Find()) Invoke(PlayUnequipAudio, tool);
                 cutter.UnequipCutter();
             }
             else
             {
-                if (!FindTools() || gun == null) { Second = EquipmentController.Equipment.None; return; }
+                if (!FindTools() || gun == null) { VrHand.DropSecond(); return; }
                 if (!force && !gun.CanBeUnequipped()) return;
-                Second = EquipmentController.Equipment.None;
+                VrHand.DropSecond();
                 if (Find()) Invoke(PlayUnequipAudio, tool);
                 gun.UnequipGun();
             }
             model = null;
-            if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: the {tool} in the {Name(SecondNode)} hand is put away");
+            if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: the {tool} in the {Name(node)} hand is put away");
         }
 
         // The tool the scanner hid, and the hand that held it.
-        public static EquipmentController.Equipment Suspended { get; private set; }
-        public static XRNode SuspendedNode { get; private set; }
+        public static EquipmentController.Equipment Suspended => VrHand.Hidden;
+        public static XRNode SuspendedNode => VrHand.HiddenHand?.Node ?? XRNode.RightHand;
 
         // The scanner is drawn while the other hand holds the game's tool: the game puts that tool away, and it comes back
         // after the scan (Resume).
         public static void Suspend(EquipmentController.Equipment tool, XRNode node)
         {
             if (!Enabled) return;
-            Suspended = tool;
-            SuspendedNode = node;
+            VrHand.Hide(VrHand.Of(node), tool);
             if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: the scanner hides the {tool} in the {Name(node)} hand");
         }
 
@@ -201,19 +199,21 @@ namespace ShipbreakerVR
         {
             if (Suspended == EquipmentController.Equipment.None) return;
             if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: the {Suspended} hidden by the scanner stays put away");
-            Suspended = EquipmentController.Equipment.None;
+            VrHand.Unhide();
         }
 
         // The scanner is put away: the hidden tool comes back into its hand instead of an empty hand. False without one.
         public static bool Resume(EquipmentController controller)
         {
             var tool = Suspended;
-            Suspended = EquipmentController.Equipment.None;
-            if (tool == EquipmentController.Equipment.None || !Enabled) return false;
+            var node = SuspendedNode;
+            var back = tool != EquipmentController.Equipment.None && Enabled;
+            VrHand.Unhide(back);
+            if (!back) return false;
             equipment = controller;
             Invoke(SetEquipment, tool);
             Invoke(PlayEquipAudio, tool);
-            if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: the scanner is put away, the {tool} comes back into the {Name(SuspendedNode)} hand");
+            if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: the scanner is put away, the {tool} comes back into the {Name(node)} hand");
             return true;
         }
 
@@ -239,7 +239,7 @@ namespace ShipbreakerVR
             if (Find() && !equipment.IsNothingEquipped && equipment.CurrentEquipment == Second)
             {
                 if (logs++ < 60) Plugin.Log.LogInfo($"Two tools: the game took the {Second} as its tool");
-                Second = EquipmentController.Equipment.None;
+                VrHand.DropSecond();
             }
         }
 
@@ -381,7 +381,7 @@ namespace ShipbreakerVR
         public static void Release()
         {
             PutAway(true);
-            Suspended = EquipmentController.Equipment.None;
+            VrHand.Unhide();
             if (point != null) Object.Destroy(point.gameObject);
             if (aim != null) Object.Destroy(aim.gameObject);
             point = null;

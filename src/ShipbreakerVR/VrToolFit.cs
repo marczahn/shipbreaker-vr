@@ -71,7 +71,7 @@ namespace ShipbreakerVR
         }
 
         // While adjusting: the other hand's grip blocks drawing from the belt with that hand.
-        public static bool Blocks(XRNode node) => Adjusting != null && Adjusting.Value && node != VrToolInput.ToolNode && HoldsModel();
+        public static bool Blocks(XRNode node) => Adjusting != null && Adjusting.Value && node != VrHand.GameToolHand.Node && HoldsModel();
 
         // From VrToolModels.Place, before the tool is placed, with the tool hand's wrist and aim pose in tracking space: the
         // other hand's grip drags the tool while adjusting.

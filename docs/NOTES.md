@@ -753,13 +753,22 @@ before rendering, where the tool models, arms and laser are placed.
 
 `VrFrame` runs the per-frame logic in a fixed order from a step at the end of Unity's `EarlyUpdate` (inserted into the
 player loop, removed on unload): after the runtime delivered the controller state, before the physics steps and before
-any of the game's `Update`s. The order is `VrInput` → `VrToolInput` (drawing, holding and putting away tools, the tool
+any of the game's `Update`s. The order is `VrInput` → `VrToolInput` (`VrHand`, then drawing, holding and putting away tools, the tool
 hand, the buttons' actions, `VrDualTools.Check`) → `VrAim` (the aim camera on the tool hand) → `VrDualTools.UpdateAim`
 → `VrControls` (flying, braking, turning). The patched game code and `VrClimb` (in the physics step) only read the
 results. Before, each module computed its state on the first read in a frame, so the order depended on which game
 method asked first: `VrAim` could cache the old tool hand for a frame after the other hand took the tool. If the step
 goes missing from the player loop (the game's ECS world can rebuild it), `Plugin.Update` runs the frame instead and puts
 the step back within a second, with a warning in the log.
+
+`VrHand` keeps what each hand does as one state: `Empty`, `GameTool` (the game's equipped tool, aimed and worked with
+that hand), `SecondTool` (`VrDualTools`), `HiddenTool` (hidden by the scanner in the other hand) or `Holding`
+(`VrClimb`). Before, the tool hand lived in `VrToolInput`, the second and the hidden tool's hands in `VrDualTools` and
+holding on in `VrClimb`, and "is this hand free?" combined five of them. The modules change the state only through
+`VrHand`'s transitions (take the game's tool, keep or drop the second tool, hide or bring back a tool, start or stop
+holding on); a hand gets a tool only after letting go and holds on only while free, so it never does two things at
+once. `VrToolInput.Update` brings the state up to date with the game's equipped tool each frame; every change is logged
+as `Hands: left Empty -> GameTool (GrappleHook)`, and F8 lists both hands.
 
 ## Diagnostics
 The tools below are off by default, so players' logs stay readable: config `Debug/Diagnose` turns on F8, the automatic
