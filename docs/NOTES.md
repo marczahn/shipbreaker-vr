@@ -1024,6 +1024,42 @@ player starts on D3D12 and the OpenXR session runs, but HDRP's pipeline fails to
 'KSampleCopy4_1_x_8' not found` in `GPUCopy`'s constructor), so nothing is drawn. The game's build holds its compute
 shaders for D3D11 only.
 
+Two more measurements with test code that is gone again. The game's ECS systems (timed per class through
+`SystemBase`/`ComponentSystem`/`JobComponentSystem.Update`): 316 systems together 2.0-2.4 ms per frame in the bay,
+4.6 ms when busy; the largest is `LynxCopyTransformsSystem` with 0.6-0.85 ms, nothing else above 0.2 ms, so there is
+no single system worth making cheaper. Fewer job workers (`JobsUtility.JobWorkerCount` 2 or 4 instead of Unity's 7):
+the Submits took about 25 % less per draw call (0.36-0.43 against 0.53-0.56 µs), the frame time perhaps 0.5 ms less,
+within the noise of the scene. The bay draws 3,500-5,100 draw calls per frame for both eyes, with 1,100-2,500 shadow
+casters.
+
+### Alternate eyes
+
+The main thread's render cost is per eye, so `VrAlternateEyes` (`[Rendering] AugenAbwechselnd`, F11) renders one
+eye per frame, the left and the right in turn, the way Luke Ross's R.E.A.L. VR mods and UEVR do for games that are
+limited by the processor:
+- After `XRSystem.SetupFrame` the other eye's (Camera, XRPass) entry is taken out of the frame's passes (the list
+  SetupFrame returns is `framePasses` itself) and put back before `ReleaseFrame`, which returns the passes to their
+  pool. With one eye left, `VrEyeSharing` does nothing that frame.
+- In `endFrameRendering` the rendered eye's target is copied into a texture of ours, and the other eye's texture from
+  the frame before goes into its target (`CopyTexture`, the target's slice). Both eyes render once before it starts
+  and again after the target's size or format changed.
+- The runtime has to know the copied image is older: OpenXR submits each view with the pose it was rendered with,
+  and the compositor turns the image to the current head pose. `VrAlternateEyesFeature`, an OpenXR feature added to
+  the settings before the loader starts (`VrXr.AddAlternateEyesFeature`), hooks `xrGetInstanceProcAddr`
+  (`HookGetInstanceProcAddr`) and so `xrEndFrame`; the hook hands on a copy of the frame end info whose skipped view
+  has the pose and field of view it had when it was rendered. Offsets are those of a 64 bit build
+  (`XrCompositionLayerProjectionView`: pose and fov at 16, 44 bytes, 96 bytes per view).
+- Which eye a frame skipped reaches the render thread, where Unity calls `xrEndFrame`, through a plugin event in the
+  frame's commands (`CommandBuffer.IssuePluginEvent` with a delegate's function pointer).
+- The hook survives a reload of the plugin (the OpenXR instance does) and finds the current plugin's handler through
+  `AppDomain` data. The feature is only added when VR starts, so the option needs VR started with a version that
+  has it.
+
+First test in the bay (0.7x, 7 job workers, same scene right before and after F11): 54 fps and 100 % missed at 90 Hz
+with both eyes, 63 fps and 24 % missed alternating; HDRP's main thread time 7.4 ms against 4.3 ms, 5,100 against 2,700
+draw calls. No visible problems in a first look; the runtime got no depth for the views, so the old pose is all it
+reprojects with. Game logic (about 9 ms busy) is now the larger part.
+
 The mod's own main thread cost is small (estimated 0.2-0.5 ms per frame). The largest item was `VrCanvases` scanning
 every canvas including prefabs (`Resources.FindObjectsOfTypeAll`) twice a second and allocating an array per inactive
 canvas; it now scans scene objects only and walks the parents.
