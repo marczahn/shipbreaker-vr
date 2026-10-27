@@ -28,8 +28,19 @@ namespace ShipbreakerVR
         private static int frames, missed;
         private static float logicSum, renderSum, bestRefresh;
 
-        // Called every frame by VrPerformance.Update.
+        private static int errors;
+
+        // Called every frame by VrPerformance.Update. A failure here must not stop the rest of the VR camera's LateUpdate.
         public static void Update(bool running, bool inHab)
+        {
+            try { Refresh(running, inHab); }
+            catch (System.Exception e)
+            {
+                if (errors++ < 3) Plugin.Log.LogError($"Performance overlay: {e}");
+            }
+        }
+
+        private static void Refresh(bool running, bool inHab)
         {
             var show = running && VrSettings.PerformanceOverlay.Value;
             if (!show)
@@ -80,7 +91,10 @@ namespace ShipbreakerVR
             // The game's font; TMP's default may be unset until the game loaded one.
             if (Time.unscaledTime < nextFontSearch) return false;
             nextFontSearch = Time.unscaledTime + 1f;
-            var font = TMP_Settings.defaultFontAsset;
+            TMP_FontAsset font = null;
+            // TMP_Settings throws while TMP has no settings asset loaded.
+            try { font = TMP_Settings.defaultFontAsset; }
+            catch (System.NullReferenceException) { }
             if (font == null)
             {
                 var fonts = Resources.FindObjectsOfTypeAll<TMP_FontAsset>();

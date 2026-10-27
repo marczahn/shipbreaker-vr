@@ -967,7 +967,16 @@ of release players. The mod opens a `CustomSampler` in a BeforeRendering pass an
 `HDRenderPipeline.TryCull`), physics steps per frame, garbage collections and managed memory. `Render info` lines, 3 s
 after the rig follows a new camera, list the frame settings in effect, the active post effects, the occlusion mesh,
 realtime shadow lights and planar probes, the asset's settings (as JSON) and once the timing settings (target frame
-rate, fixed step, incremental GC).
+rate, fixed step, incremental GC). The game's `boot.config` already turns incremental GC on (`gc-max-time-slice=3`)
+and graphics jobs (`gfx-enable-gfx-jobs=1`).
+
+The frame time lines need `Debug/Diagnose` or `Anzeige/Leistungsanzeige`. The latter also shows the numbers in the
+headset, in the top left of the visor and menus (`VrPerformanceOverlay`, a canvas of our own that `VrCanvases` attaches
+to the UI camera): fps, the headset's rate, the share of frames that missed the best rate seen, the main thread's game
+logic and render times, the resolution and whether eye sharing is on. Comparing settings only works near the edge:
+once the runtime halves the rate (Virtual Desktop reports 45 Hz), every frame takes 22.2 ms whatever was saved. The
+first eye sharing test ran at 1.15x and 1.25x, all of it at 45 Hz, and showed no difference for that reason; culling
+went from twice per frame (about 1 ms) to once (about 0.65 ms) and two shadow atlases were reused.
 
 The mod's own main thread cost is small (estimated 0.2-0.5 ms per frame). The largest item was `VrCanvases` scanning
 every canvas including prefabs (`Resources.FindObjectsOfTypeAll`) twice a second and allocating an array per inactive
@@ -985,7 +994,6 @@ Ideas not done yet, for after the measurements:
 - Passes that run per frame setting even when nothing uses them (rough distortion and refraction color pyramids,
   low-res transparency, Stop NaNs) could be switched off in the VR camera's frame settings once the render info shows
   they are on and a scan shows no material needs them.
-- Incremental GC (`gc-max-time-slice` in `boot.config`) if the garbage collections show up as hitches.
 
 ## Roadmap
 1. Inventory – done
