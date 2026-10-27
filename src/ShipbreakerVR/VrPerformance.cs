@@ -317,6 +317,11 @@ namespace ShipbreakerVR
                 text.Append($", {System.GC.CollectionCount(0) - gcStart} garbage collections, {System.GC.GetTotalMemory(false) / (1024 * 1024)} MB managed");
                 if (VrEyeSharing.SharedThisFrame && VrSettings.EyeSharing.Value) text.Append($", {VrEyeSharing.ReusedAtlases} shadow atlases reused");
                 Plugin.Log.LogInfo(text.ToString());
+                if (cullFrames > 0)
+                {
+                    var steps = VrFrameProfile.Describe(cullFrames);
+                    if (steps != null) Plugin.Log.LogInfo($"Frame steps ({statsLabel}), main thread per frame: {steps}");
+                }
             }
             frames.Clear();
             logicSum = renderSum = gpuSum = 0.0;
@@ -333,6 +338,7 @@ namespace ShipbreakerVR
             gcStart = System.GC.CollectionCount(0);
             gpuEyeSum = 0.0;
             gpuEyeCount = 0;
+            VrFrameProfile.Reset();
         }
 
         // Share of frames that took 1.4 to 4 intervals of the given refresh rate: missed by the GPU, which the runtime

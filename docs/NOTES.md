@@ -985,6 +985,12 @@ The second test (i7-7700K, RTX 4070 Ti, 2688x2880 per eye):
 - Hab, 1.0x: 83 fps with, 84 without, about 3 % missed either way; game logic is only about 3 ms there.
 No visible differences between the eyes. `AugenTeilen` is on by default since.
 
+Where the main thread's time goes: `VrFrameProfile` puts a marker before every step of Unity's player loop (and after
+each phase's last) that takes a timestamp, and logs with each frame time line a `Frame steps` line: the steps that
+took the most per frame (`Update.ScriptRunBehaviourUpdate`, the game's ECS groups, `PostLateUpdate.FinishFrameRendering`
+where HDRP renders, ...) and the phases' totals. The step that holds the wait for the headset shows up there too. The
+game's ECS world rebuilds the player loop, so the markers are checked once a second and put in again.
+
 The mod's own main thread cost is small (estimated 0.2-0.5 ms per frame). The largest item was `VrCanvases` scanning
 every canvas including prefabs (`Resources.FindObjectsOfTypeAll`) twice a second and allocating an array per inactive
 canvas; it now scans scene objects only and walks the parents.
