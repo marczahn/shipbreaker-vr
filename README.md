@@ -110,11 +110,11 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | I want to … | How |
 |---|---|
 | Use it | Point the controller and pull the trigger: cut, grapple, place or detonate demo charges. |
-| Use what I point at | Press A or X, with either hand. With an empty hand it uses what is in the middle of your view, marked by the game's dot. Without a tool the trigger and B do nothing. |
+| Use what I point at | Press A or X, with either hand. With an empty hand it uses what is in the middle of your view, marked by the game's dot. Without a tool the trigger and B do nothing. On the cutter A turns the cut instead, so use the other hand. |
 | Throw | Hold the trigger and press A. |
 | Reel in what the grapple holds | Hold the trigger and press B. |
 | Switch the tool's mode | Press B (demo charges: switch to the detonator; grapple: see below). |
-| Turn the cutter's line | Roll your wrist. The cutter starts with horizontal cuts, and its switch to vertical cuts has no button. |
+| Turn the cutter's line | Press A to switch between horizontal and vertical cuts. The line also turns when you roll your wrist. |
 
 ### Cutter
 
@@ -123,7 +123,7 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | I want to … | How |
 |---|---|
 | Cut with the Splitsaw | Pull the trigger. It cuts along a line, horizontal at first. |
-| Turn the line | Roll your wrist. The game's switch to vertical cuts has no button. |
+| Turn the line | Press A (X in the left hand) to switch between horizontal and vertical cuts, as the right mouse button does in the flat game. The line also turns when you roll your wrist. |
 | Switch to the Stinger and back | Press B. The Stinger cuts the point the laser shows. |
 
 ### Demo charges
@@ -225,7 +225,6 @@ That has not been tested.
 
 ## What does not work yet
 
-- The cutter's switch between horizontal and vertical cuts has no button; roll your wrist instead.
 - There is no laser pointer for the menus yet; you move through them with the sticks.
 - During loading screens the view can go dark for a moment.
 - Above 1.0, the render resolution can crash the game after loading (see above).

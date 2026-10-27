@@ -21,6 +21,8 @@ namespace ShipbreakerVR
     //   A / X           with the trigger held: throw what the grapple holds (hold to charge, release to throw);
     //                   otherwise interact (doors, switches, containers, airlock consoles), from either hand, also
     //                   one without a tool; the grip never does (it holds on, VrClimb)
+    //   A / X on the cutter  switch the Splitsaw between horizontal and vertical cuts (CutterAltFire, the right mouse
+    //                   button in the flat game) instead; the other hand's A or X still interacts
     //   B / Y           with the trigger held: reel in what the grapple holds, while the button is held
     //   B / Y tap       tool mode (cutter Stinger/Splitsaw, demo charge mode); on the grapple grappling or placing
     //                   tethers (VrTetherMode)
@@ -35,7 +37,7 @@ namespace ShipbreakerVR
     // calls in the tool classes are redirected (ToolInputPatch) to versions that add these presses to the real ones.
     internal static class VrToolInput
     {
-        private enum Action { Fire, Throw, Interact, ToolMode, Tether, Recall, Retract, Grapple, Cutter, DemoCharge, Scanner, Holster }
+        private enum Action { Fire, Throw, Interact, Angle, ToolMode, Tether, Recall, Retract, Grapple, Cutter, DemoCharge, Scanner, Holster }
 
         private const float LongPress = 0.4f;
 
@@ -50,6 +52,7 @@ namespace ShipbreakerVR
             { GameplayActions.GameplayActionSet.DemoChargeFire, Action.Fire },
             { GameplayActions.GameplayActionSet.Throw, Action.Throw },
             { GameplayActions.GameplayActionSet.Interact, Action.Interact },
+            { GameplayActions.GameplayActionSet.CutterAltFire, Action.Angle },
             { GameplayActions.GameplayActionSet.ToolMode, Action.ToolMode },
             { GameplayActions.GameplayActionSet.PlaceTether, Action.Tether },
             { GameplayActions.GameplayActionSet.RecallTethers, Action.Recall },
@@ -223,7 +226,9 @@ namespace ShipbreakerVR
             }
             if (!a) hand.ATether = null;
             hand.ADown = a;
-            if (!(hand.ATethers && (hand.ATether != null || hand.ALong))) now[(int)(hand.AThrows ? Action.Throw : Action.Interact)] = a;
+            // On the cutter A switches the cut's angle; there is nothing to throw, and the other hand interacts.
+            if (held == EquipmentController.Equipment.CuttingTool) now[(int)Action.Angle] = a;
+            else if (!(hand.ATethers && (hand.ATether != null || hand.ALong))) now[(int)(hand.AThrows ? Action.Throw : Action.Interact)] = a;
 
             var b = hand.Input.Secondary.Down;
             if (b && !hand.BDown)
