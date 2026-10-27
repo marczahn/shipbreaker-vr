@@ -51,6 +51,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> MirrorCutter;
         public static ConfigEntry<bool> TwoTools;
         public static ConfigEntry<bool> Climbing;
+        public static ConfigEntry<bool> UprightBody;
         public static ConfigEntry<bool> Diagnostics;
         public static ConfigEntry<bool> ToolExport;
         public static ConfigEntry<KeyboardShortcut> ToggleVrKey;
@@ -150,6 +151,10 @@ namespace ShipbreakerVR
                 ("Grip with a hand that holds no tool, close to a surface, holds on there; moving the hand pulls you along it, hand over hand with both. A light part comes to the hand instead, the station and fixed hulls stay put. Letting go keeps your speed, so you can push off. While the left hand holds on, flying rests. At a control (airlock console, switch) the grip holds on too; A or X works it.",
                     "Grip mit einer Hand ohne Werkzeug, nah an einer Oberfläche, hält dich dort fest; bewegst du die Hand, ziehst du dich daran entlang, mit beiden Händen Hand über Hand. Ein leichtes Teil kommt stattdessen zur Hand, Station und feste Rümpfe bleiben, wo sie sind. Loslassen behält deinen Schwung, so kannst du dich abstoßen. Solange die linke Hand festhält, ruht das Fliegen. An einem Bedienelement (Schleusenkonsole, Schalter) hält der Grip dich ebenfalls fest; bedient wird es mit A oder X."),
                 "How far you and a light part move depends on both masses.");
+
+            UprightBody = Bind("Steuerung", "OberkoerperAufrecht", true,
+                ("Your body stays upright and keeps its heading while you look around, so the shoulders stay put and the hands reach the controllers the same way wherever you look. It turns after your head once you turn more than a little. Off: the body turns with every look, as before.",
+                    "Dein Körper bleibt aufrecht und behält seine Richtung, während du dich umschaust: Die Schultern bleiben, wo sie sind, und die Hände reichen gleich weit, egal wohin du schaust. Drehst du dich weiter, dreht er sich nach. Aus: Der Körper dreht sich wie bisher mit jedem Blick mit."));
 
             Diagnostics = Bind("Debug", "Diagnose", false,
                 "For finding problems: Tasten/Diagnose (F8) writes what is drawn around the player into the log and saves screenshots next to it (also on its own 6 s after entering the Hab), load screens are logged frame by frame, and frame times are logged every 30 s.");

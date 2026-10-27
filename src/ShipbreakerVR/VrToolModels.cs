@@ -271,9 +271,9 @@ namespace ShipbreakerVR
             if (!FindArm(hand)) return;
             var head = camera.transform;
             var animated = armTip.rotation;
-            var wristRotation = aim * (Quaternion.Inverse(head.rotation) * animated);
+            var wristRotation = aim * (Quaternion.Inverse(VrTorso.Frame(head.rotation)) * animated);
             if (weight >= 1f) LogArm(hand, head);
-            Bend(armRoot, armMid, armTip, Vector3.Lerp(armTip.position, wrist, weight));
+            Reach(armRoot.parent, armRoot, armMid, armTip, Vector3.Lerp(armTip.position, wrist, weight));
             armTip.rotation = Quaternion.Slerp(animated, wristRotation, weight);
         }
 
@@ -395,6 +395,33 @@ namespace ShipbreakerVR
         private static EquipmentController.Equipment heldBefore;
         private static int stowLogs;
         private static bool stowed;
+
+        // How far the collarbone pushes the shoulder towards a target out of the arm's reach, in meters of the model.
+        public const float CollarReach = 0.08f;
+        // The most the collarbone turns for it, in degrees.
+        private const float CollarTurn = 30f;
+
+        // Bend, with the collarbone (the shoulder's parent) first turning the shoulder towards a target the arm cannot
+        // reach, as one pushes the shoulder forward reaching for something. Returns how far the wrist still stays short
+        // of the target, in meters (0 when it gets there).
+        public static float Reach(Transform collar, Transform root, Transform mid, Transform tip, Vector3 target)
+        {
+            var length = Vector3.Distance(root.position, mid.position) + Vector3.Distance(mid.position, tip.position);
+            var over = Vector3.Distance(root.position, target) - length;
+            if (over > 0f && collar != null)
+            {
+                var shoulder = root.position;
+                var toShoulder = shoulder - collar.position;
+                var moved = shoulder + (target - shoulder).normalized * Mathf.Min(over, CollarReach) - collar.position;
+                var turn = Quaternion.FromToRotation(toShoulder, moved);
+                turn.ToAngleAxis(out var angle, out var axis);
+                if (angle > 180f) angle -= 360f;
+                if (axis.sqrMagnitude > 1e-8f && Mathf.Abs(angle) > 1e-3f)
+                    collar.rotation = Quaternion.AngleAxis(Mathf.Clamp(angle, -CollarTurn, CollarTurn), axis) * collar.rotation;
+            }
+            Bend(root, mid, tip, target);
+            return Mathf.Max(0f, Vector3.Distance(root.position, target) - length);
+        }
 
         // Two-bone IK: the elbow bends until shoulder to wrist is as long as shoulder to target, then the shoulder turns
         // the arm onto the target. The elbow stays in the plane the animation gave it.

@@ -335,6 +335,22 @@ interacting, the grapple and the "entity of interest".
   the mouse turns the body) was dropped: in VR that made no sense in practice. An old entry in the config file is
   ignored.
 
+- The player model hangs on that body, so it turned with the whole head too (heading, pitch and roll), around the eye.
+  The shoulders (`rig_*_shoulder`, the humanoid upper arms, under `rig_*_collarbone < rig_spine3`) sit about 20 cm
+  below the eye and swung around it with every look while the controllers stayed put, so the arms' reach changed with
+  the head (issue #37): looking down took the shoulders back, looking right took the right one back. `VrTorso` (first of
+  the LateUpdate steps) turns the model back upright after the animation: the hips (the humanoid root, set by the
+  animator every frame) turn around the neck bone onto `Playspace * heading`, and the neck turns back, so the head stays
+  at the eye. The heading lives in tracking space and follows the head's with a dead zone of 40 degrees, turning after
+  it beyond 10 degrees (`VrTorso.Follow`). Bone poses relative to the eye (the charge arm's wrist, the mirrored charge
+  hand) use `VrTorso.Frame` instead of the camera's rotation. Body, camera and aiming are untouched. Setting
+  `Steuerung/OberkoerperAufrecht`. Logs: `Torso: upright, turned around the neck | back to the game`, once `Torso: from
+  the eye, neck ... shoulders ...`.
+- A target beyond the arm's reach first turns the collarbone (up to 8 cm at the shoulder, 30 degrees,
+  `VrToolModels.Reach`), as one pushes the shoulder forward. Logs once per arm `Hands: <arm> arm upper ..., lower ...,
+  reach ...; shoulder at ... from the eye`, and every 10 s `Hands: <arm> hand short of the controller in N% of frames,
+  by up to ... m` while it stays short.
+
 ## UI
 - The game renders its UI with a camera tagged `UI_Camera` inside HDRP custom passes (`HUDCustomPass`,
   `DrawUICameraCustomPass`) as a full-screen overlay. `CustomPass.Execute` is overloaded, so patches must name the
