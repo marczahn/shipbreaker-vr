@@ -67,8 +67,8 @@ namespace ShipbreakerVR
             var layer = uiLayer = LowestLayer(uiCamera.cullingMask);
             // Inactive ones too: a canvas the game switches on later (the Hab's fades) would otherwise show for up to
             // half a second where the game put it, which for one on the Hab camera is in the room right in front of
-            // the VR camera.
-            var canvases = Resources.FindObjectsOfTypeAll<Canvas>();
+            // the VR camera. Scene objects only: Resources.FindObjectsOfTypeAll also walked every prefab, twice a second.
+            var canvases = Object.FindObjectsOfType<Canvas>(true);
             // Slightly in front of the canvases already on the UI camera. Not too close: TextMeshPro text turns into
             // solid blocks when a canvas ends up extremely small (planeDistance of a few centimetres).
             var nearest = float.MaxValue;

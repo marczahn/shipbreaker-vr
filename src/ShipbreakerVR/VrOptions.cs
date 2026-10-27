@@ -121,6 +121,7 @@ namespace ShipbreakerVR
                 new SliderRow { Label = L("Head height (cm)", "Kopfhöhe (cm)"), Entry = VrSettings.HeadHeight, Format = "0", Step = 1f },
                 new SliderRow { Label = L("Head sideways (cm)", "Kopf seitlich (cm)"), Entry = VrSettings.HeadSideways, Format = "0", Step = 1f },
                 EnumRow(L("Ambient occlusion", "Umgebungsverdeckung"), VrSettings.AmbientOcclusion),
+                new BoolRow { Label = L("Share work between eyes", "Augen teilen"), Entry = VrSettings.EyeSharing },
                 EnumRow(L("Helmet", "Helm"), VrSettings.Helmet),
                 new BoolRow { Label = L("HUD and menus in world", "HUD und Menüs im Raum"), Entry = VrSettings.UiInVr },
                 EnumRow(L("Visor steadying", "Visierberuhigung"), VrSettings.HudSteadying),
@@ -128,6 +129,7 @@ namespace ShipbreakerVR
                 new SliderRow { Label = L("Visor distance (m)", "Visierabstand (m)"), Entry = VrSettings.HudDistance, Format = "0.0" },
                 new SliderRow { Label = L("Menu distance (m)", "Menüabstand (m)"), Entry = VrSettings.MenuDistance, Format = "0.0" },
                 new SliderRow { Label = L("Menu width (m)", "Menübreite (m)"), Entry = VrSettings.MenuWidth, Format = "0.0" },
+                new BoolRow { Label = L("Performance display", "Leistungsanzeige"), Entry = VrSettings.PerformanceOverlay },
             };
         }
 

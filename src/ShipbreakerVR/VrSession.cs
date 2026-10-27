@@ -42,6 +42,8 @@ namespace ShipbreakerVR
             PatchReport.LogSummary();
             try { VrFrame.Install(); }
             catch (System.Exception e) { Plugin.Log.LogError($"Installing the frame update failed, running it from Update: {e}"); }
+            try { VrFrameProfile.Install(); }
+            catch (System.Exception e) { Plugin.Log.LogError($"Installing the frame profile failed: {e}"); }
         }
 
         // From Plugin.OnDestroy (not when the game quits). Everything the mod changed in the game goes back to how the
@@ -70,8 +72,11 @@ namespace ShipbreakerVR
                 if (VrSettings.StartVrAtLaunch.Value) VrXr.Toggle();
             }
             if (VrSettings.Pressed(VrSettings.ToggleVrKey)) VrXr.Toggle();
+            if (VrSettings.Pressed(VrSettings.EyeSharingKey)) VrEyeSharing.Toggle();
             VrXr.Watch();
             VrFrame.Check();
+            try { VrFrameProfile.Check(); }
+            catch (System.Exception e) { Plugin.Log.LogError($"Frame profile check failed: {e}"); }
             VrMenuInput.EnsureAttached();
             AttachCamera();
         }

@@ -155,6 +155,7 @@ namespace ShipbreakerVR
 
             Plugin.Log.LogInfo($"VR camera follows '{camera.name}' (HDRP data copied: {gameHd != null})");
             VrPerformance.LogOtherCameras(camera);
+            VrRenderInfo.Schedule();
         }
 
         // Nothing of the (half-loaded) world, only black behind the UI canvas. Retarget restores the camera settings.
@@ -266,6 +267,9 @@ namespace ShipbreakerVR
                 // The near plane scales with the player, so close things are cut off as far as before.
                 vrCamera.nearClipPlane = 0.05f * WorldScale;
                 LogEyeSeparation();
+                HdrpXrSettings.Update(VrSettings.AntiAliasing.Value == VrResolution.AntiAliasing.TAA);
+                HdrpXrSettings.CheckSlices();
+                VrRenderInfo.Update(this);
             }
             vrCamera.enabled = running;
             if (running && gameCamera != null) gameCamera.enabled = false;

@@ -19,7 +19,7 @@ namespace ShipbreakerVR
     // The rest of the frame hangs on the VR camera's callbacks (VrCamera), which run the phases below, each step on its
     // own as here, so the whole order is in this file:
     //   Update        frame statistics, load trace, F8 (diagnostics only)
-    //   FixedUpdate   VrClimb: holding on, each physics step
+    //   FixedUpdate   VrClimb: holding on, each physics step; the physics step count (frame statistics)
     //   LateUpdate    after the game's animation: VrToolModels bends the arm for the demo charge, VrHands poses the
     //                 suit's hands, VrCrosshair hides the crosshair; then the rig itself (VrCamera)
     //   before render the rig is placed on the game camera (VrCamera.FollowGameCamera, also in LateUpdate); then VrClimb
@@ -47,6 +47,7 @@ namespace ShipbreakerVR
         private static readonly (string Name, System.Action Step)[] FixedSteps =
         {
             ("climbing", VrClimb.FixedUpdate),
+            ("frame statistics", VrPerformance.FixedStep),
         };
 
         private static readonly (string Name, System.Action Step)[] LateSteps =

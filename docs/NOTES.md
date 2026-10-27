@@ -907,6 +907,124 @@ per game session; that needs a restart. Reload with the options menu closed; an 
 the VR tab falls back to the first tab. Mono never unloads assemblies, so every reload leaves the old code in memory
 (about 140 KB each), which is harmless for a test session.
 
+## Performance audit: work done twice per eye
+The bay ran at 45 Hz at 1.05x (22-24 ms per frame), and at 90 Hz the main thread already used about 10 of the 11.1 ms
+(NOTES above, "Performance in the Hab"). So both the GPU and the CPU are close to the limit on an i7-7700K with an
+RTX 4070 Ti. An audit against the HDRP 10.9.0 source (the game ships some HDRP 10.x) found
+these points. None of them was measured in the headset yet; the log lines below are there to measure them.
+
+What MultiPass does per eye (HDRP `HDRenderPipeline.Render`, `XRSystem.CreateLayoutFromXrSdk`): every eye is its own
+`XRPass`, its own `HDCamera` (history, exposure, volume stack) and its own render request. Most of that work depends on
+the view and cannot be shared (G-buffer, lighting, SSAO, SSR, volumetrics, post-processing). Two things don't:
+- Culling. HDRP reuses the first eye's culling results for the second eye only if the runtime gives both passes the
+  same culling pass (`cullingPassId`). Otherwise it culls the scene, every light's shadow casters, decals and probes
+  twice. `VrEyeSharing` logs what the runtime does (`XR culling passes from the runtime: ...`) and, with
+  `[Rendering] AugenTeilen`, gives the first eye a culling volume that holds both eyes (per plane the looser of the two,
+  5 cm out) and the second eye the first eye's culling pass id. HDRP's own branch then shares the results.
+- Shadow maps. `HDShadowManager.RenderShadows` runs in every render request and redraws the punctual, cascade and
+  area atlases. The atlases are persistent RTHandles imported into the render graph, and with shared culling the
+  second eye's shadow requests (from the culling results and the camera transform both eyes share) are the same as
+  the first eye's. With `AugenTeilen` a prefix on `HDShadowAtlas.RenderShadows` skips the second eye for atlases the
+  first eye rendered this frame, except blurred ones (EVSM, IM) and the cached atlases. The second eye still builds its
+  own shadow data, so sampling uses its own camera-relative matrices. An atlas that anything else renders after the first
+eye (a reflection probe draws its own shadows into the same atlases) is rendered again for the second eye.
+With shared culling HDRP has a bug of its own: it marks the shared result as "don't release" in a set it clears at
+the start of every camera in its culling loop, so a camera after the second eye would make both eyes release the
+same result into the pool. While the eyes share, `VrEyeSharing` moves them to the end of the frame's camera passes.
+`beginCameraRendering` then also fires once per frame for the VR camera instead of once per eye (`VrHelmet` and
+`VrLoadTrace` are fine with that). The shared culling also shares the first eye's cascade fit, so far shadows at the
+outer edge of the right eye could fade a little earlier. F10 switches it while the game runs; the frame
+  time line names the state, so before and after land in separate lines.
+
+Single Pass Instanced stays out of reach: HDRP issues every draw twice with `STEREO_INSTANCING_ON`, and a shader
+without that variant draws both instances into the left eye. The game was built without XR, so none of its shaders,
+HDRP's own included, has those variants, and there is no per-material fallback.
+
+Texture array slices. HDRP allocates every screen-sized target with `TextureXR.slices` slices. `XRSystem`'s constructor
+sets it to 2 whenever an XR display exists when the pipeline is created, and nothing lowers it. In MultiPass only
+slice 0 is used. The pipeline is normally created before the plugin starts OpenXR, but one recreated afterwards (for
+example by a quality level with another asset) would carry a second slice in every target, roughly doubling HDRP's
+render target memory. `XrMaxViewsPatch` makes `GetMaxViews` return 1 with MultiPass. `XRSystem` takes the larger of that and the current
+value, so this only helps while the slices are still 1; lowering them at runtime would pair existing two-slice
+targets with new one-slice ones in one render target bind, which D3D11 refuses. If they are 2 anyway, the log says so
+(`HDRP render targets have 2 texture array slices ...`), and `Render info: ... texture array slices N` tells which case
+it is.
+
+XR settings in the HDRP asset (`HdrpXrSettings.Update`): the occlusion mesh (the hidden area outside the lenses) is
+only drawn if the asset's `xrSettings.occlusionMesh` is on and the runtime supplies one; the mod switches the flag on.
+Camera jitter (`xrSettings.cameraJitter`) is off by default, and in XR HDRP then leaves the jitter out of TAA, which
+only blurs: the washed-out TAA from the UI section. With TAA selected the mod switches the jitter on.
+
+Effects that are wrong in a headset (motion blur, depth of field, lens distortion, chromatic aberration, Panini
+projection) are switched off for the VR camera through the quality volume (`[Bild] VrUnpassendeEffekteAus`). The Hab
+camera has no custom frame settings, so depth of field is allowed there; at full resolution per eye it is among the
+most expensive effects, if a volume uses it.
+
+Measuring. Neither the runtime nor `FrameTimingManager` reports GPU time, and HDRP's profiling samplers are compiled out
+of release players. The mod opens a `CustomSampler` in a BeforeRendering pass and closes it after post-processing
+(`GPU timer: ...` says once whether Unity's recorder works in this player; if it does, the frame time line gets
+`GPU both eyes`). The frame time line also gives how often HDRP culls per frame and how long it takes (Harmony timer on
+`HDRenderPipeline.TryCull`), physics steps per frame, garbage collections and managed memory. `Render info` lines, 3 s
+after the rig follows a new camera, list the frame settings in effect, the active post effects, the occlusion mesh,
+realtime shadow lights and planar probes, the asset's settings (as JSON) and once the timing settings (target frame
+rate, fixed step, incremental GC). The game's `boot.config` already turns incremental GC on (`gc-max-time-slice=3`)
+and graphics jobs (`gfx-enable-gfx-jobs=1`).
+
+The frame time lines need `Debug/Diagnose` or `Anzeige/Leistungsanzeige`. The latter also shows the numbers in the
+headset, in the upper left of the visor and menus (`VrPerformanceOverlay`, a canvas of our own that `VrCanvases` attaches
+to the UI camera): fps, the headset's rate, the share of frames that missed the best rate seen, the main thread's game
+logic and render times, the resolution and whether eye sharing is on. Comparing settings only works near the edge:
+once the runtime halves the rate (Virtual Desktop reports 45 Hz), every frame takes 22.2 ms whatever was saved. The
+first eye sharing test ran at 1.15x and 1.25x, all of it at 45 Hz, and showed no difference for that reason; culling
+went from twice per frame (about 1 ms) to once (about 0.65 ms) and two shadow atlases were reused. With Virtual
+Desktop's Synchronous Spacewarp switched off the runtime keeps 90 Hz and the frame rate shows what the game manages.
+The second test (i7-7700K, RTX 4070 Ti, 2688x2880 per eye):
+- Bay, 1.0x: 77 fps and 7 % missed with eye sharing, 69-73 fps and 28-33 % missed without. Game logic and rendering
+  took about 6 ms each on the main thread. 0.5x, 0.7x, 0.8x and 1.0x all gave 13.1 ms per frame: in the bay the main
+  thread sets the pace, not the GPU.
+- Hab, 1.0x: 83 fps with, 84 without, about 3 % missed either way; game logic is only about 3 ms there.
+No visible differences between the eyes. `AugenTeilen` is on by default since.
+
+Where the main thread's time goes: `VrFrameProfile` puts a marker before every step of Unity's player loop (and after
+each phase's last) that takes a timestamp, and logs with each frame time line a `Frame steps` line: the steps that
+took the most per frame (`Update.ScriptRunBehaviourUpdate`, the game's ECS groups, `PostLateUpdate.FinishFrameRendering`
+where HDRP renders, ...) and the phases' totals. The step that holds the wait for the headset shows up there too. The
+game's ECS world rebuilds the player loop, so the markers are checked once a second and put in again.
+`VrRenderProfile` splits HDRP's part (`FinishFrameRendering`) further, as a `Render steps` line: per eye render
+request the time for building the render graph, compiling it and executing its passes, the passes that take the most
+by name, and the other cameras' requests (the UI camera). First result in the full bay (0.7x, eye sharing on): HDRP's
+render takes 7.8-8.3 ms, the two eye requests only 3.4-4.0 ms of it (building the graph 1.6-1.9, compiling 0.2, passes
+1.2-1.4; no single pass above 0.3 ms), culling 0.6-1.2 ms. The passes only record commands and queue the draws; Unity
+works through the queued draws (sorting, batching, setting up each draw) in `ScriptableRenderContext.Submit`, so the
+line also has HDRP's whole render, its Submits (a transpiler on `HDRenderPipeline.Render`) and the rest, plus whether
+the SRP Batcher is on (HDRP sets it from its asset when the pipeline starts).
+Second result, same place: HDRP's render 7.1-9.1 ms = eye requests 3.6-4.2 + Submits 2.3-3.0 (two per frame) +
+culling 0.6-1.2 + rest 0.6-0.7, so it is fully accounted for. The SRP Batcher is on in the game; switching it off
+(with a test key, since removed) changed nothing measurable on the main thread (Submits 2.3-2.5 ms with it, 2.3-3.0 without, at a load that varied
+more than that). The line now also has Unity's draw counters per frame (draw calls, batches, SetPass calls, shadow
+casters, triangles; a release player keeps these) and the main and render thread times where the player has them.
+DirectX 12 (`-force-d3d12`, for native graphics jobs that spread the render thread's work) is no way out either: the
+player starts on D3D12 and the OpenXR session runs, but HDRP's pipeline fails to start every frame (`Kernel
+'KSampleCopy4_1_x_8' not found` in `GPUCopy`'s constructor), so nothing is drawn. The game's build holds its compute
+shaders for D3D11 only.
+
+The mod's own main thread cost is small (estimated 0.2-0.5 ms per frame). The largest item was `VrCanvases` scanning
+every canvas including prefabs (`Resources.FindObjectsOfTypeAll`) twice a second and allocating an array per inactive
+canvas; it now scans scene objects only and walks the parents.
+
+Ideas not done yet, for after the measurements:
+- HDRP's software dynamic resolution (`DynamicResolutionHandler`, XR-aware in 10.9, upscaling with CAS or Catmull-Rom)
+  instead of `eyeTextureResolutionScale` below the maximum: no reallocation and no video memory spike per change, so
+  the bay and the Hab, or an automatic controller, could change the resolution from one frame to the next. `VrUi` would
+  have to draw with the final viewport instead of `actualWidth/actualHeight`.
+- The desktop mirror is blitted every frame (`XRSystem.RenderMirrorView`, 0.1-0.3 ms); it could be switched off with
+  `SetPreferredMirrorBlitMode`, at the cost of the game window (and the F8 window dump) staying black.
+- Our AfterPostProcess pass makes HDRP render post-processing into an intermediate target and copy it once more per eye
+  (`HDUtils.PostProcessIsFinalPass`).
+- Passes that run per frame setting even when nothing uses them (rough distortion and refraction color pyramids,
+  low-res transparency, Stop NaNs) could be switched off in the VR camera's frame settings once the render info shows
+  they are on and a scan shows no material needs them.
+
 ## Roadmap
 1. Inventory – done
 2. Foundation (BepInEx, plugin, camera hook) – done
