@@ -260,6 +260,7 @@ namespace ShipbreakerVR
             }
             frames.Add(Time.unscaledDeltaTime);
             cullFrames++;
+            VrRenderProfile.SampleCounters();
             if (gpuRecorder != null && gpuRecorder.isValid)
             {
                 LogGpuTimer();

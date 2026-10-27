@@ -999,6 +999,11 @@ works through the queued draws (sorting, batching, setting up each draw) in `Scr
 line also has HDRP's whole render, its Submits (a transpiler on `HDRenderPipeline.Render`) and the rest, plus whether
 the SRP Batcher is on. **F9** (`Tasten/SrpBatcher`) switches the batcher for a comparison; HDRP sets it from its asset
 only when the pipeline starts.
+Second result, same place: HDRP's render 7.1-9.1 ms = eye requests 3.6-4.2 + Submits 2.3-3.0 (two per frame) +
+culling 0.6-1.2 + rest 0.6-0.7, so it is fully accounted for. The SRP Batcher is on in the game; switching it off
+changed nothing measurable on the main thread (Submits 2.3-2.5 ms with it, 2.3-3.0 without, at a load that varied
+more than that). The line now also has Unity's draw counters per frame (draw calls, batches, SetPass calls, shadow
+casters, triangles; a release player keeps these) and the main and render thread times where the player has them.
 
 The mod's own main thread cost is small (estimated 0.2-0.5 ms per frame). The largest item was `VrCanvases` scanning
 every canvas including prefabs (`Resources.FindObjectsOfTypeAll`) twice a second and allocating an array per inactive

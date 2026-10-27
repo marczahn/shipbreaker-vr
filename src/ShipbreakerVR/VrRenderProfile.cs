@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Text;
 using HarmonyLib;
+using Unity.Profiling;
 using UnityEngine;
 using UnityEngine.Experimental.Rendering.RenderGraphModule;
 using UnityEngine.Rendering;
@@ -18,9 +19,12 @@ namespace ShipbreakerVR
     // queue the draws; Unity sorts, batches and sets up the queued draws when the context is submitted, so that is where
     // the cost per object shows (and where the SRP Batcher, whose state is logged too, saves). Whatever is left after the
     // requests, the Submits and the culling (VrEyeSharing times it) is the rest: frame setup, callbacks, the mirror view.
-    // Only while the frame time line records; logged with it (VrPerformance).
+    // Only while the frame time line records; logged with it (VrPerformance). Also Unity's own counters of the frame's
+    // draws, which a release player keeps (ProfilerRecorder), and its thread timings where the player has them.
     internal static class VrRenderProfile
     {
+        static VrRenderProfile() => VrSession.OnUnload("render counters", StopCounters);
+
         private const int Shown = 10;
         private const double MinShownMs = 0.05;
         private static readonly double TickMs = 1000.0 / Stopwatch.Frequency;
@@ -38,6 +42,22 @@ namespace ShipbreakerVR
         private static readonly Dictionary<string, long> PassTicks = new Dictionary<string, long>();
         private static readonly Dictionary<string, long> OtherTicks = new Dictionary<string, long>();
         private static readonly List<KeyValuePair<string, long>> Sorted = new List<KeyValuePair<string, long>>();
+
+        // Unity's counters: (category, name, a time in nanoseconds).
+        private static readonly (ProfilerCategory category, string name, bool time)[] CounterNames =
+        {
+            (ProfilerCategory.Render, "Draw Calls Count", false),
+            (ProfilerCategory.Render, "Batches Count", false),
+            (ProfilerCategory.Render, "SetPass Calls Count", false),
+            (ProfilerCategory.Render, "Shadow Casters Count", false),
+            (ProfilerCategory.Render, "Triangles Count", false),
+            (ProfilerCategory.Internal, "Main Thread", true),
+            (ProfilerCategory.Internal, "Render Thread", true),
+        };
+        private static ProfilerRecorder[] counters;
+        private static double[] counterSums;
+        private static int counterFrames;
+        private static bool countersLogged;
 
         public static bool Recording => VrPerformance.Recording;
 
@@ -70,6 +90,56 @@ namespace ShipbreakerVR
         }
 
         public static void Rendered(long ticks) => render += ticks;
+
+        // Every recorded frame (VrPerformance.RecordFrame): the counters' values of the frame before.
+        public static void SampleCounters()
+        {
+            if (counters == null) StartCounters();
+            for (var i = 0; i < counters.Length; i++)
+                if (counters[i].Valid) counterSums[i] += counters[i].LastValue;
+            counterFrames++;
+        }
+
+        private static void StartCounters()
+        {
+            counters = new ProfilerRecorder[CounterNames.Length];
+            counterSums = new double[CounterNames.Length];
+            for (var i = 0; i < counters.Length; i++)
+            {
+                try { counters[i] = ProfilerRecorder.StartNew(CounterNames[i].category, CounterNames[i].name); }
+                catch (System.Exception e) { Plugin.Log.LogWarning($"Render counter '{CounterNames[i].name}': {e.Message}"); }
+            }
+        }
+
+        private static void StopCounters()
+        {
+            if (counters == null) return;
+            foreach (var counter in counters) counter.Dispose();
+            counters = null;
+        }
+
+        private static void AppendCounters(StringBuilder text)
+        {
+            if (counters == null || counterFrames == 0) return;
+            text.Append("; Unity's counters per frame");
+            var any = false;
+            for (var i = 0; i < counters.Length; i++)
+            {
+                if (!counters[i].Valid) continue;
+                var value = counterSums[i] / counterFrames;
+                text.Append(any ? ", " : " ").Append(CounterNames[i].time ? $"{CounterNames[i].name} {value / 1e6:0.00} ms" : $"{CounterNames[i].name} {value:0}");
+                any = true;
+            }
+            if (!any) text.Append(" unavailable");
+            if (!countersLogged)
+            {
+                countersLogged = true;
+                var missing = new List<string>();
+                for (var i = 0; i < counters.Length; i++)
+                    if (!counters[i].Valid) missing.Add(CounterNames[i].name);
+                if (missing.Count > 0) Plugin.Log.LogInfo($"Render counters this player doesn't have: {string.Join(", ", missing)}");
+            }
+        }
 
         // In place of ScriptableRenderContext.Submit in HDRP's render (RenderSubmitTimerPatch).
         public static void Submit(ref ScriptableRenderContext context)
@@ -131,6 +201,7 @@ namespace ShipbreakerVR
                 text.Append("; other cameras ");
                 AppendTop(text, OtherTicks, frames);
             }
+            AppendCounters(text);
             Reset();
             return text.ToString();
         }
@@ -155,6 +226,8 @@ namespace ShipbreakerVR
         {
             vrRequests = vrExecute = vrCompile = vrPasses = otherRequests = render = submit = 0;
             vrRequestCount = submitCount = 0;
+            counterFrames = 0;
+            if (counterSums != null) System.Array.Clear(counterSums, 0, counterSums.Length);
             PassTicks.Clear();
             OtherTicks.Clear();
         }
