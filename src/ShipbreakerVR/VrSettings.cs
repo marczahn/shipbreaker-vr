@@ -58,6 +58,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<KeyboardShortcut> DiagnosticsKey;
         public static ConfigEntry<KeyboardShortcut> ToolExportKey;
         public static ConfigEntry<KeyboardShortcut> EyeSharingKey;
+        public static ConfigEntry<KeyboardShortcut> SrpBatcherKey;
 
         // What the VR options show for a setting: its hint, and for a list the names of its values in enum order.
         private sealed class Texts
@@ -227,6 +228,8 @@ namespace ShipbreakerVR
                 "With Debug/WerkzeugExport on: saves the model of the tool in the hand.");
             EyeSharingKey = Bind("Tasten", "AugenTeilen", new KeyboardShortcut(KeyCode.F10),
                 "Switches Rendering/AugenTeilen on and off.");
+            SrpBatcherKey = Bind("Tasten", "SrpBatcher", new KeyboardShortcut(KeyCode.F9),
+                "Switches Unity's SRP Batcher on and off until the game restarts, for comparing frame times (Anzeige/Leistungsanzeige).");
         }
 
         // A setting without an option row, described in the .cfg only.

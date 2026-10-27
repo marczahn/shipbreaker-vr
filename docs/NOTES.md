@@ -992,7 +992,13 @@ where HDRP renders, ...) and the phases' totals. The step that holds the wait fo
 game's ECS world rebuilds the player loop, so the markers are checked once a second and put in again.
 `VrRenderProfile` splits HDRP's part (`FinishFrameRendering`) further, as a `Render steps` line: per eye render
 request the time for building the render graph, compiling it and executing its passes, the passes that take the most
-by name, and the other cameras' requests (the UI camera).
+by name, and the other cameras' requests (the UI camera). First result in the full bay (0.7x, eye sharing on): HDRP's
+render takes 7.8-8.3 ms, the two eye requests only 3.4-4.0 ms of it (building the graph 1.6-1.9, compiling 0.2, passes
+1.2-1.4; no single pass above 0.3 ms), culling 0.6-1.2 ms. The passes only record commands and queue the draws; Unity
+works through the queued draws (sorting, batching, setting up each draw) in `ScriptableRenderContext.Submit`, so the
+line also has HDRP's whole render, its Submits (a transpiler on `HDRenderPipeline.Render`) and the rest, plus whether
+the SRP Batcher is on. **F9** (`Tasten/SrpBatcher`) switches the batcher for a comparison; HDRP sets it from its asset
+only when the pipeline starts.
 
 The mod's own main thread cost is small (estimated 0.2-0.5 ms per frame). The largest item was `VrCanvases` scanning
 every canvas including prefabs (`Resources.FindObjectsOfTypeAll`) twice a second and allocating an array per inactive

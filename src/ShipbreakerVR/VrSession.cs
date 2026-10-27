@@ -73,6 +73,7 @@ namespace ShipbreakerVR
             }
             if (VrSettings.Pressed(VrSettings.ToggleVrKey)) VrXr.Toggle();
             if (VrSettings.Pressed(VrSettings.EyeSharingKey)) VrEyeSharing.Toggle();
+            if (VrSettings.Pressed(VrSettings.SrpBatcherKey)) VrRenderProfile.ToggleSrpBatcher();
             VrXr.Watch();
             VrFrame.Check();
             try { VrFrameProfile.Check(); }
