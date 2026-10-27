@@ -521,6 +521,20 @@ rope (log: "Grapple: rope snapped at ..."). The game skips its out-of-view snap 
 snap there apart from the rope passing through something. Holding something heavy with a hand still blocks thrust
 (`GrabController.IsGrabPreventingThrust`).
 
+Holding with the grapple (`VrGrappleHold`): the grapple's rope (`LaserRope`, caught in `GrapplingHook.SetHookPoint` with
+the player's rigidbody as the start anchor and manipulator) pulls a light part towards the player's attach point plus
+the rope direction times the rope length (`GetPositionForceInfo`), and turns it to keep its attitude to the player
+(`GetRotationForceInfo`, through `m_ReorientObject` or the stored attach forward/up). Both directions are stored in the
+player's space (`AnchorData.LocalRopeDirection`, `LocalAttachForward`, `LocalAttachUp`), and in VR the player's body
+follows the head (`VrBody`), so Marc saw the held part follow his gaze instead of the grapple. Postfixes on both methods
+now take the player's pose from the hand that holds the grapple (`VrAim.CameraTransformFor` for the grapple family), as
+if the body were fixed to that hand from the moment the rope caught: the target moves by the difference, and the
+springs (`mMaxSpring * SpringPercent`, `RotationSpringPercent`, scaled by the inertia tensor for `Force`/`Impulse`) by
+that difference too, since they are linear in it. The part does not jump when the rope catches, when the hand starts to
+aim later or when the grapple changes hands (the body's pose is carried over). Only the grapple's own rope, only while
+the hand aims, and only where the game pulls the part to the player; something too heavy to move still pulls the player
+as before (log: "Grapple hold: '<part>' follows '<aim camera>' ...", once per catch, at most 20 times).
+
 ### Holding on and climbing (`VrClimb`, config `Steuerung/Festhalten`)
 The game has its own grab (`GrabController`, `HandGrab`): it reaches for a raycast hit and holds the player with springs
 1.75 m behind the grabbed point (`HandSettings.ConnectedAnchorZOffset`), with lead and sticky animations. That does not
