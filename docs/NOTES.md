@@ -976,7 +976,14 @@ to the UI camera): fps, the headset's rate, the share of frames that missed the 
 logic and render times, the resolution and whether eye sharing is on. Comparing settings only works near the edge:
 once the runtime halves the rate (Virtual Desktop reports 45 Hz), every frame takes 22.2 ms whatever was saved. The
 first eye sharing test ran at 1.15x and 1.25x, all of it at 45 Hz, and showed no difference for that reason; culling
-went from twice per frame (about 1 ms) to once (about 0.65 ms) and two shadow atlases were reused.
+went from twice per frame (about 1 ms) to once (about 0.65 ms) and two shadow atlases were reused. With Virtual
+Desktop's Synchronous Spacewarp switched off the runtime keeps 90 Hz and the frame rate shows what the game manages.
+The second test (i7-7700K, RTX 4070 Ti, 2688x2880 per eye):
+- Bay, 1.0x: 77 fps and 7 % missed with eye sharing, 69-73 fps and 28-33 % missed without. Game logic and rendering
+  took about 6 ms each on the main thread. 0.5x, 0.7x, 0.8x and 1.0x all gave 13.1 ms per frame: in the bay the main
+  thread sets the pace, not the GPU.
+- Hab, 1.0x: 83 fps with, 84 without, about 3 % missed either way; game logic is only about 3 ms there.
+No visible differences between the eyes. `AugenTeilen` is on by default since.
 
 The mod's own main thread cost is small (estimated 0.2-0.5 ms per frame). The largest item was `VrCanvases` scanning
 every canvas including prefabs (`Resources.FindObjectsOfTypeAll`) twice a second and allocating an array per inactive

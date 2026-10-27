@@ -89,9 +89,9 @@ namespace ShipbreakerVR
                 "A separate texture per eye instead of a Texture2DArray. Experimental, in case MultiPass alone is not enough.");
             StartVrAtLaunch = Bind("Rendering", "VrBeimStart", true,
                 "Start VR as soon as the game launches, so the intro and loading screens already show in the headset. Off: start VR with Tasten/VrAnAus (F3).");
-            EyeSharing = Bind("Rendering", "AugenTeilen", false,
-                ("Experimental: works out what is in view and draws the sun's shadows once for both eyes instead of once per eye. Saves CPU and GPU time. Switch it off if objects are missing at the edge of one eye or shadows look different between the eyes.",
-                    "Experimentell: ermittelt, was im Blickfeld ist, und zeichnet die Schatten der Sonne einmal für beide Augen statt für jedes Auge einzeln. Spart CPU- und GPU-Zeit. Ausschalten, wenn am Rand eines Auges Objekte fehlen oder Schatten zwischen den Augen verschieden aussehen."),
+            EyeSharing = Bind("Rendering", "AugenTeilen", true,
+                ("Works out what is in view and draws the shadows once for both eyes instead of once per eye. Saves processor time, most in the bay. Switch it off if objects appear late or are missing at the edge of one eye, or if shadows flicker or differ between the eyes.",
+                    "Ermittelt einmal für beide Augen, was im Blickfeld ist, und zeichnet die Schatten nur einmal statt für jedes Auge. Spart Prozessorzeit, am meisten im Dock. Ausschalten, wenn am Rand eines Auges Objekte zu spät erscheinen oder fehlen, oder wenn Schatten flackern oder zwischen den Augen verschieden aussehen."),
                 "Tasten/AugenTeilen (F10) switches it while the game runs.");
             NoVrUnfitEffects = Bind("Bild", "VrUnpassendeEffekteAus", true,
                 "Switch off effects that are wrong in a headset: motion blur, depth of field, lens distortion, chromatic aberration and Panini projection.");
