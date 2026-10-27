@@ -275,7 +275,10 @@ namespace ShipbreakerVR
                     if (!loggedRewrite)
                     {
                         loggedRewrite = true;
-                        Plugin.Log.LogInfo($"Alternate eyes: xrEndFrame gives eye {skip} the pose it was rendered with");
+                        // A chained structure (depth for the runtime's reprojection) would still describe this frame's
+                        // depth, which the skipped eye didn't draw.
+                        var chained = Marshal.ReadIntPtr(sourceViews + skip * ViewSize, 8) != IntPtr.Zero;
+                        Plugin.Log.LogInfo($"Alternate eyes: xrEndFrame gives eye {skip} the pose it was rendered with ({viewCount} views, {(chained ? "with" : "no")} depth or other chained data)");
                     }
                     return info;
                 }
