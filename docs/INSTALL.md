@@ -74,8 +74,9 @@ flat game.
   use what you point at (A or X works from either hand, also an empty one), trigger + A = throw, B = switch the tool's
   mode, trigger + B = reel in. In the left hand X and Y stand for A and B, and controller flying pauses until you let
   go; the right stick still turns. The grapple's tethers are below.
-- The cutter's line turns with your wrist. It starts out horizontal; the game's switch to vertical cuts has no button,
-  so roll your wrist for vertical cuts.
+- The cutter's line starts out horizontal. A on the cutter switches between horizontal and vertical cuts (the right
+  mouse button in the flat game), and the line also turns with your wrist. That hand's A then does not use things;
+  the other hand's A or X does.
 - The suit's hands follow your controllers and close while you squeeze the grip.
 - The flat game never showed the cutter's right side, which is coarse and plain. The mod copies the detailed left side
   onto it, mirrored (small print there reads backwards). `CutterSpiegeln = false` under `[Bild]` in the config file
@@ -91,8 +92,8 @@ flat game.
 
 ![Demo charges](images/charges.svg)
 
-- Cutter: the trigger cuts, B switches between the Splitsaw (a line, horizontal at first; roll your wrist to turn it)
-  and the Stinger (the point the laser shows).
+- Cutter: the trigger cuts, A switches the Splitsaw between horizontal and vertical cuts (the line also turns with your
+  wrist), B switches between the Splitsaw (a line) and the Stinger (the point the laser shows).
 - Demo charges: the trigger places a charge where you point, or throws it where your hand points if you point at
   nothing. B takes the detonator (and goes back to the charges while you have some left); with the detonator the
   trigger detonates.

@@ -102,10 +102,12 @@ interacting, the grapple and the "entity of interest".
   `Vector2.right` (horizontal, the default, `mHorizontalCutNext = true`) or `Vector2.up`, switched by `CutterAltFire`
   (right mouse button) and, with `AutoAlternate`, after every cut. The part at the front of the model that shows it is
   `CuttingFXController.m_CuttingRail` (and `m_CuttingRailReticles`, `m_CuttingRailShadow`), turned in
-  `UpdateToolRotation` to `LookRotation(forward, CutRotation)`: crosswise for horizontal cuts. `CutterAltFire` has no
-  controller button in VR, so the rail stays crosswise and the line turns with the wrist. Marc asked for the rail
+  `UpdateToolRotation` to `LookRotation(forward, CutRotation)`: crosswise for horizontal cuts. Marc asked for the rail
   lengthwise, but kept it as it is once it was clear that only switching the cut to vertical would keep the rail
-  telling the truth.
+  telling the truth. Now A (X in the left hand) on the cutter presses `CutterAltFire` (`VrToolInput`, `Action.Angle`),
+  so the cut and the rail switch together; the line still turns with the wrist on top of that. That A no longer
+  interacts or throws (nothing to throw on the cutter); the other hand's A or X interacts as before. The Stinger does
+  not poll `CutterAltFire`, so A does nothing there.
 - Tool buttons (`VrToolInput`, only while hand aiming is active): all on the controller of the hand that holds the tool
   (the right one by default; on the left X stands for A and Y for B), the right stick stays with turning. Trigger =
   `GrappleFire`/`CutterFire`/`DemoChargeFire`; A = `Interact`, or `Throw` if the trigger was held when A went down (the
