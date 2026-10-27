@@ -1003,6 +1003,10 @@ culling 0.6-1.2 + rest 0.6-0.7, so it is fully accounted for. The SRP Batcher is
 (with a test key, since removed) changed nothing measurable on the main thread (Submits 2.3-2.5 ms with it, 2.3-3.0 without, at a load that varied
 more than that). The line now also has Unity's draw counters per frame (draw calls, batches, SetPass calls, shadow
 casters, triangles; a release player keeps these) and the main and render thread times where the player has them.
+DirectX 12 (`-force-d3d12`, for native graphics jobs that spread the render thread's work) is no way out either: the
+player starts on D3D12 and the OpenXR session runs, but HDRP's pipeline fails to start every frame (`Kernel
+'KSampleCopy4_1_x_8' not found` in `GPUCopy`'s constructor), so nothing is drawn. The game's build holds its compute
+shaders for D3D11 only.
 
 The mod's own main thread cost is small (estimated 0.2-0.5 ms per frame). The largest item was `VrCanvases` scanning
 every canvas including prefabs (`Resources.FindObjectsOfTypeAll`) twice a second and allocating an array per inactive
