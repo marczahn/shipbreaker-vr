@@ -67,6 +67,7 @@ namespace ShipbreakerVR
             }
 
             var manager = XRGeneralSettings.Instance.Manager;
+            if (manager.activeLoader == null) VrTestRuntime.Select();
             if (manager.activeLoader == null) manager.InitializeLoaderSync();
             if (manager.activeLoader == null)
             {
@@ -152,6 +153,7 @@ namespace ShipbreakerVR
             Plugin.Log.LogInfo($"XR settings loaded, OpenXR render mode: {openXr?.renderMode}");
             if (openXr != null) EnableControllerProfile(openXr);
             if (openXr != null) AddAlternateEyesFeature(openXr);
+            if (openXr != null && VrSettings.TestMode.Value) AddFeature<VrTestFeature>(openXr, "ShipbreakerVR Test Input");
             settingsLoaded = true;
         }
 
@@ -168,6 +170,20 @@ namespace ShipbreakerVR
             AccessTools.Field(typeof(OpenXRFeature), "m_enabled").SetValue(feature, true);
             field.SetValue(settings, features.Concat(new OpenXRFeature[] { feature }).ToArray());
             Plugin.Log.LogInfo("OpenXR: alternate eyes feature added");
+        }
+
+        private static void AddFeature<T>(OpenXRSettings settings, string name) where T : OpenXRFeature
+        {
+            var field = AccessTools.Field(typeof(OpenXRSettings), "features");
+            var features = (OpenXRFeature[])field.GetValue(settings) ?? new OpenXRFeature[0];
+            if (features.Any(f => f != null && f.GetType().FullName == typeof(T).FullName)) return;
+            var feature = ScriptableObject.CreateInstance<T>();
+            feature.name = name;
+            AccessTools.Field(typeof(OpenXRFeature), "nameUi").SetValue(feature, name);
+            AccessTools.Field(typeof(OpenXRFeature), "version").SetValue(feature, "0.0.1");
+            AccessTools.Field(typeof(OpenXRFeature), "m_enabled").SetValue(feature, true);
+            field.SetValue(settings, features.Concat(new OpenXRFeature[] { feature }).ToArray());
+            Plugin.Log.LogInfo($"OpenXR: {name} feature added");
         }
 
         // OpenXR only creates controller actions for enabled interaction profiles. The profiles in the AssetBundle

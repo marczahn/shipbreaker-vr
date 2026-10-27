@@ -47,7 +47,7 @@ namespace ShipbreakerVR
             }
         }
 
-        public static void Dump(VrCamera vr, string reason)
+        public static void Dump(VrCamera vr, string reason, bool saveImages = true)
         {
             var head = vr.transform;
             var text = new StringBuilder();
@@ -80,7 +80,7 @@ namespace ShipbreakerVR
             }
 
             Plugin.Log.LogInfo(text.ToString());
-            SaveImages(ui);
+            if (saveImages) SaveImages(ui, System.IO.Path.Combine(Paths.BepInExRootPath, "ShipbreakerVR-F8"), DateTime.Now.ToString("yyyyMMdd-HHmmss"));
         }
 
         private static void DescribeCanvas(StringBuilder text, Transform head, Canvas canvas, VrUi ui)
@@ -154,13 +154,12 @@ namespace ShipbreakerVR
             return $"ahead {ahead:0}, up {up:0}";
         }
 
-        private static void SaveImages(VrUi ui)
+        // The UI texture and the game window (written at the end of the frame) as <prefix>-ui.png and <prefix>-window.png.
+        public static void SaveImages(VrUi ui, string folder, string stamp)
         {
             try
             {
-                var folder = System.IO.Path.Combine(Paths.BepInExRootPath, "ShipbreakerVR-F8");
                 Directory.CreateDirectory(folder);
-                var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
                 var texture = ui != null ? ui.Texture : null;
                 if (texture != null)
                 {

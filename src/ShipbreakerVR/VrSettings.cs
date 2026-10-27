@@ -53,6 +53,8 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> Climbing;
         public static ConfigEntry<bool> Diagnostics;
         public static ConfigEntry<bool> ToolExport;
+        public static ConfigEntry<bool> TestMode;
+        public static ConfigEntry<bool> MockRuntime;
         public static ConfigEntry<KeyboardShortcut> ToggleVrKey;
         public static ConfigEntry<KeyboardShortcut> CenterKey;
         public static ConfigEntry<KeyboardShortcut> MonitorLookKey;
@@ -155,6 +157,10 @@ namespace ShipbreakerVR
                 "For finding problems: Tasten/Diagnose (F8) writes what is drawn around the player into the log and saves screenshots next to it (also on its own 6 s after entering the Hab), load screens are logged frame by frame, and frame times are logged every 30 s.");
             ToolExport = Bind("Debug", "WerkzeugExport", false,
                 "Tasten/WerkzeugExport (Shift+F8) saves the model of the tool in the hand (meshes, textures, UV layouts) to BepInEx\\ShipbreakerVR-tools, for retexturing it.");
+            TestMode = Bind("Test", "Testmodus", false,
+                "For development: test scripts dropped into BepInEx\\ShipbreakerVR-test\\inbox move the head and the controllers and press their buttons, and save screenshots and logs to ...\\results (see VrTestScript). Needs a restart to switch on.");
+            MockRuntime = Bind("Test", "MockRuntime", false,
+                "For development, with Testmodus: start VR with Unity's mock OpenXR runtime (BepInEx\\plugins\\ShipbreakerVR\\MockRuntime\\mock_runtime.dll) instead of the headset's, so VR runs without a headset. Needs a restart.");
             MirrorCutter = Bind("Bild", "CutterSpiegeln", true,
                 "Copy the detailed left side of the cutter's model onto its plain right side, which the flat game never showed.");
             VrToolFit.Bind();
