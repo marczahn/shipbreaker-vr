@@ -242,7 +242,11 @@ namespace ShipbreakerVR
         private static MethodBase TargetMethod() =>
             AccessTools.Method(AccessTools.TypeByName("UnityEngine.Rendering.HighDefinition.XRSystem"), "SetupFrame");
 
-        private static void Postfix(object __result) => VrEyeSharing.AfterSetupFrame(__result as IList);
+        private static void Postfix(object __result)
+        {
+            VrAlternateEyes.AfterSetupFrame(__result as IList);
+            VrEyeSharing.AfterSetupFrame(__result as IList);
+        }
     }
 
     // Times HDRP's culling per camera render request, to see whether the eyes share it and what it costs.

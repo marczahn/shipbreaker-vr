@@ -20,6 +20,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> SeparateEyeTextures;
         public static ConfigEntry<bool> StartVrAtLaunch;
         public static ConfigEntry<bool> EyeSharing;
+        public static ConfigEntry<bool> AlternateEyes;
         public static ConfigEntry<bool> NoVrUnfitEffects;
         public static ConfigEntry<bool> PerformanceOverlay;
         public static ConfigEntry<bool> UiInVr;
@@ -59,6 +60,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<KeyboardShortcut> ToolExportKey;
         public static ConfigEntry<KeyboardShortcut> EyeSharingKey;
         public static ConfigEntry<KeyboardShortcut> JobWorkerKey;
+        public static ConfigEntry<KeyboardShortcut> AlternateEyesKey;
 
         // What the VR options show for a setting: its hint, and for a list the names of its values in enum order.
         private sealed class Texts
@@ -94,6 +96,10 @@ namespace ShipbreakerVR
                 ("Works out what is in view and draws the shadows once for both eyes instead of once per eye. Saves processor time, most in the bay. Switch it off if objects appear late or are missing at the edge of one eye, or if shadows flicker or differ between the eyes.",
                     "Ermittelt einmal für beide Augen, was im Blickfeld ist, und zeichnet die Schatten nur einmal statt für jedes Auge. Spart Prozessorzeit, am meisten im Dock. Ausschalten, wenn am Rand eines Auges Objekte zu spät erscheinen oder fehlen, oder wenn Schatten flackern oder zwischen den Augen verschieden aussehen."),
                 "Tasten/AugenTeilen (F10) switches it while the game runs.");
+            AlternateEyes = Bind("Rendering", "AugenAbwechselnd", false,
+                ("Draws only one eye per frame, the left and the right in turn; the other eye shows its last image, turned to where you look now. Saves about half of the rendering work on the processor. Fast-moving things (tools, hands, flying parts) can flicker slightly, because the eyes see them at different moments.",
+                    "Zeichnet pro Bild nur ein Auge, abwechselnd links und rechts; das andere Auge zeigt sein letztes Bild, gedreht auf die aktuelle Blickrichtung. Spart etwa die Hälfte der Render-Arbeit des Prozessors. Schnell bewegte Dinge (Werkzeug, Hände, fliegende Teile) können leicht flimmern, weil die Augen sie zu verschiedenen Zeitpunkten sehen."),
+                "Experimental. Needs VR started with this version (it hooks the OpenXR runtime when VR starts). Tasten/AugenAbwechselnd (F11) switches it while the game runs.");
             NoVrUnfitEffects = Bind("Bild", "VrUnpassendeEffekteAus", true,
                 "Switch off effects that are wrong in a headset: motion blur, depth of field, lens distortion, chromatic aberration and Panini projection.");
 
@@ -228,6 +234,8 @@ namespace ShipbreakerVR
                 "With Debug/WerkzeugExport on: saves the model of the tool in the hand.");
             EyeSharingKey = Bind("Tasten", "AugenTeilen", new KeyboardShortcut(KeyCode.F10),
                 "Switches Rendering/AugenTeilen on and off.");
+            AlternateEyesKey = Bind("Tasten", "AugenAbwechselnd", new KeyboardShortcut(KeyCode.F11),
+                "Switches Rendering/AugenAbwechselnd on and off.");
             JobWorkerKey = Bind("Tasten", "JobWorker", new KeyboardShortcut(KeyCode.F9),
                 "Test: steps the number of Unity's job worker threads through Unity's own count, 4 and 2, until the game restarts (frame times in the log per count).");
         }

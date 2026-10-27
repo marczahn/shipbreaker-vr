@@ -77,7 +77,7 @@ namespace ShipbreakerVR
             text.text =
                 $"<color=#{color}>{fps:0} fps</color>   headset {refresh:0} Hz   {share * 100f:0} % missed\n" +
                 $"game {logicSum / frames * 1000f:0.0} ms   render {renderSum / frames * 1000f:0.0} ms\n" +
-                $"{(inHab ? "station" : "bay")} {XRSettings.eyeTextureResolutionScale:0.00}x   eye sharing {(VrSettings.EyeSharing.Value ? "on" : "off")}";
+                $"{(inHab ? "station" : "bay")} {XRSettings.eyeTextureResolutionScale:0.00}x   eye sharing {(VrSettings.EyeSharing.Value ? "on" : "off")}{(VrAlternateEyes.Enabled ? "   alternate eyes" : "")}";
             Reset();
         }
 
