@@ -19,6 +19,9 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> MultiPass;
         public static ConfigEntry<bool> SeparateEyeTextures;
         public static ConfigEntry<bool> StartVrAtLaunch;
+        public static ConfigEntry<bool> EyeSharing;
+        public static ConfigEntry<bool> NoVrUnfitEffects;
+        public static ConfigEntry<bool> PerformanceOverlay;
         public static ConfigEntry<bool> UiInVr;
         public static ConfigEntry<float> HudDistance;
         public static ConfigEntry<float> HudScale;
@@ -54,6 +57,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<KeyboardShortcut> MonitorLookKey;
         public static ConfigEntry<KeyboardShortcut> DiagnosticsKey;
         public static ConfigEntry<KeyboardShortcut> ToolExportKey;
+        public static ConfigEntry<KeyboardShortcut> EyeSharingKey;
 
         // What the VR options show for a setting: its hint, and for a list the names of its values in enum order.
         private sealed class Texts
@@ -85,6 +89,12 @@ namespace ShipbreakerVR
                 "A separate texture per eye instead of a Texture2DArray. Experimental, in case MultiPass alone is not enough.");
             StartVrAtLaunch = Bind("Rendering", "VrBeimStart", true,
                 "Start VR as soon as the game launches, so the intro and loading screens already show in the headset. Off: start VR with Tasten/VrAnAus (F3).");
+            EyeSharing = Bind("Rendering", "AugenTeilen", true,
+                ("Works out what is in view and draws the shadows once for both eyes instead of once per eye. Saves processor time, most in the bay. Switch it off if objects appear late or are missing at the edge of one eye, or if shadows flicker or differ between the eyes.",
+                    "Ermittelt einmal für beide Augen, was im Blickfeld ist, und zeichnet die Schatten nur einmal statt für jedes Auge. Spart Prozessorzeit, am meisten im Dock. Ausschalten, wenn am Rand eines Auges Objekte zu spät erscheinen oder fehlen, oder wenn Schatten flackern oder zwischen den Augen verschieden aussehen."),
+                "Tasten/AugenTeilen (F10) switches it while the game runs.");
+            NoVrUnfitEffects = Bind("Bild", "VrUnpassendeEffekteAus", true,
+                "Switch off effects that are wrong in a headset: motion blur, depth of field, lens distortion, chromatic aberration and Panini projection.");
 
             AmbientOcclusion = Bind("Bild", "Umgebungsverdeckung", VrPerformance.Occlusion.Niedrig,
                 ("Shading in corners and creases. Low looks nearly the same and saves a lot of performance; the game default can stutter on the station. Off for the most performance.",
@@ -167,6 +177,10 @@ namespace ShipbreakerVR
                 ("Width of the menus. Wider makes the text larger but needs more head movement to see everything.",
                     "Breite der Menüs. Breiter macht den Text größer, braucht aber mehr Kopfbewegung, um alles zu sehen."),
                 "In meters.", Between(1f, 4f));
+            PerformanceOverlay = Bind("Anzeige", "Leistungsanzeige", false,
+                ("Shows the frame rate in the upper left of the visor and menus: frames per second, the headset's rate, the share of frames that missed it, the main thread's time for game logic and for preparing the render, and the settings that matter for it.",
+                    "Zeigt links oben in Visier und Menüs die Bildrate: Bilder pro Sekunde, die Rate des Headsets, den Anteil der Bilder, die sie verpasst haben, die Zeit des Hauptthreads für Spiellogik und für das Vorbereiten des Renderns, und die Einstellungen, die sie beeinflussen."),
+                "While it is on, frame times are also logged every 30 s, as with Debug/Diagnose.");
             FlipUi = Bind("Anzeige", "UiSpiegeln", false, "Flip the UI vertically in case it is upside down.");
             MonitorLook = Bind("Anzeige", "MonitorEffekt", true,
                 "Screen look for the menus on the station's monitors: a little dimmer, fine scan lines, darker edges, a faint reflection on the glass and light on the frame. Tasten/MonitorEffektUmschalten (F7) switches it on and off.");
@@ -211,6 +225,8 @@ namespace ShipbreakerVR
                 "With Debug/Diagnose on: writes what is drawn around the player into the log and saves screenshots.");
             ToolExportKey = Bind("Tasten", "WerkzeugExport", new KeyboardShortcut(KeyCode.F8, KeyCode.LeftShift),
                 "With Debug/WerkzeugExport on: saves the model of the tool in the hand.");
+            EyeSharingKey = Bind("Tasten", "AugenTeilen", new KeyboardShortcut(KeyCode.F10),
+                "Switches Rendering/AugenTeilen on and off.");
         }
 
         // A setting without an option row, described in the .cfg only.
