@@ -10,7 +10,7 @@ using UnityEngine.XR.OpenXR.Features;
 
 namespace ShipbreakerVR
 {
-    // [Rendering] AugenAbwechselnd: one eye per frame, the left and the right in turn (alternate eye rendering, as the
+    // [Rendering] AugenAbwechselnd (on by default): one eye per frame, the left and the right in turn (alternate eye rendering, as the
     // R.E.A.L. VR mods and UEVR do it for games that are limited by the processor). The main thread spends about as
     // much on each eye as on the game's own logic (building HDRP's render graph, recording the passes, submitting the
     // draws), and the render thread passes every draw to the driver once per eye.
