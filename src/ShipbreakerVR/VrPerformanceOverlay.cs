@@ -71,11 +71,13 @@ namespace ShipbreakerVR
             var share = (float)missed / frames;
             var steady = share < 0.05f && refresh >= bestRefresh - 1f;
             var color = ColorUtility.ToHtmlStringRGB(steady ? Good : Bad);
-            var sharing = VrSettings.EyeSharing.Value ? VrOptions.L("on", "an") : VrOptions.L("off", "aus");
+            // English only: the game's language (VrOptions.L) comes from LynxGameUserOptions, whose static constructor
+            // throws while the game is still starting, and a type whose static constructor failed stays broken for the
+            // whole session. The overlay shows from the first frame of VR, so it once froze the game at the logo.
             text.text =
-                $"<color=#{color}>{fps:0} fps</color>   {VrOptions.L("headset", "Headset")} {refresh:0} Hz   {share * 100f:0} % {VrOptions.L("missed", "verpasst")}\n" +
-                $"{VrOptions.L("Game", "Spiel")} {logicSum / frames * 1000f:0.0} ms   {VrOptions.L("Render", "Rendern")} {renderSum / frames * 1000f:0.0} ms\n" +
-                $"{(inHab ? VrOptions.L("Station", "Station") : VrOptions.L("Bay", "Dock"))} {XRSettings.eyeTextureResolutionScale:0.00}x   {VrOptions.L("Eye sharing", "Augenteilen")} {sharing}";
+                $"<color=#{color}>{fps:0} fps</color>   headset {refresh:0} Hz   {share * 100f:0} % missed\n" +
+                $"game {logicSum / frames * 1000f:0.0} ms   render {renderSum / frames * 1000f:0.0} ms\n" +
+                $"{(inHab ? "station" : "bay")} {XRSettings.eyeTextureResolutionScale:0.00}x   eye sharing {(VrSettings.EyeSharing.Value ? "on" : "off")}";
             Reset();
         }
 
