@@ -971,7 +971,7 @@ rate, fixed step, incremental GC). The game's `boot.config` already turns increm
 and graphics jobs (`gfx-enable-gfx-jobs=1`).
 
 The frame time lines need `Debug/Diagnose` or `Anzeige/Leistungsanzeige`. The latter also shows the numbers in the
-headset, in the top left of the visor and menus (`VrPerformanceOverlay`, a canvas of our own that `VrCanvases` attaches
+headset, in the upper left of the visor and menus (`VrPerformanceOverlay`, a canvas of our own that `VrCanvases` attaches
 to the UI camera): fps, the headset's rate, the share of frames that missed the best rate seen, the main thread's game
 logic and render times, the resolution and whether eye sharing is on. Comparing settings only works near the edge:
 once the runtime halves the rate (Virtual Desktop reports 45 Hz), every frame takes 22.2 ms whatever was saved. The

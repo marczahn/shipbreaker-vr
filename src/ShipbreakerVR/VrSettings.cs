@@ -178,8 +178,8 @@ namespace ShipbreakerVR
                     "Breite der Menüs. Breiter macht den Text größer, braucht aber mehr Kopfbewegung, um alles zu sehen."),
                 "In meters.", Between(1f, 4f));
             PerformanceOverlay = Bind("Anzeige", "Leistungsanzeige", false,
-                ("Shows the frame rate in the top left of the visor and menus: frames per second, the headset's rate, the share of frames that missed it, the main thread's time for game logic and for preparing the render, and the settings that matter for it.",
-                    "Zeigt oben links in Visier und Menüs die Bildrate: Bilder pro Sekunde, die Rate des Headsets, den Anteil der Bilder, die sie verpasst haben, die Zeit des Hauptthreads für Spiellogik und für das Vorbereiten des Renderns, und die Einstellungen, die sie beeinflussen."),
+                ("Shows the frame rate in the upper left of the visor and menus: frames per second, the headset's rate, the share of frames that missed it, the main thread's time for game logic and for preparing the render, and the settings that matter for it.",
+                    "Zeigt links oben in Visier und Menüs die Bildrate: Bilder pro Sekunde, die Rate des Headsets, den Anteil der Bilder, die sie verpasst haben, die Zeit des Hauptthreads für Spiellogik und für das Vorbereiten des Renderns, und die Einstellungen, die sie beeinflussen."),
                 "While it is on, frame times are also logged every 30 s, as with Debug/Diagnose.");
             FlipUi = Bind("Anzeige", "UiSpiegeln", false, "Flip the UI vertically in case it is upside down.");
             MonitorLook = Bind("Anzeige", "MonitorEffekt", true,

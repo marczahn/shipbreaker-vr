@@ -5,7 +5,7 @@ using UnityEngine.XR;
 
 namespace ShipbreakerVR
 {
-    // The frame rate in the top left of the visor and the menus ([Anzeige] Leistungsanzeige), for judging a setting in the
+    // The frame rate in the upper left of the visor and the menus ([Anzeige] Leistungsanzeige), for judging a setting in the
     // headset without reading the log. A canvas of our own in Screen Space - Overlay, which VrCanvases attaches to the UI
     // camera like the game's own, so it shows wherever the UI does. Refreshed twice a second from the frames in between:
     // frames per second, the headset's rate and the share of frames that missed its best rate (a runtime that can't keep
@@ -120,15 +120,17 @@ namespace ShipbreakerVR
             background.color = new Color(0f, 0f, 0f, 0.6f);
             background.raycastTarget = false;
             var rect = (RectTransform)panel.transform;
-            rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0f, 1f);
-            rect.anchoredPosition = new Vector2(40f, -40f);
-            rect.sizeDelta = new Vector2(500f, 100f);
+            // Well inside the corner: at the visor's edge the headset's lenses blur it.
+            rect.anchorMin = rect.anchorMax = new Vector2(0.3f, 0.72f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = new Vector2(560f, 116f);
 
             var label = new GameObject("Text", typeof(RectTransform));
             label.transform.SetParent(panel.transform, false);
             text = label.AddComponent<TextMeshProUGUI>();
             text.font = font;
-            text.fontSize = 24f;
+            text.fontSize = 28f;
             text.color = Color.white;
             text.raycastTarget = false;
             text.enableWordWrapping = false;
