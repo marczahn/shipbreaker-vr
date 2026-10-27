@@ -155,13 +155,6 @@ namespace ShipbreakerVR
             submitCount++;
         }
 
-        // F9 (Tasten/SrpBatcher): HDRP sets it once from its asset when the pipeline starts, so it stays until then.
-        public static void ToggleSrpBatcher()
-        {
-            GraphicsSettings.useScriptableRenderPipelineBatching = !GraphicsSettings.useScriptableRenderPipelineBatching;
-            Plugin.Log.LogInfo($"SRP Batcher {(GraphicsSettings.useScriptableRenderPipelineBatching ? "on" : "off")} ({VrSettings.SrpBatcherKey.Value})");
-        }
-
         public static void Executed(long ticks) { if (InVrRequest) vrExecute += ticks; }
 
         public static void Compiled(long ticks) { if (InVrRequest) vrCompile += ticks; }
