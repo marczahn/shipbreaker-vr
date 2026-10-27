@@ -51,6 +51,7 @@ namespace ShipbreakerVR
         private static Occlusion labelOcclusion;
         private static float labelScale;
         private static bool labelSharing;
+        private static int labelWorkers;
 
         // Where a frame's time goes: the main thread from Update until rendering starts (game logic), rendering on the
         // main thread (which also waits for the headset's next frame, so it fills up to the frame time), and the GPU
@@ -231,13 +232,14 @@ namespace ShipbreakerVR
             var occlusion = VrSettings.AmbientOcclusion.Value;
             var scale = UnityEngine.XR.XRSettings.eyeTextureResolutionScale;
             var sharing = VrSettings.EyeSharing.Value;
-            if (statsLabel == null || followed != labelCamera || occlusion != labelOcclusion || !Mathf.Approximately(scale, labelScale) || sharing != labelSharing)
+            if (statsLabel == null || followed != labelCamera || occlusion != labelOcclusion || !Mathf.Approximately(scale, labelScale) || sharing != labelSharing || VrJobWorkers.Count != labelWorkers)
             {
                 labelCamera = followed;
                 labelOcclusion = occlusion;
                 labelScale = scale;
                 labelSharing = sharing;
-                return $"{(inHab ? "Hab" : $"'{followed.name}'")}, occlusion {occlusion}, {scale:0.00}x, eye sharing {(sharing ? "on" : "off")}";
+                labelWorkers = VrJobWorkers.Count;
+                return $"{(inHab ? "Hab" : $"'{followed.name}'")}, occlusion {occlusion}, {scale:0.00}x, eye sharing {(sharing ? "on" : "off")}, {labelWorkers} job workers";
             }
             return statsLabel;
         }
@@ -327,6 +329,8 @@ namespace ShipbreakerVR
                     if (steps != null) Plugin.Log.LogInfo($"Frame steps ({statsLabel}), main thread per frame: {steps}");
                     var render = VrRenderProfile.Describe(cullFrames);
                     if (render != null) Plugin.Log.LogInfo($"Render steps ({statsLabel}), main thread per frame: {render}");
+                    var systems = VrSystemProfile.Describe(cullFrames);
+                    if (systems != null) Plugin.Log.LogInfo($"ECS systems ({statsLabel}), main thread per frame: {systems}");
                 }
             }
             frames.Clear();
@@ -346,6 +350,7 @@ namespace ShipbreakerVR
             gpuEyeCount = 0;
             VrFrameProfile.Reset();
             VrRenderProfile.Reset();
+            VrSystemProfile.Reset();
         }
 
         // Share of frames that took 1.4 to 4 intervals of the given refresh rate: missed by the GPU, which the runtime

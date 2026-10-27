@@ -58,6 +58,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<KeyboardShortcut> DiagnosticsKey;
         public static ConfigEntry<KeyboardShortcut> ToolExportKey;
         public static ConfigEntry<KeyboardShortcut> EyeSharingKey;
+        public static ConfigEntry<KeyboardShortcut> JobWorkerKey;
 
         // What the VR options show for a setting: its hint, and for a list the names of its values in enum order.
         private sealed class Texts
@@ -227,6 +228,8 @@ namespace ShipbreakerVR
                 "With Debug/WerkzeugExport on: saves the model of the tool in the hand.");
             EyeSharingKey = Bind("Tasten", "AugenTeilen", new KeyboardShortcut(KeyCode.F10),
                 "Switches Rendering/AugenTeilen on and off.");
+            JobWorkerKey = Bind("Tasten", "JobWorker", new KeyboardShortcut(KeyCode.F9),
+                "Test: steps the number of Unity's job worker threads through Unity's own count, 4 and 2, until the game restarts (frame times in the log per count).");
         }
 
         // A setting without an option row, described in the .cfg only.
