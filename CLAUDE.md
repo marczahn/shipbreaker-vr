@@ -7,20 +7,27 @@ OpenXR at runtime. Tested with a Meta Quest via Virtual Desktop (VDXR runtime). 
 - Everything in the repository is English: code, comments, docs, commit messages, PR titles and bodies.
 - Conversation with Marc happens in German.
 - Exception: the config keys in `BepInEx\config\de.marczahn.shipbreakervr.cfg` are German (`Bild/Weltmassstab`,
-  `KoerperFolgtKopf`, ...). Keep them so existing user settings survive.
+  `Steuerung/Drehen`, ...). Keep them so existing user settings survive.
 
 ## Layout
-- `src/ShipbreakerVR/` – the plugin (C#, net48). One file per concern: `VrCamera` (rig, eye resolution, video memory),
+- `src/ShipbreakerVR/` – the plugin (C#, net48). One file per concern: `VrSettings` (config entries with ranges, texts and keys), `VrSession` (start, F3, attaching the rig, teardown on unload), `VrCamera` (rig, recentering, following the game and Hab cameras), `VrResolution` (anti-aliasing, eye resolution, video memory), `VrCameraSilencer` (other cameras off while VR runs),
   `VrBody` (body follows head, playspace), `VrUi` / `VrCanvases` (HUD visor and menu canvas), `VrOptions` /
   `VrOptionsNavigation` (rows in the game's options menu), `VrControls` (motion controller flying), `VrXr` (OpenXR
-  setup), `VrHelmet`, `VrPostProcess`, `ScreenSizePatch`, `HdrpXrPatch`.
+  setup), `VrAim` (aiming with the hand, laser), `VrToolInput` / `VrToolBelt` (tool buttons, taking tools off the
+  body), `VrDualTools` (two tools at once, one per hand; the scanner hides the other), `VrToolModels` / `VrToolFit` (tools in the hand, demo charge arm), `VrHands` (the suit's hands follow the
+  controllers), `VrClimb` (holding on and climbing with the grip of a free hand), `VrTetherMode` (the grapple's tether mode), `VrInput` (the controllers, read once per frame), `VrHand` (what each hand does: tool, second tool, hidden tool, holding on),
+  `VrFrame` (the per-frame order: input, tool hands, aim and flying, then the steps on the VR camera's callbacks), `VrCrosshair` (hiding the crosshair while aiming), `GameTools` (the game classes the tool transpilers reach into, with their tool family), `GameRefs` (the player's controllers, found once), `PatchReport` (patch summary, features off when their patches are incomplete), `VrUtil` (small shared helpers: transform paths, canvas group alpha, overlay material), `VrHelmet`, `VrPostProcess`, `ScreenSizePatch`,
+  `HdrpXrPatch`.
 - `unity/ShipbreakerVRUnity/` – helper project that builds the `xrmanager` AssetBundle with the XR/OpenXR settings and
   collects the OpenXR DLLs (menu *ShipbreakerVR → Build for the game*).
 - `docs/NOTES.md` – technical findings about the game and why the mod does what it does.
-- `docs/JOURNAL.md` – the development journal (see below).
 - `README.md` – the players' front page (written for non-technical users); `CONTRIBUTING.md` – building and layout for developers.
 - `docs/INSTALL.md` – user install guide; `docs/releases/<version>.md` – release notes.
+- `tests/ShipbreakerVR.Tests/` – tests for the logic that runs without the engine; `tools/check.sh` builds and runs them.
 - `tools/build-release.sh` and `.claude/skills/release/` – building a release ZIP.
+- `tools/control-images.py` – draws the control overviews in `docs/images` (flying, hands, tool buttons, cutter,
+  demo charges, grapple, menus). When a control changes, update its texts there, in `README.md`, in `docs/INSTALL.md` and in the setting's
+  description (`VrSettings`), then run it.
 - `licenses/`, `THIRD-PARTY-NOTICES.md`, `LICENSE` (MIT), `DISCLAIMER.md`.
 
 ## Building
@@ -37,6 +44,9 @@ The game logic lives in `BBI.Unity.Game.dll`, `Assembly-CSharp` is nearly empty.
 - Small game methods may be inlined by Mono, so a prefix/postfix on them never runs; patch the caller with a transpiler.
 
 ## Testing workflow
+- Run `tools/check.sh` (build with warnings as errors, then the tests in `tests/ShipbreakerVR.Tests`) before every PR,
+  with the same folder properties as the build. The tests need the game's whole `Managed` folder (see
+  `CONTRIBUTING.md`, "Checks"). Add a test when you change logic that runs without the engine.
 - Only Marc can test, in the headset. Say what to look for and which log line confirms it.
 - Logs: `BepInEx\LogOutput.log` in the game folder and `Player.log` in the game's LocalLow folder. Read them yourself
   when the device is connected instead of asking Marc to paste them.
@@ -54,26 +64,3 @@ The game logic lives in `BBI.Unity.Game.dll`, `Assembly-CSharp` is nearly empty.
 - Work on a branch and open a PR; merge only when Marc says so. Rebase or merge `main` before testing when asked.
 - Releases follow the release skill in `.claude/skills/release/`. Tags and GitHub releases are named `alpha-v<version>`.
   Sessions cannot push tags or create GitHub releases, so Marc publishes them by hand.
-
-## Development journal
-`docs/JOURNAL.md` tells the story of the mod's development for people who want to see how it came about, including
-dead ends, wrong guesses and revised decisions. It is the counterpart to a developer diary: an experience report told by
-Claude in the first person.
-
-**Add an entry in the same PR** whenever the PR adds a feature, fixes a bug, or revises an earlier decision. Pure
-documentation, release housekeeping and refactorings without visible effect do not need one.
-
-How to write an entry:
-- Append it at the bottom (chronological order). Start with an anchor and a heading:
-  `<a id="short-slug"></a>` then `## YYYY-MM-DD · Title`. Use a date range if the work spanned several days.
-- Written in English, in the first person from Claude's perspective ("I"). Refer to Marc and his brother Raik (tester
-  and source of ideas) by name.
-- Follow the style, tone and length of the existing entries: short, conversational, like a blog post, with short
-  sentences and dry humor. The facts must stay accurate.
-- Tell what was wanted, what went wrong, which attempts failed and why, and what finally worked. Mention when
-  something took several rounds or when Marc's or Raik's observation or suggestion cracked the problem.
-- When a change revises or builds on an earlier entry, link it: `[world scale](#world-scale)`.
-- Leave out technical detail the story does not need; the facts belong in `docs/NOTES.md`.
-- No direct quotes from Marc or Raik; paraphrase what they said or decided.
-- Group related small problems by cause or theme instead of walking through each one separately.
-- No personal paths, drive letters or user names from the test machine.

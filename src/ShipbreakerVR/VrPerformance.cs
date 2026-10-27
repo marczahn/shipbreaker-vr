@@ -175,21 +175,29 @@ namespace ShipbreakerVR
             Plugin.Log.LogInfo($"GPU timer: sampler {(gpuSampler != null && gpuSampler.isValid ? "valid" : "invalid")}, recorder {(gpuRecorder != null && gpuRecorder.isValid ? "valid" : "invalid")}, GPU recorder supported: {supports ?? "unknown"}");
         }
 
+        // The last frame's two parts, for the overlay (VrPerformanceOverlay).
+        public static float FrameLogic { get; private set; }
+        public static float FrameRender { get; private set; }
+
         private static void StartOfRendering()
         {
             renderStart = Time.realtimeSinceStartup;
-            if (updateStart < 0f || statsLabel == null) return;
-            logicSum += renderStart - updateStart;
-            logicCount++;
+            if (updateStart < 0f) return;
+            FrameLogic = renderStart - updateStart;
             updateStart = -1f;
+            if (statsLabel == null) return;
+            logicSum += FrameLogic;
+            logicCount++;
         }
 
         private static void EndOfRendering()
         {
-            if (renderStart < 0f || statsLabel == null) return;
-            renderSum += Time.realtimeSinceStartup - renderStart;
-            renderCount++;
+            if (renderStart < 0f) return;
+            FrameRender = Time.realtimeSinceStartup - renderStart;
             renderStart = -1f;
+            if (statsLabel == null) return;
+            renderSum += FrameRender;
+            renderCount++;
         }
 
         // Called every frame by the VR camera.
@@ -198,25 +206,28 @@ namespace ShipbreakerVR
             PauseTruckCamera(running && inHab);
             if (ambientOcclusion != null)
             {
-                var mode = Plugin.AmbientOcclusion.Value;
+                var mode = VrSettings.AmbientOcclusion.Value;
                 ambientOcclusion.quality.overrideState = running && mode == Occlusion.Niedrig;
                 ambientOcclusion.intensity.overrideState = running && mode == Occlusion.Aus;
-                var off = running && Plugin.NoVrUnfitEffects.Value;
+                var off = running && VrSettings.NoVrUnfitEffects.Value;
                 motionBlur.intensity.overrideState = off;
                 depthOfField.focusMode.overrideState = off;
                 lensDistortion.intensity.overrideState = off;
                 chromaticAberration.intensity.overrideState = off;
                 panini.distance.overrideState = off;
             }
-            RecordFrame(running && !worldHidden ? Label(followed, inHab) : null);
+            // Logged with the diagnostics, and while the overlay shows, so a test with it on leaves numbers in the log.
+            var logged = VrSettings.Diagnostics.Value || VrSettings.PerformanceOverlay.Value;
+            RecordFrame(logged && running && !worldHidden ? Label(followed, inHab) : null);
+            VrPerformanceOverlay.Update(running, inHab);
         }
 
         private static string Label(Camera followed, bool inHab)
         {
             if (followed == null) return null;
-            var occlusion = Plugin.AmbientOcclusion.Value;
+            var occlusion = VrSettings.AmbientOcclusion.Value;
             var scale = UnityEngine.XR.XRSettings.eyeTextureResolutionScale;
-            var sharing = Plugin.EyeSharing.Value;
+            var sharing = VrSettings.EyeSharing.Value;
             if (statsLabel == null || followed != labelCamera || occlusion != labelOcclusion || !Mathf.Approximately(scale, labelScale) || sharing != labelSharing)
             {
                 labelCamera = followed;
@@ -228,7 +239,7 @@ namespace ShipbreakerVR
             return statsLabel;
         }
 
-        // Frame times per place and setting, logged every 30 s and whenever either changes. In VR the frame rate is tied
+        // With Debug/Diagnose on: frame times per place and setting, logged every 30 s and whenever either changes. In VR the frame rate is tied
         // to the headset's: a frame the GPU doesn't finish in time takes two refresh intervals.
         private static void RecordFrame(string label)
         {
@@ -304,7 +315,7 @@ namespace ShipbreakerVR
                     text.Append($", physics steps {(double)fixedSteps / cullFrames:0.00} per frame");
                 }
                 text.Append($", {System.GC.CollectionCount(0) - gcStart} garbage collections, {System.GC.GetTotalMemory(false) / (1024 * 1024)} MB managed");
-                if (VrEyeSharing.SharedThisFrame && Plugin.EyeSharing.Value) text.Append($", {VrEyeSharing.ReusedAtlases} shadow atlases reused");
+                if (VrEyeSharing.SharedThisFrame && VrSettings.EyeSharing.Value) text.Append($", {VrEyeSharing.ReusedAtlases} shadow atlases reused");
                 Plugin.Log.LogInfo(text.ToString());
             }
             frames.Clear();

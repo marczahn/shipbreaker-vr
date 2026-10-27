@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Tests for the plugin's logic that runs without the game: the plugin (net48) and the game's managed DLLs load
+       under .NET 8 as long as a test touches no engine call (no Transform, Rigidbody, Input, Quaternion.Euler, ...).
+       Takes the same folder properties as the plugin (GameDir, or ManagedDir, BepInExDir and XrDir); see
+       tools/check.sh. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RollForward>Major</RollForward>
+    <IsPackable>false</IsPackable>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <GameDir Condition="'$(GameDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Hardspace Shipbreaker</GameDir>
+    <ManagedDir Condition="'$(ManagedDir)' == ''">$(GameDir)\Shipbreaker_Data\Managed</ManagedDir>
+    <BepInExDir Condition="'$(BepInExDir)' == ''">$(GameDir)\BepInEx\core</BepInExDir>
+    <!-- The plugin and the game's DLLs target .NET Framework. -->
+    <NoWarn>$(NoWarn);NU1702;MSB3277</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ShipbreakerVR\ShipbreakerVR.csproj" SetTargetFramework="TargetFramework=net48" SkipGetTargetFrameworkProperties="true" />
+    <Reference Include="BepInEx" HintPath="$(BepInExDir)\BepInEx.dll" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(ManagedDir)\UnityEngine.CoreModule.dll" />
+    <Reference Include="UnityEngine.XRModule" HintPath="$(ManagedDir)\UnityEngine.XRModule.dll" />
+    <Reference Include="BBI.Unity.Game" HintPath="$(ManagedDir)\BBI.Unity.Game.dll" />
+    <!-- Everything else the plugin's types load, found next to the tests (GameAssemblies.cs). -->
+    <None Include="$(ManagedDir)\*.dll;$(BepInExDir)\*.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+</Project>

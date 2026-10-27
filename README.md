@@ -1,7 +1,7 @@
 # ShipbreakerVR
 
-Play **Hardspace: Shipbreaker** in VR: look around your cutting bay with your own head, fly with your hand and use the
-menus with your motion controllers.
+Play **Hardspace: Shipbreaker** in VR: look around your cutting bay with your own head, fly with one hand, take your
+tools off your suit and aim them with your hands, and use the menus with your motion controllers.
 
 **[Download the latest version](https://github.com/marczahn/shipbreaker-vr/releases/latest)**
 
@@ -24,9 +24,14 @@ menus with your motion controllers.
 ## What you get
 
 - **Real VR from the first second.** The game starts in your headset, intro and loading screens included. Look around
-  freely; your body and your tools turn with your head.
+  freely; your body turns with your head.
 - **Fly with your hand.** Hold the trigger on the left controller and move your hand where you want to go. The right
   stick turns you, Y brakes.
+- **Tools in your hands.** Grab the grapple, cutter, demo charges and scanner from your hips, shoulder and helmet with
+  either hand, one in each hand if you like, and aim them where your hand points. A thin laser shows where. Hold on to
+  anything with an empty hand and climb along it. The grapple has a second mode for placing tethers. The suit's hands
+  follow your controllers, and the cutter's plain right side, never seen in the flat game, gets the detail of its left
+  side.
 - **Menus with the controllers.** No need to reach for the mouse: your controllers work like a gamepad in all menus.
 - **Your HUD inside the helmet.** The game's display sits in your visor, menus float in the room in front of you, and
   the helmet frame moves with your head.
@@ -68,9 +73,9 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 
 ## Playing
 
-![Controls overview](docs/images/controls.svg)
+### Flying (left hand flies, right hand steers)
 
-**Flying (left hand flies, right hand steers):**
+![Flying controls](docs/images/flying.svg)
 
 | I want to … | How |
 |---|---|
@@ -79,13 +84,81 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | Turn left or right | Push the right stick left or right. |
 | Look up or down | Push the right stick up or down. |
 | Brake | Press Y. |
-| Open the pause menu | Press X and A together. |
-| Put the view back in front of me | Press B and Y together (or F4 on the keyboard). |
+| Open the pause menu | Press the right stick (also in the station). |
+| Put the view back in front of me | Press the left stick (or F4 on the keyboard). |
+| Fly while the grapple holds something big | Fly and brake as usual. If you fly farther away than the grapple reaches, the rope snaps. |
+
+### Your hands
+
+![Hands](docs/images/hands.svg)
+
+| I want to … | How |
+|---|---|
+| Take a tool | Reach to where it sits and squeeze the grip: grapple at the right hip, demo charges at the left hip, cutter over the right shoulder, scanner at the right side of the helmet. The controller buzzes when you are there. |
+| Put it away | Let go of the grip. |
+| Hold two tools at once | While one hand holds the cutter, the grapple or the demo charges, take another of them with your other hand. Each hand's trigger and buttons work its own tool. |
+| Hand a tool to the other hand | Reach for it with the other hand and squeeze the grip. |
+| Scan with a tool in the other hand | Take the scanner with your free hand. The other tool disappears while you scan; keep its grip squeezed and it comes back when you let go of the scanner. |
+| Hold on and climb | Squeeze the grip of a hand without a tool close to anything: the hand holds on there. Move the hand to pull yourself along, with both hands hand over hand, or with one while the other works a tool. Light parts come to your hand instead; the station and fixed hulls stay put. Let go while moving the hand to push off. |
+| Work an airlock console or a switch | Look at it and press A or X. The grip only holds on, also there. |
+| Use a tool with the left hand | Take it with the left hand. X and Y then do what A and B do, and flying pauses until you let go. |
+
+### Tool buttons
+
+![Tool buttons](docs/images/tools.svg)
+
+| I want to … | How |
+|---|---|
+| Use it | Point the controller and pull the trigger: cut, grapple, place or detonate demo charges. |
+| Use what I point at | Press A or X, with either hand. With an empty hand it uses what is in the middle of your view, marked by the game's dot. Without a tool the trigger and B do nothing. |
+| Throw | Hold the trigger and press A. |
+| Reel in what the grapple holds | Hold the trigger and press B. |
+| Switch the tool's mode | Press B (demo charges: switch to the detonator; grapple: see below). |
+| Turn the cutter's line | Roll your wrist. The cutter starts with horizontal cuts, and its switch to vertical cuts has no button. |
+
+### Cutter
+
+![Cutter](docs/images/cutter.svg)
+
+| I want to … | How |
+|---|---|
+| Cut with the Splitsaw | Pull the trigger. It cuts along a line, horizontal at first. |
+| Turn the line | Roll your wrist. The game's switch to vertical cuts has no button. |
+| Switch to the Stinger and back | Press B. The Stinger cuts the point the laser shows. |
+
+### Demo charges
+
+![Demo charges](docs/images/charges.svg)
+
+| I want to … | How |
+|---|---|
+| Place a charge | Point at a surface and pull the trigger. |
+| Throw a charge | Point at nothing and pull the trigger. It flies where your hand points. |
+| Take the detonator | Press B. B again goes back to the charges, while you have some left. |
+| Detonate | Pull the trigger with the detonator in your hand. |
+
+### Grapple and tethers
+
+![Grapple and tethers](docs/images/grapple.svg)
+
+B switches the grapple between grappling (blue laser) and placing tethers (orange laser with a ring where it points).
+The controller buzzes twice when the tether mode starts and once when grappling comes back.
+
+| I want to … | Grappling (blue laser) | Placing tethers (orange laser) |
+|---|---|---|
+| Place a tether | Hold B while pointing at the start, let go at the end. | Pull the trigger at the start, let go at the end. |
+| Remove one tether | – | Point at it (it lights up orange) and tap A. |
+| Recall all tethers | Hold B while pointing at nothing. | Hold A. |
+| Switch the mode | Tap B. | Press B, however long. |
+
+### Menus and keyboard
+
+![Menus and keyboard](docs/images/menus.svg)
 
 **In menus** both controllers act together like one Xbox gamepad: left stick to move around, A to confirm, B to go
 back, the triggers switch tabs.
 
-**Keyboard:** F3 turns VR on and off, F4 puts the view back in front of you.
+**Keyboard:** F3 turns VR on and off, F4 puts the view back in front of you. Both keys can be changed in the config file (section `[Tasten]`).
 
 ## Settings
 
@@ -98,6 +171,11 @@ likely to need:
 - **Turning:** smooth turning, or turning in steps, which is easier on the stomach.
 - **Head height** and **Head sideways:** move your view if you seem to sit too low or off to one side in the suit.
 - **Controller flying:** switch it off if you fly with mouse and keyboard or a gamepad.
+- **Aim with the hand:** switch it off to aim your tools at the center of your view again, as in the flat game.
+- **Two tools at once:** switch it off if you want a tool from one hand to replace the one in the other hand.
+- **Hold on and climb:** switch it off if the grip of an empty hand should do nothing.
+- **Fit tools in the hand:** if the cutter or the grapple does not sit right in your hand, switch this on, grab the
+  tool with your other hand and move it into place. Letting go stores it. Switch it off again when you are done.
 
 ## Something is wrong
 
@@ -147,7 +225,7 @@ That has not been tested.
 
 ## What does not work yet
 
-- Your tools still aim where you look, not where your hand points.
+- The cutter's switch between horizontal and vertical cuts has no button; roll your wrist instead.
 - There is no laser pointer for the menus yet; you move through them with the sticks.
 - During loading screens the view can go dark for a moment.
 - Above 1.0, the render resolution can crash the game after loading (see above).

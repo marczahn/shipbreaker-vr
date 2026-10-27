@@ -17,7 +17,7 @@ namespace ShipbreakerVR
     // probes once per eye. The shadow maps are rendered inside every request (HDShadowManager.RenderShadows) into
     // persistent atlases, from the culling results and the camera's transform, which both eyes share.
     //
-    // With [Rendering] AugenTeilen (F10 switches it), the first eye culls a frustum that holds both eyes and the second
+    // With [Rendering] AugenTeilen (Tasten/AugenTeilen, F10, switches it), the first eye culls a frustum that holds both eyes and the second
     // eye takes its results, and the second eye then keeps the shadow atlases the first eye rendered instead of drawing
     // the same shadow casters into them again.
     internal static class VrEyeSharing
@@ -33,7 +33,7 @@ namespace ShipbreakerVR
         // Looser planes by this much (meters, times the world scale), so nothing at the edge of either eye is culled.
         private const float PlaneMargin = 0.05f;
 
-        public static bool Enabled => Plugin.EyeSharing.Value && VrXr.IsRunning;
+        public static bool Enabled => VrSettings.EyeSharing.Value && VrXr.IsRunning;
 
         // Whether the second eye uses the first eye's culling results this frame (by the runtime or by us).
         public static bool SharedThisFrame { get; private set; }
@@ -66,9 +66,9 @@ namespace ShipbreakerVR
 
         public static void Toggle()
         {
-            Plugin.EyeSharing.Value = !Plugin.EyeSharing.Value;
+            VrSettings.EyeSharing.Value = !VrSettings.EyeSharing.Value;
             loggedReuse = false;
-            Plugin.Log.LogInfo($"Eye sharing (culling and shadow maps once for both eyes) {(Plugin.EyeSharing.Value ? "on" : "off")} (F10)");
+            Plugin.Log.LogInfo($"Eye sharing (culling and shadow maps once for both eyes) {(VrSettings.EyeSharing.Value ? "on" : "off")} ({VrSettings.EyeSharingKey.Value})");
         }
 
         // After XRSystem.SetupFrame: the frame's passes as (Camera, XRPass). For the VR camera's two eyes, cull once.

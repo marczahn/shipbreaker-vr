@@ -27,7 +27,7 @@ namespace ShipbreakerVR
             if (Displays.Count == 0) return;
 
             var display = Displays[0];
-            if (Plugin.SeparateEyeTextures.Value) display.textureLayout = XRDisplaySubsystem.TextureLayout.SeparateTexture2Ds;
+            if (VrSettings.SeparateEyeTextures.Value) display.textureLayout = XRDisplaySubsystem.TextureLayout.SeparateTexture2Ds;
 
             if (logged || !display.running) return;
             logged = true;
@@ -49,7 +49,7 @@ namespace ShipbreakerVR
 
         private static void Postfix(ref int __result)
         {
-            if (Plugin.MultiPass.Value) __result = 1;
+            if (VrSettings.MultiPass.Value) __result = 1;
         }
     }
 
@@ -90,7 +90,7 @@ namespace ShipbreakerVR
         // reports it.
         public static void CheckSlices()
         {
-            if (slicesChecked || !Plugin.MultiPass.Value || TextureXR.slices <= 1) return;
+            if (slicesChecked || !VrSettings.MultiPass.Value || TextureXR.slices <= 1) return;
             slicesChecked = true;
             Plugin.Log.LogWarning($"HDRP render targets have {TextureXR.slices} texture array slices although MultiPass uses one: about twice the video memory they need");
         }

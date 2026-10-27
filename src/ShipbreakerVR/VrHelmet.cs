@@ -27,7 +27,12 @@ namespace ShipbreakerVR
         private float nextSearch;
         private bool hidden;
 
-        public static void Attach(VrCamera vr) => vr.gameObject.AddComponent<VrHelmet>().vr = vr;
+        public static VrHelmet Attach(VrCamera vr)
+        {
+            var helmet = vr.gameObject.AddComponent<VrHelmet>();
+            helmet.vr = vr;
+            return helmet;
+        }
 
         private void OnEnable() => RenderPipelineManager.beginCameraRendering += OnBeginCamera;
 
@@ -43,7 +48,8 @@ namespace ShipbreakerVR
             container.localScale = originalLocalScale;
         }
 
-        private void LateUpdate()
+        // From VrCamera.LateUpdate, after the rig and the UI.
+        public void Late()
         {
             if (controller == null)
             {
@@ -64,7 +70,7 @@ namespace ShipbreakerVR
                 // Remember the helmet pose relative to the game camera while the game still positions it itself.
                 relativePosition = cam.InverseTransformPoint(container.position);
                 relativeRotation = Quaternion.Inverse(cam.rotation) * container.rotation;
-                Plugin.Log.LogInfo($"Helmet found: '{Path(container)}', relative to camera {relativePosition} / {relativeRotation.eulerAngles}");
+                Plugin.Log.LogInfo($"Helmet found: '{VrUtil.Path(container)}', relative to camera {relativePosition} / {relativeRotation.eulerAngles}");
             }
 
             var mode = CurrentMode;
@@ -88,7 +94,7 @@ namespace ShipbreakerVR
         // Only while the VR camera is the player's: in the Hab the helmet would otherwise come along from the bay
         // and hang around the head in the player's quarters.
         private Mode CurrentMode => VrXr.IsRunning && vr != null && vr.GameCamera != null && vr.GameCamera == LynxCameraController.MainCamera
-            ? Plugin.Helmet.Value
+            ? VrSettings.Helmet.Value
             : Mode.Spiel;
 
         private void Follow()
@@ -110,6 +116,5 @@ namespace ShipbreakerVR
             if (mesh != null) mesh.SetActive(!hide);
         }
 
-        private static string Path(Transform t) => t.parent == null ? t.name : Path(t.parent) + "/" + t.name;
     }
 }

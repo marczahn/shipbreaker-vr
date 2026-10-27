@@ -31,6 +31,7 @@ namespace ShipbreakerVR
             var vr = VrCamera.Instance;
             if (vr == null || !vr.BodyFollowsHead)
             {
+                // Without VR the game turns the body as usual.
                 synced = false;
                 // Turns from the motion controllers act on the body directly; the camera follows it.
                 body.MoveRotation(vr != null ? VrControls.TakeTurn() * gameTarget : gameTarget);
@@ -95,7 +96,7 @@ namespace ShipbreakerVR
     [HarmonyPatch(typeof(OrientationController), "HandleAxisRotation")]
     internal static class OrientationControllerAxisRotationPatch
     {
-        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
         {
             var moveRotation = AccessTools.Method(typeof(Rigidbody), nameof(Rigidbody.MoveRotation));
             var replacement = AccessTools.Method(typeof(VrBody), nameof(VrBody.MoveRotation));
@@ -110,7 +111,7 @@ namespace ShipbreakerVR
                 }
                 yield return instruction;
             }
-            Plugin.Log.LogInfo($"OrientationController: {replaced} rotation call(s) redirected");
+            PatchReport.Count("Body rotation", original, replaced, "rotation call(s)");
         }
     }
 

@@ -2,16 +2,21 @@
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
     <AssemblyName>ShipbreakerVR</AssemblyName>
-    <Version>0.6.1</Version>
+    <!-- The version comes from Plugin.Version, so the DLL's file version matches the plugin's. -->
+    <Version>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/Plugin.cs')), 'Version = "([^"]+)"').Groups[1].Value)</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <!-- Ordner mit den DLLs des Spiels und von BepInEx; per -p:GameDir=... überschreibbar -->
-    <GameDir Condition="'$(GameDir)' == ''">F:\SteamLibrary\steamapps\common\Hardspace Shipbreaker</GameDir>
+    <!-- Folders with the DLLs of the game and BepInEx. GameDir defaults to Steam's standard library; set it with
+         -p:GameDir=... or as an environment variable of the same name, or set the three folders one by one. -->
+    <GameDir Condition="'$(GameDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Hardspace Shipbreaker</GameDir>
     <ManagedDir Condition="'$(ManagedDir)' == ''">$(GameDir)\Shipbreaker_Data\Managed</ManagedDir>
     <BepInExDir Condition="'$(BepInExDir)' == ''">$(GameDir)\BepInEx\core</BepInExDir>
     <XrDir Condition="'$(XrDir)' == ''">$(GameDir)\BepInEx\plugins\ShipbreakerVR</XrDir>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="ShipbreakerVR.Tests" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
@@ -35,12 +40,13 @@
     <Reference Include="UnityEngine.UI" HintPath="$(ManagedDir)\UnityEngine.UI.dll" Private="false" />
     <Reference Include="Unity.TextMeshPro" HintPath="$(ManagedDir)\Unity.TextMeshPro.dll" Private="false" />
     <Reference Include="Doozy.Engine" HintPath="$(ManagedDir)\Doozy.Engine.dll" Private="false" />
+    <Reference Include="Carbon.Core" HintPath="$(ManagedDir)\Carbon.Core.dll" Private="false" />
     <Reference Include="UnityEngine.SubsystemsModule" HintPath="$(ManagedDir)\UnityEngine.SubsystemsModule.dll" Private="false" />
     <Reference Include="UnityEngine.AnimationModule" HintPath="$(ManagedDir)\UnityEngine.AnimationModule.dll" Private="false" />
     <Reference Include="UnityEngine.ScreenCaptureModule" HintPath="$(ManagedDir)\UnityEngine.ScreenCaptureModule.dll" Private="false" />
     <Reference Include="UnityEngine.ImageConversionModule" HintPath="$(ManagedDir)\UnityEngine.ImageConversionModule.dll" Private="false" />
     <Reference Include="UnityEngine.JSONSerializeModule" HintPath="$(ManagedDir)\UnityEngine.JSONSerializeModule.dll" Private="false" />
-    <!-- Aus dem Unity-Hilfsprojekt (Output\BepInEx\plugins\ShipbreakerVR), liegen im Spiel neben dem Plugin -->
+    <!-- From the Unity helper project (Output\BepInEx\plugins\ShipbreakerVR), next to the plugin in the game -->
     <Reference Include="Unity.XR.Management" HintPath="$(XrDir)\Unity.XR.Management.dll" Private="false" />
     <Reference Include="Unity.XR.OpenXR" HintPath="$(XrDir)\Unity.XR.OpenXR.dll" Private="false" />
   </ItemGroup>

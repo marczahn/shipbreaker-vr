@@ -13,9 +13,19 @@ namespace ShipbreakerVR
 {
     // Starts and stops OpenXR at runtime. The XR settings come from the AssetBundle
     // built in the Unity helper project (unity/ShipbreakerVRUnity, menu "ShipbreakerVR").
+    // The runtime can also end the session on its own (Virtual Desktop closed, the headset's link lost): Unity's OpenXR
+    // plugin then shuts the loader down and tries to restart it (session loss) or quits the game (the runtime exits).
+    // Watch follows that, so the game camera comes back instead of staying off for a VR view nobody sees, and the game
+    // keeps running instead of quitting.
     internal static class VrXr
     {
         private static bool settingsLoaded;
+        // Why VR cannot start (the AssetBundle missing or broken); it cannot be loaded a second time, so F3 says so.
+        private static string unavailable;
+        private static float lostSince = -1f;
+
+        // How long the loader may be gone before VR counts as stopped: the plugin's restart takes a few frames.
+        private const float LossGrace = 3f;
 
         public static bool IsRunning { get; private set; }
 
@@ -40,7 +50,21 @@ namespace ShipbreakerVR
 
         private static void Start()
         {
-            if (!settingsLoaded) LoadSettings();
+            if (unavailable != null)
+            {
+                Plugin.Log.LogWarning($"VR cannot start: {unavailable}");
+                return;
+            }
+            if (!settingsLoaded)
+            {
+                try { LoadSettings(); }
+                catch (Exception e)
+                {
+                    unavailable = e.Message;
+                    Plugin.Log.LogError($"VR cannot start: {unavailable}. Reinstall the mod (see docs/INSTALL.md) and restart the game.");
+                    return;
+                }
+            }
 
             var manager = XRGeneralSettings.Instance.Manager;
             if (manager.activeLoader == null) manager.InitializeLoaderSync();
@@ -52,7 +76,58 @@ namespace ShipbreakerVR
 
             manager.StartSubsystems();
             IsRunning = true;
+            lostSince = -1f;
+            KeepGameOnExit(manager.activeLoader);
             Plugin.Log.LogInfo($"VR started with {manager.activeLoader.name}");
+        }
+
+        // From VrSession.Update, every frame: VR runs as long as the OpenXR loader does. A loader gone for LossGrace
+        // (the runtime ended the session, the plugin's restart failed) stops VR here too, back to the flat view; a
+        // loader back after a restart starts it again.
+        public static void Watch()
+        {
+            if (!settingsLoaded) return;
+            var manager = XRGeneralSettings.Instance != null ? XRGeneralSettings.Instance.Manager : null;
+            if (manager == null) return;
+            var active = manager.activeLoader != null;
+            if (active == IsRunning)
+            {
+                lostSince = -1f;
+                return;
+            }
+            if (active)
+            {
+                IsRunning = true;
+                KeepGameOnExit(manager.activeLoader);
+                Plugin.Log.LogInfo($"VR session restarted by the runtime with {manager.activeLoader.name}");
+                return;
+            }
+            if (lostSince < 0f) lostSince = Time.unscaledTime;
+            if (Time.unscaledTime - lostSince < LossGrace) return;
+            lostSince = -1f;
+            IsRunning = false;
+            Plugin.Log.LogWarning("VR session ended by the runtime (Virtual Desktop closed or the headset disconnected): back to the flat view. F3 starts VR again.");
+        }
+
+        // When the runtime exits, the OpenXR plugin (OpenXRRestarter) shuts the loader down and then quits the
+        // application unless its ShouldCancelQuit returns false. The game keeps running instead, in the flat view (Watch).
+        private static void KeepGameOnExit(XRLoader loader)
+        {
+            try
+            {
+                var restarter = AccessTools.Method(typeof(OpenXRLoaderBase), "GetRestarter")?.Invoke(loader, null);
+                var field = restarter != null ? AccessTools.Field(restarter.GetType(), "ShouldCancelQuit") : null;
+                if (field == null)
+                {
+                    Plugin.Log.LogWarning("OpenXR: no restarter found; the game may quit when the runtime exits");
+                    return;
+                }
+                field.SetValue(restarter, (Func<bool>)(() => false));
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning($"OpenXR: could not keep the game running when the runtime exits: {e.Message}");
+            }
         }
 
         private static void Stop()
@@ -73,7 +148,7 @@ namespace ShipbreakerVR
 
             if (XRGeneralSettings.Instance == null) throw new Exception("XRGeneralSettings missing from AssetBundle");
             var openXr = OpenXRSettings.Instance;
-            if (openXr != null && Plugin.MultiPass.Value) openXr.renderMode = OpenXRSettings.RenderMode.MultiPass;
+            if (openXr != null && VrSettings.MultiPass.Value) openXr.renderMode = OpenXRSettings.RenderMode.MultiPass;
             Plugin.Log.LogInfo($"XR settings loaded, OpenXR render mode: {openXr?.renderMode}");
             if (openXr != null) EnableControllerProfile(openXr);
             settingsLoaded = true;
