@@ -175,6 +175,9 @@ namespace ShipbreakerVR
             Plugin.Log.LogInfo($"GPU timer: sampler {(gpuSampler != null && gpuSampler.isValid ? "valid" : "invalid")}, recorder {(gpuRecorder != null && gpuRecorder.isValid ? "valid" : "invalid")}, GPU recorder supported: {supports ?? "unknown"}");
         }
 
+        // Whether the frame time line is recording; the render profile (VrRenderProfile) only times then.
+        public static bool Recording => statsLabel != null;
+
         // The last frame's two parts, for the overlay (VrPerformanceOverlay).
         public static float FrameLogic { get; private set; }
         public static float FrameRender { get; private set; }
@@ -321,6 +324,8 @@ namespace ShipbreakerVR
                 {
                     var steps = VrFrameProfile.Describe(cullFrames);
                     if (steps != null) Plugin.Log.LogInfo($"Frame steps ({statsLabel}), main thread per frame: {steps}");
+                    var render = VrRenderProfile.Describe(cullFrames);
+                    if (render != null) Plugin.Log.LogInfo($"Render steps ({statsLabel}), main thread per frame: {render}");
                 }
             }
             frames.Clear();
@@ -339,6 +344,7 @@ namespace ShipbreakerVR
             gpuEyeSum = 0.0;
             gpuEyeCount = 0;
             VrFrameProfile.Reset();
+            VrRenderProfile.Reset();
         }
 
         // Share of frames that took 1.4 to 4 intervals of the given refresh rate: missed by the GPU, which the runtime
