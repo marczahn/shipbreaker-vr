@@ -122,6 +122,7 @@ namespace ShipbreakerVR
                 new SliderRow { Label = L("Head sideways (cm)", "Kopf seitlich (cm)"), Entry = VrSettings.HeadSideways, Format = "0", Step = 1f },
                 EnumRow(L("Ambient occlusion", "Umgebungsverdeckung"), VrSettings.AmbientOcclusion),
                 new BoolRow { Label = L("Share work between eyes", "Augen teilen"), Entry = VrSettings.EyeSharing },
+                new BoolRow { Label = L("Alternate eyes", "Augen abwechselnd"), Entry = VrSettings.AlternateEyes },
                 EnumRow(L("Helmet", "Helm"), VrSettings.Helmet),
                 new BoolRow { Label = L("HUD and menus in world", "HUD und Menüs im Raum"), Entry = VrSettings.UiInVr },
                 EnumRow(L("Visor steadying", "Visierberuhigung"), VrSettings.HudSteadying),

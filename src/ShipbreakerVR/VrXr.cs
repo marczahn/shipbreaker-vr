@@ -151,7 +151,23 @@ namespace ShipbreakerVR
             if (openXr != null && VrSettings.MultiPass.Value) openXr.renderMode = OpenXRSettings.RenderMode.MultiPass;
             Plugin.Log.LogInfo($"XR settings loaded, OpenXR render mode: {openXr?.renderMode}");
             if (openXr != null) EnableControllerProfile(openXr);
+            if (openXr != null) AddAlternateEyesFeature(openXr);
             settingsLoaded = true;
+        }
+
+        // The feature that hooks xrEndFrame for VrAlternateEyes; it hands frames on unchanged while that is off.
+        private static void AddAlternateEyesFeature(OpenXRSettings settings)
+        {
+            var field = AccessTools.Field(typeof(OpenXRSettings), "features");
+            var features = (OpenXRFeature[])field.GetValue(settings) ?? new OpenXRFeature[0];
+            if (features.Any(f => f != null && f.GetType().FullName == typeof(VrAlternateEyesFeature).FullName)) return;
+            var feature = ScriptableObject.CreateInstance<VrAlternateEyesFeature>();
+            feature.name = "ShipbreakerVR Alternate Eyes";
+            AccessTools.Field(typeof(OpenXRFeature), "nameUi").SetValue(feature, "ShipbreakerVR Alternate Eyes");
+            AccessTools.Field(typeof(OpenXRFeature), "version").SetValue(feature, "0.0.1");
+            AccessTools.Field(typeof(OpenXRFeature), "m_enabled").SetValue(feature, true);
+            field.SetValue(settings, features.Concat(new OpenXRFeature[] { feature }).ToArray());
+            Plugin.Log.LogInfo("OpenXR: alternate eyes feature added");
         }
 
         // OpenXR only creates controller actions for enabled interaction profiles. The profiles in the AssetBundle

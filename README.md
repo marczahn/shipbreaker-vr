@@ -167,6 +167,8 @@ likely to need:
 
 - **Center view:** puts the view and the menus in front of you again.
 - **Render resolution:** how sharp the picture is. Lower it if the game stutters.
+- **Alternate eyes:** draws only one eye per picture, the left and the right in turn, which makes the bay run much
+  smoother on most processors. Switch it off (or press F11) if fast movements flicker too much for you.
 - **Station resolution:** the same for the station between shifts, which is harder on the graphics card.
 - **Turning:** smooth turning, or turning in steps, which is easier on the stomach.
 - **Head height** and **Head sideways:** move your view if you seem to sit too low or off to one side in the suit.
@@ -184,8 +186,10 @@ The render resolution is probably set too high and the graphics card runs out of
 in the VR tab back to 1.0.
 
 ### The game stutters or the picture smears when I move
-Lower **Render resolution** in the VR tab, and leave **Ambient occlusion** on Low or switch it off. In the game's own
-graphics settings, a lower quality level helps too.
+Leave **Alternate eyes** and **Share work between eyes** on in the VR tab. In the bay the processor is usually the
+limit, not the graphics card; there a lower refresh rate for the headset in your VR app (72 or 80 Hz instead of 90)
+helps more than a lower resolution. Otherwise lower **Render resolution** in the VR tab, and leave **Ambient
+occlusion** on Low or switch it off. In the game's own graphics settings, a lower quality level helps too.
 
 ### The view wobbles at the station's monitors
 The graphics card does not keep up there. Lower **Station resolution** in the VR tab step by step until it stops.
