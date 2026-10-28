@@ -16,8 +16,11 @@ namespace ShipbreakerVR
     // body, so a push off flies on. While the left hand holds on, controller flying rests (VrControls).
     // The grip always holds on, also at the game's controls (airlock consoles, panels); working them is A or X, as Marc
     // asked (VrToolInput).
-    // Each physics step (VrCamera.FixedUpdate) the player's velocity, and the thing's at the hold, is set so the hand
-    // reaches its hold by the end of the step: an impulse between the two, as a joint would apply, without joints.
+    // Each physics step (VrCamera.FixedUpdate) the player's velocity, and the thing's at the hold, is set by an impulse
+    // between the two, as a joint would apply, without joints: the body moves against the hand's own motion (the hand
+    // pulls back, the body goes forward), and what is left between hand and hold closes softly, like a damped spring.
+    // Pulling the hand to its hold within one step (until 0.21) rammed the body into the hull whenever the hull was in
+    // the way, every step: the view shook, the ship got pushed, and letting go flew off at the speed of the bounce.
     internal static class VrClimb
     {
         static VrClimb() => VrSession.OnUnload("climbing", Release);
@@ -27,8 +30,15 @@ namespace ShipbreakerVR
         // A hand held back this far from its hold (the body stuck behind something, the part torn away) lets go.
         private const float TearOff = 0.5f;
         // How fast the hold may pull the body, and how fast a push off may fly, in m/s at world scale 1.
-        private const float MaxPull = 10f;
-        private const float MaxPushOff = 5f;
+        private const float MaxPull = 4f;
+        private const float MaxPushOff = 4f;
+        // How quickly a gap between hand and hold closes, in seconds (the spring), and how much the hold may change the
+        // body's speed per second, in m/s² at world scale 1: a hand let go of while stretched between two holds no
+        // longer snaps the body to the other one within a step.
+        private const float CloseTime = 0.08f;
+        private const float MaxAcceleration = 40f;
+        // The hand's speed is smoothed over about this time in seconds.
+        private const float VelocitySmoothing = 0.03f;
         // The speed a push off keeps is the hands' speed, smoothed over about this time in seconds.
         private const float PushOffSmoothing = 0.08f;
         // LynxUnityEngineExtensions.InStaticLayer: the station and other things that never move.
@@ -56,6 +66,11 @@ namespace ShipbreakerVR
             // The hold: a point fixed on Anchor (the body, or the collider's transform without one).
             public Transform Anchor;
             public Vector3 Point;
+            // The controller's velocity in tracking space, smoothed: from the runtime, or from the positions it reports
+            // once per frame where it reports no velocity.
+            public Vector3 Velocity;
+            public Vector3 LastLocal;
+            public float LastLocalTime;
 
             public Hand(VrHand vr)
             {
@@ -79,10 +94,12 @@ namespace ShipbreakerVR
         // Where the body was when the rig was placed last (RigPlaced).
         private static Vector3 bodyAtRig;
         private static bool rigPlaced;
-        // The body's speed relative to its holds, smoothed, and the holds' own speed, for the push off.
+        // The speed the hands asked of the body against its holds, smoothed, and the holds' own speed, for the push off.
         private static Vector3 pushOff;
         private static Vector3 holdVelocity;
         private static int logs;
+        // The runtime reported a controller velocity once: from then on it is used, not the positions.
+        private static bool runtimeVelocity;
 
         // From VrCamera.FollowGameCamera, right after the rig was placed for the frame. The hands are measured on the rig,
         // which moves once per frame; in the physics steps between they move along by as far as the body has come since.
@@ -138,6 +155,7 @@ namespace ShipbreakerVR
         {
             var input = hand.Input;
             hand.Tracked = input.Tracked && input.TryGetPosition(out hand.Local);
+            if (hand.Tracked) MeasureVelocity(hand);
             var down = input.Grip.Down;
             var pressed = down && !hand.GripDown;
             hand.GripDown = down;
@@ -184,7 +202,10 @@ namespace ShipbreakerVR
             hand.Anchor = body != null ? body.transform : best.transform;
             hand.Point = hand.Anchor.InverseTransformPoint(at);
             if (first) pushOff = Vector3.zero;
-            if (first) VrClimbTrace.Start(body, hand.Movable);
+            hand.Velocity = Vector3.zero;
+            hand.LastLocal = hand.Local;
+            hand.LastLocalTime = Time.fixedTime;
+            if (first) VrClimbTrace.Start(player, body, hand.Movable);
             else VrClimbTrace.TakePart(body, hand.Movable);
             hand.Input.Buzz(0.5f, 0.06f);
             if (logs++ < 80)
@@ -193,8 +214,9 @@ namespace ShipbreakerVR
                     + $", {(hand.Movable ? "moves" : "fixed")}), {Mathf.Sqrt(bestDistance):0.00} m from the surface");
         }
 
-        // Each holding hand: the impulse between player and hold that brings the hand to its hold in this step. Both hands
-        // share the player's mass; two hands on the same light part share its mass too.
+        // Each holding hand: the impulse between player and hold that moves the body against the hand's motion and closes
+        // the gap between hand and hold softly. Both hands share the player's mass; two hands on the same light part share
+        // its mass too.
         private static void Pull()
         {
             var holding = 0;
@@ -209,20 +231,26 @@ namespace ShipbreakerVR
             VrClimbTrace.StepStart(player);
 
             var dt = Time.fixedDeltaTime;
+            var scale = VrCamera.WorldScale;
+            var rig = VrCamera.Instance.transform.parent;
             var velocity = player.velocity;
             var change = Vector3.zero;
             var holdsVelocity = Vector3.zero;
+            var wantedSum = Vector3.zero;
             foreach (var hand in Hands)
             {
                 if (!hand.Holding) continue;
                 var hold = Hold(hand);
                 var error = hold - HandWorld(hand);
-                VrClimbTrace.Hand(hand == LeftHand ? 0 : 1, hand.Local, hand.Tracked, error.magnitude);
+                // The hand's velocity against the body, in the world: the rig moves with the body.
+                var handVelocity = rig.TransformVector(hand.Velocity);
+                VrClimbTrace.Hand(hand == LeftHand ? 0 : 1, hand.Local, hand.Tracked, error.magnitude, handVelocity.magnitude);
                 var holdVelocityHere = hand.Body != null ? hand.Body.GetPointVelocity(hold) : Vector3.zero;
                 holdsVelocity += holdVelocityHere;
-                // The player's velocity relative to the hold that closes the gap within this step.
-                var wanted = Vector3.ClampMagnitude(error / dt, MaxPull * VrCamera.WorldScale);
-                var needed = wanted - (velocity - holdVelocityHere);
+                // The player's velocity relative to the hold: against the hand's motion, plus the spring.
+                var wanted = Vector3.ClampMagnitude(-handVelocity + error / CloseTime, MaxPull * scale);
+                wantedSum += wanted;
+                var needed = Vector3.ClampMagnitude(wanted - (velocity - holdVelocityHere), MaxAcceleration * scale * dt);
                 if (needed.sqrMagnitude < 1e-10f) continue;
                 var inverse = holding / player.mass;
                 if (hand.Movable) inverse += Sharing(hand) * InverseMass(hand.Body, hold, needed.normalized);
@@ -237,7 +265,31 @@ namespace ShipbreakerVR
             player.velocity = velocity + change;
             VrClimbTrace.StepEnd(player, change);
             holdVelocity = holdsVelocity / holding;
-            pushOff = Vector3.Lerp(pushOff, player.velocity - holdVelocity, 1f - Mathf.Exp(-dt / PushOffSmoothing));
+            // A push off keeps what the hands asked for, not what the body got: bouncing off the hull is not a push.
+            pushOff = Vector3.Lerp(pushOff, wantedSum / holding, 1f - Mathf.Exp(-dt / PushOffSmoothing));
+        }
+
+        // The controller's velocity this step, smoothed. Without a velocity from the runtime it comes from the position,
+        // which changes once per frame while the physics may step twice in one frame.
+        private static void MeasureVelocity(Hand hand)
+        {
+            var now = Time.fixedTime;
+            Vector3 raw;
+            if (hand.Input.TryGetVelocity(out var reported) && reported != Vector3.zero)
+            {
+                raw = reported;
+                if (!runtimeVelocity && logs++ < 80) Plugin.Log.LogInfo("Climbing: the runtime reports the controllers' velocity");
+                runtimeVelocity = true;
+            }
+            else if (runtimeVelocity) raw = Vector3.zero;
+            else if (hand.Local != hand.LastLocal && now > hand.LastLocalTime)
+            {
+                raw = (hand.Local - hand.LastLocal) / (now - hand.LastLocalTime);
+                hand.LastLocal = hand.Local;
+                hand.LastLocalTime = now;
+            }
+            else return;
+            hand.Velocity = Vector3.Lerp(hand.Velocity, raw, 1f - Mathf.Exp(-Time.fixedDeltaTime / VelocitySmoothing));
         }
 
         // Above the game's grab mass range (GrabController.RawGrabbedMassRange.AboveRange), through reflection: the range's

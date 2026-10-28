@@ -80,6 +80,13 @@ namespace ShipbreakerVR
                 return Get() && Device.TryGetFeatureValue(CommonUsages.devicePosition, out position);
             }
 
+            // The grip pose's velocity in tracking space, read now, if the runtime reports one.
+            public bool TryGetVelocity(out Vector3 velocity)
+            {
+                velocity = Vector3.zero;
+                return Get() && Device.TryGetFeatureValue(CommonUsages.deviceVelocity, out velocity);
+            }
+
             // The grip pose in tracking space, read now.
             public bool TryGetGripPose(out Vector3 position, out Quaternion rotation)
             {

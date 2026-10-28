@@ -564,14 +564,21 @@ fit a hand that should stay exactly where it holds, so the mod does its own: the
 (`VrToolInput.Free`: no tool, not at the belt, not fitting a tool) looks for the nearest non-trigger collider within 10 cm
 of the controller (`Physics.OverlapSphere`, the player's own colliders skipped) and fixes the hand's position on it (on
 its rigidbody, or its transform without one). Each physics step (`VrCamera.FixedUpdate`) an impulse between the player's
-body (`GrabController.m_PlayerRigidbodyReference`) and the hold sets their relative velocity so the hand reaches the hold
-by the end of the step: a deadbeat constraint, no joints. Its share follows the masses; the station's static layer (27,
+body (`GrabController.m_PlayerRigidbodyReference`) and the hold sets their relative velocity: against the hand's own
+velocity (from the runtime, `CommonUsages.deviceVelocity`, or from the positions it reports once per frame; smoothed over
+30 ms), plus the gap between hand and hold closing over 80 ms, at most 4 m/s, its change limited to 40 m/s².
+No joints. Until 0.21 the hand was pulled onto its hold within one step (a deadbeat constraint, up to 10 m/s); a trace
+(`VrClimbTrace`, lines "Climbing trace:") showed that, whenever the hull stood in the way, the body was rammed into it
+every step (up to 8 m/s per step by the hold and nearly as much back by the collision, the hand up to 16 cm off its
+hold): the view shook, the ship got the contact impulses, and letting go flew off at the bounce's speed (4 to 6 m/s).
+With two hands at two spots of the hull the hands stayed up to 35 cm off their holds, and letting go of one pulled the
+body to the other in one step. Head turns were not the cause (rig shift under 2 mm per frame). Its share follows the masses; the station's static layer (27,
 `InStaticLayer`), kinematic bodies and masses above `GrabController.RawGrabbedMassRange` count as immovable, as in the
 game's `RigidbodyUtils.MassRatio`. Off the center of mass the part's effective mass along the push is used, which
 includes its turning. Two hands share the player's mass (and a part both hold, its mass). The controllers are measured
 on the rig, which moves once per frame at render (`VrClimb.RigPlaced`); within physics steps the hand moves along by how
-far the body moved since. Letting go of the last hold keeps the body's velocity relative to the holds smoothed over
-80 ms, capped at 5 m/s, so a push off flies on; a hand held back more than 0.5 m from its hold lets go without it.
+far the body moved since. Letting go of the last hold keeps the velocity the hands asked of the body (not the one it
+got, which includes bounces) smoothed over 80 ms, capped at 4 m/s, so a push off flies on; a hand held back more than 0.5 m from its hold lets go without it.
 While the left hand holds on, controller flying rests. Log lines start with "Climbing:".
 
 Controls are `InteractableObject`s; the airlock console (`SM_AirlockConsole_LockPanel`) has a trigger collider
