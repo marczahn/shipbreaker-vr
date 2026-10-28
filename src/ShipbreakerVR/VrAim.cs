@@ -108,6 +108,7 @@ namespace ShipbreakerVR
             AccessTools.FieldRefAccess<CuttingController, List<CuttingController.CuttableInfo>>("mTargetBuffer");
         private static readonly HashSet<StructurePart> cutTargets = new HashSet<StructurePart>();
         private static bool loggedCutLine;
+        private static string cutLineInfo = "-";
 
         // True while the tools aim from the hand: VR in gameplay, the option on and the tool hand's controller tracked.
         // Settled once per frame (VrFrame).
@@ -444,10 +445,11 @@ namespace ShipbreakerVR
                     AddCutPoint(camera, toLaser, start,
                         Vector3.Lerp(points[k].ScreenPosition, points[k + 1].ScreenPosition, i / (LineDotsBetween + 1f)), range, mask);
             }
-            if (!loggedCutLine)
+            cutLineInfo = $"{points.Length} edge points of the game, {valid} on the {cutTargets.Count} part(s) the cut reaches, {cutPoints.Count} dots";
+            if (!loggedCutLine && cutPoints.Count > 0)
             {
                 loggedCutLine = true;
-                Plugin.Log.LogInfo($"Splitsaw line: {points.Length} edge points of the game, {valid} on the {cutTargets.Count} part(s) the cut reaches, {cutPoints.Count} dots");
+                Plugin.Log.LogInfo($"Splitsaw line: {cutLineInfo}");
             }
         }
 
@@ -586,7 +588,7 @@ namespace ShipbreakerVR
         public static string Describe(Transform head)
         {
             var text = $"aim with hand: option {VrSettings.AimWithHand.Value}{(PatchReport.HandAimWorks ? "" : " (off, patches incomplete)")}, active {Active}, tool {withTool}";
-            if (active) text += $", hand at {VrDiagnostics.Direction(head, aim.transform.position)} {Vector3.Distance(head.position, aim.transform.position):0.00} m, pointing {VrDiagnostics.Direction(head, head.position + aim.transform.forward)}, beam on {beamTarget}";
+            if (active) text += $", hand at {VrDiagnostics.Direction(head, aim.transform.position)} {Vector3.Distance(head.position, aim.transform.position):0.00} m, pointing {VrDiagnostics.Direction(head, head.position + aim.transform.forward)}, beam on {beamTarget}, Splitsaw line {cutLineInfo}";
             return text + "; " + VrHand.Describe() + "; " + VrDualTools.Describe() + CutterModel();
         }
 
