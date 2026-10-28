@@ -179,7 +179,7 @@ namespace ShipbreakerVR
             if (steps == 0 && frames == 0) return;
             var text = $"Climbing trace: {steps} steps, {frames} frames; hand off its hold mm avg/max L {HandError[0]} R {HandError[1]}; "
                 + $"controller motion mm/step L {HandMotion[0]} R {HandMotion[1]}; hand speed mm/s L {HandSpeed[0]} R {HandSpeed[1]}; "
-                + "body dv mm/s per step: climbing {ClimbChange}, other {OtherChange}; "
+                + $"body dv mm/s per step: climbing {ClimbChange}, other {OtherChange}; "
                 + $"rig vs body mm/frame {RigShift}, body turn deg/frame {BodyTurn}, interpolation lag mm {InterpolationLag}";
             if (player != null) text += $"; body {player.velocity.magnitude:0.00} m/s";
             if (part != null)
