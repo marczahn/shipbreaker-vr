@@ -73,8 +73,11 @@ interacting, the grapple and the "entity of interest".
   jointed and drop the velocity component, so the direction does not matter for them.
 - Pointer, only with a tool drawn (`VrAim.Aiming`): a cyan laser (2 mm, fading slightly) from the muzzle to the first
   hit of a plain raycast (default layers minus layers whose name contains "Player", "UI" and our pass layer), 5 m long
-  without a hit. Drawn with `UI/Default` in our after-post-process pass (`VrUiPass`) per eye, without depth, under the
-  UI. The first version was a 4 mm cyan beam that faded out; Marc wanted something more like a laser pointer. For a
+  without a hit. Drawn with `UI/Default` in our after-post-process pass (`VrUiPass`) per eye, under the UI. Since issue #39 the
+  lasers are tested against the camera's depth buffer (`ZTest LessEqual`, depth bound with the color buffer), so the
+  tool in the hand hides the part of the laser behind it; the tether mode's ring, the traced tether and the placing line
+  stay drawn over everything, because they lie on or along surfaces and would flicker in them. Log `Aim laser depth
+  tested: depth buffer WxH, color WxH` once per session. The first version was a 4 mm cyan beam that faded out; Marc wanted something more like a laser pointer. For a
   while it took the color the game gives the tool's reticle (`GrappleCrosshairController.CrosshairIcon`, lerped to
   `HookableInRange`, `HookableOutOfRange`, `NotHookableColor`, `NothingColor`; the cutter's
   `CuttingUIController.m_AimedCenterReticleIcon`; the Stinger's `m_ScalpelReticle`; grapple `#FFC300`, Stinger

@@ -54,6 +54,7 @@ namespace ShipbreakerVR
         private static bool active;
         private static bool withTool;
         private static bool loggedPose;
+        private static bool loggedDepth;
 
         private static int beamFrame = -1;
         private static bool beamVisible;
@@ -70,7 +71,10 @@ namespace ShipbreakerVR
         private static string beamTarget = "-";
         private static int pointerMask;
         private static Mesh beamMesh;
+        // The lasers are hidden by what lies in front of them, the tool in the hand above all (depth tested); the tether
+        // mode's ring and lines are drawn over everything, since they lie on or along the surfaces they mark.
         private static Material beamMaterial;
+        private static Material tetherBeamMaterial;
         private static Mesh ringMesh;
         private static Material tetherMaterial;
 
@@ -257,8 +261,8 @@ namespace ShipbreakerVR
             return GameSession.CurrentGameState == GameSession.GameState.Gameplay;
         }
 
-        // Called from our UI pass for each eye, before the UI: the laser from the hand to what it hits. Drawn over
-        // everything (the pass has no depth), which is fine since the laser ends at the first thing it meets.
+        // Called from our UI pass for each eye, before the UI: the laser from the hand to what it hits. Tested against the
+        // scene's depth, so the tool in the hand (and anything else in front) hides it, as Marc asked (issue #39).
         public static void Draw(CustomPassContext context, Camera vrCamera)
         {
             if (vrCamera == null || context.hdCamera.camera != vrCamera) return;
@@ -270,9 +274,14 @@ namespace ShipbreakerVR
             var eye = (Vector3)view.inverse.GetColumn(3);
             var scale = VrCamera.WorldScale;
             var cmd = context.cmd;
-            cmd.SetRenderTarget(context.cameraColorBuffer, 0, CubemapFace.Unknown, -1);
+            cmd.SetRenderTarget(context.cameraColorBuffer, context.cameraDepthBuffer, 0, CubemapFace.Unknown, -1);
             cmd.SetViewport(new Rect(0, 0, context.hdCamera.actualWidth, context.hdCamera.actualHeight));
             cmd.SetViewProjectionMatrices(view, proj);
+            if (!loggedDepth)
+            {
+                loggedDepth = true;
+                Plugin.Log.LogInfo($"Aim laser depth tested: depth buffer {(context.cameraDepthBuffer != null && context.cameraDepthBuffer.rt != null ? $"{context.cameraDepthBuffer.rt.width}x{context.cameraDepthBuffer.rt.height}" : "missing")}, color {(context.cameraColorBuffer != null && context.cameraColorBuffer.rt != null ? $"{context.cameraColorBuffer.rt.width}x{context.cameraColorBuffer.rt.height}" : "missing")}");
+            }
 
             DrawBeam(cmd, eye, scale, beamStart, beamEnd, beamHit, VrTetherMode.Applies(VrToolModels.Equipped), handNode, beamTether);
             if (secondBeamVisible)
@@ -286,9 +295,9 @@ namespace ShipbreakerVR
         // that hand and the tether it points at traced.
         private static void DrawBeam(CommandBuffer cmd, Vector3 eye, float scale, Vector3 start, Vector3 end, bool hit, bool tethers, XRNode node, Tether target)
         {
-            var material = tethers ? tetherMaterial : beamMaterial;
-            DrawLine(cmd, eye, scale, start, end, material);
+            DrawLine(cmd, eye, scale, start, end, tethers ? tetherBeamMaterial : beamMaterial);
             if (!tethers) return;
+            var material = tetherMaterial;
             if (target != null) DrawLine(cmd, eye, scale * TraceWidth, target.WorldStartAttachPoint, target.WorldEndAttachPoint, material);
             if (VrTetherMode.TryGetStart(node, out var tetherStart)) DrawLine(cmd, eye, scale, tetherStart, end, material);
             if (!hit) return;
@@ -390,7 +399,8 @@ namespace ShipbreakerVR
             beamMesh.vertices = new[] { new Vector3(-0.5f, 0f, 0f), new Vector3(0.5f, 0f, 0f), new Vector3(0.5f, 1f, 0f), new Vector3(-0.5f, 1f, 0f) };
             beamMesh.colors = new[] { near, near, far, far };
             beamMesh.triangles = new[] { 0, 2, 1, 0, 3, 2 };
-            beamMaterial = VrUtil.OverlayMaterial(LaserColor);
+            beamMaterial = VrUtil.DepthTestedMaterial(LaserColor);
+            tetherBeamMaterial = VrUtil.DepthTestedMaterial(TetherColor);
             tetherMaterial = VrUtil.OverlayMaterial(TetherColor);
 
             // A flat ring of radius 1 facing along z.
@@ -420,12 +430,13 @@ namespace ShipbreakerVR
         public static void Release()
         {
             if (aim != null) Object.Destroy(aim.gameObject);
-            foreach (var o in new Object[] { beamMesh, beamMaterial, ringMesh, tetherMaterial })
+            foreach (var o in new Object[] { beamMesh, beamMaterial, tetherBeamMaterial, ringMesh, tetherMaterial })
                 if (o != null) Object.Destroy(o);
             aim = null;
             throwOrigin = null;
             beamMesh = null;
             beamMaterial = null;
+            tetherBeamMaterial = null;
             beamTether = secondBeamTether = null;
             ringMesh = null;
             tetherMaterial = null;

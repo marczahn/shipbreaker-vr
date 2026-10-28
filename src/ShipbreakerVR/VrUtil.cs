@@ -42,5 +42,14 @@ namespace ShipbreakerVR
         }
 
         public static Material OverlayMaterial() => OverlayMaterial(Color.white);
+
+        // UI/Default hidden by what lies in front of it: for things in the world drawn after the scene, with its depth
+        // buffer bound.
+        public static Material DepthTestedMaterial(Color color)
+        {
+            var material = new Material(Shader.Find("UI/Default")) { color = color };
+            material.SetInt("unity_GUIZTestMode", (int)CompareFunction.LessEqual);
+            return material;
+        }
     }
 }
