@@ -41,6 +41,14 @@ engine call (`Transform`, `Rigidbody`, `Input`, `Quaternion.Euler`, ...); move t
 plain values, like `VrToolBelt.ZoneAt` or `VrResolution.FitScale`. There is no CI on GitHub: the game's DLLs cannot
 go into the public repository.
 
+## Testing without the headset
+Set `[Test] Testmodus = true` in `BepInEx\config\de.marczahn.shipbreakervr.cfg` to run test scripts (examples in
+`tools/vr-tests/`, commands at the top of `src/ShipbreakerVR/VrTestScript.cs`). To run VR without a headset, also set
+`MockRuntime = true` and copy Unity's mock runtime from the helper project's package cache
+(`Library/PackageCache/com.unity.xr.openxr@1.2.8/MockRuntime/windows/x64/openxr_loader.dll`) to
+`BepInEx\plugins\ShipbreakerVR\MockRuntime\mock_runtime.dll`. Both need a restart; see
+[docs/NOTES.md](docs/NOTES.md), "Testing without the headset".
+
 ## From the Unity helper project to a release
 *ShipbreakerVR → Build for the game* in `unity/ShipbreakerVRUnity` writes `Output/` in the game's folder structure.
 `tools/build-release.sh` reads the same files from a flatter `DEPLOY_DIR`, copied from `Output/` like this:

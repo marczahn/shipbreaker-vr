@@ -47,7 +47,7 @@ namespace ShipbreakerVR
             }
         }
 
-        public static void Dump(VrCamera vr, string reason)
+        public static void Dump(VrCamera vr, string reason, bool saveImages = true)
         {
             var head = vr.transform;
             var text = new StringBuilder();
@@ -80,7 +80,7 @@ namespace ShipbreakerVR
             }
 
             Plugin.Log.LogInfo(text.ToString());
-            SaveImages(ui);
+            if (saveImages) SaveImages(ui, System.IO.Path.Combine(Paths.BepInExRootPath, "ShipbreakerVR-F8"), DateTime.Now.ToString("yyyyMMdd-HHmmss"));
         }
 
         private static void DescribeCanvas(StringBuilder text, Transform head, Canvas canvas, VrUi ui)
@@ -154,26 +154,49 @@ namespace ShipbreakerVR
             return $"ahead {ahead:0}, up {up:0}";
         }
 
-        private static void SaveImages(VrUi ui)
+        // flip: the eye images are stored upside down (rendered for the XR swapchain), the UI texture is not.
+        private static void SavePng(RenderTexture texture, string file, bool flip = false)
+        {
+            var previous = RenderTexture.active;
+            RenderTexture.active = texture;
+            var copy = new Texture2D(texture.width, texture.height, TextureFormat.RGBA32, false);
+            copy.ReadPixels(new Rect(0, 0, texture.width, texture.height), 0, 0);
+            if (flip)
+            {
+                var pixels = copy.GetPixels32();
+                var flipped = new Color32[pixels.Length];
+                var width = texture.width;
+                for (var y = 0; y < texture.height; y++)
+                    Array.Copy(pixels, y * width, flipped, (texture.height - 1 - y) * width, width);
+                copy.SetPixels32(flipped);
+            }
+            copy.Apply();
+            RenderTexture.active = previous;
+            File.WriteAllBytes(file, copy.EncodeToPNG());
+            UnityEngine.Object.Destroy(copy);
+        }
+
+        // The UI texture, each eye's last image (with alternate eyes) and the game window (written at the end of the frame) as
+        // <prefix>-ui.png, <prefix>-eye0.png / -eye1.png and <prefix>-window.png.
+        public static void SaveImages(VrUi ui, string folder, string stamp)
         {
             try
             {
-                var folder = System.IO.Path.Combine(Paths.BepInExRootPath, "ShipbreakerVR-F8");
                 Directory.CreateDirectory(folder);
-                var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
                 var texture = ui != null ? ui.Texture : null;
                 if (texture != null)
                 {
-                    var previous = RenderTexture.active;
-                    RenderTexture.active = texture;
-                    var copy = new Texture2D(texture.width, texture.height, TextureFormat.RGBA32, false);
-                    copy.ReadPixels(new Rect(0, 0, texture.width, texture.height), 0, 0);
-                    copy.Apply();
-                    RenderTexture.active = previous;
                     var file = System.IO.Path.Combine(folder, $"{stamp}-ui.png");
-                    File.WriteAllBytes(file, copy.EncodeToPNG());
-                    UnityEngine.Object.Destroy(copy);
+                    SavePng(texture, file);
                     Plugin.Log.LogInfo($"UI texture saved: {file}");
+                }
+                for (var eye = 0; eye < 2; eye++)
+                {
+                    var image = VrAlternateEyes.EyeImage(eye);
+                    if (image == null) continue;
+                    var file = System.IO.Path.Combine(folder, $"{stamp}-eye{eye}.png");
+                    SavePng(image, file, true);
+                    Plugin.Log.LogInfo($"Eye {eye} saved: {file}");
                 }
                 var window = System.IO.Path.Combine(folder, $"{stamp}-window.png");
                 ScreenCapture.CaptureScreenshot(window);

@@ -1,0 +1,22 @@
+# Main menu with the controllers: the left stick moves the selection.
+# Confirms that scripted stick and button input reaches the game (VrMenuInput presents the controllers as a gamepad).
+head 0 1.7 0 0 0 0
+left -0.2 1.3 0.35 0 0 0
+right 0.2 1.3 0.35 0 0 0
+wait 2
+screenshot menu-before
+left stick 0 -1
+wait 0.3
+left stick 0 0
+wait 0.5
+left stick 0 -1
+wait 0.3
+left stick 0 0
+wait 0.5
+screenshot menu-down2
+left stick 0 1
+wait 0.3
+left stick 0 0
+wait 0.5
+screenshot menu-up1
+dump menu

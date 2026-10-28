@@ -923,6 +923,44 @@ per game session; that needs a restart. Reload with the options menu closed; an 
 the VR tab falls back to the first tab. Mono never unloads assemblies, so every reload leaves the old code in memory
 (about 140 KB each), which is harmless for a test session.
 
+## Testing without the headset
+`[Test] Testmodus` lets a developer, also one who is not at the computer, check a change without wearing the
+headset: test scripts move the head and the controllers, press buttons, save screenshots and collect the log.
+`[Test] MockRuntime` additionally runs VR without a headset at all. Both need a restart to switch on.
+
+- **Scripts** (`VrTestScript`): a `.txt` file dropped into `BepInEx\ShipbreakerVR-test\inbox` runs on its own (the
+  inbox is checked once a second, files in name order), then moves to `...\done`. Results go to
+  `...\results\<script>\`: `log.txt` with every log line during the run, the screenshots, and `finished.txt` at the
+  end. The commands are listed at the top of `VrTestScript.cs`; examples are in `tools/vr-tests/`. `restart` quits the
+  game and starts it again through Steam (`steam://rungameid/1161580` after 20 seconds): started directly, the exe
+  finds no Steam and quits.
+- **Poses and buttons** (`VrTestXr`, `VrTestFeature`): an OpenXR feature hooks `xrGetInstanceProcAddr` and wraps
+  `xrLocateViews`, `xrLocateSpace`, `xrCreateReferenceSpace`, `xrCreateActionSpace`,
+  `xrSuggestInteractionProfileBindings` and `xrGetActionState*`. It remembers which space is the view space, which
+  action space belongs to which action and hand, and which binding paths each action has; a pose or input the script
+  sets then replaces what the runtime reports (the runtime's own poses are still logged by `dump`). Works with the real
+  headset too: the script's head pose wins over the real one until `reset`. Unity's poses become OpenXR's by flipping z
+  (position `(x, y, -z)`, rotation `(-x, -y, z, w)`).
+- **Mock runtime** (`VrTestRuntime`): Unity OpenXR 1.2.8 ships a mock runtime for its tests,
+  `MockRuntime/windows/x64/openxr_loader.dll`, a loader and runtime in one DLL. Renamed to `mock_runtime.dll` in
+  `BepInEx\plugins\ShipbreakerVR\MockRuntime`, it is chosen through `XR_RUNTIME_JSON`, which points at a manifest
+  written next to it. It must get a trace callback (`SetXRTrace`) before it starts: without one it calls a null pointer
+  while processing events and the game crashes. It reports zero poses and frames as fast as the game renders (150-290
+  fps in the main menu); it is not part of a release.
+- **Images**: with the mock runtime the game window shows little of what the eyes see, so `screenshot` saves each
+  eye's last image from alternate eyes (`VrAlternateEyes.EyeImage`), flipped upright, beside the window and the UI
+  texture.
+- **Several hooks on `xrGetInstanceProcAddr`**: alternate eyes and the test input both chain it. Under Mono,
+  `Marshal.GetDelegateForFunctionPointer` on a pointer that came from a managed delegate returns that very delegate,
+  and casting it to another delegate type throws `InvalidCastException`. So every feature uses the one delegate type
+  `VrXr.GetInstanceProcAddrFn`.
+- **Across reloads**: the hooks are installed once per game session, but a reload brings new code. The hook calls the
+  current handler through `AppDomain` data (with system delegate types only, which both assemblies share), and the
+  spaces and bindings it saw are kept there too. The handler registers in `VrXr.Start`, before VR starts, so it sees
+  the bindings and spaces being created.
+- **Copying from a cloud session**: copying a build to the game folder under the same staged file name has delivered
+  the previous build at least twice. Stage each build under a new name and compare the checksum after copying.
+
 ## Performance audit: work done twice per eye
 The bay ran at 45 Hz at 1.05x (22-24 ms per frame), and at 90 Hz the main thread already used about 10 of the 11.1 ms
 (NOTES above, "Performance in the Hab"). So both the GPU and the CPU are close to the limit on an i7-7700K with an
