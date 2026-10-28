@@ -91,6 +91,7 @@ namespace ShipbreakerVR
             if (player == null) return;
             bodyAtRig = player.transform.position;
             rigPlaced = true;
+            if (LeftHand.Holding || RightHand.Holding) VrClimbTrace.Frame(player, VrCamera.Instance?.transform.parent);
         }
 
         // From VrCamera.FixedUpdate, before the physics step.
@@ -183,6 +184,8 @@ namespace ShipbreakerVR
             hand.Anchor = body != null ? body.transform : best.transform;
             hand.Point = hand.Anchor.InverseTransformPoint(at);
             if (first) pushOff = Vector3.zero;
+            if (first) VrClimbTrace.Start(body, hand.Movable);
+            else VrClimbTrace.TakePart(body, hand.Movable);
             hand.Input.Buzz(0.5f, 0.06f);
             if (logs++ < 80)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds '{best.name}' (layer {best.gameObject.layer}, "
@@ -203,6 +206,7 @@ namespace ShipbreakerVR
                 else holding++;
             }
             if (holding == 0) return;
+            VrClimbTrace.StepStart(player);
 
             var dt = Time.fixedDeltaTime;
             var velocity = player.velocity;
@@ -213,6 +217,7 @@ namespace ShipbreakerVR
                 if (!hand.Holding) continue;
                 var hold = Hold(hand);
                 var error = hold - HandWorld(hand);
+                VrClimbTrace.Hand(hand == LeftHand ? 0 : 1, hand.Local, hand.Tracked, error.magnitude);
                 var holdVelocityHere = hand.Body != null ? hand.Body.GetPointVelocity(hold) : Vector3.zero;
                 holdsVelocity += holdVelocityHere;
                 // The player's velocity relative to the hold that closes the gap within this step.
@@ -223,9 +228,14 @@ namespace ShipbreakerVR
                 if (hand.Movable) inverse += Sharing(hand) * InverseMass(hand.Body, hold, needed.normalized);
                 var impulse = needed / inverse;
                 change += impulse / player.mass;
-                if (hand.Movable) hand.Body.AddForceAtPosition(-impulse, hold, ForceMode.Impulse);
+                if (hand.Movable)
+                {
+                    hand.Body.AddForceAtPosition(-impulse, hold, ForceMode.Impulse);
+                    VrClimbTrace.Impulse(hand.Body, -impulse);
+                }
             }
             player.velocity = velocity + change;
+            VrClimbTrace.StepEnd(player, change);
             holdVelocity = holdsVelocity / holding;
             pushOff = Vector3.Lerp(pushOff, player.velocity - holdVelocity, 1f - Mathf.Exp(-dt / PushOffSmoothing));
         }
@@ -290,6 +300,7 @@ namespace ShipbreakerVR
             var last = !LeftHand.Holding && !RightHand.Holding;
             var speed = Vector3.ClampMagnitude(pushOff, MaxPushOff * VrCamera.WorldScale);
             if (push && last && player != null) player.velocity = holdVelocity + speed;
+            if (last) VrClimbTrace.End(player, reason, holdVelocity + speed, push && player != null);
             if (logs++ < 80)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand lets go ({reason}){(push && last ? $", flies on at {speed.magnitude:0.00} m/s" : "")}");
             if (last) pushOff = Vector3.zero;
