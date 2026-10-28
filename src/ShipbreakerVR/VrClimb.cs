@@ -218,7 +218,7 @@ namespace ShipbreakerVR
             hand.LastLocal = hand.Local;
             hand.LastLocalTime = Time.fixedTime;
             if (first) SquishyOff();
-            if (first) VrClimbTrace.Start(body, hand.Movable);
+            if (first) VrClimbTrace.Start(player, body, hand.Movable);
             else VrClimbTrace.TakePart(body, hand.Movable);
             hand.Input.Buzz(0.5f, 0.06f);
             if (logs++ < 80)

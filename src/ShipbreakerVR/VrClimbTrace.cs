@@ -5,9 +5,11 @@ namespace ShipbreakerVR
     // Measures holding on (VrClimb) for a test build, to find out why the view gets unsteady and why a held part gains
     // momentum. While a hand holds on, a line "Climbing trace:" every half second sums up the physics steps and frames
     // since the last one; letting go of the last hold logs the parts' speed against when they were taken. Only logs,
-    // changes nothing.
+    // changes nothing (but for a probe on the player's body that counts its collisions while holding on).
     internal static class VrClimbTrace
     {
+        static VrClimbTrace() => VrSession.OnUnload("climbing trace", RemoveProbe);
+
         private const float Period = 0.5f;
         private const int MaxLines = 400;
 
@@ -49,6 +51,19 @@ namespace ShipbreakerVR
         private static Quaternion lastBodyRotation;
         // The interpolated body (transform) against its physics position, when the rig was placed, in m.
         private static readonly Stat InterpolationLag = new Stat();
+        // The player's own solid colliders, and how far the head (VR camera) is from their middle, in m.
+        private static Collider[] bodyColliders;
+        private static bool bodyLogged;
+        private static readonly Stat HeadToBody = new Stat();
+        // Frames in which a body collider overlaps something else, how deep, and the deepest one's name.
+        private static int overlapFrames;
+        private static readonly Stat Overlap = new Stat();
+        private static string overlapWith;
+        private static readonly Collider[] Found = new Collider[16];
+        // Collisions the physics reported for the player's body (ContactProbe): their impulses in N s.
+        private static readonly Stat ContactImpulse = new Stat(1f);
+        private static string contactWith;
+        private static ContactProbe probe;
 
         private class Stat
         {
@@ -83,9 +98,15 @@ namespace ShipbreakerVR
         public static bool Active => lines < MaxLines;
 
         // The first hand took hold.
-        public static void Start(Rigidbody body, bool movable)
+        public static void Start(Rigidbody player, Rigidbody body, bool movable)
         {
             if (!Active) return;
+            if (player != null)
+            {
+                bodyColliders = System.Array.FindAll(player.GetComponentsInChildren<Collider>(), c => !c.isTrigger);
+                if (probe == null) probe = player.gameObject.AddComponent<ContactProbe>();
+                if (!bodyLogged) LogBody(player);
+            }
             ClearPeriod();
             hasVelocitySet = false;
             hasRigOffset = false;
@@ -152,6 +173,7 @@ namespace ShipbreakerVR
             lastBodyRotation = player.rotation;
             hasRigOffset = true;
             InterpolationLag.Add((player.transform.position - player.position).magnitude);
+            MeasureBody();
 
             if (Time.unscaledTime < nextLine) return;
             nextLine = Time.unscaledTime + Period;
@@ -171,7 +193,76 @@ namespace ShipbreakerVR
                     + $"spin {partSpinAtHold.magnitude * Mathf.Rad2Deg:0.0} -> {part.angularVelocity.magnitude * Mathf.Rad2Deg:0.0} deg/s";
             Write(text);
             part = null;
+            RemoveProbe();
             ClearPeriod();
+        }
+
+        // Once: the player's solid colliders, where they sit against the head, and the trigger colliders next to them.
+        private static void LogBody(Rigidbody player)
+        {
+            var head = VrCamera.Instance != null ? VrCamera.Instance.transform.position : player.position;
+            var text = $"Climbing trace: player colliders (head {Describe(player.transform.InverseTransformPoint(head))} in the body)";
+            foreach (var collider in player.GetComponentsInChildren<Collider>())
+            {
+                text += $"; '{collider.name}' {collider.GetType().Name}{(collider.isTrigger ? " trigger" : "")} layer {collider.gameObject.layer}";
+                if (collider is CapsuleCollider capsule) text += $" r {capsule.radius:0.00} h {capsule.height:0.00} axis {capsule.direction}";
+                else if (collider is SphereCollider sphere) text += $" r {sphere.radius:0.00}";
+                else if (collider is BoxCollider box) text += $" size {Describe(box.size)}";
+                text += $", middle {Describe(player.transform.InverseTransformPoint(collider.bounds.center))}, bounds {Describe(collider.bounds.size)}";
+            }
+            Write(text);
+            bodyLogged = true;
+        }
+
+        private static string Describe(Vector3 v) => $"({v.x:0.00}, {v.y:0.00}, {v.z:0.00})";
+
+        // Each frame while holding on: the head against the body, and whether the body sticks into something.
+        private static void MeasureBody()
+        {
+            if (bodyColliders == null || bodyColliders.Length == 0) return;
+            if (VrCamera.Instance != null) HeadToBody.Add((VrCamera.Instance.transform.position - bodyColliders[0].bounds.center).magnitude);
+            var deepest = 0f;
+            foreach (var own in bodyColliders)
+            {
+                if (own == null || !own.enabled) continue;
+                var bounds = own.bounds;
+                var count = Physics.OverlapBoxNonAlloc(bounds.center, bounds.extents, Found, Quaternion.identity, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                for (var i = 0; i < count; i++)
+                {
+                    var other = Found[i];
+                    if (System.Array.IndexOf(bodyColliders, other) >= 0) continue;
+                    var ownTransform = own.transform;
+                    var otherTransform = other.transform;
+                    if (!Physics.ComputePenetration(own, ownTransform.position, ownTransform.rotation, other, otherTransform.position, otherTransform.rotation, out _, out var depth)) continue;
+                    if (depth <= deepest) continue;
+                    deepest = depth;
+                    overlapWith = other.name;
+                }
+            }
+            if (deepest <= 0f) return;
+            overlapFrames++;
+            Overlap.Add(deepest);
+        }
+
+        private static void RemoveProbe()
+        {
+            if (probe != null) Object.Destroy(probe);
+            probe = null;
+        }
+
+        private static void Contact(Collision collision)
+        {
+            if (!Active) return;
+            var impulse = collision.impulse.magnitude;
+            if (impulse >= ContactImpulse.Max) contactWith = collision.collider.name;
+            ContactImpulse.Add(impulse);
+        }
+
+        // On the player's body while a hand holds on: Unity calls a body's collision callbacks on its own game object.
+        private class ContactProbe : MonoBehaviour
+        {
+            private void OnCollisionEnter(Collision collision) => Contact(collision);
+            private void OnCollisionStay(Collision collision) => Contact(collision);
         }
 
         private static void Log(Rigidbody player)
@@ -179,6 +270,8 @@ namespace ShipbreakerVR
             if (steps == 0 && frames == 0) return;
             var text = $"Climbing trace: {steps} steps, {frames} frames; hand off its hold mm avg/max L {HandError[0]} R {HandError[1]}; "
                 + $"controller motion mm/step L {HandMotion[0]} R {HandMotion[1]}; hand speed mm/s L {HandSpeed[0]} R {HandSpeed[1]}; "
+                + $"head to body mm {HeadToBody}; body overlaps in {overlapFrames} frames, mm avg/max {Overlap}{(overlapFrames > 0 ? $" ('{overlapWith}')" : "")}; "
+                + $"contacts {ContactImpulse.Count}, N s avg/max {ContactImpulse}{(ContactImpulse.Count > 0 ? $" ('{contactWith}')" : "")}; "
                 + $"body dv mm/s per step: climbing {ClimbChange}, other {OtherChange}; "
                 + $"rig vs body mm/frame {RigShift}, body turn deg/frame {BodyTurn}, interpolation lag mm {InterpolationLag}";
             if (player != null) text += $"; body {player.velocity.magnitude:0.00} m/s";
@@ -206,6 +299,10 @@ namespace ShipbreakerVR
             RigShift.Clear();
             BodyTurn.Clear();
             InterpolationLag.Clear();
+            HeadToBody.Clear();
+            Overlap.Clear();
+            overlapFrames = 0;
+            ContactImpulse.Clear();
             impulseNet = Vector3.zero;
             impulseSum = 0f;
         }
