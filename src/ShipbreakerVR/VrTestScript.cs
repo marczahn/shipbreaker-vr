@@ -108,6 +108,7 @@ namespace ShipbreakerVR
                 {
                     if (!logSeen) Plugin.Log.LogWarning($"Test {name}: no log line with '{waitForLog}' in time");
                     waitForLog = null;
+                    waitUntil = now;
                 }
                 else return false;
             }
