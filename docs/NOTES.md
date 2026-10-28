@@ -79,7 +79,9 @@ interacting, the grapple and the "entity of interest".
   stay drawn over everything, because they lie on or along surfaces and would flicker in them. Log `Aim laser depth
   tested: depth buffer WxH, color WxH` once per session.
   Later Marc asked for a bright dot where the grapple's or cutter's laser hits after all: a disc facing the eye (glow
-  in the laser's color fading out, radius 0.6 % of the distance, white core 0.22 %), drawn 3 % of the way towards
+  in the laser's color fading out, white core). At first it kept its size on screen (radius 0.6 % of the distance);
+  Marc found it too big and wanted it to shrink with distance like a real laser dot, so now it has a size in the world
+  (radius 6 mm, core 2 mm, times the world scale), at least 0.12 % / 0.05 % of the distance so it stays visible, drawn 3 % of the way towards
   the eye and depth tested, so the surface does not cut into it but the tool in the hand hides it. On the Splitsaw,
   smaller dots (0.35 %) mark the line it will cut: the game's own edge detection points
   (`CuttingController.EdgeDetectionPoints`, screen points across the whole screen width along the cut direction,
