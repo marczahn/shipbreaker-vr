@@ -21,6 +21,9 @@ namespace ShipbreakerVR
     // A thin laser from the muzzle to what it hits shows where the hand points. The game's crosshair in the middle of the
     // view is hidden meanwhile (VrCrosshair). With an empty hand there is nothing to aim, as Marc found: no laser
     // then, and interacting aims at the middle of the view as in the flat game, where the game's dot marks it (Aiming).
+    // Where the laser of the grapple or the cutter hits, a bright dot marks the point, like a laser pointer's; on the
+    // Splitsaw smaller dots mark the line it will cut, only where it meets a part the cut reaches (the game's edge
+    // detection points, CuttingController.EdgeDetectionPoints), as Marc asked.
     // In the grapple's tether mode (VrTetherMode) the laser is orange, a ring marks where it meets something, and while
     // a tether is being placed a line runs from where it started to where the laser ends; the tether the laser points at,
     // which A lets go of, is traced in orange.
@@ -42,6 +45,20 @@ namespace ShipbreakerVR
         private const int RingSegments = 24;
         // The traced tether is this many times as wide as the laser.
         private const float TraceWidth = 4f;
+        // The dot where the laser hits, like a laser pointer's on a surface: the radius of its glow and of its white core
+        // in meters (times the world scale), so it gets smaller with distance, as Marc wanted; at least these shares of
+        // the distance from the eye, so it stays visible far away. The dots on the Splitsaw's line look the same, as Marc
+        // wanted. All are drawn this share of the way towards the eye, so the surface does not cut into them but the
+        // tool in the hand still hides them.
+        private const float DotSize = 0.006f;
+        private const float DotCore = 0.002f;
+        private const float DotMinSize = 0.0012f;
+        private const float DotMinCore = 0.0005f;
+        // Extra dots on the Splitsaw's line between two neighboring edge points of the game, so the dots sit closer
+        // together than the game's points (Marc wanted them finer and closer).
+        private const int LineDotsBetween = 2;
+        private const float DotLift = 0.03f;
+        private const int DotSegments = 16;
 
         // How far in front of the hand a thrown demo charge starts, clear of the player's collider.
         private const float ThrowAhead = 0.2f;
@@ -54,6 +71,7 @@ namespace ShipbreakerVR
         private static bool active;
         private static bool withTool;
         private static bool loggedPose;
+        private static bool loggedDepth;
 
         private static int beamFrame = -1;
         private static bool beamVisible;
@@ -67,12 +85,30 @@ namespace ShipbreakerVR
         private static Tether secondBeamTether;
         private static Vector3 secondBeamStart;
         private static Vector3 secondBeamEnd;
+        private static bool beamDot;
+        private static bool secondBeamDot;
+        // The Splitsaw's line where it will cut.
+        private static readonly List<Vector3> cutPoints = new List<Vector3>();
         private static string beamTarget = "-";
         private static int pointerMask;
         private static Mesh beamMesh;
+        // The lasers are hidden by what lies in front of them, the tool in the hand above all (depth tested); the tether
+        // mode's ring and lines are drawn over everything, since they lie on or along the surfaces they mark.
         private static Material beamMaterial;
+        private static Material tetherBeamMaterial;
         private static Mesh ringMesh;
         private static Material tetherMaterial;
+        private static Mesh dotMesh;
+        private static Material coreMaterial;
+
+        private static readonly AccessTools.FieldRef<CuttingToolController, CuttingController> CuttingControllerOf =
+            AccessTools.FieldRefAccess<CuttingToolController, CuttingController>("m_CuttingController");
+        // The parts the Splitsaw's cut reaches (CuttingController.mTargetBuffer, refreshed with the edge points).
+        private static readonly AccessTools.FieldRef<CuttingController, List<CuttingController.CuttableInfo>> CutTargets =
+            AccessTools.FieldRefAccess<CuttingController, List<CuttingController.CuttableInfo>>("mTargetBuffer");
+        private static readonly HashSet<StructurePart> cutTargets = new HashSet<StructurePart>();
+        private static bool loggedCutLine;
+        private static string cutLineInfo = "-";
 
         // True while the tools aim from the hand: VR in gameplay, the option on and the tool hand's controller tracked.
         // Settled once per frame (VrFrame).
@@ -257,8 +293,8 @@ namespace ShipbreakerVR
             return GameSession.CurrentGameState == GameSession.GameState.Gameplay;
         }
 
-        // Called from our UI pass for each eye, before the UI: the laser from the hand to what it hits. Drawn over
-        // everything (the pass has no depth), which is fine since the laser ends at the first thing it meets.
+        // Called from our UI pass for each eye, before the UI: the laser from the hand to what it hits. Tested against the
+        // scene's depth, so the tool in the hand (and anything else in front) hides it, as Marc asked (issue #39).
         public static void Draw(CustomPassContext context, Camera vrCamera)
         {
             if (vrCamera == null || context.hdCamera.camera != vrCamera) return;
@@ -270,13 +306,23 @@ namespace ShipbreakerVR
             var eye = (Vector3)view.inverse.GetColumn(3);
             var scale = VrCamera.WorldScale;
             var cmd = context.cmd;
-            cmd.SetRenderTarget(context.cameraColorBuffer, 0, CubemapFace.Unknown, -1);
+            cmd.SetRenderTarget(context.cameraColorBuffer, context.cameraDepthBuffer, 0, CubemapFace.Unknown, -1);
             cmd.SetViewport(new Rect(0, 0, context.hdCamera.actualWidth, context.hdCamera.actualHeight));
             cmd.SetViewProjectionMatrices(view, proj);
+            if (!loggedDepth)
+            {
+                loggedDepth = true;
+                Plugin.Log.LogInfo($"Aim laser depth tested: depth buffer {(context.cameraDepthBuffer != null && context.cameraDepthBuffer.rt != null ? $"{context.cameraDepthBuffer.rt.width}x{context.cameraDepthBuffer.rt.height}" : "missing")}, color {(context.cameraColorBuffer != null && context.cameraColorBuffer.rt != null ? $"{context.cameraColorBuffer.rt.width}x{context.cameraColorBuffer.rt.height}" : "missing")}");
+            }
 
-            DrawBeam(cmd, eye, scale, beamStart, beamEnd, beamHit, VrTetherMode.Applies(VrToolModels.Equipped), handNode, beamTether);
+            var tethers = VrTetherMode.Applies(VrToolModels.Equipped);
+            var secondTethers = VrTetherMode.Applies(VrDualTools.Second);
+            DrawBeam(cmd, eye, scale, beamStart, beamEnd, beamHit, tethers, handNode, beamTether);
             if (secondBeamVisible)
-                DrawBeam(cmd, eye, scale, secondBeamStart, secondBeamEnd, secondBeamHit, VrTetherMode.Applies(VrDualTools.Second), VrDualTools.SecondNode, secondBeamTether);
+                DrawBeam(cmd, eye, scale, secondBeamStart, secondBeamEnd, secondBeamHit, secondTethers, VrDualTools.SecondNode, secondBeamTether);
+            foreach (var point in cutPoints) DrawImpact(cmd, eye, scale, point, beamMaterial);
+            if (beamDot) DrawImpact(cmd, eye, scale, beamEnd, tethers ? tetherBeamMaterial : beamMaterial);
+            if (secondBeamDot) DrawImpact(cmd, eye, scale, secondBeamEnd, secondTethers ? tetherBeamMaterial : beamMaterial);
             context.renderContext.ExecuteCommandBuffer(cmd);
             cmd.Clear();
             context.renderContext.SetupCameraProperties(context.hdCamera.camera, true);
@@ -286,14 +332,31 @@ namespace ShipbreakerVR
         // that hand and the tether it points at traced.
         private static void DrawBeam(CommandBuffer cmd, Vector3 eye, float scale, Vector3 start, Vector3 end, bool hit, bool tethers, XRNode node, Tether target)
         {
-            var material = tethers ? tetherMaterial : beamMaterial;
-            DrawLine(cmd, eye, scale, start, end, material);
+            DrawLine(cmd, eye, scale, start, end, tethers ? tetherBeamMaterial : beamMaterial);
             if (!tethers) return;
+            var material = tetherMaterial;
             if (target != null) DrawLine(cmd, eye, scale * TraceWidth, target.WorldStartAttachPoint, target.WorldEndAttachPoint, material);
             if (VrTetherMode.TryGetStart(node, out var tetherStart)) DrawLine(cmd, eye, scale, tetherStart, end, material);
             if (!hit) return;
             var size = RingSize * Vector3.Distance(eye, end);
             cmd.DrawMesh(ringMesh, Matrix4x4.TRS(end, Quaternion.LookRotation(end - eye), Vector3.one * size), material, 0, 0);
+        }
+
+        // A laser's dot: a glow in its color with a white core, of a size in the world.
+        private static void DrawImpact(CommandBuffer cmd, Vector3 eye, float scale, Vector3 point, Material glow)
+        {
+            var distance = Vector3.Distance(eye, point);
+            DrawDisc(cmd, eye, point, Mathf.Max(DotSize * scale, DotMinSize * distance), glow);
+            DrawDisc(cmd, eye, point, Mathf.Max(DotCore * scale, DotMinCore * distance), coreMaterial);
+        }
+
+        // A disc of that radius facing the eye.
+        private static void DrawDisc(CommandBuffer cmd, Vector3 eye, Vector3 point, float radius, Material material)
+        {
+            var toEye = eye - point;
+            if (toEye.sqrMagnitude <= 1e-4f) return;
+            var matrix = Matrix4x4.TRS(point + toEye * DotLift, Quaternion.LookRotation(-toEye), Vector3.one * radius);
+            cmd.DrawMesh(dotMesh, matrix, material, 0, 0);
         }
 
         // A line is a strip along its direction, turned to face the eye.
@@ -321,18 +384,86 @@ namespace ShipbreakerVR
             if (secondBeamVisible) secondBeamHit = Cast(secondBeamStart, secondRotation, out secondBeamEnd, out _);
             secondBeamTether = secondBeamVisible && VrTetherMode.Applies(VrDualTools.Second)
                 ? VrTetherMode.Targeted(secondBeamStart, secondRotation * Vector3.forward) : null;
+            secondBeamDot = secondBeamVisible && secondBeamHit && Dotted(VrDualTools.Second);
+            cutPoints.Clear();
+            if (secondBeamVisible && VrDualTools.Second == EquipmentController.Equipment.CuttingTool)
+                CutLine(secondBeamStart, secondRotation);
             beamVisible = Aiming && TryGetAim(out beamStart, out rotation);
             if (!beamVisible)
             {
                 beamVisible = secondBeamVisible;
                 beamStart = beamEnd = secondBeamStart;
-                beamHit = false;
+                beamHit = beamDot = false;
                 beamTether = null;
                 return;
             }
             beamHit = Cast(beamStart, rotation, out beamEnd, out var hit);
+            beamDot = beamHit && Dotted(VrToolModels.Equipped);
+            if (VrToolModels.Equipped == EquipmentController.Equipment.CuttingTool && VrDualTools.Second != EquipmentController.Equipment.CuttingTool)
+                CutLine(beamStart, rotation);
             beamTether = VrTetherMode.Applies(VrToolModels.Equipped) ? VrTetherMode.Targeted(beamStart, rotation * Vector3.forward) : null;
             beamTarget = beamHit ? $"'{hit.collider.name}' (layer {LayerMask.LayerToName(hit.collider.gameObject.layer)}) at {hit.distance:0.00} m" : "nothing";
+        }
+
+        // The tools whose laser ends in a dot.
+        private static bool Dotted(EquipmentController.Equipment tool) =>
+            tool == EquipmentController.Equipment.GrappleHook || tool == EquipmentController.Equipment.CuttingTool;
+
+        // The Splitsaw's line, from the cutter's muzzle along its barrel (start, rotation). The game looks for its edge
+        // points along the cut line across the whole screen (CuttingController.EdgeDetectionPoints, Valid where they meet
+        // a part the cut reaches); they lie too far apart for a fine line, and a small part may hold only one. So each
+        // stretch between two neighboring points of which one is Valid is sampled LineDotsBetween + 1 times, and a
+        // sample shows a dot where it meets one of the parts the cut reaches (the cutter's targets). The screen points
+        // are in the space of the camera the cutter aimed through this frame (CameraFor), turned onto the laser's
+        // latest pose and cast again to find the surface.
+        private static void CutLine(Vector3 start, Quaternion rotation)
+        {
+            var tool = GameRefs.Cutter;
+            if (tool == null || tool.CurrentMode != CuttingToolController.CutterMode.Cutter) return;
+            var cutter = CuttingControllerOf(tool);
+            if (cutter == null || !cutter.AnyValidTargetables) return;
+            var points = cutter.EdgeDetectionPoints.Points;
+            var camera = CameraFor((int)GameTools.Family.Cutter);
+            if (points == null || points.Length < 2 || camera == null) return;
+            cutTargets.Clear();
+            foreach (var target in CutTargets(cutter)) cutTargets.Add(target.Component);
+            var range = cutter.ActiveCutData.Range * 3f;
+            var mask = cutter.RaycastLayerMask;
+            var toLaser = rotation * Quaternion.Inverse(camera.transform.rotation);
+            var valid = 0;
+            for (var k = 0; k < points.Length; k++)
+            {
+                var isValid = Valid(points[k]);
+                if (isValid) valid++;
+                if (k == points.Length - 1)
+                {
+                    if (isValid) AddCutPoint(camera, toLaser, start, points[k].ScreenPosition, range, mask);
+                    break;
+                }
+                if (!isValid && !Valid(points[k + 1])) continue;
+                for (var i = 0; i <= LineDotsBetween; i++)
+                    AddCutPoint(camera, toLaser, start,
+                        Vector3.Lerp(points[k].ScreenPosition, points[k + 1].ScreenPosition, i / (LineDotsBetween + 1f)), range, mask);
+            }
+            cutLineInfo = $"{points.Length} edge points of the game, {valid} on the {cutTargets.Count} part(s) the cut reaches, {cutPoints.Count} dots";
+            if (!loggedCutLine && cutPoints.Count > 0)
+            {
+                loggedCutLine = true;
+                Plugin.Log.LogInfo($"Splitsaw line: {cutLineInfo}");
+            }
+        }
+
+        private static bool Valid(CuttingController.EdgeDetectionPoint point) =>
+            point.State == CuttingController.EdgeDetectionPoint.PointState.Valid;
+
+        // A dot where the ray through that screen point of the cutter's camera, turned onto the laser, meets a part the
+        // cut reaches.
+        private static void AddCutPoint(Camera camera, Quaternion toLaser, Vector3 start, Vector3 screen, float range, int mask)
+        {
+            var direction = toLaser * camera.ScreenPointToRay(screen).direction;
+            if (!Physics.Raycast(start, direction, out var hit, range, mask)) return;
+            var part = hit.collider.GetComponentInParent<StructurePart>();
+            if (part != null && cutTargets.Contains(part)) cutPoints.Add(hit.point);
         }
 
         private static bool Cast(Vector3 start, Quaternion rotation, out Vector3 end, out RaycastHit hit)
@@ -390,8 +521,26 @@ namespace ShipbreakerVR
             beamMesh.vertices = new[] { new Vector3(-0.5f, 0f, 0f), new Vector3(0.5f, 0f, 0f), new Vector3(0.5f, 1f, 0f), new Vector3(-0.5f, 1f, 0f) };
             beamMesh.colors = new[] { near, near, far, far };
             beamMesh.triangles = new[] { 0, 2, 1, 0, 3, 2 };
-            beamMaterial = VrUtil.OverlayMaterial(LaserColor);
+            beamMaterial = VrUtil.DepthTestedMaterial(LaserColor);
+            tetherBeamMaterial = VrUtil.DepthTestedMaterial(TetherColor);
             tetherMaterial = VrUtil.OverlayMaterial(TetherColor);
+            coreMaterial = VrUtil.DepthTestedMaterial(Color.white);
+
+            // A flat disc of radius 1 facing along z, opaque in the middle and fading to its edge.
+            var dotVertices = new Vector3[DotSegments + 1];
+            var dotColors = new Color[DotSegments + 1];
+            var dotTriangles = new int[DotSegments * 3];
+            dotColors[0] = Color.white;
+            for (var i = 0; i < DotSegments; i++)
+            {
+                var angle = i * 2f * Mathf.PI / DotSegments;
+                dotVertices[i + 1] = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0f);
+                dotColors[i + 1] = new Color(1f, 1f, 1f, 0f);
+                dotTriangles[i * 3] = 0;
+                dotTriangles[i * 3 + 1] = i + 1;
+                dotTriangles[i * 3 + 2] = (i + 1) % DotSegments + 1;
+            }
+            dotMesh = new Mesh { name = "ShipbreakerVR Aim Dot", vertices = dotVertices, colors = dotColors, triangles = dotTriangles };
 
             // A flat ring of radius 1 facing along z.
             var vertices = new Vector3[RingSegments * 2];
@@ -420,22 +569,26 @@ namespace ShipbreakerVR
         public static void Release()
         {
             if (aim != null) Object.Destroy(aim.gameObject);
-            foreach (var o in new Object[] { beamMesh, beamMaterial, ringMesh, tetherMaterial })
+            foreach (var o in new Object[] { beamMesh, beamMaterial, tetherBeamMaterial, ringMesh, tetherMaterial, dotMesh, coreMaterial })
                 if (o != null) Object.Destroy(o);
             aim = null;
             throwOrigin = null;
             beamMesh = null;
             beamMaterial = null;
+            tetherBeamMaterial = null;
             beamTether = secondBeamTether = null;
             ringMesh = null;
             tetherMaterial = null;
+            dotMesh = null;
+            coreMaterial = null;
+            cutPoints.Clear();
         }
 
         // For the F8 dump.
         public static string Describe(Transform head)
         {
             var text = $"aim with hand: option {VrSettings.AimWithHand.Value}{(PatchReport.HandAimWorks ? "" : " (off, patches incomplete)")}, active {Active}, tool {withTool}";
-            if (active) text += $", hand at {VrDiagnostics.Direction(head, aim.transform.position)} {Vector3.Distance(head.position, aim.transform.position):0.00} m, pointing {VrDiagnostics.Direction(head, head.position + aim.transform.forward)}, beam on {beamTarget}";
+            if (active) text += $", hand at {VrDiagnostics.Direction(head, aim.transform.position)} {Vector3.Distance(head.position, aim.transform.position):0.00} m, pointing {VrDiagnostics.Direction(head, head.position + aim.transform.forward)}, beam on {beamTarget}, Splitsaw line {cutLineInfo}";
             return text + "; " + VrHand.Describe() + "; " + VrDualTools.Describe() + CutterModel();
         }
 
