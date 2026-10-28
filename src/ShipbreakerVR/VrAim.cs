@@ -55,8 +55,8 @@ namespace ShipbreakerVR
         private const float DotMinSize = 0.0012f;
         private const float DotMinCore = 0.0005f;
         private const float LineDotSize = 0.002f;
-        // Extra dots on the Splitsaw's line between two neighboring edge points of the game on the same part, so the
-        // dots sit closer together than the game's points (Marc wanted them finer and closer).
+        // Extra dots on the Splitsaw's line between two neighboring edge points of the game, so the dots sit closer
+        // together than the game's points (Marc wanted them finer and closer).
         private const int LineDotsBetween = 2;
         private const float DotLift = 0.03f;
         private const int DotSegments = 16;
@@ -104,6 +104,11 @@ namespace ShipbreakerVR
 
         private static readonly AccessTools.FieldRef<CuttingToolController, CuttingController> CuttingControllerOf =
             AccessTools.FieldRefAccess<CuttingToolController, CuttingController>("m_CuttingController");
+        // The parts the Splitsaw's cut reaches (CuttingController.mTargetBuffer, refreshed with the edge points).
+        private static readonly AccessTools.FieldRef<CuttingController, List<CuttingController.CuttableInfo>> CutTargets =
+            AccessTools.FieldRefAccess<CuttingController, List<CuttingController.CuttableInfo>>("mTargetBuffer");
+        private static readonly HashSet<StructurePart> cutTargets = new HashSet<StructurePart>();
+        private static bool loggedCutLine;
 
         // True while the tools aim from the hand: VR in gameplay, the option on and the tool hand's controller tracked.
         // Settled once per frame (VrFrame).
@@ -408,9 +413,13 @@ namespace ShipbreakerVR
         private static bool Dotted(EquipmentController.Equipment tool) =>
             tool == EquipmentController.Equipment.GrappleHook || tool == EquipmentController.Equipment.CuttingTool;
 
-        // The Splitsaw's line, from the cutter's muzzle along its barrel (start, rotation): the game's edge detection points
-        // that lie on a part the cut reaches (Valid), in screen space of the camera the cutter aimed through when it
-        // looked for targets this frame (CameraFor), turned onto the laser's latest pose and cast again to find the surface.
+        // The Splitsaw's line, from the cutter's muzzle along its barrel (start, rotation). The game looks for its edge
+        // points along the cut line across the whole screen (CuttingController.EdgeDetectionPoints, Valid where they meet
+        // a part the cut reaches); they lie too far apart for a fine line, and a small part may hold only one. So each
+        // stretch between two neighboring points of which one is Valid is sampled LineDotsBetween + 1 times, and a
+        // sample shows a dot where it meets one of the parts the cut reaches (the cutter's targets). The screen points
+        // are in the space of the camera the cutter aimed through this frame (CameraFor), turned onto the laser's
+        // latest pose and cast again to find the surface.
         private static void CutLine(Vector3 start, Quaternion rotation)
         {
             var tool = GameRefs.Cutter;
@@ -419,43 +428,45 @@ namespace ShipbreakerVR
             if (cutter == null || !cutter.AnyValidTargetables) return;
             var points = cutter.EdgeDetectionPoints.Points;
             var camera = CameraFor((int)GameTools.Family.Cutter);
-            if (points == null || camera == null) return;
+            if (points == null || points.Length < 2 || camera == null) return;
+            cutTargets.Clear();
+            foreach (var target in CutTargets(cutter)) cutTargets.Add(target.Component);
             var range = cutter.ActiveCutData.Range * 3f;
             var mask = cutter.RaycastLayerMask;
             var toLaser = rotation * Quaternion.Inverse(camera.transform.rotation);
-            StructurePart previousPart = null;
-            var previous = Vector3.zero;
-            foreach (var point in points)
+            var valid = 0;
+            for (var k = 0; k < points.Length; k++)
             {
-                var at = Vector3.zero;
-                var part = point.State == CuttingController.EdgeDetectionPoint.PointState.Valid
-                    ? CutPart(camera, toLaser, start, point.ScreenPosition, range, mask, out at) : null;
-                if (part == null)
+                var isValid = Valid(points[k]);
+                if (isValid) valid++;
+                if (k == points.Length - 1)
                 {
-                    previousPart = null;
-                    continue;
+                    if (isValid) AddCutPoint(camera, toLaser, start, points[k].ScreenPosition, range, mask);
+                    break;
                 }
-                // Between two points on the same part: more dots, each where its ray meets that part.
-                if (part == previousPart)
-                    for (var i = 1; i <= LineDotsBetween; i++)
-                    {
-                        var between = Vector3.Lerp(previous, point.ScreenPosition, i / (LineDotsBetween + 1f));
-                        if (CutPart(camera, toLaser, start, between, range, mask, out var on) == part) cutPoints.Add(on);
-                    }
-                cutPoints.Add(at);
-                previousPart = part;
-                previous = point.ScreenPosition;
+                if (!isValid && !Valid(points[k + 1])) continue;
+                for (var i = 0; i <= LineDotsBetween; i++)
+                    AddCutPoint(camera, toLaser, start,
+                        Vector3.Lerp(points[k].ScreenPosition, points[k + 1].ScreenPosition, i / (LineDotsBetween + 1f)), range, mask);
+            }
+            if (!loggedCutLine)
+            {
+                loggedCutLine = true;
+                Plugin.Log.LogInfo($"Splitsaw line: {points.Length} edge points of the game, {valid} on the {cutTargets.Count} part(s) the cut reaches, {cutPoints.Count} dots");
             }
         }
 
-        // The part the ray through that screen point of the cutter's camera meets, turned onto the laser, and where.
-        private static StructurePart CutPart(Camera camera, Quaternion toLaser, Vector3 start, Vector3 screen, float range, int mask, out Vector3 point)
+        private static bool Valid(CuttingController.EdgeDetectionPoint point) =>
+            point.State == CuttingController.EdgeDetectionPoint.PointState.Valid;
+
+        // A dot where the ray through that screen point of the cutter's camera, turned onto the laser, meets a part the
+        // cut reaches.
+        private static void AddCutPoint(Camera camera, Quaternion toLaser, Vector3 start, Vector3 screen, float range, int mask)
         {
-            point = Vector3.zero;
             var direction = toLaser * camera.ScreenPointToRay(screen).direction;
-            if (!Physics.Raycast(start, direction, out var hit, range, mask)) return null;
-            point = hit.point;
-            return hit.collider.GetComponentInParent<StructurePart>();
+            if (!Physics.Raycast(start, direction, out var hit, range, mask)) return;
+            var part = hit.collider.GetComponentInParent<StructurePart>();
+            if (part != null && cutTargets.Contains(part)) cutPoints.Add(hit.point);
         }
 
         private static bool Cast(Vector3 start, Quaternion rotation, out Vector3 end, out RaycastHit hit)

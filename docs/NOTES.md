@@ -83,8 +83,11 @@ interacting, the grapple and the "entity of interest".
   Marc found it too big and wanted it to shrink with distance like a real laser dot, so now it has a size in the world
   (radius 6 mm, core 2 mm, times the world scale), at least 0.12 % / 0.05 % of the distance so it stays visible, drawn 3 % of the way towards
   the eye and depth tested, so the surface does not cut into it but the tool in the hand hides it. On the Splitsaw,
-  smaller dots (0.2 % of the distance; 0.35 % at first, Marc wanted them finer and closer, so two more are cast between
-  each two neighboring points on the same part) mark the line it will cut: the game's own edge detection points
+  smaller dots (0.2 % of the distance; 0.35 % at first, Marc wanted them finer and closer) mark the line it will cut, three times as dense
+  as the game's points: each stretch between two neighboring points of which one is Valid is sampled three times, and
+  a sample gets a dot where it meets a part in the cutter's targets (`mTargetBuffer`). A first version only filled in
+  between two Valid points on the same part, which left small parts with a single game point as before. Log
+  `Splitsaw line: N edge points of the game, V on the P part(s) the cut reaches, D dots` once per session. Based on the game's own edge detection points
   (`CuttingController.EdgeDetectionPoints`, screen points across the whole screen width along the cut direction,
   refreshed in `TryGetCutLineTargetables` while anything is targetable, `State == Valid` where the ray meets a part on
   the cut line within 3x the cut range). They are in the screen space of the camera the cutter aimed through
