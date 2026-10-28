@@ -1,7 +1,5 @@
-# Smoke test: head and hands move, the right trigger is pressed, screenshots on the way.
-# Copy into BepInEx\ShipbreakerVR-test\inbox (with Test/Testmodus on); results in ...\results\smoke.
-vr on
-wait 2
+waitlog VR camera attached to 'Main Camera' 180
+wait 5
 head 0 1.7 0 0 0 0
 left -0.2 1.3 0.35 0 0 0
 right 0.2 1.3 0.35 0 0 0
@@ -11,10 +9,13 @@ wait 1
 screenshot start
 dump start
 move head 0 1.7 0 0 45 0 in 2
+wait 0.5
 screenshot head-right
-move head 0 1.7 0 0 0 0 in 1
+dump head-right
+move head 0 1.7 0 -30 0 0 in 1
+wait 0.5
+screenshot head-up
 move right 0.3 1.6 0.5 -30 0 0 in 1
-screenshot right-raised
 press right trigger 0.5
 wait 1
 dump end

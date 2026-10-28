@@ -25,13 +25,13 @@ namespace ShipbreakerVR
     internal static class VrTestXr
     {
         public const string HandlerKey = "ShipbreakerVR.Test.Handler";
-        public const string GetProcKey = "ShipbreakerVR.Test.GetProc";
+        public const string ResolveKey = "ShipbreakerVR.Test.Resolve";
         public const string InstanceKey = "ShipbreakerVR.Test.Instance";
 
         // What the feature hands on; a, b, c are the call's arguments as listed at each case of Handle.
         public enum Call { LocateViews, LocateSpace, CreateReferenceSpace, CreateActionSpace, SuggestBindings, StateBoolean, StateFloat, StateVector2, StatePose, SyncActions }
 
-        public static bool Hooked => AppDomain.CurrentDomain.GetData(GetProcKey) is IntPtr p && p != IntPtr.Zero;
+        public static bool Hooked => AppDomain.CurrentDomain.GetData(ResolveKey) is Func<ulong, string, IntPtr>;
 
         // OpenXR, 64 bit: offsets into the structures the calls fill.
         private const int ViewSize = 64, ViewPoseOffset = 16, ViewStateFlagsOffset = 16;
@@ -60,7 +60,10 @@ namespace ShipbreakerVR
 
         public enum Device { Head, Left, Right }
 
-        private static readonly object Gate = new object();
+        // What the hooks learn while Unity sets OpenXR up (spaces, bindings, path names) is kept in AppDomain data, with
+        // the lock, so a plugin reloaded later (F6) still knows it: the setup does not happen again.
+        private static readonly object[] Shared = SharedState();
+        private static readonly object Gate = Shared[0];
         private static readonly Pose?[] Poses = new Pose?[3];
         // Inputs by their path without the hand, e.g. "input/trigger/value"; per hand. A stick has two values.
         private static readonly Dictionary<string, float[]>[] Inputs = { null, new Dictionary<string, float[]>(), new Dictionary<string, float[]>() };
@@ -72,15 +75,12 @@ namespace ShipbreakerVR
         private static readonly Pose?[] Reported = new Pose?[5];
 
         // Spaces: the head (view space), and per action space its action and hand.
-        private static readonly HashSet<ulong> ViewSpaces = new HashSet<ulong>();
-        private static readonly Dictionary<ulong, (ulong Action, ulong Subaction)> ActionSpaces = new Dictionary<ulong, (ulong, ulong)>();
+        private static readonly HashSet<ulong> ViewSpaces = (HashSet<ulong>)Shared[1];
+        private static readonly Dictionary<ulong, (ulong Action, ulong Subaction)> ActionSpaces = (Dictionary<ulong, (ulong, ulong)>)Shared[2];
         // Per action, the inputs it is bound to (full paths), from the suggested bindings of every profile.
-        private static readonly Dictionary<ulong, List<string>> Bindings = new Dictionary<ulong, List<string>>();
-        private static readonly Dictionary<ulong, string> PathNames = new Dictionary<ulong, string>();
+        private static readonly Dictionary<ulong, List<string>> Bindings = (Dictionary<ulong, List<string>>)Shared[3];
+        private static readonly Dictionary<ulong, string> PathNames = (Dictionary<ulong, string>)Shared[4];
         private static readonly Dictionary<(ulong, ulong), float> LastSent = new Dictionary<(ulong, ulong), float>();
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetInstanceProcAddrFn(ulong instance, [MarshalAs(UnmanagedType.LPStr)] string name, out IntPtr function);
 
         [UnmanagedFunctionPointer(CallingConvention.Winapi)]
         private delegate int PathToStringFn(ulong instance, ulong path, uint capacity, out uint count, IntPtr buffer);
@@ -88,6 +88,18 @@ namespace ShipbreakerVR
         private static PathToStringFn pathToString;
         private static Action<int, IntPtr, IntPtr, IntPtr> handler;
         private static int errors;
+
+        private static object[] SharedState()
+        {
+            const string key = "ShipbreakerVR.Test.State";
+            if (AppDomain.CurrentDomain.GetData(key) is object[] state) return state;
+            state = new object[]
+            {
+                new object(), new HashSet<ulong>(), new Dictionary<ulong, (ulong, ulong)>(), new Dictionary<ulong, List<string>>(), new Dictionary<ulong, string>(),
+            };
+            AppDomain.CurrentDomain.SetData(key, state);
+            return state;
+        }
 
         public static bool Active
         {
@@ -97,6 +109,7 @@ namespace ShipbreakerVR
             }
         }
 
+        // Before OpenXR starts (VrXr), so the hooks see Unity's setup, and from the test scripts after a reload.
         public static void Register()
         {
             if (handler != null) return;
@@ -353,9 +366,8 @@ namespace ShipbreakerVR
                 if (PathNames.TryGetValue(path, out var known)) return known;
             if (pathToString == null)
             {
-                if (!(AppDomain.CurrentDomain.GetData(GetProcKey) is IntPtr getProcPtr) || getProcPtr == IntPtr.Zero) return null;
-                var getProc = Marshal.GetDelegateForFunctionPointer<GetInstanceProcAddrFn>(getProcPtr);
-                if (getProc(instance, "xrPathToString", out var fn) != 0 || fn == IntPtr.Zero) return null;
+                var fn = Resolve(instance, "xrPathToString");
+                if (fn == IntPtr.Zero) return null;
                 pathToString = Marshal.GetDelegateForFunctionPointer<PathToStringFn>(fn);
             }
             var buffer = Marshal.AllocHGlobal(256);
@@ -386,12 +398,16 @@ namespace ShipbreakerVR
             if (PathNames.ContainsValue(name)) return;
             if (stringToPath == null)
             {
-                var getProc = Marshal.GetDelegateForFunctionPointer<GetInstanceProcAddrFn>((IntPtr)AppDomain.CurrentDomain.GetData(GetProcKey));
-                if (getProc(instance, "xrStringToPath", out var fn) != 0 || fn == IntPtr.Zero) return;
+                var fn = Resolve(instance, "xrStringToPath");
+                if (fn == IntPtr.Zero) return;
                 stringToPath = Marshal.GetDelegateForFunctionPointer<StringToPathFn>(fn);
             }
             if (stringToPath(instance, name, out var path) == 0) PathNames[path] = name;
         }
+
+        // A runtime function, through the xrGetInstanceProcAddr the feature was handed.
+        private static IntPtr Resolve(ulong instance, string function) =>
+            AppDomain.CurrentDomain.GetData(ResolveKey) is Func<ulong, string, IntPtr> resolve ? resolve(instance, function) : IntPtr.Zero;
 
         // Unity's axes are OpenXR's with z mirrored.
         private static void WritePose(IntPtr at, Pose pose)
@@ -415,9 +431,6 @@ namespace ShipbreakerVR
     internal class VrTestFeature : OpenXRFeature
     {
         [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetInstanceProcAddrFn(ulong instance, IntPtr name, IntPtr function);
-
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
         private delegate int LocateViewsFn(ulong session, IntPtr locateInfo, IntPtr viewState, uint capacity, IntPtr count, IntPtr views);
 
         [UnmanagedFunctionPointer(CallingConvention.Winapi)]
@@ -433,7 +446,7 @@ namespace ShipbreakerVR
         private delegate int ActionStateFn(ulong session, IntPtr getInfo, IntPtr state);
 
         // Static: the runtime calls them for as long as the instance lives.
-        private static GetInstanceProcAddrFn originalGetProc, hookedGetProc;
+        private static VrXr.GetInstanceProcAddrFn originalGetProc, hookedGetProc;
         private static LocateViewsFn originalLocateViews, hookedLocateViews;
         private static LocateSpaceFn originalLocateSpace, hookedLocateSpace;
         private static CreateSpaceFn originalReferenceSpace, hookedReferenceSpace, originalActionSpace, hookedActionSpace;
@@ -442,9 +455,9 @@ namespace ShipbreakerVR
 
         protected override IntPtr HookGetInstanceProcAddr(IntPtr func)
         {
-            originalGetProc = Marshal.GetDelegateForFunctionPointer<GetInstanceProcAddrFn>(func);
+            originalGetProc = Marshal.GetDelegateForFunctionPointer<VrXr.GetInstanceProcAddrFn>(func);
             hookedGetProc = GetInstanceProcAddr;
-            AppDomain.CurrentDomain.SetData(VrTestXr.GetProcKey, func);
+            AppDomain.CurrentDomain.SetData(VrTestXr.ResolveKey, (Func<ulong, string, IntPtr>)Resolve);
             Plugin.Log.LogInfo("Test input: OpenXR feature hooked xrGetInstanceProcAddr");
             return Marshal.GetFunctionPointerForDelegate(hookedGetProc);
         }
@@ -453,6 +466,22 @@ namespace ShipbreakerVR
         {
             AppDomain.CurrentDomain.SetData(VrTestXr.InstanceKey, xrInstance);
             return true;
+        }
+
+        private static IntPtr Resolve(ulong instance, string function)
+        {
+            var name = Marshal.StringToHGlobalAnsi(function);
+            var result = Marshal.AllocHGlobal(IntPtr.Size);
+            try
+            {
+                Marshal.WriteIntPtr(result, IntPtr.Zero);
+                return originalGetProc(instance, name, result) == 0 ? Marshal.ReadIntPtr(result) : IntPtr.Zero;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(name);
+                Marshal.FreeHGlobal(result);
+            }
         }
 
         private static void Hand(VrTestXr.Call call, IntPtr a, IntPtr b, IntPtr c)

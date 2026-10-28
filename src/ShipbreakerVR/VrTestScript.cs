@@ -33,9 +33,11 @@ namespace ShipbreakerVR
     //   vr on|off                          starts or stops VR (F3)
     //   recenter                           centers the view (F4)
     //   config SECTION/KEY VALUE           changes a setting, e.g. config Steuerung/Klettern false
-    //   screenshot NAME                    saves the game window (the headset's mirror) and the UI texture
+    //   screenshot NAME                    saves each eye's image (with alternate eyes), the game window and the UI texture
     //   dump [LABEL]                       writes what is drawn around the player (as F8) and the runtime's poses
     //   log TEXT                           writes TEXT into the log
+    //   quit                               quits the game
+    //   restart                            quits the game and starts it again (for changes to the OpenXR setup)
     internal static class VrTestScript
     {
         static VrTestScript() => VrSession.OnUnload("test scripts", () => Finish("unloaded"));
@@ -266,6 +268,12 @@ namespace ShipbreakerVR
                 case "log":
                     Plugin.Log.LogInfo($"Test {name}: {line.Substring(words[0].Length).Trim()}");
                     return;
+                case "quit":
+                case "restart":
+                    Finish(command == "quit" ? "quits the game" : "restarts the game");
+                    if (command == "restart") Relaunch();
+                    Application.Quit();
+                    return;
                 default:
                     throw new FormatException($"unknown command '{words[0]}'");
             }
@@ -348,6 +356,20 @@ namespace ShipbreakerVR
             var pose = VrTestXr.GetPose(device);
             if (pose.HasValue) return pose.Value;
             return new VrTestXr.Pose(device == VrTestXr.Device.Head ? new Vector3(0f, 1.7f, 0f) : new Vector3(device == VrTestXr.Device.Left ? -0.2f : 0.2f, 1.3f, 0.3f), Quaternion.identity);
+        }
+
+        // A new game process, through Steam (started directly, the game quits again without Steam), once this one has had
+        // time to quit (the game runs only once at a time).
+        private static void Relaunch()
+        {
+            const string url = "steam://rungameid/1161580";
+            var start = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c timeout /t 20 /nobreak >nul & start \"\" \"{url}\"")
+            {
+                CreateNoWindow = true,
+                UseShellExecute = false,
+            };
+            System.Diagnostics.Process.Start(start);
+            Plugin.Log.LogInfo($"Test: the game starts again in 20 s ({url})");
         }
 
         private static void SetConfig(string key, string value)

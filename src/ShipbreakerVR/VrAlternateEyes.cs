@@ -160,6 +160,9 @@ namespace ShipbreakerVR
         }
 
         // The eye's saved image, made again (and not current) when the target's size or format changed.
+        // The eye's last rendered image (null while alternate eyes is off), for test screenshots.
+        public static RenderTexture EyeImage(int eye) => savedValid[eye] ? saved[eye] : null;
+
         private static RenderTexture Saved(int eye, RenderTextureDescriptor target)
         {
             var copy = saved[eye];
@@ -303,19 +306,17 @@ namespace ShipbreakerVR
     // enabled; without a handler, or with the option off, it hands every frame on unchanged.
     internal class VrAlternateEyesFeature : OpenXRFeature
     {
-        [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-        private delegate int GetInstanceProcAddrFn(ulong instance, IntPtr name, IntPtr function);
 
         [UnmanagedFunctionPointer(CallingConvention.Winapi)]
         private delegate int EndFrameFn(ulong session, IntPtr frameEndInfo);
 
         // Static: the runtime calls them for as long as the instance lives.
-        private static GetInstanceProcAddrFn originalGetProc, hookedGetProc;
+        private static VrXr.GetInstanceProcAddrFn originalGetProc, hookedGetProc;
         private static EndFrameFn originalEndFrame, hookedEndFrame;
 
         protected override IntPtr HookGetInstanceProcAddr(IntPtr func)
         {
-            originalGetProc = Marshal.GetDelegateForFunctionPointer<GetInstanceProcAddrFn>(func);
+            originalGetProc = Marshal.GetDelegateForFunctionPointer<VrXr.GetInstanceProcAddrFn>(func);
             hookedGetProc = GetInstanceProcAddr;
             Plugin.Log.LogInfo("Alternate eyes: OpenXR feature hooked xrGetInstanceProcAddr");
             return Marshal.GetFunctionPointerForDelegate(hookedGetProc);

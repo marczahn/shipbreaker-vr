@@ -29,6 +29,12 @@ namespace ShipbreakerVR
 
         public static bool IsRunning { get; private set; }
 
+        // xrGetInstanceProcAddr, for the features that hook it (VrAlternateEyesFeature, VrTestFeature). One type for
+        // all of them: Unity hands each feature the pointer the one before returned, and for a pointer Mono made from a
+        // managed delegate, GetDelegateForFunctionPointer returns that delegate, which only casts to its own type.
+        [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.Winapi)]
+        public delegate int GetInstanceProcAddrFn(ulong instance, IntPtr name, IntPtr function);
+
         // After a reload (ScriptEngine, F6) the XR settings from the AssetBundle are still loaded, and OpenXR may still run
         // for the previous instance; the AssetBundle cannot be loaded a second time. Takes both over. True if the
         // settings were already loaded, i.e. this is not the first instance in this game session.
@@ -67,6 +73,7 @@ namespace ShipbreakerVR
             }
 
             var manager = XRGeneralSettings.Instance.Manager;
+            if (manager.activeLoader == null && VrSettings.TestMode.Value) VrTestXr.Register();
             if (manager.activeLoader == null) VrTestRuntime.Select();
             if (manager.activeLoader == null) manager.InitializeLoaderSync();
             if (manager.activeLoader == null)
