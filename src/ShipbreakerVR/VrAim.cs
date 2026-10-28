@@ -54,7 +54,10 @@ namespace ShipbreakerVR
         private const float DotCore = 0.002f;
         private const float DotMinSize = 0.0012f;
         private const float DotMinCore = 0.0005f;
-        private const float LineDotSize = 0.0035f;
+        private const float LineDotSize = 0.002f;
+        // Extra dots on the Splitsaw's line between two neighboring edge points of the game on the same part, so the
+        // dots sit closer together than the game's points (Marc wanted them finer and closer).
+        private const int LineDotsBetween = 2;
         private const float DotLift = 0.03f;
         private const int DotSegments = 16;
 
@@ -418,13 +421,41 @@ namespace ShipbreakerVR
             var camera = CameraFor((int)GameTools.Family.Cutter);
             if (points == null || camera == null) return;
             var range = cutter.ActiveCutData.Range * 3f;
+            var mask = cutter.RaycastLayerMask;
             var toLaser = rotation * Quaternion.Inverse(camera.transform.rotation);
+            StructurePart previousPart = null;
+            var previous = Vector3.zero;
             foreach (var point in points)
             {
-                if (point.State != CuttingController.EdgeDetectionPoint.PointState.Valid) continue;
-                var direction = toLaser * camera.ScreenPointToRay(point.ScreenPosition).direction;
-                if (Physics.Raycast(start, direction, out var hit, range, cutter.RaycastLayerMask)) cutPoints.Add(hit.point);
+                var at = Vector3.zero;
+                var part = point.State == CuttingController.EdgeDetectionPoint.PointState.Valid
+                    ? CutPart(camera, toLaser, start, point.ScreenPosition, range, mask, out at) : null;
+                if (part == null)
+                {
+                    previousPart = null;
+                    continue;
+                }
+                // Between two points on the same part: more dots, each where its ray meets that part.
+                if (part == previousPart)
+                    for (var i = 1; i <= LineDotsBetween; i++)
+                    {
+                        var between = Vector3.Lerp(previous, point.ScreenPosition, i / (LineDotsBetween + 1f));
+                        if (CutPart(camera, toLaser, start, between, range, mask, out var on) == part) cutPoints.Add(on);
+                    }
+                cutPoints.Add(at);
+                previousPart = part;
+                previous = point.ScreenPosition;
             }
+        }
+
+        // The part the ray through that screen point of the cutter's camera meets, turned onto the laser, and where.
+        private static StructurePart CutPart(Camera camera, Quaternion toLaser, Vector3 start, Vector3 screen, float range, int mask, out Vector3 point)
+        {
+            point = Vector3.zero;
+            var direction = toLaser * camera.ScreenPointToRay(screen).direction;
+            if (!Physics.Raycast(start, direction, out var hit, range, mask)) return null;
+            point = hit.point;
+            return hit.collider.GetComponentInParent<StructurePart>();
         }
 
         private static bool Cast(Vector3 start, Quaternion rotation, out Vector3 end, out RaycastHit hit)
