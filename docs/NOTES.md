@@ -572,7 +572,16 @@ No joints. Until 0.21 the hand was pulled onto its hold within one step (a deadb
 every step (up to 8 m/s per step by the hold and nearly as much back by the collision, the hand up to 16 cm off its
 hold): the view shook, the ship got the contact impulses, and letting go flew off at the bounce's speed (4 to 6 m/s).
 With two hands at two spots of the hull the hands stayed up to 35 cm off their holds, and letting go of one pulled the
-body to the other in one step. Head turns were not the cause (rig shift under 2 mm per frame). Its share follows the masses; the station's static layer (27,
+body to the other in one step. Head turns were not the cause (rig shift under 2 mm per frame).
+The soft pull alone still fought something that was not a collision (no contacts on the player's body, yet the body's
+velocity was taken back each step): the game's squishy collide (`PlayerMotion.HandleSquishyCollide`, each physics step)
+casts a ray along the player's velocity and, with a surface within `m_SquishyCollideRange`, pushes the body off it and
+turns its velocity aside (unless the surface's body is light enough to move); each time it starts it plays the
+material's `SquishyCollide` sound (the crackling), spawns its effect and posts a camera shake (`CameraShakeController`
+moves the helmet, which the VR camera follows). A hand pulling the body towards the hull triggers it all the time, so
+while a hand holds on it is off (`PlayerMotion.SetSquishyCollide(false)`, the game's own switch for noclip), and back to
+its previous state once the last hand lets go. The auto brake (`HandleAutoBrake`, 1 m/s² against the velocity when not
+thrusting) stays; it showed up as at most 20 mm/s per step in the trace. Its share follows the masses; the station's static layer (27,
 `InStaticLayer`), kinematic bodies and masses above `GrabController.RawGrabbedMassRange` count as immovable, as in the
 game's `RigidbodyUtils.MassRatio`. Off the center of mass the part's effective mass along the push is used, which
 includes its turning. Two hands share the player's mass (and a part both hold, its mass). The controllers are measured

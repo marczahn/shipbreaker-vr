@@ -5,11 +5,9 @@ namespace ShipbreakerVR
     // Measures holding on (VrClimb) for a test build, to find out why the view gets unsteady and why a held part gains
     // momentum. While a hand holds on, a line "Climbing trace:" every half second sums up the physics steps and frames
     // since the last one; letting go of the last hold logs the parts' speed against when they were taken. Only logs,
-    // changes nothing (but for a probe on the player's body that counts its collisions while holding on).
+    // changes nothing.
     internal static class VrClimbTrace
     {
-        static VrClimbTrace() => VrSession.OnUnload("climbing trace", RemoveProbe);
-
         private const float Period = 0.5f;
         private const int MaxLines = 400;
 
@@ -26,10 +24,6 @@ namespace ShipbreakerVR
         private static readonly bool[] HasLocal = new bool[2];
         // The controller's smoothed speed against the body, as VrClimb uses it, in m/s.
         private static readonly Stat[] HandSpeed = { new Stat(), new Stat() };
-        // Collisions of the player's body (ContactProbe): their impulses in N s, and the largest one's other body.
-        private static readonly Stat ContactImpulse = new Stat(1f);
-        private static string contactWith;
-        private static ContactProbe probe;
         // The velocity change VrClimb gave the body in a step, and the one something else gave it since the step before
         // (the game's thrust, brake or drag, collisions), in m/s.
         private static readonly Stat ClimbChange = new Stat();
@@ -89,10 +83,9 @@ namespace ShipbreakerVR
         public static bool Active => lines < MaxLines;
 
         // The first hand took hold.
-        public static void Start(Rigidbody player, Rigidbody body, bool movable)
+        public static void Start(Rigidbody body, bool movable)
         {
             if (!Active) return;
-            if (probe == null && player != null) probe = player.gameObject.AddComponent<ContactProbe>();
             ClearPeriod();
             hasVelocitySet = false;
             hasRigOffset = false;
@@ -178,29 +171,7 @@ namespace ShipbreakerVR
                     + $"spin {partSpinAtHold.magnitude * Mathf.Rad2Deg:0.0} -> {part.angularVelocity.magnitude * Mathf.Rad2Deg:0.0} deg/s";
             Write(text);
             part = null;
-            RemoveProbe();
             ClearPeriod();
-        }
-
-        private static void RemoveProbe()
-        {
-            if (probe != null) Object.Destroy(probe);
-            probe = null;
-        }
-
-        private static void Contact(Collision collision)
-        {
-            if (!Active) return;
-            var impulse = collision.impulse.magnitude;
-            if (impulse > ContactImpulse.Max) contactWith = collision.rigidbody != null ? collision.rigidbody.name : collision.collider.name;
-            ContactImpulse.Add(impulse);
-        }
-
-        // On the player's body while a hand holds on: Unity calls a body's collision callbacks on its own game object.
-        private class ContactProbe : MonoBehaviour
-        {
-            private void OnCollisionEnter(Collision collision) => Contact(collision);
-            private void OnCollisionStay(Collision collision) => Contact(collision);
         }
 
         private static void Log(Rigidbody player)
@@ -208,7 +179,7 @@ namespace ShipbreakerVR
             if (steps == 0 && frames == 0) return;
             var text = $"Climbing trace: {steps} steps, {frames} frames; hand off its hold mm avg/max L {HandError[0]} R {HandError[1]}; "
                 + $"controller motion mm/step L {HandMotion[0]} R {HandMotion[1]}; hand speed mm/s L {HandSpeed[0]} R {HandSpeed[1]}; "
-                + $"contacts {ContactImpulse.Count}, impulse N s avg/max {ContactImpulse}{(ContactImpulse.Count > 0 ? $" ('{contactWith}')" : "")}; body dv mm/s per step: climbing {ClimbChange}, other {OtherChange}; "
+                + "body dv mm/s per step: climbing {ClimbChange}, other {OtherChange}; "
                 + $"rig vs body mm/frame {RigShift}, body turn deg/frame {BodyTurn}, interpolation lag mm {InterpolationLag}";
             if (player != null) text += $"; body {player.velocity.magnitude:0.00} m/s";
             if (part != null)
@@ -230,7 +201,6 @@ namespace ShipbreakerVR
             foreach (var stat in HandError) stat.Clear();
             foreach (var stat in HandMotion) stat.Clear();
             foreach (var stat in HandSpeed) stat.Clear();
-            ContactImpulse.Clear();
             ClimbChange.Clear();
             OtherChange.Clear();
             RigShift.Clear();

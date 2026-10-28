@@ -14,6 +14,10 @@ namespace ShipbreakerVR
     // player along it; a light part comes to the hand instead. With both hands holding, each pulls with half the player's
     // mass, so the body settles between them and hand over hand climbs. Letting go keeps the speed the hands gave the
     // body, so a push off flies on. While the left hand holds on, controller flying rests (VrControls).
+    // While a hand holds on, the game's squishy collide is off (PlayerMotion.HandleSquishyCollide): moving towards a
+    // surface within its range it pushes the body away and turns its velocity aside, and each time it starts it plays a
+    // crackling sound of the surface's material, spawns an effect and shakes the camera. Pulled towards the hull by the
+    // hand, the body fought it every step: the hand stayed centimeters off its hold, the view shook and the sound crackled.
     // The grip always holds on, also at the game's controls (airlock consoles, panels); working them is A or X, as Marc
     // asked (VrToolInput).
     // Each physics step (VrCamera.FixedUpdate) the player's velocity, and the thing's at the hold, is set by an impulse
@@ -46,6 +50,9 @@ namespace ShipbreakerVR
 
         private static readonly AccessTools.FieldRef<GrabController, Rigidbody> PlayerBody =
             AccessTools.FieldRefAccess<GrabController, Rigidbody>("m_PlayerRigidbodyReference");
+
+        private static readonly AccessTools.FieldRef<PlayerMotion, bool> SquishyCollide =
+            AccessTools.FieldRefAccess<PlayerMotion, bool>("m_SquishyCollideEnabled");
 
         private static readonly System.Reflection.MethodInfo RawGrabbedMassRange =
             AccessTools.PropertyGetter(typeof(GrabController), "RawGrabbedMassRange");
@@ -90,6 +97,10 @@ namespace ShipbreakerVR
 
         private static GrabController grab;
         private static Rigidbody player;
+        private static PlayerMotion motion;
+        // Squishy collide as it was before the first hand took hold, while it is off for holding on.
+        private static bool squishyWas;
+        private static bool squishyOff;
         private static float nextSearch;
         // Where the body was when the rig was placed last (RigPlaced).
         private static Vector3 bodyAtRig;
@@ -142,9 +153,10 @@ namespace ShipbreakerVR
                 nextSearch = Time.unscaledTime + 1f;
                 grab = GameRefs.Grab;
                 player = grab != null ? PlayerBody(grab) : null;
+                motion = player != null ? player.GetComponent<PlayerMotion>() : null;
                 rigPlaced = false;
                 if (player != null && logs++ < 80)
-                    Plugin.Log.LogInfo($"Climbing: player body '{player.name}', {player.mass:0.#} kg, interpolation {player.interpolation}");
+                    Plugin.Log.LogInfo($"Climbing: player body '{player.name}', {player.mass:0.#} kg, interpolation {player.interpolation}, {(motion != null ? "PlayerMotion found" : "no PlayerMotion")}");
             }
             return player != null && rigPlaced;
         }
@@ -205,7 +217,8 @@ namespace ShipbreakerVR
             hand.Velocity = Vector3.zero;
             hand.LastLocal = hand.Local;
             hand.LastLocalTime = Time.fixedTime;
-            if (first) VrClimbTrace.Start(player, body, hand.Movable);
+            if (first) SquishyOff();
+            if (first) VrClimbTrace.Start(body, hand.Movable);
             else VrClimbTrace.TakePart(body, hand.Movable);
             hand.Input.Buzz(0.5f, 0.06f);
             if (logs++ < 80)
@@ -353,9 +366,26 @@ namespace ShipbreakerVR
             var speed = Vector3.ClampMagnitude(pushOff, MaxPushOff * VrCamera.WorldScale);
             if (push && last && player != null) player.velocity = holdVelocity + speed;
             if (last) VrClimbTrace.End(player, reason, holdVelocity + speed, push && player != null);
+            if (last) SquishyBack();
             if (logs++ < 80)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand lets go ({reason}){(push && last ? $", flies on at {speed.magnitude:0.00} m/s" : "")}");
             if (last) pushOff = Vector3.zero;
+        }
+
+        private static void SquishyOff()
+        {
+            if (motion == null || squishyOff) return;
+            squishyWas = SquishyCollide(motion);
+            motion.SetSquishyCollide(false);
+            squishyOff = true;
+            if (logs++ < 80) Plugin.Log.LogInfo($"Climbing: squishy collide off while holding on (was {(squishyWas ? "on" : "off")})");
+        }
+
+        private static void SquishyBack()
+        {
+            if (!squishyOff) return;
+            squishyOff = false;
+            if (motion != null) motion.SetSquishyCollide(squishyWas);
         }
 
         private static void LetGoAll()
