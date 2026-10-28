@@ -155,8 +155,8 @@ namespace ShipbreakerVR
                 "How far you and a light part move depends on both masses.");
 
             UprightBody = Bind("Steuerung", "OberkoerperAufrecht", true,
-                ("Your body stays upright and keeps its heading while you look around, so the shoulders stay put and the hands reach the controllers the same way wherever you look. It turns after your head once you turn more than a little. Off: the body turns with every look, as before.",
-                    "Dein Körper bleibt aufrecht und behält seine Richtung, während du dich umschaust: Die Schultern bleiben, wo sie sind, und die Hände reichen gleich weit, egal wohin du schaust. Drehst du dich weiter, dreht er sich nach. Aus: Der Körper dreht sich wie bisher mit jedem Blick mit."));
+                ("Your body stays upright and faces your hands while you look around, and follows your head when you lean, so the hands reach the controllers the same way wherever you look. Off: the body turns with every look and stays put when you lean, as before.",
+                    "Dein Körper bleibt aufrecht und zu deinen Händen gewandt, während du dich umschaust, und geht mit, wenn du dich vorbeugst: Die Hände reichen gleich weit, egal wohin du schaust. Aus: Der Körper dreht sich wie bisher mit jedem Blick mit und bleibt stehen, wenn du dich vorbeugst."));
 
             Diagnostics = Bind("Debug", "Diagnose", false,
                 "For finding problems: Tasten/Diagnose (F8) writes what is drawn around the player into the log and saves screenshots next to it (also on its own 6 s after entering the Hab), load screens are logged frame by frame, and frame times are logged every 30 s.");

@@ -5,24 +5,30 @@ namespace ShipbreakerVR
 {
     // The player model hangs on the game's body, and VrBody turns that body with the whole head (heading, pitch and roll)
     // around the eye: the shoulders swung around the eye with every look, about 20 cm below it, while the controllers
-    // stayed put, so the arms' reach changed with the head (issue #37). Here, after the animation and before the arms are
-    // bent (VrFrame), the model is turned back upright around its neck: it keeps only a heading of its own in tracking
-    // space, which follows the head's heading with a dead zone (Follow), as a body stays put while the head looks around.
-    // Only the model turns: the body, the camera and the game's aiming stay as they are. The hips are turned, the root of
-    // the humanoid skeleton, which the animator sets again every frame; the neck is turned back, so the head stays at the
-    // eye as before.
+    // stayed put, so the arms' reach changed with the head (issue #37). The body also stays where the game puts it while
+    // the tracked head moves away from that spot (leaning, looking down moves the eyes forward), so the shoulders stayed
+    // behind. Here, after the animation and before the arms are bent (VrFrame), the model is turned upright around its
+    // neck onto a heading of its own in tracking space (Follow), and moved so that its neck sits below the tracked head
+    // as it sits below the game camera. Only the model moves: the body, the camera and the game's aiming stay as they
+    // are. The hips are moved, the root of the humanoid skeleton, which the animator sets again every frame; the neck is
+    // turned back, so the head keeps its angle to the eye.
     internal static class VrTorso
     {
         static VrTorso() => VrSession.OnUnload("torso", Release);
 
         // How long the model takes to turn between the game's pose and the upright one.
         private const float Blend = 0.3f;
-        // How far the head turns away from the body before it takes the body along, in degrees.
-        public const float DeadZone = 40f;
-        // Beyond this angle the body slowly turns after the head, so that it faces the same way again after a real turn.
+        // How far the body's heading may stay away from the head's, in degrees.
+        public const float DeadZone = 60f;
+        // Within this angle of where it is heading for, the body stays put.
         public const float FollowFrom = 10f;
         // How fast it turns after it: the share of the angle beyond FollowFrom per second (exponential).
         public const float CatchUp = 1.5f;
+        // The body heads where the hands are, in front of the head, once their middle is this far from the head
+        // (meters, horizontally); otherwise where the head looks.
+        private const float HandsFrom = 0.15f;
+        // The most the model moves to the tracked head, in meters of the model; beyond that it stays where the game has it.
+        private const float MostShift = 0.6f;
 
         private static Animator animator;
         private static Transform hips;
@@ -56,13 +62,14 @@ namespace ShipbreakerVR
             if (active != applied)
             {
                 applied = active;
-                Plugin.Log.LogInfo($"Torso: {(active ? "upright, turned around the neck" : "back to the game")}");
+                Plugin.Log.LogInfo($"Torso: {(active ? "upright, turned around the neck, the neck below the tracked head" : "back to the game")}");
             }
             if (vr == null || camera == null) return;
 
             if (HeadingOf(vr.HeadRotation, out var head))
             {
-                heading = headingKnown ? Follow(heading, head, Time.unscaledDeltaTime) : head;
+                var toward = HandsHeading(vr.transform.localPosition, head, out var hands) ? hands : head;
+                heading = headingKnown ? Follow(heading, head, toward, Time.unscaledDeltaTime) : head;
                 headingKnown = true;
             }
             if (weight <= 0f || !found || hips == null || neck == null)
@@ -79,7 +86,14 @@ namespace ShipbreakerVR
             animatedRotation = hips.localRotation;
             var pivot = neck.position;
             var neckRotation = neck.rotation;
-            hips.SetPositionAndRotation(pivot + turn * (hips.position - pivot), turn * hips.rotation);
+            var shift = Vector3.zero;
+            if (VrToolModels.TrackingToWorld(vr.transform.localPosition, vr.HeadRotation, out var eye, out var eyeRotation))
+            {
+                // The neck below the tracked head as it is below the game camera now.
+                var wantedNeck = eye + eyeRotation * camera.transform.InverseTransformPoint(pivot);
+                shift = Vector3.ClampMagnitude(wantedNeck - pivot, MostShift) * weight;
+            }
+            hips.SetPositionAndRotation(pivot + turn * (hips.position - pivot) + shift, turn * hips.rotation);
             // The neck and the head on it stay as the game had them, at the eye: only the body below turns.
             neck.rotation = neckRotation;
             setPosition = hips.localPosition;
@@ -88,21 +102,32 @@ namespace ShipbreakerVR
             Correction = turn;
         }
 
-        // The heading the body keeps, in degrees around the tracking space's up axis: within DeadZone of the head's, and
-        // beyond FollowFrom slowly turning after it. Plain numbers, for the tests.
-        public static float Follow(float body, float head, float deltaTime)
+        // The heading the body keeps, in degrees around the tracking space's up axis: it turns towards where it is heading
+        // for (toward: the hands, or the head) once that is more than FollowFrom away, and never stays more than DeadZone
+        // away from the head's. Plain numbers, for the tests.
+        public static float Follow(float body, float head, float toward, float deltaTime)
         {
-            var diff = Wrap(head - body);
-            var sign = diff < 0f ? -1f : 1f;
+            var diff = Wrap(toward - body);
             var off = System.Math.Abs(diff);
-            if (off > DeadZone)
-            {
-                body += sign * (off - DeadZone);
-                off = DeadZone;
-            }
-            var beyond = off - FollowFrom;
-            if (beyond > 0f) body += sign * beyond * (1f - (float)System.Math.Exp(-CatchUp * deltaTime));
+            if (off > FollowFrom)
+                body += (diff < 0f ? -1f : 1f) * (off - FollowFrom) * (1f - (float)System.Math.Exp(-CatchUp * deltaTime));
+            var fromHead = Wrap(body - head);
+            if (fromHead > DeadZone) body = head + DeadZone;
+            else if (fromHead < -DeadZone) body = head - DeadZone;
             return Wrap(body);
+        }
+
+        // Where the middle between the hands lies from the head, in tracking space, if both are tracked, far enough
+        // from the head and not behind it (reaching over the shoulder for a tool).
+        private static bool HandsHeading(Vector3 head, float headHeading, out float angle)
+        {
+            angle = 0f;
+            if (!VrInput.Left.TryGetPosition(out var left) || !VrInput.Right.TryGetPosition(out var right)) return false;
+            var middle = (left + right) * 0.5f - head;
+            middle.y = 0f;
+            if (middle.magnitude < HandsFrom) return false;
+            angle = Mathf.Atan2(middle.x, middle.z) * Mathf.Rad2Deg;
+            return System.Math.Abs(Wrap(angle - headHeading)) < 90f;
         }
 
         // An angle in (-180, 180].

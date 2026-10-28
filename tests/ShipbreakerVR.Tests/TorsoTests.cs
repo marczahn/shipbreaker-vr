@@ -5,36 +5,40 @@ namespace ShipbreakerVR.Tests
     public class TorsoTests
     {
         [Fact]
-        public void BodyKeepsItsHeadingWhileTheHeadLooksAroundALittle()
+        public void BodyKeepsItsHeadingNearWhereItHeadsFor()
         {
-            Assert.Equal(0f, VrTorso.Follow(0f, VrTorso.FollowFrom - 1f, 1f), 3);
-            Assert.Equal(0f, VrTorso.Follow(0f, -(VrTorso.FollowFrom - 1f), 1f), 3);
+            Assert.Equal(0f, VrTorso.Follow(0f, 0f, VrTorso.FollowFrom - 1f, 1f), 3);
+            Assert.Equal(0f, VrTorso.Follow(0f, 0f, -(VrTorso.FollowFrom - 1f), 1f), 3);
+        }
+
+        [Fact]
+        public void BodyStaysWithTheHandsWhileTheHeadLooksAround()
+        {
+            var body = 0f;
+            for (var i = 0; i < 300; i++) body = VrTorso.Follow(body, 50f, 0f, 1f / 60f);
+            Assert.Equal(0f, body, 3);
         }
 
         [Fact]
         public void BodyStaysWithinTheDeadZoneOfTheHead()
         {
-            var body = VrTorso.Follow(0f, 90f, 0f);
-            Assert.Equal(90f - VrTorso.DeadZone, body, 3);
-            body = VrTorso.Follow(0f, -90f, 0f);
-            Assert.Equal(-90f + VrTorso.DeadZone, body, 3);
+            Assert.Equal(90f - VrTorso.DeadZone, VrTorso.Follow(0f, 90f, 0f, 0f), 3);
+            Assert.Equal(-90f + VrTorso.DeadZone, VrTorso.Follow(0f, -90f, 0f, 0f), 3);
         }
 
         [Fact]
-        public void BodyTurnsAfterTheHeadOverTime()
+        public void BodyTurnsAfterWhereItHeadsForOverTime()
         {
             var body = 0f;
-            for (var i = 0; i < 300; i++) body = VrTorso.Follow(body, 30f, 1f / 60f);
+            for (var i = 0; i < 300; i++) body = VrTorso.Follow(body, 30f, 30f, 1f / 60f);
             Assert.InRange(body, 30f - VrTorso.FollowFrom - 0.5f, 30f - VrTorso.FollowFrom + 0.01f);
         }
 
         [Fact]
         public void BodyTurnsTheShortWayAcrossTheBack()
         {
-            var body = VrTorso.Follow(170f, -170f, 0f);
-            Assert.Equal(170f, body, 3);
-            body = VrTorso.Follow(170f, -100f, 0f);
-            Assert.Equal(-100f - VrTorso.DeadZone, body, 3);
+            Assert.Equal(170f, VrTorso.Follow(170f, -170f, -170f, 0f), 3);
+            Assert.Equal(-100f - VrTorso.DeadZone, VrTorso.Follow(170f, -100f, -100f, 0f), 3);
         }
 
         [Theory]
