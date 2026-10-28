@@ -1,0 +1,47 @@
+# In a shift: the suit's hands follow the controllers, tools come off the body with the grip (cutter over the right
+# shoulder, grapple at the right hip), the trigger works the tool, aiming follows the hand.
+# Start it on the loading screen before a shift (its first line presses A to go on).
+press right a 0.2
+waitlog VR camera attached to 'Main Camera' 120
+wait 10
+head 0 1.7 0 0 0 0
+left -0.25 1.2 0.3 0 0 0
+right 0.25 1.2 0.3 0 0 0
+recenter
+wait 2
+screenshot start
+dump start
+# Cutter over the right shoulder.
+move right 0.15 1.7 -0.15 in 1
+wait 0.5
+right grip 1
+wait 1
+move right 0.25 1.35 0.45 in 1
+wait 1
+screenshot cutter
+dump cutter
+right trigger 1
+wait 0.7
+screenshot cutting
+right trigger 0
+wait 0.5
+move right 0.25 1.35 0.45 0 -30 0 in 1
+wait 0.5
+screenshot cutter-turned
+right grip 0
+wait 1
+# Grapple at the right hip.
+move right 0.25 1.05 0 in 1
+wait 0.5
+right grip 1
+wait 1
+move right 0.25 1.35 0.45 in 1
+wait 1
+screenshot grapple
+right grip 0
+wait 1
+# Left hand raised and turned.
+move left -0.3 1.55 0.4 0 0 -45 in 1
+wait 1
+screenshot left-up
+dump end

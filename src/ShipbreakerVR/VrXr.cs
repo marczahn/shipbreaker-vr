@@ -29,6 +29,12 @@ namespace ShipbreakerVR
 
         public static bool IsRunning { get; private set; }
 
+        // xrGetInstanceProcAddr, for the features that hook it (VrAlternateEyesFeature, VrTestFeature). One type for
+        // all of them: Unity hands each feature the pointer the one before returned, and for a pointer Mono made from a
+        // managed delegate, GetDelegateForFunctionPointer returns that delegate, which only casts to its own type.
+        [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.Winapi)]
+        public delegate int GetInstanceProcAddrFn(ulong instance, IntPtr name, IntPtr function);
+
         // After a reload (ScriptEngine, F6) the XR settings from the AssetBundle are still loaded, and OpenXR may still run
         // for the previous instance; the AssetBundle cannot be loaded a second time. Takes both over. True if the
         // settings were already loaded, i.e. this is not the first instance in this game session.
@@ -67,6 +73,8 @@ namespace ShipbreakerVR
             }
 
             var manager = XRGeneralSettings.Instance.Manager;
+            if (manager.activeLoader == null && VrSettings.TestMode.Value) VrTestXr.Register();
+            if (manager.activeLoader == null) VrTestRuntime.Select();
             if (manager.activeLoader == null) manager.InitializeLoaderSync();
             if (manager.activeLoader == null)
             {
@@ -152,6 +160,7 @@ namespace ShipbreakerVR
             Plugin.Log.LogInfo($"XR settings loaded, OpenXR render mode: {openXr?.renderMode}");
             if (openXr != null) EnableControllerProfile(openXr);
             if (openXr != null) AddAlternateEyesFeature(openXr);
+            if (openXr != null && VrSettings.TestMode.Value) AddFeature<VrTestFeature>(openXr, "ShipbreakerVR Test Input");
             settingsLoaded = true;
         }
 
@@ -168,6 +177,20 @@ namespace ShipbreakerVR
             AccessTools.Field(typeof(OpenXRFeature), "m_enabled").SetValue(feature, true);
             field.SetValue(settings, features.Concat(new OpenXRFeature[] { feature }).ToArray());
             Plugin.Log.LogInfo("OpenXR: alternate eyes feature added");
+        }
+
+        private static void AddFeature<T>(OpenXRSettings settings, string name) where T : OpenXRFeature
+        {
+            var field = AccessTools.Field(typeof(OpenXRSettings), "features");
+            var features = (OpenXRFeature[])field.GetValue(settings) ?? new OpenXRFeature[0];
+            if (features.Any(f => f != null && f.GetType().FullName == typeof(T).FullName)) return;
+            var feature = ScriptableObject.CreateInstance<T>();
+            feature.name = name;
+            AccessTools.Field(typeof(OpenXRFeature), "nameUi").SetValue(feature, name);
+            AccessTools.Field(typeof(OpenXRFeature), "version").SetValue(feature, "0.0.1");
+            AccessTools.Field(typeof(OpenXRFeature), "m_enabled").SetValue(feature, true);
+            field.SetValue(settings, features.Concat(new OpenXRFeature[] { feature }).ToArray());
+            Plugin.Log.LogInfo($"OpenXR: {name} feature added");
         }
 
         // OpenXR only creates controller actions for enabled interaction profiles. The profiles in the AssetBundle

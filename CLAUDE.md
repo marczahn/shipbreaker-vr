@@ -16,7 +16,8 @@ OpenXR at runtime. Tested with a Meta Quest via Virtual Desktop (VDXR runtime). 
   setup), `VrAim` (aiming with the hand, laser), `VrToolInput` / `VrToolBelt` (tool buttons, taking tools off the
   body), `VrDualTools` (two tools at once, one per hand; the scanner hides the other), `VrToolModels` / `VrToolFit` (tools in the hand, demo charge arm), `VrTorso` (the player model upright around the neck, keeping its own heading), `VrHands` (the suit's hands follow the
   controllers), `VrClimb` (holding on and climbing with the grip of a free hand), `VrTetherMode` (the grapple's tether mode), `VrGrappleHold` (what the grapple holds follows the grapple in the hand), `VrInput` (the controllers, read once per frame), `VrHand` (what each hand does: tool, second tool, hidden tool, holding on),
-  `VrFrame` (the per-frame order: input, tool hands, aim and flying, then the steps on the VR camera's callbacks), `VrCrosshair` (hiding the crosshair while aiming), `GameTools` (the game classes the tool transpilers reach into, with their tool family), `GameRefs` (the player's controllers, found once), `PatchReport` (patch summary, features off when their patches are incomplete), `VrUtil` (small shared helpers: transform paths, canvas group alpha, overlay material), `VrHelmet`, `VrPostProcess`, `ScreenSizePatch`,
+  `VrFrame` (the per-frame order: input, tool hands, aim and flying, then the steps on the VR camera's callbacks), `VrCrosshair` (hiding the crosshair while aiming), `GameTools` (the game classes the tool transpilers reach into, with their tool family), `GameRefs` (the player's controllers, found once), `PatchReport` (patch summary, features off when their patches are incomplete), `VrUtil` (small shared helpers: transform paths, canvas group alpha, overlay material), `VrTestScript` / `VrTestXr` / `VrTestRuntime` (test mode: scripted head and controllers, screenshots, the mock
+  OpenXR runtime), `VrHelmet`, `VrPostProcess`, `ScreenSizePatch`,
   `HdrpXrPatch`.
 - `unity/ShipbreakerVRUnity/` – helper project that builds the `xrmanager` AssetBundle with the XR/OpenXR settings and
   collects the OpenXR DLLs (menu *ShipbreakerVR → Build for the game*).
@@ -48,6 +49,10 @@ The game logic lives in `BBI.Unity.Game.dll`, `Assembly-CSharp` is nearly empty.
   with the same folder properties as the build. The tests need the game's whole `Managed` folder (see
   `CONTRIBUTING.md`, "Checks"). Add a test when you change logic that runs without the engine.
 - Only Marc can test, in the headset. Say what to look for and which log line confirms it.
+- Much can be checked without him: with `[Test] Testmodus` (and `MockRuntime` for no headset at all), test scripts
+  dropped into `BepInEx\ShipbreakerVR-test\inbox` move the head and controllers, press buttons and save eye images
+  and logs (see `docs/NOTES.md`, "Testing without the headset", and `tools/vr-tests/`). Switch both off again
+  afterwards, or Marc's headset is not used.
 - Logs: `BepInEx\LogOutput.log` in the game folder and `Player.log` in the game's LocalLow folder. Read them yourself
   when the device is connected instead of asking Marc to paste them.
 - Install a test build into the game folder only when Marc says so; other threads may be testing at the same time.

@@ -80,6 +80,8 @@ namespace ShipbreakerVR
             catch (System.Exception e) { Plugin.Log.LogError($"Frame profile check failed: {e}"); }
             VrMenuInput.EnsureAttached();
             AttachCamera();
+            try { VrTestScript.Update(); }
+            catch (System.Exception e) { Plugin.Log.LogError($"Test script failed: {e}"); }
         }
 
         // The main menu has no LynxCameraController yet; the VR camera then attaches to the menu camera.
