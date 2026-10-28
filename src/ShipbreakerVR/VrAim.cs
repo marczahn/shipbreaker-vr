@@ -47,14 +47,13 @@ namespace ShipbreakerVR
         private const float TraceWidth = 4f;
         // The dot where the laser hits, like a laser pointer's on a surface: the radius of its glow and of its white core
         // in meters (times the world scale), so it gets smaller with distance, as Marc wanted; at least these shares of
-        // the distance from the eye, so it stays visible far away. The dots on the Splitsaw's line keep their size as a
-        // share of the distance. All are drawn this share of the way towards the eye, so the surface does not cut into
-        // them but the tool in the hand still hides them.
+        // the distance from the eye, so it stays visible far away. The dots on the Splitsaw's line look the same, as Marc
+        // wanted. All are drawn this share of the way towards the eye, so the surface does not cut into them but the
+        // tool in the hand still hides them.
         private const float DotSize = 0.006f;
         private const float DotCore = 0.002f;
         private const float DotMinSize = 0.0012f;
         private const float DotMinCore = 0.0005f;
-        private const float LineDotSize = 0.002f;
         // Extra dots on the Splitsaw's line between two neighboring edge points of the game, so the dots sit closer
         // together than the game's points (Marc wanted them finer and closer).
         private const int LineDotsBetween = 2;
@@ -320,7 +319,7 @@ namespace ShipbreakerVR
             DrawBeam(cmd, eye, scale, beamStart, beamEnd, beamHit, tethers, handNode, beamTether);
             if (secondBeamVisible)
                 DrawBeam(cmd, eye, scale, secondBeamStart, secondBeamEnd, secondBeamHit, secondTethers, VrDualTools.SecondNode, secondBeamTether);
-            foreach (var point in cutPoints) DrawDot(cmd, eye, point, LineDotSize, beamMaterial);
+            foreach (var point in cutPoints) DrawImpact(cmd, eye, scale, point, beamMaterial);
             if (beamDot) DrawImpact(cmd, eye, scale, beamEnd, tethers ? tetherBeamMaterial : beamMaterial);
             if (secondBeamDot) DrawImpact(cmd, eye, scale, secondBeamEnd, secondTethers ? tetherBeamMaterial : beamMaterial);
             context.renderContext.ExecuteCommandBuffer(cmd);
@@ -342,17 +341,13 @@ namespace ShipbreakerVR
             cmd.DrawMesh(ringMesh, Matrix4x4.TRS(end, Quaternion.LookRotation(end - eye), Vector3.one * size), material, 0, 0);
         }
 
-        // The laser's own dot: a glow in its color with a white core, of a size in the world.
+        // A laser's dot: a glow in its color with a white core, of a size in the world.
         private static void DrawImpact(CommandBuffer cmd, Vector3 eye, float scale, Vector3 point, Material glow)
         {
             var distance = Vector3.Distance(eye, point);
             DrawDisc(cmd, eye, point, Mathf.Max(DotSize * scale, DotMinSize * distance), glow);
             DrawDisc(cmd, eye, point, Mathf.Max(DotCore * scale, DotMinCore * distance), coreMaterial);
         }
-
-        // A dot on the Splitsaw's line, the same size near and far.
-        private static void DrawDot(CommandBuffer cmd, Vector3 eye, Vector3 point, float size, Material glow) =>
-            DrawDisc(cmd, eye, point, size * Vector3.Distance(eye, point), glow);
 
         // A disc of that radius facing the eye.
         private static void DrawDisc(CommandBuffer cmd, Vector3 eye, Vector3 point, float radius, Material material)
