@@ -24,10 +24,10 @@ namespace ShipbreakerVR
     //   A / X on the cutter  switch the Splitsaw between horizontal and vertical cuts (CutterAltFire, the right mouse
     //                   button in the flat game) instead; the other hand's A or X still interacts
     //   B / Y           with the trigger held: reel in what the grapple holds, while the button is held
-    //   B / Y tap       tool mode (cutter Stinger/Splitsaw, demo charge mode); on the grapple grappling or placing
-    //                   tethers (VrTetherMode)
-    //   B / Y held      place a tether from where the hand points when the hold starts to where it points on release;
-    //                   held while pointing at nothing: recall all tethers
+    //   B / Y tap       tool mode (cutter Stinger/Splitsaw, demo charge mode)
+    //   B / Y on the grapple  grappling or placing tethers (VrTetherMode), however long it is held
+    //   B / Y held      (not on the grapple) place a tether from where the hand points when the hold starts to where it
+    //                   points on release; held while pointing at nothing: recall all tethers
     //   in the grapple's tether mode:
     //   trigger         place a tether, from where the hand points at the press to where it points at the release
     //   A / X tap       let go of the tether the hand points at (otherwise interact)
@@ -243,8 +243,10 @@ namespace ShipbreakerVR
                 hand.BDown = b;
                 return;
             }
-            // In the tether mode B only switches the mode back, however long it is held, so a slow tap never recalls.
-            if (b && !hand.BLong && !tethers && Time.unscaledTime - hand.BDownAt >= LongPress)
+            // On the grapple B only switches between grappling and placing tethers, however long it is held: tethers are
+            // placed and recalled in the tether mode, as Marc asked, so a slow tap never places or recalls one.
+            var grapple = held == EquipmentController.Equipment.GrappleHook;
+            if (b && !hand.BLong && !grapple && Time.unscaledTime - hand.BDownAt >= LongPress)
             {
                 hand.BLong = true;
                 hand.BTether = VrAim.PointsAtSomething(VrHand.SecondHand == hand.Vr);
@@ -255,7 +257,7 @@ namespace ShipbreakerVR
             // A tap switches the mode when it ends, so a long press never does. The grapple switches the mod's own mode
             // (VrTetherMode), not while its trigger is held.
             var tap = !b && hand.BDown && !hand.BLong;
-            if (held == EquipmentController.Equipment.GrappleHook)
+            if (grapple)
             {
                 if (tap && !hand.Trigger) VrTetherMode.Toggle(hand.Input.Device);
             }

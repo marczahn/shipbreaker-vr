@@ -77,7 +77,18 @@ interacting, the grapple and the "entity of interest".
   lasers are tested against the camera's depth buffer (`ZTest LessEqual`, depth bound with the color buffer), so the
   tool in the hand hides the part of the laser behind it; the tether mode's ring, the traced tether and the placing line
   stay drawn over everything, because they lie on or along surfaces and would flicker in them. Log `Aim laser depth
-  tested: depth buffer WxH, color WxH` once per session. The first version was a 4 mm cyan beam that faded out; Marc wanted something more like a laser pointer. For a
+  tested: depth buffer WxH, color WxH` once per session.
+  Later Marc asked for a bright dot where the grapple's or cutter's laser hits after all: a disc facing the eye (glow
+  in the laser's color fading out, radius 0.6 % of the distance, white core 0.22 %), drawn 3 % of the way towards
+  the eye and depth tested, so the surface does not cut into it but the tool in the hand hides it. On the Splitsaw,
+  smaller dots (0.35 %) mark the line it will cut: the game's own edge detection points
+  (`CuttingController.EdgeDetectionPoints`, screen points across the whole screen width along the cut direction,
+  refreshed in `TryGetCutLineTargetables` while anything is targetable, `State == Valid` where the ray meets a part on
+  the cut line within 3x the cut range). They are in the screen space of the camera the cutter aimed through
+  (`VrAim.CameraFor`), turned onto the laser's latest pose and cast again with the cutter's `RaycastLayerMask`. Only
+  shown while `AnyValidTargetables`, since the points keep their old states otherwise.
+  The grapple's B no longer places or recalls tethers in the grappling mode (Marc: that belongs to the tether mode);
+  it switches the mode however long it is held. B held on the other tools still does. The first version was a 4 mm cyan beam that faded out; Marc wanted something more like a laser pointer. For a
   while it took the color the game gives the tool's reticle (`GrappleCrosshairController.CrosshairIcon`, lerped to
   `HookableInRange`, `HookableOutOfRange`, `NotHookableColor`, `NothingColor`; the cutter's
   `CuttingUIController.m_AimedCenterReticleIcon`; the Stinger's `m_ScalpelReticle`; grapple `#FFC300`, Stinger

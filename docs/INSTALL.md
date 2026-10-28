@@ -93,7 +93,8 @@ flat game.
 ![Demo charges](images/charges.svg)
 
 - Cutter: the trigger cuts, A switches the Splitsaw between horizontal and vertical cuts (the line also turns with your
-  wrist), B switches between the Splitsaw (a line) and the Stinger (the point the laser shows).
+  wrist), B switches between the Splitsaw (a line) and the Stinger (the point the laser shows). A bright dot marks
+  where the laser hits; with the Splitsaw, small dots on the parts show where the cut goes.
 - Demo charges: the trigger places a charge where you point, or throws it where your hand points if you point at
   nothing. B takes the detonator (and goes back to the charges while you have some left); with the detonator the
   trigger detonates.
@@ -103,8 +104,8 @@ flat game.
 
 B switches the grapple between two modes. The controller buzzes twice when the tether mode starts and once when
 grappling comes back.
-- Grappling (blue laser): the trigger grapples, as in the flat game. Hold B to place a tether from where you point to
-  where you let go; hold B pointing at nothing to recall all tethers.
+- Grappling (blue laser, a bright dot where it hits): the trigger grapples, as in the flat game. B only switches to
+  the tether mode, however long you hold it; tethers are placed and recalled there.
 - Placing tethers (orange laser, a ring where it points): pull the trigger at the start of the tether and let go at
   the end; a line shows the tether meanwhile. The tether you point at lights up orange, and a tap on A removes it;
   pointing at no tether, A uses what you point at. Hold A to recall all tethers. B switches back to grappling however
