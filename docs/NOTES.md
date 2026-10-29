@@ -375,7 +375,12 @@ interacting, the grapple and the "entity of interest".
   looking down 45 degrees (21 cm with the setting off), 5 cm looking 50 degrees to the side (20 cm off), 4 cm looking
   up, 8 cm leaning 15 cm forward with the hands 15 cm further (24 cm off), none looking straight ahead.
 - A target beyond the arm's reach first turns the collarbone (up to 8 cm at the shoulder, 30 degrees,
-  `VrToolModels.Reach`), as one pushes the shoulder forward. Logs once per arm `Hands: <arm> arm upper ..., lower ...,
+  `VrToolModels.Reach`), as one pushes the shoulder forward. Then the arm gets up to 15 % longer
+  (`VrToolModels.MostStretch`): the elbow and the wrist bone move out along their parents, so both bones and the skin
+  on them stretch by the same share. The model's arm is 55 cm from shoulder to wrist (upper arm 32.5 cm, forearm
+  22 cm), shorter than most players' arms, so a stretched-out hand stopped short of the controller; in the test above
+  the hands kept 4 to 11 cm short. `VrToolModels.Unstretch` (first LateUpdate step) puts the arms back to their own
+  length every frame before they are posed again. Logs once per arm `Hands: <arm> arm upper ..., lower ...,
   reach ...; shoulder at ... from the eye`, and every 10 s `Hands: <arm> hand short of the controller in N% of frames,
   by up to ... m` while it stays short.
 
