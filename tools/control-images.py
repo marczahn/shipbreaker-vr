@@ -74,9 +74,12 @@ def grip():
             + arrow("M72 40 H60") + arrow("M4 40 H16"))
 
 
-def laser(color, ring=False):
+def laser(color, ring=False, dot=False):
     parts = [controller(tilt=55, dx=-12, dy=8),
              f'<path d="M40 40 L74 18" stroke="{color}" stroke-width="3"/>']
+    if dot:
+        parts.append(f'<circle cx="72" cy="19" r="7" fill="{color}" opacity="0.5"/>'
+                     f'<circle cx="72" cy="19" r="3" fill="#ffffff"/>')
     if ring:
         parts.append(f'<circle cx="70" cy="21" r="7" fill="none" stroke="{color}" stroke-width="3"/>')
     return "".join(parts)
@@ -263,7 +266,7 @@ def main():
     page("cutter.svg", "ShipbreakerVR cutter", "Cutter",
          "Over the right shoulder. B switches between the Splitsaw (a line) and the Stinger (a point).", [
              (cut_line(), "Splitsaw", "Trigger: cut along the line.",
-              "Starts with horizontal cuts."),
+              "Dots on the parts show where it cuts. Horizontal at first."),
              (button("A"), "Turn the cut", "A: switch between horizontal and vertical cuts.",
               "The line also turns with your wrist."),
              (stinger(), "Stinger", "B: switch to the Stinger, B again: back.",
@@ -301,11 +304,11 @@ def main():
               "Trigger held + A throws, trigger held + B reels in."),
              (trigger(), "Place a tether", "Trigger at the start, let go at the end.",
               "A line shows the tether while the trigger is held."),
-             (button("B"), "Tether with B", "Hold B at the start, let go at the end.",
-              "Hold B pointing at nothing: recall all tethers."),
+             (laser(LASER, dot=True), "Bright dot", "Marks where the laser hits.",
+              "The cutter's laser has one too."),
              (tether(), "Remove one tether", "Point at it (it lights up orange) and tap A.",
               "Pointing at no tether, A uses what you point at."),
-             (button("B"), "Tether mode", "B: switch to the tether mode.", "A tap."),
+             (button("B"), "Tether mode", "B: switch to the tether mode.", "However long you press it."),
              (button("A"), "Recall all tethers", "Hold A.", "B switches back to grappling, however long you hold it."),
          ], heading=("Grappling", "Placing tethers", LASER, TETHER))
 

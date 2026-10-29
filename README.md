@@ -28,7 +28,7 @@ tools off your suit and aim them with your hands, and use the menus with your mo
 - **Fly with your hand.** Hold the trigger on the left controller and move your hand where you want to go. The right
   stick turns you, Y brakes.
 - **Tools in your hands.** Grab the grapple, cutter, demo charges and scanner from your hips, shoulder and helmet with
-  either hand, one in each hand if you like, and aim them where your hand points. A thin laser shows where. Hold on to
+  either hand, one in each hand if you like, and aim them where your hand points. A thin laser shows where, with a bright dot where the grapple's or cutter's laser hits. Hold on to
   anything with an empty hand and climb along it. The grapple has a second mode for placing tethers. The suit's hands
   follow your controllers, and the cutter's plain right side, never seen in the flat game, gets the detail of its left
   side.
@@ -122,7 +122,7 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 
 | I want to … | How |
 |---|---|
-| Cut with the Splitsaw | Pull the trigger. It cuts along a line, horizontal at first. |
+| Cut with the Splitsaw | Pull the trigger. It cuts along a line, horizontal at first. Small dots on the parts show where the cut goes. |
 | Turn the line | Press A (X in the left hand) to switch between horizontal and vertical cuts, as the right mouse button does in the flat game. The line also turns when you roll your wrist. |
 | Switch to the Stinger and back | Press B. The Stinger cuts the point the laser shows. |
 
@@ -146,10 +146,10 @@ The controller buzzes twice when the tether mode starts and once when grappling 
 
 | I want to … | Grappling (blue laser) | Placing tethers (orange laser) |
 |---|---|---|
-| Place a tether | Hold B while pointing at the start, let go at the end. | Pull the trigger at the start, let go at the end. |
+| Place a tether | – | Pull the trigger at the start, let go at the end. |
 | Remove one tether | – | Point at it (it lights up orange) and tap A. |
-| Recall all tethers | Hold B while pointing at nothing. | Hold A. |
-| Switch the mode | Tap B. | Press B, however long. |
+| Recall all tethers | – | Hold A. |
+| Switch the mode | Press B, however long. | Press B, however long. |
 
 ### Menus and keyboard
 
