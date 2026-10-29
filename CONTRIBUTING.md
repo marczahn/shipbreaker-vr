@@ -3,6 +3,7 @@
 A VR mod for **Hardspace: Shipbreaker** (Unity 2020.3, Mono, HDRP 10.x), built as a BepInEx 5 plugin that loads
 OpenXR at runtime. Tested with Meta Quest via Virtual Desktop (VDXR runtime). For players, see the [README](README.md).
 
+- New to software? Start with the German guide [docs/EINSTIEG.md](docs/EINSTIEG.md).
 - How the game works and why the mod does what it does: [docs/NOTES.md](docs/NOTES.md)
 - Release notes: [docs/releases/](docs/releases)
 
