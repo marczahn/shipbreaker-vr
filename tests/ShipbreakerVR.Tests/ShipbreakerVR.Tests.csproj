@@ -26,7 +26,8 @@
     <Reference Include="UnityEngine.CoreModule" HintPath="$(ManagedDir)\UnityEngine.CoreModule.dll" />
     <Reference Include="UnityEngine.XRModule" HintPath="$(ManagedDir)\UnityEngine.XRModule.dll" />
     <Reference Include="BBI.Unity.Game" HintPath="$(ManagedDir)\BBI.Unity.Game.dll" />
-    <!-- Everything else the plugin's types load, found next to the tests (GameAssemblies.cs). -->
-    <None Include="$(ManagedDir)\*.dll;$(BepInExDir)\*.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    <!-- Everything else the plugin's types load, found next to the tests (GameAssemblies.cs). Not the game's
+         Newtonsoft.Json (12.0): the test host needs the 13.0 from its package, and whichever file is newer would win. -->
+    <None Include="$(ManagedDir)\*.dll;$(BepInExDir)\*.dll" Exclude="$(ManagedDir)\Newtonsoft.Json.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
   </ItemGroup>
 </Project>
