@@ -55,6 +55,7 @@ namespace ShipbreakerVR.Tests
         [InlineData(0.2f, -0.6f, 0.4f, (int)Zone.None)]
         [InlineData(0.1f, 0.1f, -0.3f, (int)Zone.Cutter)]
         [InlineData(0.15f, 0f, 0.05f, (int)Zone.Scanner)]
+        [InlineData(-0.15f, 0f, 0.05f, (int)Zone.Flashlight)]
         [InlineData(0f, 0f, 0.5f, (int)Zone.None)]
         [InlineData(-0.3f, 0f, -0.3f, (int)Zone.None)]
         // The zone as a number: the test method is public, the enum internal.
