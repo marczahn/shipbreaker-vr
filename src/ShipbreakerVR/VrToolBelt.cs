@@ -5,7 +5,8 @@ namespace ShipbreakerVR
     // Picking the tools off the body instead of the flat game's wheel, as Marc wanted: reaching there with either hand and
     // pressing the grip draws the tool (VrToolInput), letting go puts it back. The zones are measured from the head in
     // tracking space (real meters), turned with the head's heading, so they stay at the body whichever way one looks or
-    // the playspace turns; they are the same for both hands. Entering a zone gives that hand a short buzz.
+    // the playspace turns; they are the same for both hands. Entering a zone gives that hand a short buzz, and an empty
+    // hand keeps vibrating softly as long as it stays there.
     //   right hip            grapple
     //   left hip             demo charges (drawn across the body)
     //   over the right shoulder  cutter
@@ -18,19 +19,30 @@ namespace ShipbreakerVR
         private const float HipBelow = -0.45f;
         private const float HipSide = 0.08f;
         private const float HipForward = 0.25f;
+        // The hip zones are turned this far around the head towards the back, in degrees, so a hand reaching out to the
+        // side to hold on does not draw a tool.
+        private const float HipTurn = 15f;
+        private static readonly float HipTurnCos = Mathf.Cos(HipTurn * Mathf.Deg2Rad);
+        private static readonly float HipTurnSin = Mathf.Sin(HipTurn * Mathf.Deg2Rad);
         private const float ShoulderAbove = -0.12f;
         private const float ShoulderBehind = -0.05f;
         private const float ShoulderInside = -0.1f;
         private const float HelmetReach = 0.22f;
         private const float HelmetSide = 0.06f;
+        // The vibration in a zone: its strength, and pulses that overlap so that it does not stop between them, in seconds.
+        private const float StayAmplitude = 0.15f;
+        private const float StayPulse = 0.15f;
+        private const float StayEvery = 0.1f;
 
         // The zone each hand last buzzed for (left, right).
         private static readonly Zone[] announced = new Zone[2];
+        // When each hand gets its next pulse (left, right).
+        private static readonly float[] nextPulse = new float[2];
         private static int logs;
 
         // The zone the hand is in this frame (None without tracking). Quiet (while its trigger is held) it does not buzz;
-        // the buzz comes when the trigger is let go inside the zone.
-        public static Zone Update(VrInput.Hand hand, bool quiet)
+        // the buzz comes when the trigger is let go inside the zone. An empty hand vibrates while it stays in the zone.
+        public static Zone Update(VrInput.Hand hand, bool quiet, bool empty)
         {
             var zone = Find(hand, out var local);
             var index = hand.IsLeft ? 0 : 1;
@@ -41,6 +53,11 @@ namespace ShipbreakerVR
                 hand.Buzz(0.25f, 0.04f);
                 if (logs++ < 40)
                     Plugin.Log.LogInfo($"Tool belt: {hand.Name} hand at {zone} ({local.x:0.00}, {local.y:0.00}, {local.z:0.00} m from the head)");
+            }
+            if (zone != Zone.None && empty && !quiet && Time.unscaledTime >= nextPulse[index])
+            {
+                nextPulse[index] = Time.unscaledTime + StayEvery;
+                hand.Buzz(StayAmplitude, StayPulse);
             }
             return zone;
         }
@@ -64,10 +81,13 @@ namespace ShipbreakerVR
         // The zone at a hand position relative to the head, in meters along the head's heading (x right, y up, z forward).
         internal static Zone ZoneAt(Vector3 local)
         {
-            if (local.y < HipBelow && local.z < HipForward)
+            if (local.y < HipBelow)
             {
-                if (local.x > HipSide) return Zone.Grapple;
-                if (local.x < -HipSide) return Zone.DemoCharge;
+                // Measured as if the hand were turned forward by HipTurn on its side of the body, mirrored for the left hip.
+                var side = Mathf.Abs(local.x);
+                var turnedSide = side * HipTurnCos - local.z * HipTurnSin;
+                var turnedForward = local.z * HipTurnCos + side * HipTurnSin;
+                if (turnedForward < HipForward && turnedSide > HipSide) return local.x > 0f ? Zone.Grapple : Zone.DemoCharge;
             }
             if (local.magnitude < HelmetReach && local.x > HelmetSide && local.z > ShoulderBehind) return Zone.Scanner;
             if (local.y > ShoulderAbove && local.z < ShoulderBehind && local.x > ShoulderInside) return Zone.Cutter;
