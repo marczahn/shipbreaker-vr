@@ -3,6 +3,7 @@ using BBI.Unity.Game;
 using Cinemachine;
 using HarmonyLib;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace ShipbreakerVR
 {
@@ -169,6 +170,27 @@ namespace ShipbreakerVR
         }
 
         public static bool IsHabCamera(Camera camera) => camera != null && camera.GetComponentInParent<Hab3DController>() != null;
+
+        // How level the Hab is, for the log: the rig stands on the world's up, so a room that looks tilted is either tilted
+        // in the world or the headset's own horizon is off.
+        public static void LogLevel(Camera camera)
+        {
+            var at = camera.transform;
+            var floor = Physics.Raycast(at.position, Vector3.down, out var hit, 5f, ~0, QueryTriggerInteraction.Ignore)
+                ? $"'{hit.collider.name}' {hit.distance:0.00} m below, {Vector3.Angle(hit.normal, Vector3.up):0.00}° off level"
+                : "no collider below";
+            Plugin.Log.LogInfo($"Hab level: camera at {at.position} turned {at.eulerAngles}, floor {floor}");
+            for (var i = 0; i < SceneManager.sceneCount; i++)
+                foreach (var root in SceneManager.GetSceneAt(i).GetRootGameObjects())
+                {
+                    var tilt = Vector3.Angle(root.transform.up, Vector3.up);
+                    if (tilt > 0.01f) Plugin.Log.LogInfo($"Hab level: scene root '{root.name}' {tilt:0.00}° off level, turned {root.transform.eulerAngles}");
+                }
+            var logged = 0;
+            foreach (var renderer in Object.FindObjectsOfType<MeshRenderer>())
+                if (renderer.name.IndexOf("Floor", System.StringComparison.OrdinalIgnoreCase) >= 0 && logged++ < 8)
+                    Plugin.Log.LogInfo($"Hab level: '{renderer.name}' turned {renderer.transform.eulerAngles}");
+        }
 
         // In VR the sway moves the whole room around the player. Silenced while the rig follows the Hab camera,
         // restored afterwards. Rescanned now and then, since locations may be activated later.
