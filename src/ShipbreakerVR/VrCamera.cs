@@ -230,6 +230,7 @@ namespace ShipbreakerVR
             {
                 Plugin.Log.LogInfo($"VR camera attached to the Hab camera '{hab.name}'");
                 Retarget(hab);
+                VrHab.LogLevel(hab);
                 VrDiagnostics.Schedule(6f, "Hab entered 6 s ago");
             }
 
