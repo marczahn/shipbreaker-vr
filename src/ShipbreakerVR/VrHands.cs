@@ -25,6 +25,8 @@ namespace ShipbreakerVR
 
         // How long an arm takes to move between the game's pose and the controller.
         private const float Blend = 0.2f;
+        // How fast a hand that let go of a hold returns to its controller, in m/s at world scale 1.
+        private const float HoldReturn = 2f;
 
         private class Arm
         {
@@ -39,6 +41,9 @@ namespace ShipbreakerVR
             public Transform Little;
             public float Weight;
             public bool Driven;
+            // From the controller to where the game's hand sits: to its hold while it holds on (VrClimb), so the hand stays
+            // there however far the real one has gone, then back to nothing.
+            public Vector3 OffController;
             // The animator's grab parameters of this hand, as HandGrab sets them.
             public readonly string Prep;
             public readonly string Grab;
@@ -137,6 +142,11 @@ namespace ShipbreakerVR
             if (weight <= 0f || arm.Wrist == null || arm.Upper == null || arm.Lower == null) return;
             if (!arm.Input.TryGetPosition(out var gripLocal) || !arm.Input.TryGetAimRotation(out var aimLocal)) return;
             if (!VrToolModels.TrackingToWorld(gripLocal + aimLocal * VrInput.WristBehindGrip, aimLocal, out var wrist, out var aim)) return;
+            if (VrClimb.TryGetHold(arm.Input, out var point) && VrToolModels.TrackingToWorld(gripLocal, aimLocal, out var grip, out _))
+                arm.OffController = point - grip;
+            else
+                arm.OffController = Vector3.MoveTowards(arm.OffController, Vector3.zero, HoldReturn * VrCamera.WorldScale * Time.unscaledDeltaTime);
+            wrist += arm.OffController;
 
             var animated = arm.Wrist.rotation;
             VrToolModels.Bend(arm.Upper, arm.Lower, arm.Wrist, Vector3.Lerp(arm.Wrist.position, wrist, weight));
@@ -292,6 +302,7 @@ namespace ShipbreakerVR
             grab = null;
             LeftArm.Weight = RightArm.Weight = 0f;
             LeftArm.Driven = RightArm.Driven = false;
+            LeftArm.OffController = RightArm.OffController = Vector3.zero;
             Charges(false);
             chargePieces.Clear();
             chargesOn = null;

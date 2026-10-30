@@ -574,6 +574,20 @@ far the body moved since. Letting go of the last hold keeps the body's velocity 
 80 ms, capped at 5 m/s, so a push off flies on; a hand held back more than 0.5 m from its hold lets go without it.
 While the left hand holds on, controller flying rests. Log lines start with "Climbing:".
 
+The constraint's velocity knows nothing of the body's colliders, and `PlayerMotion.OnCollisionEnter` treats every new
+contact as an impact (sound, sparks, shake, damage by `ImpactDamageRangeAsset` from the relative velocity). Pulling up
+to a surface ran into it at up to 10 m/s. So each step a `Rigidbody.SweepTestAll` along the velocity relative to the
+holds removes what would close to under 2 cm from anything ahead (`VrClimb.KeepClear`), for moving things relative to
+their velocity. Sliding along a surface stays. What still touches the thing held at up to 3 m/s skips the game's
+`OnCollisionEnter` (`ImpactPatch`); ship parts share one kinematic rigidbody, so that is the whole hull. Faster hits and
+other things stay impacts. The colliders stay on. The sweep sees only the body's colliders, not the head leaning out
+past them.
+
+With the body resting there the real hand can go on past the hold. The game's hand stays on the hold (`VrHands.Pose`
+adds the way from the controller to the hold to the wrist, and it returns at 2 m/s after letting go), and the 0.5 m tear
+off does not apply while `KeepClear` holds the body back: an early build let go at 0.51 m of pulling. Nothing pushes the
+body while the real hand comes back, since the error still points into the surface until it has passed the hold.
+
 Controls are `InteractableObject`s; the airlock console (`SM_AirlockConsole_LockPanel`) has a trigger collider
 "Interaction Volume" with activation `LineOfSight`, progress `Press`, `WaitForRelease` and a `HandTarget` the game's
 hand reaches for. The flat game starts the interaction when the control is in the middle of the view

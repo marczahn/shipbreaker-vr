@@ -18,19 +18,29 @@ namespace ShipbreakerVR
     // asked (VrToolInput).
     // Each physics step (VrCamera.FixedUpdate) the player's velocity, and the thing's at the hold, is set so the hand
     // reaches its hold by the end of the step: an impulse between the two, as a joint would apply, without joints.
+    // Pulling up close must not hit what is in the way: that velocity ignores the body's colliders, and each new contact
+    // is an impact to the game (PlayerMotion.OnCollisionEnter: sound, sparks, shake and damage). So a sweep along the
+    // velocity stops the body just short of anything ahead (KeepClear), and what still touches the thing held at low
+    // speed is no impact (Soft, ImpactPatch). The colliders stay on, so the body does not go through it.
     internal static class VrClimb
     {
         static VrClimb() => VrSession.OnUnload("climbing", Release);
 
         // How far from the controller a surface may be to hold on, in meters at world scale 1.
         private const float Reach = 0.1f;
-        // A hand held back this far from its hold (the body stuck behind something, the part torn away) lets go.
+        // A hand held back this far from its hold (the part torn away) lets go. Not while the body rests against what is
+        // ahead of it: there the arm may reach as far as it wants, the game's hand stays on the hold (VrHands.Pose) and
+        // nothing pushes the body until the real hand has come back past the hold.
         private const float TearOff = 0.5f;
         // How fast the hold may pull the body, and how fast a push off may fly, in m/s at world scale 1.
         private const float MaxPull = 10f;
         private const float MaxPushOff = 5f;
         // The speed a push off keeps is the hands' speed, smoothed over about this time in seconds.
         private const float PushOffSmoothing = 0.08f;
+        // How far the body stays from what is ahead of it while holding on, in meters at world scale 1.
+        private const float Clearance = 0.02f;
+        // Up to this speed, in m/s at world scale 1, touching the thing held is no impact.
+        private const float SoftContact = 3f;
         // LynxUnityEngineExtensions.InStaticLayer: the station and other things that never move.
         private const int StaticLayer = 27;
 
@@ -83,6 +93,9 @@ namespace ShipbreakerVR
         private static Vector3 pushOff;
         private static Vector3 holdVelocity;
         private static int logs;
+        private static int contactLogs;
+        // Whether KeepClear held the body back in the last step.
+        private static bool blocked;
 
         // From VrCamera.FollowGameCamera, right after the rig was placed for the frame. The hands are measured on the rig,
         // which moves once per frame; in the physics steps between they move along by as far as the body has come since.
@@ -199,10 +212,14 @@ namespace ShipbreakerVR
             {
                 if (!hand.Holding) continue;
                 var error = Hold(hand) - HandWorld(hand);
-                if (error.magnitude > TearOff * VrCamera.WorldScale) LetGo(hand, false, $"held back {error.magnitude:0.00} m from the hold");
+                if (!blocked && error.magnitude > TearOff * VrCamera.WorldScale) LetGo(hand, false, $"held back {error.magnitude:0.00} m from the hold");
                 else holding++;
             }
-            if (holding == 0) return;
+            if (holding == 0)
+            {
+                blocked = false;
+                return;
+            }
 
             var dt = Time.fixedDeltaTime;
             var velocity = player.velocity;
@@ -225,9 +242,52 @@ namespace ShipbreakerVR
                 change += impulse / player.mass;
                 if (hand.Movable) hand.Body.AddForceAtPosition(-impulse, hold, ForceMode.Impulse);
             }
-            player.velocity = velocity + change;
             holdVelocity = holdsVelocity / holding;
+            player.velocity = KeepClear(velocity + change, dt);
             pushOff = Vector3.Lerp(pushOff, player.velocity - holdVelocity, 1f - Mathf.Exp(-dt / PushOffSmoothing));
+        }
+
+        // The velocity without what would carry the body's colliders closer than Clearance to anything ahead within this
+        // step. Moving along a surface or away from it stays.
+        private static Vector3 KeepClear(Vector3 velocity, float dt)
+        {
+            blocked = false;
+            var relative = velocity - holdVelocity;
+            var speed = relative.magnitude;
+            if (speed < 1e-4f) return velocity;
+            var clearance = Clearance * VrCamera.WorldScale;
+            var hits = player.SweepTestAll(relative / speed, speed * dt + clearance, QueryTriggerInteraction.Ignore);
+            foreach (var hit in hits)
+            {
+                if (Own(hit.collider)) continue;
+                var body = hit.collider.attachedRigidbody;
+                var other = body != null ? body.GetPointVelocity(hit.point) : Vector3.zero;
+                var limited = ClimbContact.LimitApproach(velocity, other, hit.normal, hit.distance - clearance, dt);
+                if (limited != velocity)
+                {
+                    blocked = true;
+                    if (contactLogs++ < 20)
+                        Plugin.Log.LogInfo($"Climbing: body stops short of '{hit.collider.name}', {hit.distance:0.00} m ahead, "
+                            + $"from {velocity.magnitude:0.00} to {limited.magnitude:0.00} m/s");
+                }
+                velocity = limited;
+            }
+            return velocity;
+        }
+
+        // Whether a collision of the player's body is a touch of the thing held instead of an impact. Ship parts share one
+        // rigidbody, so the whole hull counts as the thing held.
+        public static bool Soft(Collision collision)
+        {
+            if (!LeftHand.Holding && !RightHand.Holding) return false;
+            var speed = collision.relativeVelocity.magnitude;
+            var soft = false;
+            foreach (var hand in Hands)
+                if (hand.Holding && (hand.Collider == collision.collider || (hand.Body != null && hand.Body == collision.rigidbody))) soft = true;
+            soft = soft && speed <= SoftContact * VrCamera.WorldScale;
+            if (contactLogs++ < 20)
+                Plugin.Log.LogInfo($"Climbing: {(soft ? "touches" : "impact with")} '{collision.collider.name}' at {speed:0.00} m/s while holding on");
+            return soft;
         }
 
         // Above the game's grab mass range (GrabController.RawGrabbedMassRange.AboveRange), through reflection: the range's
@@ -265,6 +325,19 @@ namespace ShipbreakerVR
 
         private static Vector3 Hold(Hand hand) => hand.Anchor.TransformPoint(hand.Point);
 
+        // Where that controller's hand holds on, if it does, for the game's hand (VrHands.Pose).
+        public static bool TryGetHold(VrInput.Hand input, out Vector3 point)
+        {
+            point = Vector3.zero;
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input || !hand.Holding || hand.Anchor == null) continue;
+                point = Hold(hand);
+                return true;
+            }
+            return false;
+        }
+
         // The controller in the world at the body's current physics position.
         private static Vector3 HandWorld(Hand hand) =>
             VrCamera.Instance.transform.parent.TransformPoint(hand.Local) + (player.position - bodyAtRig);
@@ -300,5 +373,28 @@ namespace ShipbreakerVR
             foreach (var hand in Hands)
                 if (hand.Holding) LetGo(hand, false, "climbing paused");
         }
+    }
+
+    // Outside VrClimb, whose static fields need the game: tests run this without it.
+    internal static class ClimbContact
+    {
+        // The velocity without the part that closes more than room meters on a surface (normal pointing at the body, moving
+        // at other) within dt; no room left means no closing in at all.
+        public static Vector3 LimitApproach(Vector3 velocity, Vector3 other, Vector3 normal, float room, float dt)
+        {
+            var closing = -Vector3.Dot(velocity - other, normal);
+            var allowed = Mathf.Max(room, 0f) / dt;
+            return closing > allowed ? velocity + normal * (closing - allowed) : velocity;
+        }
+    }
+
+    // A touch of the thing held (VrClimb.Soft) makes no impact: no sound, sparks, shake or damage.
+    [HarmonyPatch]
+    internal static class ImpactPatch
+    {
+        private static System.Reflection.MethodBase TargetMethod() =>
+            AccessTools.Method(AccessTools.TypeByName("BBI.Unity.Game.PlayerMotion"), "OnCollisionEnter", new[] { typeof(Collision) });
+
+        private static bool Prefix(Collision collision) => !VrClimb.Soft(collision);
     }
 }
