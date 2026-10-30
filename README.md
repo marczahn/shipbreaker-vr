@@ -94,7 +94,8 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 
 | I want to … | How |
 |---|---|
-| Take a tool | Reach to where it sits and squeeze the grip: grapple at the right hip, demo charges at the left hip, cutter over the right shoulder, scanner at the right side of the helmet. The controller buzzes when you are there. |
+| Take a tool | Reach to where it sits and squeeze the grip: grapple at the right hip, demo charges at the left hip, cutter over the right shoulder, scanner at the right side of the helmet. The controller vibrates while you are there. |
+| Flashlight | Reach to the left side of the helmet with the left hand and squeeze the grip to switch it on or off. |
 | Put it away | Let go of the grip. |
 | Hold two tools at once | While one hand holds the cutter, the grapple or the demo charges, take another of them with your other hand. Each hand's trigger and buttons work its own tool. |
 | Hand a tool to the other hand | Reach for it with the other hand and squeeze the grip. |

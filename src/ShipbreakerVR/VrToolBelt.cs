@@ -11,9 +11,10 @@ namespace ShipbreakerVR
     //   left hip             demo charges (drawn across the body)
     //   over the right shoulder  cutter
     //   right side of the helmet scanner
+    //   left side of the helmet  flashlight on or off, left hand only
     internal static class VrToolBelt
     {
-        public enum Zone { None, Grapple, Cutter, DemoCharge, Scanner }
+        public enum Zone { None, Grapple, Cutter, DemoCharge, Scanner, Flashlight }
 
         // Head-relative bounds in meters: x right, y up, z forward.
         private const float HipBelow = -0.45f;
@@ -75,7 +76,8 @@ namespace ShipbreakerVR
             forward.y = 0f;
             if (forward.sqrMagnitude < 0.0001f) return Zone.None;
             local = Quaternion.Inverse(Quaternion.LookRotation(forward, Vector3.up)) * (hand - head.localPosition);
-            return ZoneAt(local);
+            var zone = ZoneAt(local);
+            return zone == Zone.Flashlight && !controller.IsLeft ? Zone.None : zone;
         }
 
         // The zone at a hand position relative to the head, in meters along the head's heading (x right, y up, z forward).
@@ -90,6 +92,7 @@ namespace ShipbreakerVR
                 if (turnedForward < HipForward && turnedSide > HipSide) return local.x > 0f ? Zone.Grapple : Zone.DemoCharge;
             }
             if (local.magnitude < HelmetReach && local.x > HelmetSide && local.z > ShoulderBehind) return Zone.Scanner;
+            if (local.magnitude < HelmetReach && local.x < -HelmetSide && local.z > ShoulderBehind) return Zone.Flashlight;
             if (local.y > ShoulderAbove && local.z < ShoulderBehind && local.x > ShoulderInside) return Zone.Cutter;
             return Zone.None;
         }

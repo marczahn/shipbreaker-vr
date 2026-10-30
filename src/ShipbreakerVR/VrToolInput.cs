@@ -41,6 +41,11 @@ namespace ShipbreakerVR
 
         private const float LongPress = 0.4f;
 
+        private static readonly AccessTools.FieldRef<InputHandlerGameplay, GameplayActions.GameplayActionSet> HandlerAction =
+            AccessTools.FieldRefAccess<InputHandlerGameplay, GameplayActions.GameplayActionSet>("m_Action");
+        private static readonly AccessTools.FieldRef<InputHandlerGameplay, UnityEngine.Events.UnityEvent> HandlerEvent =
+            AccessTools.FieldRefAccess<InputHandlerGameplay, UnityEngine.Events.UnityEvent>("m_OnAction");
+
         private static readonly int Count = System.Enum.GetValues(typeof(Action)).Length;
         // Drawing and putting away (the select actions and Holster); the tool actions are per hand (Hand.Now).
         private static readonly bool[] now = new bool[Count];
@@ -295,6 +300,11 @@ namespace ShipbreakerVR
         // in this hand (VrDualTools).
         private static void Draw(Hand hand)
         {
+            if (hand.Zone == VrToolBelt.Zone.Flashlight)
+            {
+                ToggleFlashlight(hand);
+                return;
+            }
             if (!FindEquipment()) return;
             var zone = hand.Zone;
             var tool = zone == VrToolBelt.Zone.Grapple ? EquipmentController.Equipment.GrappleHook
@@ -334,6 +344,24 @@ namespace ShipbreakerVR
             if (logs++ < 60) Plugin.Log.LogInfo($"Tool control: {hand.Name} hand {(taken ? "takes" : "draws")} the {tool}");
             VrHand.TakeGameTool(hand.Vr, tool);
             holsterPulses = 0;
+        }
+
+        // The flashlight has no code of its own to call: an InputHandlerGameplay on the player runs it when its action is
+        // pressed. Pressing that action for the game would need a patch on every frame, so its event runs from here, and
+        // only when the game does not block the action.
+        private static void ToggleFlashlight(Hand hand)
+        {
+            var flashlight = GameplayActions.GameplayActionSet.ToggleFlashlight;
+            if (ActionBlockerService.Instance.IsActionBlocked(flashlight)) return;
+            var handlers = 0;
+            foreach (var handler in Object.FindObjectsOfType<InputHandlerGameplay>())
+            {
+                if (HandlerAction(handler) != flashlight) continue;
+                HandlerEvent(handler)?.Invoke();
+                handlers++;
+            }
+            hand.Input.Buzz(0.5f, 0.06f);
+            if (logs++ < 60) Plugin.Log.LogInfo($"Tool control: {hand.Name} hand switches the flashlight ({handlers} handler(s))");
         }
 
         // Grip let go by the hand that holds the tool: the hand stays empty, as Marc wanted, whatever put the tool there
