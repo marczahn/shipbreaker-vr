@@ -228,7 +228,14 @@ namespace ShipbreakerVR
             hand.ADown = a;
             // On the cutter A switches the cut's angle; there is nothing to throw, and the other hand interacts.
             if (held == EquipmentController.Equipment.CuttingTool) now[(int)Action.Angle] = a;
-            else if (!(hand.ATethers && (hand.ATether != null || hand.ALong))) now[(int)(hand.AThrows ? Action.Throw : Action.Interact)] = a;
+            else if (!(hand.ATethers && (hand.ATether != null || hand.ALong)))
+            {
+                // The grapple pushes with its throw action, held to charge, unless the hand points at something to use: the
+                // game decides which (GrapplingHook.Update). The push aims along the grapple, as its raycast uses the aim camera.
+                var pushes = held == EquipmentController.Equipment.GrappleHook && !tethers;
+                now[(int)Action.Interact] = a && !hand.AThrows;
+                now[(int)Action.Throw] = a && (hand.AThrows || pushes);
+            }
 
             var b = hand.Input.Secondary.Down;
             if (b && !hand.BDown)
