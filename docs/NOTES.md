@@ -781,7 +781,9 @@ is drawn with `UI/Default` and textures made at runtime for the canvas's aspect;
 
 The Hab's virtual cameras have heights made for the flat game: with the same tracked height the head was 1.68 m and
 2.00 m above the floor at two spots where one stands. While standing the head now goes to `HabStanding.Height` (1.90 m,
-Raik's value) along `VrHab.RoomUp`, at a monitor and lying it stays. That is the height held at the last recentering.
+Raik's value) along `VrHab.RoomUp`, at a monitor, lying and at spots below 1.5 m (the room seen from the bed, 1.28 m,
+where one sits) it stays. That is the height held at the last recentering. The waypoint rings and the prompts stay at
+the flat game's height and no longer fit the view; Raik wants to rework how the Hab is used anyway.
 The floor has no collider (a ray from the head hits nothing within 5 m) and its mesh is static batched (`MeshFilter`
 bounds cover the batch, in the F8 room list those come out around 358 m), so the foot of the loose chair stands for the
 floor. Log `Hab: camera spot N m above the floor`.

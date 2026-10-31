@@ -198,7 +198,8 @@ namespace ShipbreakerVR
             if (Mathf.Abs(spot - loggedSpot) > 0.01f)
             {
                 loggedSpot = spot;
-                Plugin.Log.LogInfo($"Hab: camera spot {spot:0.00} m above the floor, standing at {HabStanding.Height:0.00} m");
+                var name = cutBrain != null && cutBrain.ActiveVirtualCamera != null ? cutBrain.ActiveVirtualCamera.Name : "?";
+                Plugin.Log.LogInfo($"Hab: camera spot '{name}' {spot:0.00} m above the floor, {(HabStanding.Sits(spot) ? "sitting, stays" : $"standing at {HabStanding.Height:0.00} m")}");
             }
             return HabStanding.Place(camera, up, floor, scale);
         }
@@ -343,9 +344,17 @@ namespace ShipbreakerVR
         // Eye height over the Hab's floor while standing, in meters at world scale 1.
         public const float Height = 1.9f;
 
-        // Moves a point along up to standing height, keeping where it is in the room.
-        public static Vector3 Place(Vector3 point, Vector3 up, float floor, float scale) =>
-            point + up * (floor + Height * scale - Vector3.Dot(point, up));
+        // A spot below this is one where one sits: the view of the room from the bed is at 1.28 m, the lowest one standing 1.81 m.
+        private const float SitBelow = 1.5f;
+
+        public static bool Sits(float spot) => spot < SitBelow;
+
+        // Moves a point along up to standing height, keeping where it is in the room. A sitting spot stays.
+        public static Vector3 Place(Vector3 point, Vector3 up, float floor, float scale)
+        {
+            var height = Vector3.Dot(point, up);
+            return Sits((height - floor) / scale) ? point : point + up * (floor + Height * scale - height);
+        }
     }
 
     [HarmonyPatch(typeof(LynxCameraController), "OnGameStateChangedEvent")]

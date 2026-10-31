@@ -10,13 +10,20 @@ namespace ShipbreakerVR.Tests
 
         [Theory]
         [InlineData(361.2f)]
-        [InlineData(358f)]
+        [InlineData(361.11f)]
         public void StandsAtTheSameHeightFromEverySpot(float height)
         {
             var placed = HabStanding.Place(new Vector3(3f, height, 4f), Up, 359.3f, 1f);
             Assert.Equal(361.2f, placed.y, 3);
             Assert.Equal(3f, placed.x, 3);
             Assert.Equal(4f, placed.z, 3);
+        }
+
+        [Fact]
+        public void SittingOnTheBedKeepsTheSpot()
+        {
+            var placed = HabStanding.Place(new Vector3(3f, 1.28f, 4f), Up, 0f, 1f);
+            Assert.Equal(1.28f, placed.y, 3);
         }
 
         [Fact]
