@@ -34,7 +34,9 @@ namespace ShipbreakerVR
         private const float TiltShift = 0.0025f;
         private const float TiltShiftMax = 0.15f;
         private const float TurnDeadzone = 8f;
-        private const float TurnFull = 45f;
+        // Rolling: as fast per degree as turning, up to a hand tilted all the way.
+        private const float RollFull = 90f;
+        private const float RollSpeed = 100f;
         private const float TurnSpeed = 45f;
         private const float StickDeadzone = 0.15f;
 
@@ -146,12 +148,12 @@ namespace ShipbreakerVR
 
         private static float StickRate(float value) => Ramp(Mathf.Abs(value), StickDeadzone, 1f) * Mathf.Sign(value) * TurnSpeed * Time.deltaTime;
 
-        // Degrees to turn this frame for a hand angle (0..360 from eulerAngles): none inside the deadzone, full speed from
-        // TurnFull on.
+        // Degrees to roll this frame for a hand angle (0..360 from eulerAngles): none inside the deadzone, full speed from
+        // RollFull on.
         private static float Rate(float angle)
         {
             if (angle > 180f) angle -= 360f;
-            return Ramp(Mathf.Abs(angle), TurnDeadzone, TurnFull) * Mathf.Sign(angle) * TurnSpeed * Time.deltaTime;
+            return Ramp(Mathf.Abs(angle), TurnDeadzone, RollFull) * Mathf.Sign(angle) * RollSpeed * Time.deltaTime;
         }
 
         private static float SnapAngle(Turning mode) =>
