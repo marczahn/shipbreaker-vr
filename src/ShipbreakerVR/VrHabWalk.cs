@@ -95,7 +95,7 @@ namespace ShipbreakerVR
             }
             if (!VrInput.Right.Primary.Pressed) return;
             var head = VrHab.Room.InverseTransformPoint(VrCamera.Instance.transform.position);
-            File.AppendAllText(System.IO.Path.Combine(Paths.BepInExRootPath, "ShipbreakerVR-hab-floor.txt"), $"{head.x:0.00} {head.z:0.00}
+            File.AppendAllText(System.IO.Path.Combine(Paths.BepInExRootPath, "ShipbreakerVR-hab-floor.txt"), $"{head.x:0.00} {head.z:0.00}" + "
 ");
             VrInput.Right.Buzz(0.5f, 0.06f);
             Plugin.Log.LogInfo($"Hab: floor point {head.x:0.00} {head.z:0.00}");
