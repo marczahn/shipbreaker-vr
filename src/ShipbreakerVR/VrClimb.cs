@@ -42,7 +42,7 @@ namespace ShipbreakerVR
         // The speed a push off keeps is the hands' speed, smoothed over about this time in seconds.
         private const float PushOffSmoothing = 0.08f;
         // How far the body stays from what is ahead of it while holding on, in meters at world scale 1.
-        private const float Clearance = 0.02f;
+        private const float Clearance = 0.04f;
         // Up to this speed, in m/s at world scale 1, touching the thing held is no impact.
         private const float SoftContact = 3f;
         // Parts up to this mass, in kg, sit firmly in the hand: they turn with it. Heavier ones turn freely on the hold.
