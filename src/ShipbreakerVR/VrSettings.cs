@@ -31,6 +31,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<float> MenuWidth;
         public static ConfigEntry<bool> FlipUi;
         public static ConfigEntry<bool> MonitorLook;
+        public static ConfigEntry<bool> FreeWalking;
         public static ConfigEntry<VrHelmet.Mode> Helmet;
         public static ConfigEntry<VrResolution.AntiAliasing> AntiAliasing;
         public static ConfigEntry<float> ResolutionScale;
@@ -199,6 +200,8 @@ namespace ShipbreakerVR
                     "Zeigt links oben in Visier und Menüs die Bildrate: Bilder pro Sekunde, die Rate des Headsets, den Anteil der Bilder, die sie verpasst haben, die Zeit des Hauptthreads für Spiellogik und für das Vorbereiten des Renderns, und die Einstellungen, die sie beeinflussen."),
                 "While it is on, frame times are also logged every 30 s, as with Debug/Diagnose.");
             FlipUi = Bind("Anzeige", "UiSpiegeln", false, "Flip the UI vertically in case it is upside down.");
+            FreeWalking = Bind("Station", "FreiGehen", false,
+                "Walk through the station instead of hopping between its spots. Sitting on the bed, A stands up and B sits down again; the left stick walks, the right stick turns in steps. Walking with a stick can make you feel sick.");
             MonitorLook = Bind("Anzeige", "MonitorEffekt", true,
                 "Screen look for the menus on the station's monitors: a little dimmer, fine scan lines, darker edges, a faint reflection on the glass and light on the frame. Tasten/MonitorEffektUmschalten (F7) switches it on and off.");
             Helmet = Bind("Anzeige", "Helm", VrHelmet.Mode.Kopf,

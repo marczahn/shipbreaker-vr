@@ -332,17 +332,20 @@ namespace ShipbreakerVR
             // Hab camera moves become fades in VR: until the view is black the rig stays on the old spot. At the monitor
             // above the bed it stays where it was.
             VrHab.UpdateTransition();
+            if (FollowsHab) VrHabWalk.Update(HabHeading(gameCamera.transform.rotation));
+            else VrHabWalk.Stop();
             if (FollowsHab && (VrHab.Holding || VrHab.Staying)) return;
             var cam = gameCamera.transform;
             // At a monitor in the Hab the head goes in front of it instead of right up to it (VrHab.Monitor).
             var position = cam.position;
-            if (FollowsHab && VrHab.Monitor != null) position = VrHab.MonitorViewpoint(VrHab.Monitor, position);
+            if (VrHabWalk.Walking) position = VrHabWalk.Head(WorldScale);
+            else if (FollowsHab && VrHab.Monitor != null) position = VrHab.MonitorViewpoint(VrHab.Monitor, position);
             // Each spot's height was made for the flat game: 32 cm apart between two spots where one stands.
             else if (FollowsHab && !Lying(cam.rotation)) position = VrHab.Standing(position, WorldScale);
-            VrHab.StandShift = FollowsHab && VrHab.Monitor == null ? position - cam.position : Vector3.zero;
+            VrHab.StandShift = FollowsHab && VrHab.Monitor == null && !VrHabWalk.Walking ? position - cam.position : Vector3.zero;
             // The Hab camera swings between bed, kitchen and terminal; the playspace turns along, but only around the
             // vertical axis: its pitch would tilt the room. Looking up or down is up to the head. Except lying in bed.
-            if (FollowsHab) Playspace = HabHeading(cam.rotation) * recenterRotation;
+            if (FollowsHab) Playspace = (VrHabWalk.Walking ? VrHabWalk.Heading : HabHeading(cam.rotation)) * recenterRotation;
             // Cinemachine sets the lens every frame: in the Hab the rooms reach 500 m, the view out of the window
             // 5000 m (ship and dock). Copied only once, the ship stayed cut off at 500 m. In the Hab at least as far
             // as its farthest view: at the terminal (2555 m) the earth outside was cut off depending on the head.

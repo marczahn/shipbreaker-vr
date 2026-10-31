@@ -228,6 +228,9 @@ namespace ShipbreakerVR
 
         public static Hab3DController Controller => controller;
 
+        // The spot the game is on.
+        public static string ActiveSpot => cutBrain != null && cutBrain.ActiveVirtualCamera != null ? cutBrain.ActiveVirtualCamera.Name : null;
+
         // The room the Hab's floor plan is measured in.
         public static Transform Room
         {
@@ -429,6 +432,11 @@ namespace ShipbreakerVR
             if (nav.ClickableButton == null || nav.TransformToTrack == null) return;
             var prompt = nav.ClickableButton.RectTransform;
             var area = prompt.parent != null ? prompt.parent.parent as RectTransform : null;
+            if (area != null && VrHabWalk.Walking)
+            {
+                prompt.localPosition = new Vector3(area.rect.width * 2f, 0f, prompt.localPosition.z);
+                return;
+            }
             var ui = VrUi.Instance;
             if (area == null || ui == null || !ui.OnMenuCanvas(nav.TransformToTrack.position, out var place)) return;
             // A spot beyond the canvas's edge would lose its frame, and with it the only way to see that the spot can be reached.

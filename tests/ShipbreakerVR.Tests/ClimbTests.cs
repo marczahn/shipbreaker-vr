@@ -43,6 +43,35 @@ namespace ShipbreakerVR.Tests
         }
 
         [Fact]
+        public void WalksFreelyInsideTheFloor()
+        {
+            var to = new Vector2(131f, 116f);
+            Assert.Equal(to, HabFloor.Limit(new Vector2(131f, 115f), to));
+        }
+
+        [Fact]
+        public void SlidesAlongAnEdge()
+        {
+            var limited = HabFloor.Limit(new Vector2(132f, 115f), new Vector2(132.5f, 115.5f));
+            Assert.Equal(132f, limited.x, 3);
+            Assert.Equal(115.5f, limited.y, 3);
+        }
+
+        [Fact]
+        public void WalksFromTheAisleToTheWorkArea()
+        {
+            Assert.True(HabFloor.Inside(new Vector2(131f, 118.5f)));
+            Assert.True(HabFloor.Inside(new Vector2(132.5f, 120f)));
+        }
+
+        [Fact]
+        public void StopsInACorner()
+        {
+            var from = new Vector2(132.1f, 113.6f);
+            Assert.Equal(from, HabFloor.Limit(from, new Vector2(132.5f, 113f)));
+        }
+
+        [Fact]
         public void SittingOnTheBedKeepsTheSpot()
         {
             var placed = HabStanding.Place(new Vector3(3f, 1.28f, 4f), Up, 0f, 1f);
