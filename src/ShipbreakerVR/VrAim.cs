@@ -192,7 +192,9 @@ namespace ShipbreakerVR
             aim.aspect = main.aspect;
             aim.nearClipPlane = main.nearClipPlane;
             aim.farClipPlane = main.farClipPlane;
-            withTool = VrToolModels.Equipped != EquipmentController.Equipment.None;
+            // The game's hand keeps naming the scanner after it was put away; the equipment knows it is gone.
+            var equipment = GameRefs.Equipment;
+            withTool = VrToolModels.Equipped != EquipmentController.Equipment.None && (equipment == null || !equipment.IsNothingEquipped);
             active = true;
         }
 
