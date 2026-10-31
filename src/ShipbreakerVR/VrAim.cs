@@ -237,7 +237,7 @@ namespace ShipbreakerVR
             if (!Usable() || !hand.TryGetAimPose(out var local, out var localRotation, out _)) return false;
             var rig = VrCamera.Instance.transform.parent;
             position = rig.TransformPoint(local);
-            rotation = rig.rotation * localRotation;
+            rotation = rig.rotation * VrToolSteady.Apply(hand, ToolOf(hand), localRotation);
             return true;
         }
 
@@ -265,6 +265,9 @@ namespace ShipbreakerVR
         // The controller of the hand that holds the tool (VrHand.GameToolHand), the right one unless the left hand drew it.
         private static VrInput.Hand Tool => VrHand.GameToolHand.Input;
 
+        private static EquipmentController.Equipment ToolOf(VrInput.Hand hand) =>
+            hand == Tool ? VrToolModels.Equipped : hand.Node == VrDualTools.SecondNode ? VrDualTools.Second : EquipmentController.Equipment.None;
+
         private static bool TryGetPoseLocal(out Vector3 local, out Quaternion localRotation)
         {
             local = Vector3.zero;
@@ -277,6 +280,7 @@ namespace ShipbreakerVR
                 handNode = hand.Node;
             }
             if (!hand.TryGetAimPose(out local, out localRotation, out var pointer)) return false;
+            localRotation = VrToolSteady.Apply(hand, VrToolModels.Equipped, localRotation);
             if (!loggedPose)
             {
                 loggedPose = true;

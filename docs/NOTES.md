@@ -1142,3 +1142,6 @@ Ideas not done yet, for after the measurements:
 4. Playing VR: controllers, tools in hand, bindings – flying done, aiming with the hand in progress
 5. Using VR: HUD as visor, menus with the right controller (no pointer yet) – in progress
 6. Comfort and performance
+
+## Steadier tools
+`VrToolSteady` filters the turn of cutter and grapple: within 0.5 degrees of the filtered turn it closes `(angle / 0.5)^2` of the gap, the micro filter of the ITR 2 aiming mod, and always follows with a lag of 40 ms for some weight in the hand. Only the turn: the tool stays at the hand, and the aim uses the same turn.
