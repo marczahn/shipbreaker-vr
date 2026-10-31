@@ -939,7 +939,8 @@ The player's `EquipmentController`, `GrabController`, `CuttingToolController` an
 only when something changes (the options rows, the screen size, the F8 dump), not every frame.
 
 F8 (`VrDiagnostics`) is for things only seen in the headset. It writes into the log: game state, head pose, what lies
-below the head along `VrHab.RoomUp` (solid colliders within 5 m, for the height above a floor), the camera the rig follows, where the UI canvas hangs, every active root canvas (render mode, camera, layer, whether `VrCanvases`
+below the head along `VrHab.RoomUp` (solid colliders within 5 m, for the height above a floor), in the Hab the heights
+of the meshes within 4 m (to compare the view with the furniture), the camera the rig follows, where the UI canvas hangs, every active root canvas (render mode, camera, layer, whether `VrCanvases`
 attached it, direction and distance from the head for the non-overlay ones, and its dark, large or specially shaded
 graphics, and its visible texts with their position on the canvas, so a prompt that is off the canvas or covered
 shows up), and the visible renderers within 4 m that reach above eye height. It also runs on its own 6 s after the rig
