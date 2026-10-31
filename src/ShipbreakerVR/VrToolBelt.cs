@@ -17,8 +17,11 @@ namespace ShipbreakerVR
 
         // Head-relative bounds in meters: x right, y up, z forward.
         private const float HipBelow = -0.45f;
-        private const float HipSide = 0.08f;
-        private const float HipForward = 0.25f;
+        private const float HipDeepest = -0.85f;
+        private const float HipSide = 0.1f;
+        private const float HipOutside = 0.35f;
+        private const float HipForward = 0.1f;
+        private const float HipBehind = -0.2f;
         // The hip zones are turned this far around the head towards the back, in degrees, so a hand reaching out to the
         // side to hold on does not draw a tool.
         private const float HipTurn = 15f;
@@ -81,13 +84,13 @@ namespace ShipbreakerVR
         // The zone at a hand position relative to the head, in meters along the head's heading (x right, y up, z forward).
         internal static Zone ZoneAt(Vector3 local)
         {
-            if (local.y < HipBelow)
+            if (local.y < HipBelow && local.y > HipDeepest)
             {
                 // Measured as if the hand were turned forward by HipTurn on its side of the body, mirrored for the left hip.
                 var side = Mathf.Abs(local.x);
                 var turnedSide = side * HipTurnCos - local.z * HipTurnSin;
                 var turnedForward = local.z * HipTurnCos + side * HipTurnSin;
-                if (turnedForward < HipForward && turnedSide > HipSide) return local.x > 0f ? Zone.Grapple : Zone.DemoCharge;
+                if (turnedForward < HipForward && turnedForward > HipBehind && turnedSide > HipSide && turnedSide < HipOutside) return local.x > 0f ? Zone.Grapple : Zone.DemoCharge;
             }
             if (local.magnitude < HelmetReach && local.x > HelmetSide && local.z > ShoulderBehind) return Zone.Scanner;
             if (local.y > ShoulderAbove && local.z < ShoulderBehind && local.x > ShoulderInside) return Zone.Cutter;
