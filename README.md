@@ -110,7 +110,7 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | I want to … | How |
 |---|---|
 | Use it | Point the controller and pull the trigger: cut, grapple, place or detonate demo charges. |
-| Push things away with the grapple | Press A (X in the left hand) with nothing grappled, or hold it to charge the push. It goes where the grapple points. |
+| Push things away with the grapple | Press A (X in the left hand) with nothing grappled, or hold it to charge the push. It goes where the grapple points, also at consoles: those are used with an empty hand. |
 | Use what I point at | Press A or X, with either hand. With an empty hand it uses what is in the middle of your view, marked by the game's dot. Without a tool the trigger and B do nothing. On the cutter A turns the cut instead, so use the other hand. |
 | Throw | Hold the trigger and press A. |
 | Reel in what the grapple holds | Hold the trigger and press B. |

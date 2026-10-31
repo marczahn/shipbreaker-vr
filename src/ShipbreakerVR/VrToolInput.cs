@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using BBI.Unity.Game;
 using HarmonyLib;
 using UnityEngine;
@@ -230,10 +231,10 @@ namespace ShipbreakerVR
             if (held == EquipmentController.Equipment.CuttingTool) now[(int)Action.Angle] = a;
             else if (!(hand.ATethers && (hand.ATether != null || hand.ALong)))
             {
-                // The grapple pushes with its throw action, held to charge, unless the hand points at something to use: the
-                // game decides which (GrapplingHook.Update). The push aims along the grapple, as its raycast uses the aim camera.
+                // The grapple pushes with its throw action, held to charge, also at a control: those are for empty hands, and
+                // PushPatch keeps them from stopping the push. It aims along the grapple, as its raycast uses the aim camera.
                 var pushes = held == EquipmentController.Equipment.GrappleHook && !tethers;
-                now[(int)Action.Interact] = a && !hand.AThrows;
+                now[(int)Action.Interact] = a && !hand.AThrows && !pushes;
                 now[(int)Action.Throw] = a && (hand.AThrows || pushes);
             }
 
@@ -469,6 +470,33 @@ namespace ShipbreakerVR
                 yield return instruction;
             }
             PatchReport.Count("Tool control", original, replaced, "input poll(s)");
+        }
+    }
+}
+
+namespace ShipbreakerVR
+{
+    // The game's grapple does not push while a control is in view. Controls are for empty hands here, so to it there is none.
+    [HarmonyPatch]
+    internal static class PushPatch
+    {
+        private static readonly MethodInfo Current = AccessTools.PropertyGetter(typeof(InteractionController), nameof(InteractionController.CurrentInteractable));
+
+        private static MethodBase TargetMethod() => AccessTools.Method(AccessTools.TypeByName("GrapplingHook"), "UpdateGrapplingHook");
+
+        private static InteractableObject NoControl(InteractionController controller) => VrAim.Active ? null : controller.CurrentInteractable;
+
+        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        {
+            foreach (var instruction in instructions)
+            {
+                if (instruction.operand is MethodInfo called && called == Current)
+                {
+                    instruction.opcode = OpCodes.Call;
+                    instruction.operand = AccessTools.Method(typeof(PushPatch), nameof(NoControl));
+                }
+                yield return instruction;
+            }
         }
     }
 }
