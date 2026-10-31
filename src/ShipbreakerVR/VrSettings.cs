@@ -201,7 +201,7 @@ namespace ShipbreakerVR
                 "While it is on, frame times are also logged every 30 s, as with Debug/Diagnose.");
             FlipUi = Bind("Anzeige", "UiSpiegeln", false, "Flip the UI vertically in case it is upside down.");
             FreeWalking = Bind("Station", "FreiGehen", false,
-                "Walk through the station instead of hopping between its spots. Sitting on the bed, A stands up and B sits down again; the left stick walks, the right stick turns in steps. Walking with a stick can make you feel sick.");
+                "Walk through the station instead of hopping between its spots. Sitting on the bed, A stands up and B sits down again; the left stick walks, the right stick turns in steps, and the triggers change the poster you look at. Walking with a stick can make you feel sick.");
             MonitorLook = Bind("Anzeige", "MonitorEffekt", true,
                 "Screen look for the menus on the station's monitors: a little dimmer, fine scan lines, darker edges, a faint reflection on the glass and light on the frame. Tasten/MonitorEffektUmschalten (F7) switches it on and off.");
             Helmet = Bind("Anzeige", "Helm", VrHelmet.Mode.Kopf,

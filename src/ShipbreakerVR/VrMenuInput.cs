@@ -143,7 +143,7 @@ namespace ShipbreakerVR
                     if (VrHabWalk.TakesInput)
                     {
                         leftStick = rightStick = Vector2.zero;
-                        pressed[0] = pressed[1] = false;
+                        pressed[0] = pressed[1] = pressed[4] = pressed[5] = false;
                     }
                 }
 

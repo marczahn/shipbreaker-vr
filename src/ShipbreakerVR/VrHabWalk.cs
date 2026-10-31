@@ -60,12 +60,14 @@ namespace ShipbreakerVR
             }
             Turn(VrInput.Right.Stick.x);
             Move(VrInput.Left.Stick);
+            VrHabPosters.Update(VrCamera.Instance.transform, VrCamera.WorldScale);
         }
 
         public static void Stop()
         {
             if (!Walking) return;
             Walking = false;
+            VrHabPosters.Stop();
             Plugin.Log.LogInfo("Hab: sitting down again");
         }
 
