@@ -92,6 +92,8 @@ namespace ShipbreakerVR
             public Vector3 Surface;
             // A part that turns with the hand: its turn relative to the controller, and its speed limit before.
             public bool Firm;
+            // The second hand on a firmly held part: it stays on the part, the first hand moves it.
+            public bool Follower;
             public Quaternion FirmTurn;
             public float SpinBefore;
             public RigidbodyInterpolation InterpolationBefore;
@@ -270,9 +272,10 @@ namespace ShipbreakerVR
             hand.Surface = hand.Anchor.InverseTransformPoint(surface);
             hand.HeldAt = Time.time;
             hand.Firm = false;
+            hand.Follower = false;
             foreach (var other in Hands)
-                if (other != hand && other.Firm && other.Body == body) Unfirm(other);
-            if (hand.Movable && body.mass <= FirmMass && !HeldByOther(hand) && hand.Input.TryGetAimRotation(out var aim))
+                if (other != hand && other.Firm && other.Body == body) hand.Follower = true;
+            if (!hand.Follower && hand.Movable && body.mass <= FirmMass && !HeldByOther(hand) && hand.Input.TryGetAimRotation(out var aim))
                 Firm(hand, aim);
             hand.PullOffset = hand.Local - ClimbContact.Closer(hand.Local, VrCamera.Instance.transform.localPosition);
             LogControl(best, hand);
@@ -297,13 +300,13 @@ namespace ShipbreakerVR
             {
                 if (!hand.Holding) continue;
                 var error = Hold(hand) - PullPoint(hand);
-                if (!blocked && error.magnitude > (hand.Firm ? 2f : 1f) * TearOff * VrCamera.WorldScale) LetGo(hand, false, $"held back {error.magnitude:0.00} m from the hold");
+                if (!blocked && error.magnitude > (hand.Firm || hand.Follower ? 2f : 1f) * TearOff * VrCamera.WorldScale) LetGo(hand, false, $"held back {error.magnitude:0.00} m from the hold");
                 else holding++;
             }
             // A firmly held part goes with the hand and pulls at nothing.
             var pulling = 0;
             foreach (var hand in Hands)
-                if (hand.Holding && !hand.Firm) pulling++;
+                if (hand.Holding && !hand.Firm && !hand.Follower) pulling++;
             if (pulling == 0)
             {
                 blocked = false;
@@ -317,7 +320,7 @@ namespace ShipbreakerVR
             var holdsVelocity = Vector3.zero;
             foreach (var hand in Hands)
             {
-                if (!hand.Holding || hand.Firm) continue;
+                if (!hand.Holding || hand.Firm || hand.Follower) continue;
                 var hold = Hold(hand);
                 var error = hold - PullPoint(hand);
                 var holdVelocityHere = hand.Body != null ? hand.Body.GetPointVelocity(hold) : Vector3.zero;
@@ -394,6 +397,7 @@ namespace ShipbreakerVR
         {
             var body = hand.Body;
             hand.Firm = true;
+            hand.Follower = false;
             hand.FirmTurn = Quaternion.Inverse(VrCamera.Instance.transform.parent.rotation * aim) * body.rotation;
             hand.SpinBefore = body.maxAngularVelocity;
             hand.InterpolationBefore = body.interpolation;
@@ -600,6 +604,7 @@ namespace ShipbreakerVR
         {
             VrHand.StopHolding(hand.Vr);
             var firm = hand.Firm;
+            hand.Follower = false;
             var body = hand.Body;
             if (firm) Unfirm(hand);
             hand.Anchor = null;
@@ -626,7 +631,7 @@ namespace ShipbreakerVR
         private static bool Pulling()
         {
             foreach (var hand in Hands)
-                if (hand.Holding && !hand.Firm) return true;
+                if (hand.Holding && !hand.Firm && !hand.Follower) return true;
             return false;
         }
 

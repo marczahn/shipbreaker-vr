@@ -610,6 +610,8 @@ A firmly held part (up to 30 kg) must not use the deadbeat impulse: with the spi
 crate it knocked into the body each step, deadly. It now goes part of the way to the hand each step (half at no mass, 8 % at
 30 kg, so heavier parts lag behind), by velocity,
 interpolated, with no pull on the player, and does not collide with the body until its bounds are 45 cm away after letting go.
+A second hand on such a part only stays on it (`Hand.Follower`), and takes over when the first lets go: with the deadbeat pull two
+hands on a light part spun it and built up speed on the player out of nothing.
 
 While a hand holds on the game's squishy collide is off (`PlayerMotion.SetSquishyCollide`, its switch for noclip): it casts a
 ray along the velocity and pushes the body off a surface in range, with a crackle and a shake. Found on `climb-trace`.
