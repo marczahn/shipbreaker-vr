@@ -57,6 +57,14 @@ namespace ShipbreakerVR.Tests
             Assert.Equal(share, VrToolSteady.Share(angle, 0.5f), 3);
 
         [Theory]
+        [InlineData(0.1f, 0f, 0.1f)]
+        [InlineData(0.1f, 40f, 0f)]
+        [InlineData(0.2f, 40f, 0.1f)]
+        [InlineData(0.3f, 90f, 0.15f)]
+        public void TiltDoesNotCountAsThrust(float offset, float tilt, float thrust) =>
+            Assert.Equal(thrust, VrControls.ThrustOffset(offset, tilt), 3);
+
+        [Theory]
         [InlineData(0.2f, -0.6f, 0f, (int)Zone.Grapple)]
         [InlineData(-0.2f, -0.6f, 0f, (int)Zone.DemoCharge)]
         [InlineData(0f, -0.6f, 0f, (int)Zone.None)]

@@ -1218,3 +1218,4 @@ trigger sphere of 0.5 m, `PlayerTouchTransferCollider`, sits on it and stays). I
 it 0.1 m towards the legs, which have no collider, and 0.07 m back, so it reaches 15 cm ahead: airlocks were a tight fit. The body's center of mass is kept.
 ## Steadier tools
 `VrToolSteady` filters the turn of cutter and grapple: within 0.5 degrees of the filtered turn it closes `(angle / 0.5)^2` of the gap, the micro filter of the ITR 2 aiming mod, and always follows with a lag of 40 ms for some weight in the hand. Only the turn: the tool stays at the hand, and the aim uses the same turn.
+Tilting the left controller to roll still gave thrust although it is measured at the wrist: 8 cm behind the grip is an estimate, and the arm moves along. So the offset counts 2.5 mm less per degree the hand is tilted from where the trigger was pressed, at most 15 cm (`VrControls.ThrustOffset`).
