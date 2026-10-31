@@ -355,6 +355,35 @@ interacting, the grapple and the "entity of interest".
   the mouse turns the body) was dropped: in VR that made no sense in practice. An old entry in the config file is
   ignored.
 
+- The player model hangs on that body, so it turned with the whole head too (heading, pitch and roll), around the eye.
+  The shoulders (`rig_*_shoulder`, the humanoid upper arms, under `rig_*_collarbone < rig_spine3`) sit about 20 cm
+  below the eye and swung around it with every look while the controllers stayed put, so the arms' reach changed with
+  the head (issue #37): looking down took the shoulders back, looking right took the right one back. `VrTorso` (first of
+  the LateUpdate steps) turns the model back upright after the animation: the hips (the humanoid root, set by the
+  animator every frame) turn around the neck bone onto `Playspace * heading`, and the neck turns back, so the head stays
+  at the eye. The heading lives in tracking space: it heads for the middle between the hands when that is at least
+  15 cm in front of the head (within 90 degrees of where it looks), otherwise for the head's heading, turns after it
+  beyond 10 degrees and never stays more than 60 degrees from the head (`VrTorso.Follow`). The body also ignored the
+  tracked head's position (the rig follows the game camera, which stays where the game puts it), so leaning and the
+  eyes moving forward when looking down left the shoulders behind: the hips also move so that the neck sits below the
+  tracked head as it sits below the game camera (at most 60 cm). Bone poses relative to the eye (the charge arm's
+  wrist, the mirrored charge hand) use `VrTorso.Frame` instead of the camera's rotation. Body, camera and aiming are
+  untouched. Setting `Steuerung/OberkoerperAufrecht`. Logs: `Torso: upright, turned around the neck, the neck below
+  the tracked head | back to the game`, once `Torso: from the eye, neck ... shoulders ...`.
+- Measured in test mode with the mock runtime, the head moving as on a neck (pivot 12 cm below and 8 cm behind the
+  eyes), both controllers 70 cm in front at chest height: the hands fall short of the controllers by up to 11 cm
+  looking down 45 degrees (21 cm with the setting off), 5 cm looking 50 degrees to the side (20 cm off), 4 cm looking
+  up, 8 cm leaning 15 cm forward with the hands 15 cm further (24 cm off), none looking straight ahead.
+- A target beyond the arm's reach first turns the collarbone (up to 8 cm at the shoulder, 30 degrees,
+  `VrToolModels.Reach`), as one pushes the shoulder forward. Then the arm gets up to 15 % longer
+  (`VrToolModels.MostStretch`): the elbow and the wrist bone move out along their parents, so both bones and the skin
+  on them stretch by the same share. The model's arm is 55 cm from shoulder to wrist (upper arm 32.5 cm, forearm
+  22 cm), shorter than most players' arms, so a stretched-out hand stopped short of the controller; in the test above
+  the hands kept 4 to 11 cm short. `VrToolModels.Unstretch` (first LateUpdate step) puts the arms back to their own
+  length every frame before they are posed again. Logs once per arm `Hands: <arm> arm upper ..., lower ...,
+  reach ...; shoulder at ... from the eye`, and every 10 s `Hands: <arm> hand short of the controller in N% of frames,
+  by up to ... m` while it stays short.
+
 ## UI
 - The game renders its UI with a camera tagged `UI_Camera` inside HDRP custom passes (`HUDCustomPass`,
   `DrawUICameraCustomPass`) as a full-screen overlay. `CustomPass.Execute` is overloaded, so patches must name the
