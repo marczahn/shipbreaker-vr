@@ -127,6 +127,7 @@ namespace ShipbreakerVR
         private static GrabController grab;
         private static Rigidbody player;
         private static PlayerMotion motion;
+        private static SphereCollider bodySphere;
         // The game's squishy collide as it was before the first hand took hold, while it is off for holding on.
         private static bool squishyWas;
         private static bool squishyOff;
@@ -139,6 +140,7 @@ namespace ShipbreakerVR
         private static Vector3 holdVelocity;
         private static int logs;
         private static int contactLogs;
+        private static int impactLogs;
         private static int switchLogs;
         // Whether KeepClear held the body back in the last step.
         private static bool blocked;
@@ -256,7 +258,7 @@ namespace ShipbreakerVR
                 return;
             }
 
-            var first = !LeftHand.Holding && !RightHand.Holding;
+            var first = !Pulling();
             if (!VrHand.StartHolding(hand.Vr)) return;
             var body = best.attachedRigidbody;
             hand.Collider = best;
@@ -274,7 +276,7 @@ namespace ShipbreakerVR
                 Firm(hand, aim);
             hand.PullOffset = hand.Local - ClimbContact.Closer(hand.Local, VrCamera.Instance.transform.localPosition);
             LogControl(best, hand);
-            if (first)
+            if (first && !hand.Firm)
             {
                 pushOff = Vector3.zero;
                 SquishyOff();
@@ -345,9 +347,15 @@ namespace ShipbreakerVR
             var speed = relative.magnitude;
             if (speed < 1e-4f) return velocity;
             var clearance = Clearance * VrCamera.WorldScale;
-            var hits = player.SweepTestAll(relative / speed, speed * dt + clearance, QueryTriggerInteraction.Ignore);
+            // The body's solid sphere only: a Rigidbody sweep could also take its trigger sphere of 50 cm.
+            var solid = BodySphere();
+            var center = solid != null ? solid.transform.TransformPoint(solid.center) : player.position;
+            var radius = solid != null ? solid.radius : 0.3f;
+            var hits = Physics.SphereCastAll(center, radius, relative / speed, speed * dt + clearance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             foreach (var hit in hits)
             {
+                // What the sphere already touches has no place ahead of it.
+                if (hit.distance <= 0f) continue;
                 var body = hit.collider.attachedRigidbody;
                 if (Own(hit.collider) || HeldFirmly(body)) continue;
                 var other = body != null ? body.GetPointVelocity(hit.point) : Vector3.zero;
@@ -374,7 +382,7 @@ namespace ShipbreakerVR
             foreach (var hand in Hands)
                 if (hand.Holding && (hand.Collider == collision.collider || (hand.Body != null && hand.Body == collision.rigidbody))) soft = true;
             soft = soft && speed <= SoftContact * VrCamera.WorldScale;
-            if (contactLogs++ < 20)
+            if (impactLogs++ < 40)
                 Plugin.Log.LogInfo($"Climbing: {(soft ? "touches" : "impact with")} '{collision.collider.name}' at {speed:0.00} m/s while holding on");
             return soft;
         }
@@ -418,8 +426,8 @@ namespace ShipbreakerVR
             for (var i = clearing.Count - 1; i >= 0; i--)
             {
                 var each = clearing[i];
-                if (each.Body != null && !all && player != null && Time.time < each.Until
-                    && (each.Body.ClosestPointOnBounds(player.position) - player.position).magnitude < FirmClear) continue;
+                if (each.Body != null && !all && player != null && (Held(each.Body) || (Time.time < each.Until
+                    && (each.Body.ClosestPointOnBounds(player.position) - player.position).magnitude < FirmClear))) continue;
                 Collide(each.Parts, true);
                 clearing.RemoveAt(i);
             }
@@ -446,10 +454,25 @@ namespace ShipbreakerVR
             }
         }
 
+        private static SphereCollider BodySphere()
+        {
+            if (bodySphere == null)
+                foreach (var collider in player.GetComponentsInChildren<SphereCollider>(true))
+                    if (!collider.isTrigger) bodySphere = collider;
+            return bodySphere;
+        }
+
         private static bool HeldFirmly(Rigidbody body)
         {
             foreach (var hand in Hands)
                 if (hand.Firm && body != null && hand.Body == body) return true;
+            return false;
+        }
+
+        private static bool Held(Rigidbody body)
+        {
+            foreach (var hand in Hands)
+                if (hand.Holding && hand.Body == body) return true;
             return false;
         }
 
@@ -577,11 +600,16 @@ namespace ShipbreakerVR
         {
             VrHand.StopHolding(hand.Vr);
             var firm = hand.Firm;
+            var body = hand.Body;
             if (firm) Unfirm(hand);
             hand.Anchor = null;
             hand.Collider = null;
             hand.Body = null;
-            var last = !LeftHand.Holding && !RightHand.Holding;
+            foreach (var other in Hands)
+                if (other != hand && other.Holding && other.Movable && other.Body == body && body != null && body.mass <= FirmMass
+                    && other.Input.TryGetAimRotation(out var aim)) Firm(other, aim);
+            // A firmly held part does not count: it pulls at nothing.
+            var last = !Pulling();
             var speed = Vector3.ClampMagnitude(pushOff, MaxPushOff * VrCamera.WorldScale);
             if (push && last && !firm && player != null) player.velocity = holdVelocity + speed;
             if (logs++ < 80)
@@ -595,6 +623,13 @@ namespace ShipbreakerVR
 
         // PlayerMotion.HandleSquishyCollide: moving towards a surface within its range, it pushes the body away and plays
         // a crackle, an effect and a shake. A hand pulling up to the hull would fight it all the time.
+        private static bool Pulling()
+        {
+            foreach (var hand in Hands)
+                if (hand.Holding && !hand.Firm) return true;
+            return false;
+        }
+
         private static void SquishyOff()
         {
             if (motion == null || squishyOff) return;
