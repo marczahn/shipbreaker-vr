@@ -21,6 +21,8 @@ namespace ShipbreakerVR
         private const int MaxGraphicsPerCanvas = 6;
         private const int MaxTextsPerCanvas = 12;
         private const int MaxRenderers = 30;
+        private const float MaxBelow = 5f;
+        private const int MaxBelowHits = 4;
 
         private static float dueAt = -1f;
         private static string dueReason;
@@ -53,6 +55,7 @@ namespace ShipbreakerVR
             var text = new StringBuilder();
             text.AppendLine($"Dump ({reason}) at {Time.unscaledTime:0.0} s, game state {GameSession.CurrentGameState}, load screen {(SceneLoader.Instance != null && SceneLoader.Instance.LoadScreenVisible)}, VR {VrXr.IsRunning}, screen {Screen.width}x{Screen.height}, eye {UnityEngine.XR.XRSettings.eyeTextureWidth}x{UnityEngine.XR.XRSettings.eyeTextureHeight}");
             text.AppendLine($"  head at {head.position}, looking {Direction(head, head.position + head.forward)}, rig scale {head.parent.localScale.x:0.00}");
+            text.AppendLine($"  below the head (tracked at {head.localPosition}): {Below(head)}");
             var game = vr.GameCamera;
             if (game != null)
                 text.AppendLine($"  following '{VrUtil.Path(game.transform)}' at {Direction(head, game.transform.position)} {Vector3.Distance(head.position, game.transform.position):0.00} m, its view {Direction(head, head.position + game.transform.forward)}, fov {game.fieldOfView:0}, pixels {game.pixelWidth}x{game.pixelHeight}, stereo {game.stereoEnabled}, mask {game.cullingMask}, far {game.farClipPlane:0}, Hab {vr.FollowsHab}, fade {VrHab.Fade:0.00}");
@@ -81,6 +84,17 @@ namespace ShipbreakerVR
 
             Plugin.Log.LogInfo(text.ToString());
             if (saveImages) SaveImages(ui, System.IO.Path.Combine(Paths.BepInExRootPath, "ShipbreakerVR-F8"), DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+        }
+
+        // What lies straight below the head along the room's up, nearest first. Named, since the nearest may be a bed.
+        private static string Below(Transform head)
+        {
+            var hits = Physics.RaycastAll(head.position, -VrHab.RoomUp, MaxBelow, Physics.AllLayers, QueryTriggerInteraction.Ignore)
+                .OrderBy(h => h.distance)
+                .Take(MaxBelowHits)
+                .Select(h => $"{h.distance:0.00} m '{VrUtil.Path(h.collider.transform)}' layer {h.collider.gameObject.layer}")
+                .ToList();
+            return hits.Count > 0 ? string.Join(", ", hits) : $"nothing within {MaxBelow:0} m";
         }
 
         private static void DescribeCanvas(StringBuilder text, Transform head, Canvas canvas, VrUi ui)
