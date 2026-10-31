@@ -226,6 +226,26 @@ namespace ShipbreakerVR
             }
         }
 
+        public static Hab3DController Controller => controller;
+
+        // The room the Hab's floor plan is measured in.
+        public static Transform Room
+        {
+            get
+            {
+                _ = RoomUp;
+                return interior;
+            }
+        }
+
+        // The floor's height in the room's axes.
+        public static bool TryRoomFloor(out float height)
+        {
+            var found = Room != null && FindFloor();
+            height = found ? floorLocal.y : 0f;
+            return found;
+        }
+
         // Set by a move between spots: the stick has to come back before the next one, or holding it spins through the room.
         public static bool WaitForStick { get; set; }
 
