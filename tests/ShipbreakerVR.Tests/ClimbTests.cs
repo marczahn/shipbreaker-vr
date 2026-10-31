@@ -52,9 +52,48 @@ namespace ShipbreakerVR.Tests
         [Fact]
         public void SlidesAlongAnEdge()
         {
-            var limited = HabFloor.Limit(new Vector2(132f, 115f), new Vector2(132.5f, 115.5f));
-            Assert.Equal(132f, limited.x, 3);
-            Assert.Equal(115.5f, limited.y, 3);
+            var limited = HabFloor.Limit(new Vector2(132.3f, 114.7f), new Vector2(133f, 115f));
+            Assert.Equal(132.3f, limited.x, 3);
+            Assert.Equal(115f, limited.y, 3);
+        }
+
+        [Fact]
+        public void TheFloorsEdgeDoesNotCrossItself()
+        {
+            var edge = HabFloor.Outline;
+            for (var i = 0; i < edge.Length; i++)
+                for (var j = i + 2; j < edge.Length; j++)
+                {
+                    if (i == 0 && j == edge.Length - 1) continue;
+                    Assert.False(Crosses(edge[i], edge[i + 1], edge[j], edge[(j + 1) % edge.Length]), $"edges {i} and {j}");
+                }
+        }
+
+        private static bool Crosses(Vector2 a, Vector2 b, Vector2 c, Vector2 d) =>
+            Side(a, b, c) * Side(a, b, d) < 0f && Side(c, d, a) * Side(c, d, b) < 0f;
+
+        private static float Side(Vector2 a, Vector2 b, Vector2 point) =>
+            (b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x);
+
+        [Theory]
+        [InlineData(130.6f, 113.7f)]
+        [InlineData(131.11f, 114.61f)]
+        [InlineData(131.07f, 116.67f)]
+        [InlineData(131.86f, 119.17f)]
+        [InlineData(131.63f, 120.17f)]
+        [InlineData(131.36f, 120.85f)]
+        public void CanWalkWhereTheGameStands(float x, float z)
+        {
+            Assert.True(HabFloor.Inside(new Vector2(x, z)));
+        }
+
+        [Theory]
+        [InlineData(133.4f, 121.2f)]
+        [InlineData(130f, 111f)]
+        [InlineData(129f, 114f)]
+        public void CannotWalkIntoFurniture(float x, float z)
+        {
+            Assert.False(HabFloor.Inside(new Vector2(x, z)));
         }
 
         [Fact]
@@ -67,8 +106,8 @@ namespace ShipbreakerVR.Tests
         [Fact]
         public void StopsInACorner()
         {
-            var from = new Vector2(132.1f, 113.45f);
-            Assert.Equal(from, HabFloor.Limit(from, new Vector2(132.5f, 113f)));
+            var from = new Vector2(130.6f, 113.7f);
+            Assert.Equal(from, HabFloor.Limit(from, new Vector2(120f, 100f)));
         }
 
         [Fact]

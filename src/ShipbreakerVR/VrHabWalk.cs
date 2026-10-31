@@ -125,19 +125,49 @@ namespace ShipbreakerVR
     // Where one can walk in the Hab, in the room's axes (x, z). Nothing there has a collider, neither walls nor floor.
     internal static class HabFloor
     {
-        // Lowest and highest corner of the aisle, the work area and the window niche.
-        private static readonly Rect[] Areas =
+        // The floor's edge, walked and measured in the headset with the head at the walls and furniture.
+        public static readonly Vector2[] Outline =
         {
-            Rect.MinMaxRect(129.75f, 113.45f, 132.1f, 118.5f),
-            Rect.MinMaxRect(130.6f, 118.5f, 132.9f, 121.35f),
-            Rect.MinMaxRect(128.7f, 115.95f, 130.1f, 116.8f),
+            new Vector2(131.10f, 112.63f), new Vector2(128.99f, 112.55f), new Vector2(129.05f, 112.93f), new Vector2(129.59f, 112.93f),
+            new Vector2(129.59f, 113.36f), new Vector2(129.84f, 113.39f), new Vector2(130.15f, 114.21f), new Vector2(129.51f, 114.57f),
+            new Vector2(129.51f, 115.57f), new Vector2(129.43f, 115.58f), new Vector2(128.47f, 115.64f), new Vector2(128.52f, 116.59f),
+            new Vector2(129.91f, 117.90f), new Vector2(130.16f, 117.89f), new Vector2(130.18f, 118.44f), new Vector2(130.10f, 118.42f),
+            new Vector2(130.12f, 118.69f), new Vector2(130.06f, 119.90f), new Vector2(130.12f, 119.90f), new Vector2(130.15f, 121.09f),
+            new Vector2(130.15f, 121.15f), new Vector2(129.34f, 121.15f), new Vector2(129.35f, 121.82f), new Vector2(129.99f, 121.46f),
+            new Vector2(130.15f, 121.51f), new Vector2(130.37f, 122.18f), new Vector2(131.14f, 122.22f), new Vector2(131.18f, 122.00f),
+            new Vector2(131.41f, 122.01f), new Vector2(131.50f, 122.23f), new Vector2(133.63f, 120.42f), new Vector2(133.97f, 120.48f),
+            new Vector2(134.47f, 121.04f), new Vector2(134.52f, 120.07f), new Vector2(134.36f, 120.05f), new Vector2(134.20f, 119.95f),
+            new Vector2(133.76f, 120.03f), new Vector2(132.87f, 118.90f), new Vector2(132.86f, 118.84f), new Vector2(133.20f, 118.60f),
+            new Vector2(133.16f, 118.20f), new Vector2(133.01f, 118.20f), new Vector2(133.02f, 117.80f), new Vector2(132.72f, 117.82f),
+            new Vector2(132.73f, 117.28f), new Vector2(132.58f, 117.28f), new Vector2(132.59f, 116.88f), new Vector2(132.46f, 116.77f),
+            new Vector2(132.42f, 115.84f), new Vector2(132.63f, 115.68f), new Vector2(132.60f, 115.20f), new Vector2(132.47f, 115.08f),
+            new Vector2(132.46f, 114.22f), new Vector2(132.62f, 114.11f), new Vector2(132.53f, 113.51f), new Vector2(132.55f, 113.45f),
+            new Vector2(132.40f, 113.53f), new Vector2(132.21f, 113.40f), new Vector2(132.34f, 113.21f), new Vector2(131.74f, 112.63f),
+            new Vector2(131.60f, 112.76f), new Vector2(131.38f, 112.56f), new Vector2(131.55f, 112.42f), new Vector2(131.34f, 112.27f),
+            new Vector2(131.25f, 112.42f), new Vector2(131.21f, 112.52f),
         };
+
+        // How far the head stays from that edge, so the view does not end up inside what it was measured against.
+        private const float Margin = 0.1f;
 
         public static bool Inside(Vector2 point)
         {
-            foreach (var area in Areas)
-                if (point.x >= area.xMin && point.x <= area.xMax && point.y >= area.yMin && point.y <= area.yMax) return true;
-            return false;
+            var inside = false;
+            for (int i = 0, last = Outline.Length - 1; i < Outline.Length; last = i++)
+            {
+                var a = Outline[i];
+                var b = Outline[last];
+                if ((a.y > point.y) != (b.y > point.y) && point.x < a.x + (b.x - a.x) * (point.y - a.y) / (b.y - a.y)) inside = !inside;
+                if (Distance(point, a, b) < Margin) return false;
+            }
+            return inside;
+        }
+
+        private static float Distance(Vector2 point, Vector2 a, Vector2 b)
+        {
+            var along = b - a;
+            var share = Mathf.Clamp01(Vector2.Dot(point - a, along) / Mathf.Max(along.sqrMagnitude, 1e-6f));
+            return (point - (a + along * share)).magnitude;
         }
 
         // How far a step gets: along an edge if it runs into one at a slant.
