@@ -33,12 +33,12 @@ namespace ShipbreakerVR
     {
         static VrAim() => VrSession.OnUnload("aim camera", Release);
 
-        private const float BeamWidth = 0.002f;
+        private const float BeamWidth = 0.003f;
         private const float BeamMiss = 5f;
         private const float BeamRange = 100f;
-        private static readonly Color LaserColor = new Color(1f, 0.12f, 0.08f);
+        private static readonly Color LaserColor = new Color(2.5f, 0.25f, 0.15f);
         // The bright middle of the dots, so that they stay red too.
-        private static readonly Color DotCoreColor = new Color(1f, 0.55f, 0.5f);
+        private static readonly Color DotCoreColor = new Color(2.5f, 1.2f, 1f);
         private static readonly Color TetherColor = new Color(1f, 0.6f, 0.15f);
         // The ring at the end of the tether mode's laser: its outer radius as a share of the distance from the eye, so it
         // looks the same size near and far, and its inner radius as a share of the outer one.
@@ -52,8 +52,8 @@ namespace ShipbreakerVR
         // the distance from the eye, so it stays visible far away. The dots on the Splitsaw's line look the same, as Marc
         // wanted. All are drawn this share of the way towards the eye, so the surface does not cut into them but the
         // tool in the hand still hides them.
-        private const float DotSize = 0.006f;
-        private const float DotCore = 0.002f;
+        private const float DotSize = 0.008f;
+        private const float DotCore = 0.003f;
         private const float DotMinSize = 0.0012f;
         private const float DotMinCore = 0.0005f;
         // Extra dots on the Splitsaw's line between two neighboring edge points of the game, so the dots sit closer
@@ -519,8 +519,8 @@ namespace ShipbreakerVR
         private static void CreateMeshes()
         {
             // Bright near the hand, fading a little towards the target; tinted by the material.
-            var near = new Color(1f, 1f, 1f, 0.9f);
-            var far = new Color(1f, 1f, 1f, 0.4f);
+            var near = new Color(1f, 1f, 1f, 1f);
+            var far = new Color(1f, 1f, 1f, 0.75f);
             beamMesh = new Mesh { name = "ShipbreakerVR Aim Beam" };
             beamMesh.vertices = new[] { new Vector3(-0.5f, 0f, 0f), new Vector3(0.5f, 0f, 0f), new Vector3(0.5f, 1f, 0f), new Vector3(-0.5f, 1f, 0f) };
             beamMesh.colors = new[] { near, near, far, far };
