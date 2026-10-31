@@ -616,7 +616,7 @@ ray along the velocity and pushes the body off a surface in range, with a crackl
 
 The constraint's velocity knows nothing of the body's colliders, and `PlayerMotion.OnCollisionEnter` treats every new
 contact as an impact (sound, sparks, shake, damage by `ImpactDamageRangeAsset` from the relative velocity). Pulling up
-to a surface ran into it at up to 10 m/s. So each step a `Rigidbody.SweepTestAll` along the velocity relative to the
+to a surface ran into it at up to 10 m/s. So each step a sphere cast of the body's solid sphere along the velocity relative to the
 holds removes what would close to under 2 cm from anything ahead (`VrClimb.KeepClear`), for moving things relative to
 their velocity. Sliding along a surface stays. What still touches the thing held at up to 3 m/s skips the game's
 `OnCollisionEnter` (`ImpactPatch`); ship parts share one kinematic rigidbody, so that is the whole hull. Faster hits and
