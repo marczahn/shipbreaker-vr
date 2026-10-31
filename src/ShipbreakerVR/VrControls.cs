@@ -30,8 +30,13 @@ namespace ShipbreakerVR
         public const float DeadzoneMax = 10f;
         public const float FullMax = 30f;
         public const float MinThrustRange = 5f;
-        private const float TurnDeadzone = 8f;
-        private const float TurnFull = 45f;
+        // How far a tilted hand moves without meaning to, in meters per degree, and at most.
+        private const float TiltShift = 0.0025f;
+        private const float TiltShiftMax = 0.15f;
+        private const float TurnDeadzone = 12f;
+        // Rolling: as fast per degree as turning, up to a hand tilted all the way.
+        private const float RollFull = 90f;
+        private const float RollSpeed = 100f;
         private const float TurnSpeed = 45f;
         private const float StickDeadzone = 0.15f;
 
@@ -98,10 +103,16 @@ namespace ShipbreakerVR
             if (!trigger) triggerFromTool = false;
             if (!Hold(trigger && !triggerFromTool, position, rotation)) return;
             var offset = position - heldPosition;
-            var strength = Ramp(offset.magnitude, MoveDeadzone, FullOffset);
+            // The wrist is an estimate and the arm moves along when the hand tilts, so a tilt still shifts it: as far as a tilt
+            // can do that, the offset does not count as thrust. Moving the hand further still does.
+            var moved = ThrustOffset(offset.magnitude, Quaternion.Angle(heldRotation, rotation));
+            var strength = Ramp(moved, MoveDeadzone, FullOffset);
             if (strength > 0f) thrust = playspace * offset.normalized * strength;
             RollFromReference(rotation, playspace);
         }
+
+        // The offset left for thrust after what a tilt of that many degrees moves the hand by itself, in meters.
+        internal static float ThrustOffset(float offset, float tilt) => Mathf.Max(offset - Mathf.Min(tilt * TiltShift, TiltShiftMax), 0f);
 
         // Stores the pose when the button goes down; true while it stays down (from the frame after the press).
         private static bool Hold(bool pressed, Vector3 position, Quaternion rotation)
@@ -137,12 +148,12 @@ namespace ShipbreakerVR
 
         private static float StickRate(float value) => Ramp(Mathf.Abs(value), StickDeadzone, 1f) * Mathf.Sign(value) * TurnSpeed * Time.deltaTime;
 
-        // Degrees to turn this frame for a hand angle (0..360 from eulerAngles): none inside the deadzone, full speed from
-        // TurnFull on.
+        // Degrees to roll this frame for a hand angle (0..360 from eulerAngles): none inside the deadzone, full speed from
+        // RollFull on.
         private static float Rate(float angle)
         {
             if (angle > 180f) angle -= 360f;
-            return Ramp(Mathf.Abs(angle), TurnDeadzone, TurnFull) * Mathf.Sign(angle) * TurnSpeed * Time.deltaTime;
+            return Ramp(Mathf.Abs(angle), TurnDeadzone, RollFull) * Mathf.Sign(angle) * RollSpeed * Time.deltaTime;
         }
 
         private static float SnapAngle(Turning mode) =>

@@ -24,7 +24,7 @@ namespace ShipbreakerVR
     // Where the laser of the grapple or the cutter hits, a bright dot marks the point, like a laser pointer's; on the
     // Splitsaw smaller dots mark the line it will cut, only where it meets a part the cut reaches (the game's edge
     // detection points, CuttingController.EdgeDetectionPoints), as Marc asked.
-    // In the grapple's tether mode (VrTetherMode) the laser is orange, a ring marks where it meets something, and while
+    // In the grapple's tether mode (VrTetherMode) a ring marks where it meets something, and while
     // a tether is being placed a line runs from where it started to where the laser ends; the tether the laser points at,
     // which A lets go of, is traced in orange.
     // The buttons of the tool hand's controller work the tools while aiming with the hand (VrToolInput).
@@ -33,10 +33,15 @@ namespace ShipbreakerVR
     {
         static VrAim() => VrSession.OnUnload("aim camera", Release);
 
-        private const float BeamWidth = 0.002f;
+        private const float BeamWidth = 0.003f;
         private const float BeamMiss = 5f;
         private const float BeamRange = 100f;
-        private static readonly Color LaserColor = new Color(0.55f, 0.95f, 1f);
+        private static readonly Color LaserColor = new Color(2.5f, 0.25f, 0.15f);
+        // The bright middle of the dots, so that they stay red too.
+        private static readonly Color DotCoreColor = new Color(2.5f, 1.2f, 1f);
+        // The grapple's laser and dots, in both its modes; the ring and the traced tether stay orange.
+        private static readonly Color GrappleColor = new Color(0.9f, 2.0f, 2.5f);
+        private static readonly Color GrappleCoreColor = new Color(2.2f, 2.5f, 2.5f);
         private static readonly Color TetherColor = new Color(1f, 0.6f, 0.15f);
         // The ring at the end of the tether mode's laser: its outer radius as a share of the distance from the eye, so it
         // looks the same size near and far, and its inner radius as a share of the outer one.
@@ -50,8 +55,8 @@ namespace ShipbreakerVR
         // the distance from the eye, so it stays visible far away. The dots on the Splitsaw's line look the same, as Marc
         // wanted. All are drawn this share of the way towards the eye, so the surface does not cut into them but the
         // tool in the hand still hides them.
-        private const float DotSize = 0.006f;
-        private const float DotCore = 0.002f;
+        private const float DotSize = 0.008f;
+        private const float DotCore = 0.003f;
         private const float DotMinSize = 0.0012f;
         private const float DotMinCore = 0.0005f;
         // Extra dots on the Splitsaw's line between two neighboring edge points of the game, so the dots sit closer
@@ -95,7 +100,8 @@ namespace ShipbreakerVR
         // The lasers are hidden by what lies in front of them, the tool in the hand above all (depth tested); the tether
         // mode's ring and lines are drawn over everything, since they lie on or along the surfaces they mark.
         private static Material beamMaterial;
-        private static Material tetherBeamMaterial;
+        private static Material grappleMaterial;
+        private static Material grappleCoreMaterial;
         private static Mesh ringMesh;
         private static Material tetherMaterial;
         private static Mesh dotMesh;
@@ -190,7 +196,9 @@ namespace ShipbreakerVR
             aim.aspect = main.aspect;
             aim.nearClipPlane = main.nearClipPlane;
             aim.farClipPlane = main.farClipPlane;
-            withTool = VrToolModels.Equipped != EquipmentController.Equipment.None;
+            // The game's hand keeps naming the scanner after it was put away; the equipment knows it is gone.
+            var equipment = GameRefs.Equipment;
+            withTool = VrToolModels.Equipped != EquipmentController.Equipment.None && (equipment == null || !equipment.IsNothingEquipped);
             active = true;
         }
 
@@ -237,7 +245,7 @@ namespace ShipbreakerVR
             if (!Usable() || !hand.TryGetAimPose(out var local, out var localRotation, out _)) return false;
             var rig = VrCamera.Instance.transform.parent;
             position = rig.TransformPoint(local);
-            rotation = rig.rotation * localRotation;
+            rotation = rig.rotation * VrToolSteady.Apply(hand, ToolOf(hand), localRotation);
             return true;
         }
 
@@ -265,6 +273,9 @@ namespace ShipbreakerVR
         // The controller of the hand that holds the tool (VrHand.GameToolHand), the right one unless the left hand drew it.
         private static VrInput.Hand Tool => VrHand.GameToolHand.Input;
 
+        private static EquipmentController.Equipment ToolOf(VrInput.Hand hand) =>
+            hand == Tool ? VrToolModels.Equipped : hand.Node == VrDualTools.SecondNode ? VrDualTools.Second : EquipmentController.Equipment.None;
+
         private static bool TryGetPoseLocal(out Vector3 local, out Quaternion localRotation)
         {
             local = Vector3.zero;
@@ -277,6 +288,7 @@ namespace ShipbreakerVR
                 handNode = hand.Node;
             }
             if (!hand.TryGetAimPose(out local, out localRotation, out var pointer)) return false;
+            localRotation = VrToolSteady.Apply(hand, VrToolModels.Equipped, localRotation);
             if (!loggedPose)
             {
                 loggedPose = true;
@@ -317,12 +329,16 @@ namespace ShipbreakerVR
 
             var tethers = VrTetherMode.Applies(VrToolModels.Equipped);
             var secondTethers = VrTetherMode.Applies(VrDualTools.Second);
-            DrawBeam(cmd, eye, scale, beamStart, beamEnd, beamHit, tethers, handNode, beamTether);
-            if (secondBeamVisible)
-                DrawBeam(cmd, eye, scale, secondBeamStart, secondBeamEnd, secondBeamHit, secondTethers, VrDualTools.SecondNode, secondBeamTether);
-            foreach (var point in cutPoints) DrawImpact(cmd, eye, scale, point, beamMaterial);
-            if (beamDot) DrawImpact(cmd, eye, scale, beamEnd, tethers ? tetherBeamMaterial : beamMaterial);
-            if (secondBeamDot) DrawImpact(cmd, eye, scale, secondBeamEnd, secondTethers ? tetherBeamMaterial : beamMaterial);
+            // The demo charges show where they go with the game's marker, they need no laser.
+            var tool = VrToolModels.Equipped;
+            var secondTool = VrDualTools.Second;
+            if (tool != EquipmentController.Equipment.DemoCharge)
+                DrawBeam(cmd, eye, scale, beamStart, beamEnd, beamHit, tethers, handNode, beamTether, tool);
+            if (secondBeamVisible && secondTool != EquipmentController.Equipment.DemoCharge)
+                DrawBeam(cmd, eye, scale, secondBeamStart, secondBeamEnd, secondBeamHit, secondTethers, VrDualTools.SecondNode, secondBeamTether, secondTool);
+            foreach (var point in cutPoints) DrawImpact(cmd, eye, scale, point, beamMaterial, coreMaterial);
+            if (beamDot) DrawImpact(cmd, eye, scale, beamEnd, Beam(tool), Core(tool));
+            if (secondBeamDot) DrawImpact(cmd, eye, scale, secondBeamEnd, Beam(secondTool), Core(secondTool));
             context.renderContext.ExecuteCommandBuffer(cmd);
             cmd.Clear();
             context.renderContext.SetupCameraProperties(context.hdCamera.camera, true);
@@ -330,9 +346,9 @@ namespace ShipbreakerVR
 
         // One tool's laser; in the tether mode orange, with the ring where it hits, the line of the tether being placed by
         // that hand and the tether it points at traced.
-        private static void DrawBeam(CommandBuffer cmd, Vector3 eye, float scale, Vector3 start, Vector3 end, bool hit, bool tethers, XRNode node, Tether target)
+        private static void DrawBeam(CommandBuffer cmd, Vector3 eye, float scale, Vector3 start, Vector3 end, bool hit, bool tethers, XRNode node, Tether target, EquipmentController.Equipment tool)
         {
-            DrawLine(cmd, eye, scale, start, end, tethers ? tetherBeamMaterial : beamMaterial);
+            DrawLine(cmd, eye, scale, start, end, Beam(tool));
             if (!tethers) return;
             var material = tetherMaterial;
             if (target != null) DrawLine(cmd, eye, scale * TraceWidth, target.WorldStartAttachPoint, target.WorldEndAttachPoint, material);
@@ -343,11 +359,17 @@ namespace ShipbreakerVR
         }
 
         // A laser's dot: a glow in its color with a white core, of a size in the world.
-        private static void DrawImpact(CommandBuffer cmd, Vector3 eye, float scale, Vector3 point, Material glow)
+        private static Material Beam(EquipmentController.Equipment tool) =>
+            tool == EquipmentController.Equipment.GrappleHook ? grappleMaterial : beamMaterial;
+
+        private static Material Core(EquipmentController.Equipment tool) =>
+            tool == EquipmentController.Equipment.GrappleHook ? grappleCoreMaterial : coreMaterial;
+
+        private static void DrawImpact(CommandBuffer cmd, Vector3 eye, float scale, Vector3 point, Material glow, Material core)
         {
             var distance = Vector3.Distance(eye, point);
             DrawDisc(cmd, eye, point, Mathf.Max(DotSize * scale, DotMinSize * distance), glow);
-            DrawDisc(cmd, eye, point, Mathf.Max(DotCore * scale, DotMinCore * distance), coreMaterial);
+            DrawDisc(cmd, eye, point, Mathf.Max(DotCore * scale, DotMinCore * distance), core);
         }
 
         // A disc of that radius facing the eye.
@@ -515,16 +537,17 @@ namespace ShipbreakerVR
         private static void CreateMeshes()
         {
             // Bright near the hand, fading a little towards the target; tinted by the material.
-            var near = new Color(1f, 1f, 1f, 0.9f);
-            var far = new Color(1f, 1f, 1f, 0.4f);
+            var near = new Color(1f, 1f, 1f, 1f);
+            var far = new Color(1f, 1f, 1f, 0.75f);
             beamMesh = new Mesh { name = "ShipbreakerVR Aim Beam" };
             beamMesh.vertices = new[] { new Vector3(-0.5f, 0f, 0f), new Vector3(0.5f, 0f, 0f), new Vector3(0.5f, 1f, 0f), new Vector3(-0.5f, 1f, 0f) };
             beamMesh.colors = new[] { near, near, far, far };
             beamMesh.triangles = new[] { 0, 2, 1, 0, 3, 2 };
             beamMaterial = VrUtil.DepthTestedMaterial(LaserColor);
-            tetherBeamMaterial = VrUtil.DepthTestedMaterial(TetherColor);
+            grappleMaterial = VrUtil.DepthTestedMaterial(GrappleColor);
+            grappleCoreMaterial = VrUtil.DepthTestedMaterial(GrappleCoreColor);
             tetherMaterial = VrUtil.OverlayMaterial(TetherColor);
-            coreMaterial = VrUtil.DepthTestedMaterial(Color.white);
+            coreMaterial = VrUtil.DepthTestedMaterial(DotCoreColor);
 
             // A flat disc of radius 1 facing along z, opaque in the middle and fading to its edge.
             var dotVertices = new Vector3[DotSegments + 1];
@@ -569,13 +592,14 @@ namespace ShipbreakerVR
         public static void Release()
         {
             if (aim != null) Object.Destroy(aim.gameObject);
-            foreach (var o in new Object[] { beamMesh, beamMaterial, tetherBeamMaterial, ringMesh, tetherMaterial, dotMesh, coreMaterial })
+            foreach (var o in new Object[] { beamMesh, beamMaterial, grappleMaterial, grappleCoreMaterial, ringMesh, tetherMaterial, dotMesh, coreMaterial })
                 if (o != null) Object.Destroy(o);
             aim = null;
             throwOrigin = null;
             beamMesh = null;
             beamMaterial = null;
-            tetherBeamMaterial = null;
+            grappleMaterial = null;
+            grappleCoreMaterial = null;
             beamTether = secondBeamTether = null;
             ringMesh = null;
             tetherMaterial = null;

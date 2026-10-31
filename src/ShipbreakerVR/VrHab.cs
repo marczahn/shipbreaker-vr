@@ -15,6 +15,7 @@ namespace ShipbreakerVR
     internal static class VrHab
     {
         private static Hab3DController controller;
+        private static Transform interior;
         private static float nextControllerSearch;
 
         // Moving between bed, kitchen, terminal and so on, the Hab camera swings through the room for a second. In VR
@@ -169,6 +170,18 @@ namespace ShipbreakerVR
         }
 
         public static bool IsHabCamera(Camera camera) => camera != null && camera.GetComponentInParent<Hab3DController>() != null;
+
+        // The Hab stands tilted in the world: floor and walls (PRF_Hab_Interior) lie 4 degrees off, the container around
+        // them 19. Their up is the room's, without the Hab the world's.
+        public static Vector3 RoomUp
+        {
+            get
+            {
+                if (controller == null) return Vector3.up;
+                if (interior == null || interior.root != controller.transform.root) interior = controller.transform.root.Find("PRF_Hab_Interior");
+                return interior != null ? interior.up : Vector3.up;
+            }
+        }
 
         // In VR the sway moves the whole room around the player. Silenced while the rig follows the Hab camera,
         // restored afterwards. Rescanned now and then, since locations may be activated later.
