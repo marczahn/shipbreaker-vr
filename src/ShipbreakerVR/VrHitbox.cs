@@ -15,6 +15,8 @@ namespace ShipbreakerVR
         // In meters of the game's world.
         private const float Radius = 0.22f;
         private const float TowardsLegs = 0.1f;
+        // Back as well, so that it reaches 15 cm ahead of the head.
+        private const float Backwards = 0.07f;
 
         private static readonly AccessTools.FieldRef<GrabController, Rigidbody> PlayerBody =
             AccessTools.FieldRefAccess<GrabController, Rigidbody>("m_PlayerRigidbodyReference");
@@ -44,10 +46,10 @@ namespace ShipbreakerVR
             gameCenter = sphere.center;
             gameCenterOfMass = body.centerOfMass;
             sphere.radius = Radius;
-            sphere.center = gameCenter + Vector3.down * TowardsLegs;
+            sphere.center = gameCenter + Vector3.down * TowardsLegs + Vector3.back * Backwards;
             // Without this the body would turn around the new center.
             body.centerOfMass = gameCenterOfMass;
-            Plugin.Log.LogInfo($"Hitbox: sphere from {gameRadius:0.00} m to {Radius:0.00} m, {TowardsLegs:0.00} m towards the legs");
+            Plugin.Log.LogInfo($"Hitbox: sphere from {gameRadius:0.00} m to {Radius:0.00} m, {TowardsLegs:0.00} m towards the legs, {Backwards:0.00} m back");
         }
 
         private static void Restore()

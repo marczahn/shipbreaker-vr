@@ -1146,4 +1146,4 @@ Ideas not done yet, for after the measurements:
 ## The body's hitbox
 The player collides as one sphere of radius 0.32 m on `Player Collider`, centered on the player and so on the head (a
 trigger sphere of 0.5 m, `PlayerTouchTransferCollider`, sits on it and stays). In VR `VrHitbox` makes it 0.22 m and moves
-it 0.1 m towards the legs, which have no collider: airlocks were a tight fit. The body's center of mass is kept.
+it 0.1 m towards the legs, which have no collider, and 0.07 m back, so it reaches 15 cm ahead: airlocks were a tight fit. The body's center of mass is kept.
