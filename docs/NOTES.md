@@ -1142,3 +1142,5 @@ Ideas not done yet, for after the measurements:
 4. Playing VR: controllers, tools in hand, bindings – flying done, aiming with the hand in progress
 5. Using VR: HUD as visor, menus with the right controller (no pointer yet) – in progress
 6. Comfort and performance
+
+Tilting the left controller to roll still gave thrust although it is measured at the wrist: 8 cm behind the grip is an estimate, and the arm moves along. So the offset counts 2.5 mm less per degree the hand is tilted from where the trigger was pressed, at most 15 cm (`VrControls.ThrustOffset`).
