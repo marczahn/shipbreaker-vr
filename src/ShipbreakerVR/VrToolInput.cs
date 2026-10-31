@@ -291,7 +291,7 @@ namespace ShipbreakerVR
             if (!hand.Input.Valid) return;
             hand.GripPressed = active && hand.Input.Grip.Pressed;
             // No buzz while the trigger is held: the grip does not draw then (flying with the left hand, or firing).
-            if (active) hand.Vr.Zone = VrToolBelt.Update(hand.Input, hand.Trigger, hand.Vr.State == HandState.Empty);
+            if (active) hand.Vr.Zone = VrToolBelt.Update(hand.Input, hand.Trigger);
         }
 
         // Grip pressed at a zone of the tool belt: that tool goes into this hand. Through the game's own selection keys

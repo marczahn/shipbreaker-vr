@@ -5,8 +5,7 @@ namespace ShipbreakerVR
     // Picking the tools off the body instead of the flat game's wheel, as Marc wanted: reaching there with either hand and
     // pressing the grip draws the tool (VrToolInput), letting go puts it back. The zones are measured from the head in
     // tracking space (real meters), turned with the head's heading, so they stay at the body whichever way one looks or
-    // the playspace turns; they are the same for both hands. Entering a zone gives that hand a short buzz, and an empty
-    // hand keeps vibrating softly as long as it stays there.
+    // the playspace turns; they are the same for both hands. Entering a zone gives that hand a short buzz.
     //   right hip            grapple
     //   left hip             demo charges (drawn across the body)
     //   over the right shoulder  cutter
@@ -33,20 +32,14 @@ namespace ShipbreakerVR
         private const float ShoulderInside = -0.1f;
         private const float HelmetReach = 0.22f;
         private const float HelmetSide = 0.06f;
-        // The vibration in a zone: its strength, and pulses that overlap so that it does not stop between them, in seconds.
-        private const float StayAmplitude = 0.15f;
-        private const float StayPulse = 0.15f;
-        private const float StayEvery = 0.1f;
 
         // The zone each hand last buzzed for (left, right).
         private static readonly Zone[] announced = new Zone[2];
-        // When each hand gets its next pulse (left, right).
-        private static readonly float[] nextPulse = new float[2];
         private static int logs;
 
         // The zone the hand is in this frame (None without tracking). Quiet (while its trigger is held) it does not buzz;
-        // the buzz comes when the trigger is let go inside the zone. An empty hand vibrates while it stays in the zone.
-        public static Zone Update(VrInput.Hand hand, bool quiet, bool empty)
+        // the buzz comes when the trigger is let go inside the zone.
+        public static Zone Update(VrInput.Hand hand, bool quiet)
         {
             var zone = Find(hand, out var local);
             var index = hand.IsLeft ? 0 : 1;
@@ -57,11 +50,6 @@ namespace ShipbreakerVR
                 hand.Buzz(0.25f, 0.04f);
                 if (logs++ < 40)
                     Plugin.Log.LogInfo($"Tool belt: {hand.Name} hand at {zone} ({local.x:0.00}, {local.y:0.00}, {local.z:0.00} m from the head)");
-            }
-            if (zone != Zone.None && empty && !quiet && Time.unscaledTime >= nextPulse[index])
-            {
-                nextPulse[index] = Time.unscaledTime + StayEvery;
-                hand.Buzz(StayAmplitude, StayPulse);
             }
             return zone;
         }
