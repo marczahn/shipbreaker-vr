@@ -46,6 +46,7 @@ namespace ShipbreakerVR
 
         private static readonly (string Name, System.Action Step)[] FixedSteps =
         {
+            ("hitbox", VrHitbox.FixedUpdate),
             ("climbing", VrClimb.FixedUpdate),
             ("frame statistics", VrPerformance.FixedStep),
         };

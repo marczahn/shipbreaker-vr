@@ -15,6 +15,7 @@ namespace ShipbreakerVR
     internal static class VrHab
     {
         private static Hab3DController controller;
+        private static Transform interior;
         private static float nextControllerSearch;
 
         // Moving between bed, kitchen, terminal and so on, the Hab camera swings through the room for a second. In VR
@@ -170,26 +171,15 @@ namespace ShipbreakerVR
 
         public static bool IsHabCamera(Camera camera) => camera != null && camera.GetComponentInParent<Hab3DController>() != null;
 
-        // How level the Hab is, for the log: the rig stands on the world's up, so a room that looks tilted is either tilted
-        // in the world or the headset's own horizon is off.
-        public static void LogLevel(Camera camera)
+        // The Hab stands tilted in the world: floor and walls (PRF_Hab_Interior) lie 4 degrees off, the container around
+        // them 19. Their up is the room's, without the Hab the world's.
+        public static Vector3 RoomUp
         {
-            var at = camera.transform;
-            var floor = Physics.Raycast(at.position, Vector3.down, out var hit, 5f, ~0, QueryTriggerInteraction.Ignore)
-                ? $"'{hit.collider.name}' {hit.distance:0.00} m below, {Vector3.Angle(hit.normal, Vector3.up):0.00}° off level"
-                : "no collider below";
-            Plugin.Log.LogInfo($"Hab level: camera at {at.position} turned {at.eulerAngles}, floor {floor}");
-            var container = camera.GetComponentInParent<Hab3DController>();
-            var top = container != null ? container.transform.root : at.root;
-            Plugin.Log.LogInfo($"Hab level: root '{top.name}' {Vector3.Angle(top.up, Vector3.up):0.00}° off level, turned {top.eulerAngles}");
-            foreach (Transform child in top)
-                Plugin.Log.LogInfo($"Hab level: child '{child.name}' {Vector3.Angle(child.up, Vector3.up):0.00}° off level, turned {child.eulerAngles}");
-            var logged = 0;
-            foreach (var renderer in top.GetComponentsInChildren<MeshRenderer>(true))
+            get
             {
-                var name = renderer.name;
-                if ((name.IndexOf("Floor", System.StringComparison.OrdinalIgnoreCase) < 0 && name.IndexOf("Wall", System.StringComparison.OrdinalIgnoreCase) < 0) || logged++ >= 20) continue;
-                Plugin.Log.LogInfo($"Hab level: '{renderer.name}' {Vector3.Angle(renderer.transform.up, Vector3.up):0.00}° off level, turned {renderer.transform.eulerAngles}");
+                if (controller == null) return Vector3.up;
+                if (interior == null || interior.root != controller.transform.root) interior = controller.transform.root.Find("PRF_Hab_Interior");
+                return interior != null ? interior.up : Vector3.up;
             }
         }
 
