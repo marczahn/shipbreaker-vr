@@ -574,6 +574,9 @@ far the body moved since. Letting go of the last hold keeps the body's velocity 
 80 ms, capped at 5 m/s, so a push off flies on; a hand held back more than 0.5 m from its hold lets go without it.
 While the left hand holds on, controller flying rests. Log lines start with "Climbing:".
 
+While a hand holds on the game's squishy collide is off (`PlayerMotion.SetSquishyCollide`, its switch for noclip): it casts a
+ray along the velocity and pushes the body off a surface in range, with a crackle and a shake. Found on `climb-trace`.
+
 The constraint's velocity knows nothing of the body's colliders, and `PlayerMotion.OnCollisionEnter` treats every new
 contact as an impact (sound, sparks, shake, damage by `ImpactDamageRangeAsset` from the relative velocity). Pulling up
 to a surface ran into it at up to 10 m/s. So each step a `Rigidbody.SweepTestAll` along the velocity relative to the
