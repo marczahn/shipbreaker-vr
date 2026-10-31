@@ -104,7 +104,7 @@ flat game.
 
 B switches the grapple between two modes. The controller buzzes twice when the tether mode starts and once when
 grappling comes back.
-- Grappling (blue laser, a bright dot where it hits): the trigger grapples, as in the flat game. B only switches to
+- Grappling (red laser, a bright dot where it hits): the trigger grapples, as in the flat game. B only switches to
   the tether mode, however long you hold it; tethers are placed and recalled there.
 - Placing tethers (orange laser, a ring where it points): pull the trigger at the start of the tether and let go at
   the end; a line shows the tether meanwhile. The tether you point at lights up orange, and a tap on A removes it;

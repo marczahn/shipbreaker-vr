@@ -36,7 +36,9 @@ namespace ShipbreakerVR
         private const float BeamWidth = 0.002f;
         private const float BeamMiss = 5f;
         private const float BeamRange = 100f;
-        private static readonly Color LaserColor = new Color(0.55f, 0.95f, 1f);
+        private static readonly Color LaserColor = new Color(1f, 0.12f, 0.08f);
+        // The bright middle of the dots, so that they stay red too.
+        private static readonly Color DotCoreColor = new Color(1f, 0.55f, 0.5f);
         private static readonly Color TetherColor = new Color(1f, 0.6f, 0.15f);
         // The ring at the end of the tether mode's laser: its outer radius as a share of the distance from the eye, so it
         // looks the same size near and far, and its inner radius as a share of the outer one.
@@ -524,7 +526,7 @@ namespace ShipbreakerVR
             beamMaterial = VrUtil.DepthTestedMaterial(LaserColor);
             tetherBeamMaterial = VrUtil.DepthTestedMaterial(TetherColor);
             tetherMaterial = VrUtil.OverlayMaterial(TetherColor);
-            coreMaterial = VrUtil.DepthTestedMaterial(Color.white);
+            coreMaterial = VrUtil.DepthTestedMaterial(DotCoreColor);
 
             // A flat disc of radius 1 facing along z, opaque in the middle and fading to its edge.
             var dotVertices = new Vector3[DotSegments + 1];

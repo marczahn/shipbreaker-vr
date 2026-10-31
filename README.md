@@ -141,10 +141,10 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 
 ![Grapple and tethers](docs/images/grapple.svg)
 
-B switches the grapple between grappling (blue laser) and placing tethers (orange laser with a ring where it points).
+B switches the grapple between grappling (red laser) and placing tethers (orange laser with a ring where it points).
 The controller buzzes twice when the tether mode starts and once when grappling comes back.
 
-| I want to … | Grappling (blue laser) | Placing tethers (orange laser) |
+| I want to … | Grappling (red laser) | Placing tethers (orange laser) |
 |---|---|---|
 | Place a tether | – | Pull the trigger at the start, let go at the end. |
 | Remove one tether | – | Point at it (it lights up orange) and tap A. |
