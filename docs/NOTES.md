@@ -956,6 +956,8 @@ The player's `EquipmentController`, `GrabController`, `CuttingToolController` an
 `GameRefs` and shared, searched again at most once a second while missing. Reflection left in the code runs once or
 only when something changes (the options rows, the screen size, the F8 dump), not every frame.
 
+With Debug/Diagnose on, X while walking switches the floor limits off and A appends the head's place to `BepInExShipbreakerVR-hab-floor.txt`, for drawing the floor by hand.
+
 `Station/FreiGehen` (`VrHabWalk`, off by default): on `BedSitting_Virtual_Camera` A stands up; the game stays on that spot, only the rig leaves it, at `HabStanding.Height`, inside `HabFloor`'s hand-made areas from the survey (no walls or floor have colliders). Left stick walks along the head's heading, right stick turns 45 degrees, B sits down. No stations yet. The poster looked at from within 3 m gets the game's border, and the triggers change its picture through a `Hab3DPosterLocation` (`VrHabPosters`), without the game's poster spots. While walking the spot's frames are off the canvas and the sticks, A and B do not reach the game.
 
 In the Hab each dump also writes `BepInExShipbreakerVR-hab-survey.txt` (`VrHabSurvey`): spots, ways, what blocks them, colliders and renderer boxes in the room's axes, the floor plan for walking through the Hab.

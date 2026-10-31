@@ -1,3 +1,5 @@
+using System.IO;
+using BepInEx;
 using UnityEngine;
 
 namespace ShipbreakerVR
@@ -19,6 +21,7 @@ namespace ShipbreakerVR
         private static Vector2 place;
         private static Quaternion heading;
         private static bool turned;
+        private static bool mapping;
         private static int updatedFrame = -1;
 
         public static bool Walking { get; private set; }
@@ -53,11 +56,12 @@ namespace ShipbreakerVR
                 return;
             }
             if (Paused) return;
-            if (VrInput.Right.Secondary.Pressed)
+            if (VrInput.Right.Secondary.Pressed && !VrInput.Left.Secondary.Down)
             {
                 Stop();
                 return;
             }
+            if (VrSettings.Diagnostics.Value) Map();
             Turn(VrInput.Right.Stick.x);
             Move(VrInput.Left.Stick);
             VrHabPosters.Update(VrCamera.Instance.transform, VrCamera.WorldScale);
@@ -67,6 +71,7 @@ namespace ShipbreakerVR
         {
             if (!Walking) return;
             Walking = false;
+            mapping = false;
             VrHabPosters.Stop();
             Plugin.Log.LogInfo("Hab: sitting down again");
         }
@@ -76,6 +81,24 @@ namespace ShipbreakerVR
         {
             VrHab.TryRoomFloor(out var floor);
             return VrHab.Room.TransformPoint(new Vector3(place.x, floor + HabStanding.Height * scale, place.y));
+        }
+
+        // For drawing the floor by hand, with Debug/Diagnose on: X lets one walk through everything, and A writes where the
+        // head is, so one can walk along the walls and lean up to their corners.
+        private static void Map()
+        {
+            if (VrInput.Left.Primary.Pressed)
+            {
+                mapping = !mapping;
+                VrInput.Left.Buzz(0.5f, mapping ? 0.3f : 0.06f);
+                Plugin.Log.LogInfo($"Hab: floor limits {(mapping ? "off" : "on")}");
+            }
+            if (!VrInput.Right.Primary.Pressed) return;
+            var head = VrHab.Room.InverseTransformPoint(VrCamera.Instance.transform.position);
+            File.AppendAllText(System.IO.Path.Combine(Paths.BepInExRootPath, "ShipbreakerVR-hab-floor.txt"), $"{head.x:0.00} {head.z:0.00}
+");
+            VrInput.Right.Buzz(0.5f, 0.06f);
+            Plugin.Log.LogInfo($"Hab: floor point {head.x:0.00} {head.z:0.00}");
         }
 
         private static void Turn(float stick)
@@ -95,7 +118,8 @@ namespace ShipbreakerVR
             forward = forward.normalized;
             var way = forward * stick.y + Vector3.Cross(up, forward) * stick.x;
             var step = VrHab.Room.InverseTransformDirection(way) * (Speed * Time.unscaledDeltaTime);
-            place = HabFloor.Limit(place, place + new Vector2(step.x, step.z));
+            var to = place + new Vector2(step.x, step.z);
+            place = mapping ? to : HabFloor.Limit(place, to);
         }
     }
 
