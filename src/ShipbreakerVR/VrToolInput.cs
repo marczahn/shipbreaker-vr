@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using BBI.Unity.Game;
 using HarmonyLib;
 using UnityEngine;
@@ -40,6 +41,11 @@ namespace ShipbreakerVR
         private enum Action { Fire, Throw, Interact, Angle, ToolMode, Tether, Recall, Retract, Grapple, Cutter, DemoCharge, Scanner, Holster }
 
         private const float LongPress = 0.4f;
+
+        private static readonly AccessTools.FieldRef<InputHandlerGameplay, GameplayActions.GameplayActionSet> HandlerAction =
+            AccessTools.FieldRefAccess<InputHandlerGameplay, GameplayActions.GameplayActionSet>("m_Action");
+        private static readonly AccessTools.FieldRef<InputHandlerGameplay, UnityEngine.Events.UnityEvent> HandlerEvent =
+            AccessTools.FieldRefAccess<InputHandlerGameplay, UnityEngine.Events.UnityEvent>("m_OnAction");
 
         private static readonly int Count = System.Enum.GetValues(typeof(Action)).Length;
         // Drawing and putting away (the select actions and Holster); the tool actions are per hand (Hand.Now).
@@ -228,7 +234,14 @@ namespace ShipbreakerVR
             hand.ADown = a;
             // On the cutter A switches the cut's angle; there is nothing to throw, and the other hand interacts.
             if (held == EquipmentController.Equipment.CuttingTool) now[(int)Action.Angle] = a;
-            else if (!(hand.ATethers && (hand.ATether != null || hand.ALong))) now[(int)(hand.AThrows ? Action.Throw : Action.Interact)] = a;
+            else if (!(hand.ATethers && (hand.ATether != null || hand.ALong)))
+            {
+                // The grapple pushes with its throw action, held to charge, also at a control: those are for empty hands, and
+                // PushPatch keeps them from stopping the push. It aims along the grapple, as its raycast uses the aim camera.
+                var pushes = held == EquipmentController.Equipment.GrappleHook && !tethers;
+                now[(int)Action.Interact] = a && !hand.AThrows && !pushes;
+                now[(int)Action.Throw] = a && (hand.AThrows || pushes);
+            }
 
             var b = hand.Input.Secondary.Down;
             if (b && !hand.BDown)
@@ -295,6 +308,11 @@ namespace ShipbreakerVR
         // in this hand (VrDualTools).
         private static void Draw(Hand hand)
         {
+            if (hand.Zone == VrToolBelt.Zone.Flashlight)
+            {
+                ToggleFlashlight(hand);
+                return;
+            }
             if (!FindEquipment()) return;
             var zone = hand.Zone;
             var tool = zone == VrToolBelt.Zone.Grapple ? EquipmentController.Equipment.GrappleHook
@@ -334,6 +352,24 @@ namespace ShipbreakerVR
             if (logs++ < 60) Plugin.Log.LogInfo($"Tool control: {hand.Name} hand {(taken ? "takes" : "draws")} the {tool}");
             VrHand.TakeGameTool(hand.Vr, tool);
             holsterPulses = 0;
+        }
+
+        // The flashlight has no code of its own to call: an InputHandlerGameplay on the player runs it when its action is
+        // pressed. Pressing that action for the game would need a patch on every frame, so its event runs from here, and
+        // only when the game does not block the action.
+        private static void ToggleFlashlight(Hand hand)
+        {
+            var flashlight = GameplayActions.GameplayActionSet.ToggleFlashlight;
+            if (ActionBlockerService.Instance.IsActionBlocked(flashlight)) return;
+            var handlers = 0;
+            foreach (var handler in Object.FindObjectsOfType<InputHandlerGameplay>())
+            {
+                if (HandlerAction(handler) != flashlight) continue;
+                HandlerEvent(handler)?.Invoke();
+                handlers++;
+            }
+            hand.Input.Buzz(0.5f, 0.06f);
+            if (logs++ < 60) Plugin.Log.LogInfo($"Tool control: {hand.Name} hand switches the flashlight ({handlers} handler(s))");
         }
 
         // Grip let go by the hand that holds the tool: the hand stays empty, as Marc wanted, whatever put the tool there
@@ -462,6 +498,56 @@ namespace ShipbreakerVR
                 yield return instruction;
             }
             PatchReport.Count("Tool control", original, replaced, "input poll(s)");
+        }
+    }
+}
+
+namespace ShipbreakerVR
+{
+    // The demo charges' placement marker goes by the game's own idea of the tool in hand, which can stay on them after
+    // they were put away: the marker then stayed in the view. With another tool or none in the game's hand it goes.
+    [HarmonyPatch]
+    internal static class ChargeMarkerPatch
+    {
+        private static MethodBase TargetMethod() => AccessTools.Method(AccessTools.TypeByName("BBI.Unity.Game.DemoChargeController"), "Update");
+
+        private static readonly AccessTools.FieldRef<DemoChargeController, StructurePart> Target =
+            AccessTools.FieldRefAccess<DemoChargeController, StructurePart>("mPlacementTarget");
+        private static readonly MethodInfo Clear = AccessTools.Method(typeof(DemoChargeController), "ClearPlacementData");
+
+        private static void Postfix(DemoChargeController __instance)
+        {
+            if (Target(__instance) == null) return;
+            var equipment = GameRefs.Equipment;
+            if (equipment == null || (!equipment.IsNothingEquipped && equipment.CurrentEquipment == EquipmentController.Equipment.DemoCharge)) return;
+            Clear.Invoke(__instance, null);
+        }
+    }
+}
+
+namespace ShipbreakerVR
+{
+    // The game's grapple does not push while a control is in view. Controls are for empty hands here, so to it there is none.
+    [HarmonyPatch]
+    internal static class PushPatch
+    {
+        private static readonly MethodInfo Current = AccessTools.PropertyGetter(typeof(InteractionController), nameof(InteractionController.CurrentInteractable));
+
+        private static MethodBase TargetMethod() => AccessTools.Method(AccessTools.TypeByName("GrapplingHook"), "UpdateGrapplingHook");
+
+        private static InteractableObject NoControl(InteractionController controller) => VrAim.Active ? null : controller.CurrentInteractable;
+
+        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        {
+            foreach (var instruction in instructions)
+            {
+                if (instruction.operand is MethodInfo called && called == Current)
+                {
+                    instruction.opcode = OpCodes.Call;
+                    instruction.operand = AccessTools.Method(typeof(PushPatch), nameof(NoControl));
+                }
+                yield return instruction;
+            }
         }
     }
 }

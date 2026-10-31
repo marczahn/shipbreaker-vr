@@ -95,6 +95,7 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | I want to … | How |
 |---|---|
 | Take a tool | Reach to where it sits and squeeze the grip: grapple at the right hip, demo charges at the left hip, cutter over the right shoulder, scanner at the right side of the helmet. The controller buzzes when you are there. |
+| Flashlight | Reach to the left side of the helmet with the left hand and squeeze the grip to switch it on or off. |
 | Put it away | Let go of the grip. |
 | Hold two tools at once | While one hand holds the cutter, the grapple or the demo charges, take another of them with your other hand. Each hand's trigger and buttons work its own tool. |
 | Hand a tool to the other hand | Reach for it with the other hand and squeeze the grip. |
@@ -110,6 +111,7 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | I want to … | How |
 |---|---|
 | Use it | Point the controller and pull the trigger: cut, grapple, place or detonate demo charges. |
+| Push things away with the grapple | Press A (X in the left hand) with nothing grappled, or hold it to charge the push. It goes where the grapple points, also at consoles: those are used with an empty hand. |
 | Use what I point at | Press A or X, with either hand. With an empty hand it uses what is in the middle of your view, marked by the game's dot. Without a tool the trigger and B do nothing. On the cutter A turns the cut instead, so use the other hand. |
 | Throw | Hold the trigger and press A. |
 | Reel in what the grapple holds | Hold the trigger and press B. |
@@ -141,10 +143,10 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 
 ![Grapple and tethers](docs/images/grapple.svg)
 
-B switches the grapple between grappling (blue laser) and placing tethers (orange laser with a ring where it points).
+B switches the grapple between grappling (light blue laser) and placing tethers (light blue laser with an orange ring where it points).
 The controller buzzes twice when the tether mode starts and once when grappling comes back.
 
-| I want to … | Grappling (blue laser) | Placing tethers (orange laser) |
+| I want to … | Grappling (light blue laser) | Placing tethers (light blue laser with a ring) |
 |---|---|---|
 | Place a tether | – | Pull the trigger at the start, let go at the end. |
 | Remove one tether | – | Point at it (it lights up orange) and tap A. |

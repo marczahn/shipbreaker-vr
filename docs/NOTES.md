@@ -590,8 +590,8 @@ as before (log: "Grapple hold: '<part>' follows '<aim camera>' ...", once per ca
 The game has its own grab (`GrabController`, `HandGrab`): it reaches for a raycast hit and holds the player with springs
 1.75 m behind the grabbed point (`HandSettings.ConnectedAnchorZOffset`), with lead and sticky animations. That does not
 fit a hand that should stay exactly where it holds, so the mod does its own: the grip of a hand that is free
-(`VrToolInput.Free`: no tool, not at the belt, not fitting a tool) looks for the nearest non-trigger collider within 10 cm
-of the controller (`Physics.OverlapSphere`, the player's own colliders skipped) and fixes the hand's position on it (on
+(`VrToolInput.Free`: no tool, not at the belt, not fitting a tool) looks for the nearest non-trigger collider within 15 cm
+of the controller (`Physics.OverlapSphere`, the player's own colliders skipped; 15 cm since the magnet grip) and fixes the hand's position on it (on
 its rigidbody, or its transform without one). Each physics step (`VrCamera.FixedUpdate`) an impulse between the player's
 body (`GrabController.m_PlayerRigidbodyReference`) and the hold sets their relative velocity so the hand reaches the hold
 by the end of the step: a deadbeat constraint, no joints. Its share follows the masses; the station's static layer (27,
@@ -602,6 +602,45 @@ on the rig, which moves once per frame at render (`VrClimb.RigPlaced`); within p
 far the body moved since. Letting go of the last hold keeps the body's velocity relative to the holds smoothed over
 80 ms, capped at 5 m/s, so a push off flies on; a hand held back more than 0.5 m from its hold lets go without it.
 While the left hand holds on, controller flying rests. Log lines start with "Climbing:".
+
+Some door switches have only the trigger `Interaction Volume` (layer 15) and nothing solid: without a solid collider in reach, the
+grip holds on to that trigger of an `InteractableObject`.
+
+A firmly held part (up to 30 kg) must not use the deadbeat impulse: with the spin set on top it shook, and at the size of a
+crate it knocked into the body each step, deadly. It now goes part of the way to the hand each step (half at no mass, 8 % at
+30 kg, so heavier parts lag behind), by velocity,
+interpolated, with no pull on the player, and does not collide with the body until its bounds are 45 cm away after letting go.
+A second hand on such a part only stays on it (`Hand.Follower`), and takes over when the first lets go: with the deadbeat pull two
+hands on a light part spun it and built up speed on the player out of nothing.
+
+While a hand holds on the game's squishy collide is off (`PlayerMotion.SetSquishyCollide`, its switch for noclip): it casts a
+ray along the velocity and pushes the body off a surface in range, with a crackle and a shake. Found on `climb-trace`.
+
+The constraint's velocity knows nothing of the body's colliders, and `PlayerMotion.OnCollisionEnter` treats every new
+contact as an impact (sound, sparks, shake, damage by `ImpactDamageRangeAsset` from the relative velocity). Pulling up
+to a surface ran into it at up to 10 m/s. So each step a sphere cast of the body's solid sphere along the velocity relative to the
+holds removes what would close to under 4 cm from anything ahead (`VrClimb.KeepClear`), for moving things relative to
+their velocity. Sliding along a surface stays. What still touches the thing held at up to 3 m/s skips the game's
+`OnCollisionEnter` (`ImpactPatch`); ship parts share one kinematic rigidbody, so that is the whole hull. Faster hits and
+other things stay impacts. The colliders stay on. The sweep sees only the body's colliders, not the head leaning out
+past them.
+
+A grip pressed up to 0.25 s before a surface is in reach still catches. The game's hand then goes to the surface within
+0.1 s, while the body keeps the hold at the controller, so catching moves nothing. Non-convex meshes have no
+`ClosestPoint`, so 26 rays around the hand find the surface.
+
+An empty hand stops at walls (`VrHands.OutOfWalls`, a sphere cast from the shoulder each frame): only the model, not physics.
+Parts up to 30 kg that a single hand holds turn with it (`VrClimb.TurnWithHand`): their angular velocity is set each step
+so they keep their turn relative to the controller. They also stay at the real hand, `Closer` is only for fixed holds.
+
+The last part of a pull counts for more (`ClimbContact.Closer`): within 40 cm of the head a hand counts as 1.5 m closer per
+meter nearer, since a real hand stops about 30 cm ahead of the head and left the body that far from a wall grabbed at
+arm's length. Taking hold stores the difference, so nothing moves then.
+
+With the body resting there the real hand can go on past the hold. The game's hand stays on the hold (`VrHands.Pose`
+adds the way from the controller to the hold to the wrist, and it returns at 2 m/s after letting go), and the 0.5 m tear
+off does not apply while `KeepClear` holds the body back: an early build let go at 0.51 m of pulling. Nothing pushes the
+body while the real hand comes back, since the error still points into the surface until it has passed the hold.
 
 Controls are `InteractableObject`s; the airlock console (`SM_AirlockConsole_LockPanel`) has a trigger collider
 "Interaction Volume" with activation `LineOfSight`, progress `Press`, `WaitForRelease` and a `HandTarget` the game's
@@ -685,7 +724,8 @@ stuck to the head and swayed with the noise), and it painted over our UI pass, s
 Now a postfix on `OnGameStateChangedEvent` records whether the game has the main camera off (`VrHab.MainCameraOff`).
 While it is off and a `Hab3DController` exists, the rig follows the Hab camera and switches it off like any game
 camera; switching back never re-enables the main camera while the game wants it off. The playspace follows only the
-Hab camera's heading (its pitch would tilt the room), the Perlin noise amplitude of the Hab's virtual cameras is set
+Hab camera's heading (its pitch would tilt the room), standing on the room's floor: `PRF_Hab_Interior` is 3.99 degrees
+off the world's up (`Hab Container` 19.31), so with the world's up the floor rose about 4 degrees from the bed to the door, the Perlin noise amplitude of the Hab's virtual cameras is set
 to 0 while VR runs (the game itself toggles their enabled flag), and the helmet only follows the head while the rig
 is on the main camera (it would otherwise come along from the bay). The Hab's overlay and screen-space canvases
 (3D navigation prompts, the terminal `Hab ScreenStack` at 0.25 m) go onto the UI canvas like other menus.
@@ -1171,3 +1211,11 @@ Ideas not done yet, for after the measurements:
 4. Playing VR: controllers, tools in hand, bindings – flying done, aiming with the hand in progress
 5. Using VR: HUD as visor, menus with the right controller (no pointer yet) – in progress
 6. Comfort and performance
+
+## The body's hitbox
+The player collides as one sphere of radius 0.32 m on `Player Collider`, centered on the player and so on the head (a
+trigger sphere of 0.5 m, `PlayerTouchTransferCollider`, sits on it and stays). In VR `VrHitbox` makes it 0.22 m and moves
+it 0.1 m towards the legs, which have no collider, and 0.07 m back, so it reaches 15 cm ahead: airlocks were a tight fit. The body's center of mass is kept.
+## Steadier tools
+`VrToolSteady` filters the turn of cutter and grapple: within 0.5 degrees of the filtered turn it closes `(angle / 0.5)^2` of the gap, the micro filter of the ITR 2 aiming mod, and always follows with a lag of 40 ms for some weight in the hand. Only the turn: the tool stays at the hand, and the aim uses the same turn.
+Tilting the left controller to roll still gave thrust although it is measured at the wrist: 8 cm behind the grip is an estimate, and the arm moves along. So the offset counts 2.5 mm less per degree the hand is tilted from where the trigger was pressed, at most 15 cm (`VrControls.ThrustOffset`).

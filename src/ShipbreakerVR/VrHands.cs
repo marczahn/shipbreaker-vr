@@ -25,6 +25,11 @@ namespace ShipbreakerVR
 
         // How long an arm takes to move between the game's pose and the controller.
         private const float Blend = 0.2f;
+        // How fast a hand that let go of a hold returns to its controller, in m/s at world scale 1.
+        private const float HoldReturn = 2f;
+        // How thick a hand is against walls, in meters.
+        private const float HandRadius = 0.04f;
+        private static readonly RaycastHit[] WallHits = new RaycastHit[16];
 
         private class Arm
         {
@@ -39,6 +44,9 @@ namespace ShipbreakerVR
             public Transform Little;
             public float Weight;
             public bool Driven;
+            // From the controller to where the game's hand sits: to its hold while it holds on (VrClimb), so the hand stays
+            // there however far the real one has gone, then back to nothing.
+            public Vector3 OffController;
             // The reach: measured once, then how often the wrist stayed short of the controller (Count).
             public bool Measured;
             public int Frames;
@@ -65,6 +73,8 @@ namespace ShipbreakerVR
 
         private static GrabController grab;
         private static Animator animator;
+        private static InteractionController interaction;
+        private static float nextInteractionSearch;
         private static int fingerLogs;
         private static int logs;
 
@@ -88,7 +98,29 @@ namespace ShipbreakerVR
             Fingers(RightArm, rightWasDriven);
             Pose(LeftArm, active && chargeLeft && Mirrored(out var hold) ? hold : Quaternion.identity);
             Pose(RightArm, Quaternion.identity);
+            AtControl(LeftArm);
+            AtControl(RightArm);
             Charges(active && chargeLeft);
+        }
+
+        // A hand working a control is the game's, which reaches for the control's HandTarget from where its body is. In VR the
+        // body is elsewhere, so the wrist is bent onto the target here.
+        private static void AtControl(Arm arm)
+        {
+            if (arm.Driven || arm.Hand == null || arm.Hand.CurrentHandState != HandGrab.HandState.Success) return;
+            if (arm.Upper == null || arm.Lower == null || arm.Wrist == null) return;
+            if (interaction == null && Time.unscaledTime >= nextInteractionSearch)
+            {
+                nextInteractionSearch = Time.unscaledTime + 1f;
+                interaction = Object.FindObjectOfType<InteractionController>();
+            }
+            var control = interaction != null ? interaction.CurrentInteractable : null;
+            if (control == null || control.HandTarget == null) return;
+            // Things that float loose, as cassettes and cables to collect, sit off their HandTarget in the hand: the hand goes
+            // to the thing itself. Controls on the hull keep the place made for the hand.
+            var loose = control.GetComponentInParent<Rigidbody>();
+            var target = loose != null && !loose.isKinematic ? loose.worldCenterOfMass : control.HandTarget.position;
+            VrToolModels.Bend(arm.Upper, arm.Lower, arm.Wrist, target);
         }
 
         // Closes the hand while its grip is held, as long as it follows its controller: the same parameters HandGrab sets
@@ -143,6 +175,12 @@ namespace ShipbreakerVR
             if (weight <= 0f || arm.Wrist == null || arm.Upper == null || arm.Lower == null) return;
             if (!arm.Input.TryGetPosition(out var gripLocal) || !arm.Input.TryGetAimRotation(out var aimLocal)) return;
             if (!VrToolModels.TrackingToWorld(gripLocal + aimLocal * VrInput.WristBehindGrip, aimLocal, out var wrist, out var aim)) return;
+            if (VrClimb.TryGetHold(arm.Input, out var point) && VrToolModels.TrackingToWorld(gripLocal, aimLocal, out var grip, out _))
+                arm.OffController = point - grip;
+            else
+                arm.OffController = Vector3.MoveTowards(arm.OffController, Vector3.zero, HoldReturn * VrCamera.WorldScale * Time.unscaledDeltaTime);
+            wrist += arm.OffController;
+            wrist = OutOfWalls(arm, wrist);
 
             var animated = arm.Wrist.rotation;
             var target = Vector3.Lerp(arm.Wrist.position, wrist, weight);
@@ -150,6 +188,29 @@ namespace ShipbreakerVR
             var shortBy = VrToolModels.Reach(arm.Upper.parent, arm.Upper, arm.Lower, arm.Wrist, target);
             Count(arm, weight >= 1f ? shortBy : 0f);
             arm.Wrist.rotation = Quaternion.Slerp(animated, HandRotation(arm, aim * hold, animated), weight);
+        }
+
+        // An empty hand stops at what is between the shoulder and the controller instead of going through it. Only the
+        // model: nothing pushes against it. A tool stays with its controller, so the hand holding one does too.
+        private static Vector3 OutOfWalls(Arm arm, Vector3 wrist)
+        {
+            var state = (arm == LeftArm ? VrHand.Left : VrHand.Right).State;
+            if (state != HandState.Empty) return wrist;
+            var shoulder = arm.Upper.position;
+            var way = wrist - shoulder;
+            var length = way.magnitude;
+            if (length < 0.01f) return wrist;
+            var direction = way / length;
+            var count = Physics.SphereCastNonAlloc(shoulder, HandRadius, direction, WallHits, length, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            var free = length;
+            var body = arm.Wrist.root;
+            for (var i = 0; i < count; i++)
+            {
+                var hit = WallHits[i];
+                // Hits from where the cast starts inside something have no place on the way.
+                if (hit.distance > 0f && hit.distance < free && !hit.collider.transform.IsChildOf(body)) free = hit.distance;
+            }
+            return shoulder + direction * free;
         }
 
         // Every this many seconds while an arm follows its controller, how often its wrist stayed short of it.
@@ -342,6 +403,7 @@ namespace ShipbreakerVR
             grab = null;
             LeftArm.Weight = RightArm.Weight = 0f;
             LeftArm.Driven = RightArm.Driven = false;
+            LeftArm.OffController = RightArm.OffController = Vector3.zero;
             Charges(false);
             chargePieces.Clear();
             chargesOn = null;

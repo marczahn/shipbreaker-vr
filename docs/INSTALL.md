@@ -38,7 +38,7 @@ Switch it in the options row "Controller flying" in the VR tab. Hold the left tr
 - move the controller away from where it was when you pressed it to fly that way,
 - tilt it sideways to roll; the further, the faster.
 
-Thrust starts 2 cm away from that point and is full at 10 cm. The rows "Thrust deadzone" and "Full thrust at" change
+Thrust starts 2 cm away from that point and is full at 10 cm. While the controller is tilted, the hand has to move further: 2.5 cm more per 10 degrees of tilt, so rolling alone gives no thrust. The rows "Thrust deadzone" and "Full thrust at" change
 both; full thrust always stays at least 5 cm beyond the deadzone.
 
 The right stick turns (left/right) and pitches (up/down), the further, the faster; it needs no trigger. The row "Turning"
@@ -63,7 +63,8 @@ points, from the tool's muzzle. A thin laser shows where; the crosshair in the m
 With an empty hand there is no laser: A uses what is in the middle of your view, marked by the game's dot, as in the
 flat game.
 - Squeeze the grip at your body to take a tool: grapple at the right hip, demo charges at the left hip, cutter over the
-  right shoulder, scanner at the right side of the helmet. The controller buzzes when it is in such a spot. Keep the
+  right shoulder, scanner at the right side of the helmet. The controller buzzes when it is in such a spot. The left
+  hand at the left side of the helmet switches the flashlight on or off with the grip. Keep the
   grip squeezed to hold the tool; let go to put it away.
 - Each hand can hold a tool, so two of the cutter, the grapple and the demo charges can be out at once; each hand's
   trigger and buttons work its own tool. Every tool exists only once: reaching for the tool in one hand with the other
@@ -104,9 +105,9 @@ flat game.
 
 B switches the grapple between two modes. The controller buzzes twice when the tether mode starts and once when
 grappling comes back.
-- Grappling (blue laser, a bright dot where it hits): the trigger grapples, as in the flat game. B only switches to
+- Grappling (light blue laser, a bright dot where it hits): the trigger grapples, as in the flat game. B only switches to
   the tether mode, however long you hold it; tethers are placed and recalled there.
-- Placing tethers (orange laser, a ring where it points): pull the trigger at the start of the tether and let go at
+- Placing tethers (light blue laser, an orange ring where it points): pull the trigger at the start of the tether and let go at
   the end; a line shows the tether meanwhile. The tether you point at lights up orange, and a tap on A removes it;
   pointing at no tether, A uses what you point at. Hold A to recall all tethers. B switches back to grappling however
   long you hold it.

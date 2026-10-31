@@ -10,14 +10,23 @@ namespace ShipbreakerVR
     //   left hip             demo charges (drawn across the body)
     //   over the right shoulder  cutter
     //   right side of the helmet scanner
+    //   left side of the helmet  flashlight on or off, left hand only
     internal static class VrToolBelt
     {
-        public enum Zone { None, Grapple, Cutter, DemoCharge, Scanner }
+        public enum Zone { None, Grapple, Cutter, DemoCharge, Scanner, Flashlight }
 
         // Head-relative bounds in meters: x right, y up, z forward.
         private const float HipBelow = -0.45f;
-        private const float HipSide = 0.08f;
-        private const float HipForward = 0.25f;
+        private const float HipDeepest = -0.85f;
+        private const float HipSide = 0.1f;
+        private const float HipOutside = 0.35f;
+        private const float HipForward = 0.1f;
+        private const float HipBehind = -0.2f;
+        // The hip zones are turned this far around the head towards the back, in degrees, so a hand reaching out to the
+        // side to hold on does not draw a tool.
+        private const float HipTurn = 15f;
+        private static readonly float HipTurnCos = Mathf.Cos(HipTurn * Mathf.Deg2Rad);
+        private static readonly float HipTurnSin = Mathf.Sin(HipTurn * Mathf.Deg2Rad);
         private const float ShoulderAbove = -0.12f;
         private const float ShoulderBehind = -0.05f;
         private const float ShoulderInside = -0.1f;
@@ -58,18 +67,23 @@ namespace ShipbreakerVR
             forward.y = 0f;
             if (forward.sqrMagnitude < 0.0001f) return Zone.None;
             local = Quaternion.Inverse(Quaternion.LookRotation(forward, Vector3.up)) * (hand - head.localPosition);
-            return ZoneAt(local);
+            var zone = ZoneAt(local);
+            return zone == Zone.Flashlight && !controller.IsLeft ? Zone.None : zone;
         }
 
         // The zone at a hand position relative to the head, in meters along the head's heading (x right, y up, z forward).
         internal static Zone ZoneAt(Vector3 local)
         {
-            if (local.y < HipBelow && local.z < HipForward)
+            if (local.y < HipBelow && local.y > HipDeepest)
             {
-                if (local.x > HipSide) return Zone.Grapple;
-                if (local.x < -HipSide) return Zone.DemoCharge;
+                // Measured as if the hand were turned forward by HipTurn on its side of the body, mirrored for the left hip.
+                var side = Mathf.Abs(local.x);
+                var turnedSide = side * HipTurnCos - local.z * HipTurnSin;
+                var turnedForward = local.z * HipTurnCos + side * HipTurnSin;
+                if (turnedForward < HipForward && turnedForward > HipBehind && turnedSide > HipSide && turnedSide < HipOutside) return local.x > 0f ? Zone.Grapple : Zone.DemoCharge;
             }
             if (local.magnitude < HelmetReach && local.x > HelmetSide && local.z > ShoulderBehind) return Zone.Scanner;
+            if (local.magnitude < HelmetReach && local.x < -HelmetSide && local.z > ShoulderBehind) return Zone.Flashlight;
             if (local.y > ShoulderAbove && local.z < ShoulderBehind && local.x > ShoulderInside) return Zone.Cutter;
             return Zone.None;
         }
