@@ -27,7 +27,11 @@ namespace ShipbreakerVR
         static VrClimb() => VrSession.OnUnload("climbing", Release);
 
         // How far from the controller a surface may be to hold on, in meters at world scale 1.
-        private const float Reach = 0.1f;
+        private const float Reach = 0.15f;
+        // A grip pressed just before the hand arrives still catches, for this many seconds: a moving hand misses less.
+        private const float CatchTime = 0.25f;
+        // How long the game's hand takes to come to the surface it caught, in seconds.
+        private const float SnapTime = 0.1f;
         // A hand held back this far from its hold (the part torn away) lets go. Not while the body rests against what is
         // ahead of it: there the arm may reach as far as it wants, the game's hand stays on the hold (VrHands.Pose) and
         // nothing pushes the body until the real hand has come back past the hold.
@@ -71,6 +75,11 @@ namespace ShipbreakerVR
             public Vector3 Point;
             // How far the pull point (PullPoint) sat from the controller at taking hold, in tracking space.
             public Vector3 PullOffset;
+            // Where the grip was pressed last, for CatchTime.
+            public float PressedAt = -1f;
+            // The surface under the hand when it took hold, on Anchor: the game's hand goes there, the body keeps to Point.
+            public Vector3 Surface;
+            public float HeldAt;
 
             public Hand(VrHand vr)
             {
@@ -87,6 +96,7 @@ namespace ShipbreakerVR
         private static readonly Hand RightHand = new Hand(VrHand.Right);
         private static readonly Hand[] Hands = { LeftHand, RightHand };
         private static readonly Collider[] Found = new Collider[32];
+        private static readonly Vector3[] Around = BuildAround();
 
         private static GrabController grab;
         private static Rigidbody player;
@@ -163,6 +173,7 @@ namespace ShipbreakerVR
             hand.Tracked = input.Tracked && input.TryGetPosition(out hand.Local);
             var down = input.Grip.Down;
             var pressed = down && !hand.GripDown;
+            if (pressed) hand.PressedAt = Time.time;
             hand.GripDown = down;
             if (hand.Holding)
             {
@@ -171,29 +182,32 @@ namespace ShipbreakerVR
                 else if (hand.Anchor == null || !hand.Anchor.gameObject.activeInHierarchy || hand.Collider == null || !hand.Collider.enabled)
                     LetGo(hand, false, "the hold is gone");
             }
-            else if (pressed && hand.Tracked && hand.Vr.Free) TryHold(hand);
+            else if (hand.Tracked && hand.Vr.Free && down && (pressed || Time.time - hand.PressedAt < CatchTime)) TryHold(hand, pressed);
         }
 
         // Holds on to the surface nearest to the hand, if one is within reach, right where the hand is.
-        private static void TryHold(Hand hand)
+        private static void TryHold(Hand hand, bool firstTry)
         {
             var at = HandWorld(hand);
             var reach = Reach * VrCamera.WorldScale;
             var count = Physics.OverlapSphereNonAlloc(at, reach, Found, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             Collider best = null;
             var bestDistance = float.MaxValue;
+            var surface = at;
             for (var i = 0; i < count; i++)
             {
                 var collider = Found[i];
                 if (Own(collider)) continue;
-                var distance = (Closest(collider, at) - at).sqrMagnitude;
+                var closest = Closest(collider, at, reach);
+                var distance = (closest - at).sqrMagnitude;
                 if (distance >= bestDistance) continue;
                 best = collider;
                 bestDistance = distance;
+                surface = closest;
             }
             if (best == null)
             {
-                if (logs++ < 80) Plugin.Log.LogInfo($"Climbing: {hand.Name} hand grips, nothing within {reach:0.00} m");
+                if (firstTry && logs++ < 80) Plugin.Log.LogInfo($"Climbing: {hand.Name} hand grips, nothing within {reach:0.00} m");
                 return;
             }
 
@@ -206,6 +220,8 @@ namespace ShipbreakerVR
                 && !TooHeavy(body.mass);
             hand.Anchor = body != null ? body.transform : best.transform;
             hand.Point = hand.Anchor.InverseTransformPoint(at);
+            hand.Surface = hand.Anchor.InverseTransformPoint(surface);
+            hand.HeldAt = Time.time;
             hand.PullOffset = hand.Local - ClimbContact.Closer(hand.Local, VrCamera.Instance.transform.localPosition);
             if (first)
             {
@@ -339,6 +355,17 @@ namespace ShipbreakerVR
             return 1f / body.mass + Vector3.Dot(Vector3.Cross(spin, arm), direction);
         }
 
+        // The directions of a cube's faces and corners.
+        private static Vector3[] BuildAround()
+        {
+            var directions = new System.Collections.Generic.List<Vector3>();
+            for (var x = -1; x <= 1; x++)
+                for (var y = -1; y <= 1; y++)
+                    for (var z = -1; z <= 1; z++)
+                        if (x != 0 || y != 0 || z != 0) directions.Add(new Vector3(x, y, z).normalized);
+            return directions.ToArray();
+        }
+
         private static Vector3 Hold(Hand hand) => hand.Anchor.TransformPoint(hand.Point);
 
         // Where that controller's hand holds on, if it does, for the game's hand (VrHands.Pose).
@@ -348,7 +375,7 @@ namespace ShipbreakerVR
             foreach (var hand in Hands)
             {
                 if (hand.Input != input || !hand.Holding || hand.Anchor == null) continue;
-                point = Hold(hand);
+                point = Vector3.Lerp(Hold(hand), hand.Anchor.TransformPoint(hand.Surface), (Time.time - hand.HeldAt) / SnapTime);
                 return true;
             }
             return false;
@@ -368,11 +395,20 @@ namespace ShipbreakerVR
         private static bool Own(Collider collider) =>
             collider.attachedRigidbody == player || collider.transform.IsChildOf(player.transform);
 
-        // The point of the collider nearest to the hand; non-convex meshes have none, the hand counts as on them.
-        private static Vector3 Closest(Collider collider, Vector3 point)
+        // The point of the collider nearest to the hand. Non-convex meshes have no such query, most of a ship's are: rays
+        // all around the hand find it; a hand with no surface around counts as on them.
+        private static Vector3 Closest(Collider collider, Vector3 point, float reach)
         {
-            if (collider is MeshCollider mesh && !mesh.convex) return point;
-            return collider.ClosestPoint(point);
+            if (!(collider is MeshCollider mesh) || mesh.convex) return collider.ClosestPoint(point);
+            var nearest = reach;
+            var found = point;
+            foreach (var direction in Around)
+            {
+                if (!collider.Raycast(new Ray(point, direction), out var hit, nearest)) continue;
+                nearest = hit.distance;
+                found = hit.point;
+            }
+            return found;
         }
 
         // Letting go keeps the speed the hands gave the body once the last hand is off: a push off flies on.
