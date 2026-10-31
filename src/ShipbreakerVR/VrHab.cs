@@ -99,7 +99,6 @@ namespace ShipbreakerVR
             FarClip = 0f;
             foreach (var camera in controller.GetComponentsInChildren<CinemachineVirtualCamera>(true))
                 FarClip = Mathf.Max(FarClip, camera.m_Lens.FarClipPlane);
-            TurnLeft = null;
             var options = AccessTools.FieldRefAccess<Hab3DLocationNavigation, List<NavigationOption>>("m_NavigationOptions");
             foreach (var location in Resources.FindObjectsOfTypeAll<Hab3DLocationNavigation>())
             {
@@ -108,11 +107,44 @@ namespace ShipbreakerVR
                 {
                     AddScreen(navOpt);
                     var goesTo = navOpt.CameraToGoTo != null ? navOpt.CameraToGoTo.Name : "-";
-                    if (goesTo == HabTurnPatch.Target) TurnLeft = navOpt;
                     Plugin.Log.LogInfo($"Hab spot '{(location.LocationVirtualCamera != null ? location.LocationVirtualCamera.Name : "-")}': {navOpt.ButtonOption} to '{goesTo}'{(navOpt.GoesToNavigableScreen ? " (screen)" : "")}, frame on '{(navOpt.TransformToTrack != null ? navOpt.TransformToTrack.name : "-")}'");
                 }
             }
+            AddTerminalTurn();
             Plugin.Log.LogInfo($"Hab monitors: {monitors.Count} virtual camera(s), {markers.Count} waypoint marker renderer(s), farthest view {FarClip:0} m");
+        }
+
+        // Looking from the living area at the work area, the terminal is a turn to the left away, but the game goes there
+        // only by way of the turned view. So that spot gets a copy of the bed's way to the terminal: the same left, with
+        // a prompt of its own, among the spot's other options.
+        private static void AddTerminalTurn()
+        {
+            if (!VrXr.IsRunning) return;
+            var options = AccessTools.FieldRefAccess<Hab3DLocationNavigation, List<NavigationOption>>("m_NavigationOptions");
+            List<NavigationOption> living = null, bed = null;
+            foreach (var location in Resources.FindObjectsOfTypeAll<Hab3DLocationNavigation>())
+            {
+                if (!location.gameObject.scene.IsValid() || location.LocationVirtualCamera == null) continue;
+                if (location.LocationVirtualCamera.Name == "Habitation_Virtual_Camera") living = options(location);
+                else if (location.LocationVirtualCamera.Name == "BedSitting_Virtual_Camera") bed = options(location);
+            }
+            if (living == null || bed == null || living.Exists(o => o.ButtonOption == FrontEndActions.FrontEndActionSet.NavigateLeft)) return;
+            var source = bed.Find(o => o.ButtonOption == FrontEndActions.FrontEndActionSet.NavigateLeft && o.ClickableButton != null && o.CameraToGoTo != null && o.CameraToGoTo.Name == "Comms_Virtual_Camera");
+            var sibling = living.Find(o => o.ClickableButton != null);
+            if (source == null || sibling == null)
+            {
+                Plugin.Log.LogWarning("Hab: no way to the terminal to copy");
+                return;
+            }
+            var prompt = Object.Instantiate(source.ClickableButton.gameObject, sibling.ClickableButton.RectTransform.parent);
+            prompt.SetActive(sibling.ClickableButton.gameObject.activeSelf);
+            var turn = (NavigationOption)AccessTools.Method(typeof(object), "MemberwiseClone").Invoke(source, null);
+            var fields = Traverse.Create(turn);
+            fields.Field("m_ClickableButton").SetValue(prompt.GetComponent<Doozy.Engine.UI.UIButton>());
+            fields.Field("m_GameEventListener").SetValue(null);
+            fields.Field("m_ButtonStateChanger").SetValue(source.ButtonStateChanger != null ? prompt.GetComponentInChildren(source.ButtonStateChanger.GetType(), true) : null);
+            living.Add(turn);
+            Plugin.Log.LogInfo("Hab: left from the living area goes to the terminal");
         }
 
         // Center, orientation (forward into the screen) and size of a monitor's screen.
@@ -194,8 +226,8 @@ namespace ShipbreakerVR
             }
         }
 
-        // The game's way to the turned view of the living area (HabTurnPatch).
-        public static NavigationOption TurnLeft { get; private set; }
+        // Set by a move between spots: the stick has to come back before the next one, or holding it spins through the room.
+        public static bool WaitForStick { get; set; }
 
         // How far the head stands from the game's camera. The game places its prompts as seen from that camera.
         public static Vector3 StandShift { get; set; }
@@ -356,6 +388,7 @@ namespace ShipbreakerVR
     {
         private static void Postfix(NavigationOption navOpt)
         {
+            VrHab.WaitForStick = true;
             if (VrHab.AddScreen(navOpt)) return;
             if (navOpt == null || !navOpt.GoesToNavigableScreen || navOpt.ScreenAnimator == null) return;
             if (VrUi.Instance == null || !VrUi.Instance.Active) return;
@@ -397,28 +430,6 @@ namespace ShipbreakerVR
         }
     }
 
-    // Looking from the living area at the work area, the terminal and the window are a turn to the left away, but the game
-    // only goes there by way of another spot. The stick to the left takes the game's own way to the turned view.
-    [HarmonyPatch(typeof(Hab3DLocationNavigation), "Update")]
-    internal static class HabTurnPatch
-    {
-        private const string From = "Habitation_Virtual_Camera";
-        public const string Target = "HabitationTurned_Virtual_Camera";
-
-        private static void Postfix(Hab3DLocationNavigation __instance, List<NavigationOption> ___m_NavigationOptions, Hab3DController ___mHab3DController)
-        {
-            var turn = VrHab.TurnLeft;
-            if (turn == null || !VrXr.IsRunning || ___mHab3DController == null || ___mHab3DController.IsHabPaused || !__instance.isActiveAndEnabled) return;
-            var spot = __instance.LocationVirtualCamera;
-            if (spot == null || spot.Name != From || ___mHab3DController.CinemachineBrain.IsBlending) return;
-            if (!HabStanding.PointsLeft(LynxControls.Instance.GetTwoAxisInputControlVector(FrontEndActions.FrontEndActionSet.NavigateComposite))) return;
-            foreach (var navOpt in ___m_NavigationOptions)
-                if (navOpt.ButtonOption == FrontEndActions.FrontEndActionSet.NavigateLeft) return;
-            Plugin.Log.LogInfo("Hab: stick left, turning to the terminal side");
-            __instance.Navigate(turn);
-        }
-    }
-
     internal static class HabStanding
     {
         // Eye height over the Hab's floor while standing, in meters at world scale 1.
@@ -429,9 +440,6 @@ namespace ShipbreakerVR
 
         public static bool Sits(float spot) => spot < SitBelow;
 
-        // The game's sector for left around its dead zone of 0.4.
-        public static bool PointsLeft(Vector2 stick) => stick.x < -0.4f && Mathf.Abs(stick.y) <= -stick.x;
-
         // A place on the canvas, kept so far in that a frame of the given shares of its size stays on it.
         public static Vector2 Inside(Vector2 place, float width, float height)
         {
@@ -440,15 +448,19 @@ namespace ShipbreakerVR
             return new Vector2(Mathf.Clamp(place.x, -x, x), Mathf.Clamp(place.y, -y, y));
         }
 
-        // Where the line from an eye to a spot crosses the plane z = 0; false if the spot is not beyond the plane's side
-        // the line runs through, in front of the eye.
+        // Where the line from an eye to a spot crosses the plane z = 0. A spot behind the eye goes to the side it lies on,
+        // far out, so a frame for it ends up at that edge.
         public static bool Across(Vector3 eye, Vector3 spot, out Vector2 place)
         {
             place = Vector2.zero;
             var along = eye.z - spot.z;
             if (Mathf.Abs(along) < 1e-5f) return false;
             var share = eye.z / along;
-            if (share <= 0f) return false;
+            if (share <= 0f)
+            {
+                place = new Vector2(spot.x < eye.x ? -1f : 1f, 0f);
+                return true;
+            }
             place = new Vector2(eye.x + (spot.x - eye.x) * share, eye.y + (spot.y - eye.y) * share);
             return true;
         }

@@ -789,10 +789,10 @@ so patches place them as seen from the head instead. Poster buttons and the call
 the flat view's field of view differs from the canvas's, so those go where the line from the resting head
 (`VrCamera.RestingHead`; from the tracked head they moved on the canvas with the head) to their `TransformToTrack` crosses the menu canvas (`VrUi.OnMenuCanvas`, log `Hab frame ...` with size and place). The canvas
 spans about 66 degrees, so a near spot such as the kitchen could lie beyond it, and its frame was gone; frames are held
-inside the canvas. The kitchen has one poster (`Posters_Kitchen/Poster_Kitchen`), the others three. From
-`Habitation_Virtual_Camera` the stick to the left takes the game's own option to `HabitationTurned_Virtual_Camera`
-(`HabTurnPatch`), unless the spot already uses left. There is no prompt for it. The log lists every spot's options
-(`Hab spot ...`). The Hab keeps this way of use as one option; free walking is planned as the other.
+inside the canvas. The kitchen has one poster (`Posters_Kitchen/Poster_Kitchen`), the others three. `Habitation_Virtual_Camera` leaves left free, so in VR it gets a copy of the bed's left to `Comms_Virtual_Camera`
+with a copied prompt (`VrHab.AddTerminalTurn`). The log lists every spot's options (`Hab spot ...`). The game reads a
+held stick every frame, so holding it spun between two spots that are each other's down; after a move
+`VrHab.WaitForStick` keeps the sticks at zero until they are let go. The Hab keeps this way of use as one option; free walking is planned as the other.
 The floor has no collider (a ray from the head hits nothing within 5 m) and its mesh is static batched (`MeshFilter`
 bounds cover the batch, in the F8 room list those come out around 358 m), so the foot of the loose chair stands for the
 floor. Log `Hab: camera spot N m above the floor`.

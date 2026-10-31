@@ -36,20 +36,10 @@ namespace ShipbreakerVR.Tests
         }
 
         [Fact]
-        public void NoFrameForASpotBehindTheEye()
+        public void FrameForASpotBehindTheEyeGoesToItsSide()
         {
-            Assert.False(HabStanding.Across(new Vector3(0f, 0f, -2f), new Vector3(1f, 2f, -3f), out _));
-        }
-
-        [Theory]
-        [InlineData(-0.8f, 0f, true)]
-        [InlineData(-0.8f, 0.5f, true)]
-        [InlineData(-0.3f, 0f, false)]
-        [InlineData(-0.5f, 0.8f, false)]
-        [InlineData(0.8f, 0f, false)]
-        public void StickToTheLeftTurns(float x, float y, bool turns)
-        {
-            Assert.Equal(turns, HabStanding.PointsLeft(new Vector2(x, y)));
+            Assert.True(HabStanding.Across(new Vector3(0f, 0f, -2f), new Vector3(-1f, 2f, -3f), out var place));
+            Assert.Equal(-1f, place.x, 3);
         }
 
         [Fact]

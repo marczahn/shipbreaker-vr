@@ -125,6 +125,11 @@ namespace ShipbreakerVR
                 {
                     leftStick = DominantAxis(left.Stick);
                     rightStick = right.Stick;
+                    if (VrHab.WaitForStick)
+                    {
+                        if (left.Stick.magnitude < StickRest && right.Stick.magnitude < StickRest) VrHab.WaitForStick = false;
+                        else leftStick = rightStick = Vector2.zero;
+                    }
                     leftGrip = left.GripValue;
                     rightGrip = right.GripValue;
                     pressed[0] = right.Primary.Down;
@@ -164,6 +169,9 @@ namespace ShipbreakerVR
 
         // Menus move one row per up/down and change a value per left/right. A thumb pushed sideways is rarely level, and
         // its vertical part jumped to the row above or below in the middle of adjusting a slider. Only the stronger axis counts.
+        // How far in a stick counts as let go.
+        private const float StickRest = 0.3f;
+
         private static Vector2 DominantAxis(Vector2 stick) =>
             Mathf.Abs(stick.x) >= Mathf.Abs(stick.y) ? new Vector2(stick.x, 0f) : new Vector2(0f, stick.y);
 
