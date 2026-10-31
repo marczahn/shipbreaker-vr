@@ -33,7 +33,7 @@ namespace ShipbreakerVR
         // How far a tilted hand moves without meaning to, in meters per degree, and at most.
         private const float TiltShift = 0.0025f;
         private const float TiltShiftMax = 0.15f;
-        private const float TurnDeadzone = 8f;
+        private const float TurnDeadzone = 12f;
         // Rolling: as fast per degree as turning, up to a hand tilted all the way.
         private const float RollFull = 90f;
         private const float RollSpeed = 100f;
