@@ -10,7 +10,7 @@ namespace ShipbreakerVR
     // change its picture as the tabs do at the game's poster spots. Those spots are not used: the game stays where it is.
     internal static class VrHabPosters
     {
-        private const float Range = 3f;
+        private const float Range = 1.2f;
         private const float Cone = 12f;
 
         private static readonly AccessTools.FieldRef<Hab3DPoster, GameObject> Border = AccessTools.FieldRefAccess<Hab3DPoster, GameObject>("m_SelectedBorder");

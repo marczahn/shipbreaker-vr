@@ -27,7 +27,7 @@ namespace ShipbreakerVR
         public static bool Walking { get; private set; }
 
         // True while the sticks and A and B belong to walking, not to the game.
-        public static bool TakesInput => Walking && !Paused;
+        public static bool TakesInput => Walking && !Paused && !VrHabStations.Using;
 
         private static bool Paused => VrHab.Controller == null || VrHab.Controller.IsHabPaused;
 
@@ -46,16 +46,22 @@ namespace ShipbreakerVR
                     Walking = true;
                     place = Start;
                     heading = spotHeading;
+                    VrHabStations.Find();
                     Plugin.Log.LogInfo("Hab: standing up, walking");
                 }
                 return;
             }
-            if (!VrSettings.FreeWalking.Value || VrHab.ActiveSpot != SitSpot)
+            if (!VrSettings.FreeWalking.Value)
             {
                 Stop();
                 return;
             }
             if (Paused) return;
+            if (VrHabStations.Using)
+            {
+                VrHabStations.Track();
+                return;
+            }
             if (VrInput.Right.Secondary.Pressed && !VrInput.Left.Secondary.Down)
             {
                 Stop();
@@ -65,6 +71,7 @@ namespace ShipbreakerVR
             Turn(VrInput.Right.Stick.x);
             Move(VrInput.Left.Stick);
             VrHabPosters.Update(VrCamera.Instance.transform, VrCamera.WorldScale);
+            if (!mapping) VrHabStations.Update(VrCamera.Instance.transform, VrCamera.WorldScale);
         }
 
         public static void Stop()
@@ -73,6 +80,7 @@ namespace ShipbreakerVR
             Walking = false;
             mapping = false;
             VrHabPosters.Stop();
+            VrHabStations.Stop();
             Plugin.Log.LogInfo("Hab: sitting down again");
         }
 
@@ -83,17 +91,17 @@ namespace ShipbreakerVR
             return VrHab.Room.TransformPoint(new Vector3(place.x, floor + HabStanding.Height * scale, place.y));
         }
 
-        // For drawing the floor by hand, with Debug/Diagnose on: X lets one walk through everything, and A writes where the
-        // head is, so one can walk along the walls and lean up to their corners.
+        // For drawing the floor by hand, with Debug/Diagnose on: Y lets one walk through everything, and then A writes where
+        // the head is, so one can walk along the walls and lean up to their corners.
         private static void Map()
         {
-            if (VrInput.Left.Primary.Pressed)
+            if (VrInput.Left.Secondary.Pressed && !VrInput.Right.Secondary.Down)
             {
                 mapping = !mapping;
                 VrInput.Left.Buzz(0.5f, mapping ? 0.3f : 0.06f);
                 Plugin.Log.LogInfo($"Hab: floor limits {(mapping ? "off" : "on")}");
             }
-            if (!VrInput.Right.Primary.Pressed) return;
+            if (!mapping || !VrInput.Right.Primary.Pressed) return;
             var head = VrHab.Room.InverseTransformPoint(VrCamera.Instance.transform.position);
             File.AppendAllText(System.IO.Path.Combine(Paths.BepInExRootPath, "ShipbreakerVR-hab-floor.txt"), $"{head.x:0.00} {head.z:0.00}{System.Environment.NewLine}");
             VrInput.Right.Buzz(0.5f, 0.06f);
