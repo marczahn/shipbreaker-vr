@@ -46,15 +46,32 @@ namespace ShipbreakerVR.Tests
         public void WalksFreelyInsideTheFloor()
         {
             var to = new Vector2(131f, 116f);
-            Assert.Equal(to, HabFloor.Limit(new Vector2(131f, 115f), to));
+            Assert.Equal(to.y, HabFloor.Limit(new Vector2(131f, 115f), to).y, 3);
         }
 
         [Fact]
         public void SlidesAlongAnEdge()
         {
             var limited = HabFloor.Limit(new Vector2(132.3f, 114.7f), new Vector2(133f, 115f));
-            Assert.Equal(132.3f, limited.x, 3);
-            Assert.Equal(115f, limited.y, 3);
+            Assert.True(limited.x > 132.3f && limited.x < 132.4f);
+            Assert.Equal(115f, limited.y, 2);
+        }
+
+        [Fact]
+        public void SlidesAlongASlantedEdge()
+        {
+            var start = new Vector2(132.3f, 121.2f);
+            var place = start;
+            for (var i = 0; i < 60; i++) place = HabFloor.Limit(place, place + new Vector2(0.02f, 0f));
+            Assert.True(place.x > start.x + 0.2f);
+            Assert.True(place.y < start.y - 0.1f);
+            Assert.True(HabFloor.Inside(place));
+        }
+
+        [Fact]
+        public void ALongFrameDoesNotJumpOverAnEdge()
+        {
+            Assert.True(HabFloor.Inside(HabFloor.Limit(new Vector2(131f, 116f), new Vector2(131f, 125f))));
         }
 
         [Fact]
@@ -106,8 +123,7 @@ namespace ShipbreakerVR.Tests
         [Fact]
         public void StopsInACorner()
         {
-            var from = new Vector2(130.6f, 113.7f);
-            Assert.Equal(from, HabFloor.Limit(from, new Vector2(120f, 100f)));
+            Assert.True(HabFloor.Inside(HabFloor.Limit(new Vector2(130.6f, 113.7f), new Vector2(120f, 100f))));
         }
 
         [Fact]

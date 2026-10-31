@@ -149,6 +149,8 @@ namespace ShipbreakerVR
 
         // How far the head stays from that edge, so the view does not end up inside what it was measured against.
         private const float Margin = 0.1f;
+        private const float Piece = 0.05f;
+        private const int PushRounds = 3;
 
         public static bool Inside(Vector2 point)
         {
@@ -158,26 +160,43 @@ namespace ShipbreakerVR
                 var a = Outline[i];
                 var b = Outline[last];
                 if ((a.y > point.y) != (b.y > point.y) && point.x < a.x + (b.x - a.x) * (point.y - a.y) / (b.y - a.y)) inside = !inside;
-                if (Distance(point, a, b) < Margin) return false;
+                if ((point - Closest(point, a, b)).magnitude < Margin) return false;
             }
             return inside;
         }
 
-        private static float Distance(Vector2 point, Vector2 a, Vector2 b)
+        private static Vector2 Closest(Vector2 point, Vector2 a, Vector2 b)
         {
             var along = b - a;
-            var share = Mathf.Clamp01(Vector2.Dot(point - a, along) / Mathf.Max(along.sqrMagnitude, 1e-6f));
-            return (point - (a + along * share)).magnitude;
+            return a + along * Mathf.Clamp01(Vector2.Dot(point - a, along) / Mathf.Max(along.sqrMagnitude, 1e-6f));
         }
 
-        // How far a step gets: along an edge if it runs into one at a slant.
+        // Keeps the margin from every edge near a point. A step into an edge at a slant ends up moving along it.
+        private static Vector2 Pushed(Vector2 point)
+        {
+            for (var round = 0; round < PushRounds; round++)
+                for (int i = 0, last = Outline.Length - 1; i < Outline.Length; last = i++)
+                {
+                    var closest = Closest(point, Outline[i], Outline[last]);
+                    var away = point - closest;
+                    if (away.magnitude < Margin && away.magnitude > 1e-5f) point = closest + away.normalized * (Margin + 1e-3f);
+                }
+            return point;
+        }
+
+        // How far a step gets, in pieces shorter than the margin, so a long frame cannot jump over an edge.
         public static Vector2 Limit(Vector2 from, Vector2 to)
         {
-            if (Inside(to)) return to;
-            var alongX = new Vector2(to.x, from.y);
-            if (Inside(alongX)) return alongX;
-            var alongZ = new Vector2(from.x, to.y);
-            return Inside(alongZ) ? alongZ : from;
+            var way = to - from;
+            var pieces = Mathf.Max(1, Mathf.CeilToInt(way.magnitude / Piece));
+            var place = from;
+            for (var i = 0; i < pieces; i++)
+            {
+                var next = Pushed(place + way / pieces);
+                if (!Inside(next)) break;
+                place = next;
+            }
+            return place;
         }
     }
 }
