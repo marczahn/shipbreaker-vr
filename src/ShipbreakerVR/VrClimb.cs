@@ -45,6 +45,10 @@ namespace ShipbreakerVR
         private const float Clearance = 0.02f;
         // Up to this speed, in m/s at world scale 1, touching the thing held is no impact.
         private const float SoftContact = 3f;
+        // Parts up to this mass, in kg, sit firmly in the hand: they turn with it. Heavier ones turn freely on the hold.
+        private const float FirmMass = 100f;
+        // How fast a firmly held part may turn, in radians per second.
+        private const float FirmSpin = 30f;
         // LynxUnityEngineExtensions.InStaticLayer: the station and other things that never move.
         private const int StaticLayer = 27;
 
@@ -79,6 +83,10 @@ namespace ShipbreakerVR
             public float PressedAt = -1f;
             // The surface under the hand when it took hold, on Anchor: the game's hand goes there, the body keeps to Point.
             public Vector3 Surface;
+            // A part that turns with the hand: its turn relative to the controller, and its speed limit before.
+            public bool Firm;
+            public Quaternion FirmTurn;
+            public float SpinBefore;
             public float HeldAt;
 
             public Hand(VrHand vr)
@@ -222,6 +230,14 @@ namespace ShipbreakerVR
             hand.Point = hand.Anchor.InverseTransformPoint(at);
             hand.Surface = hand.Anchor.InverseTransformPoint(surface);
             hand.HeldAt = Time.time;
+            hand.Firm = false;
+            if (hand.Movable && body.mass <= FirmMass && !HeldByOther(hand) && hand.Input.TryGetAimRotation(out var aim))
+            {
+                hand.Firm = true;
+                hand.FirmTurn = Quaternion.Inverse(VrCamera.Instance.transform.parent.rotation * aim) * body.rotation;
+                hand.SpinBefore = body.maxAngularVelocity;
+                body.maxAngularVelocity = FirmSpin;
+            }
             hand.PullOffset = hand.Local - ClimbContact.Closer(hand.Local, VrCamera.Instance.transform.localPosition);
             if (first)
             {
@@ -276,6 +292,8 @@ namespace ShipbreakerVR
             }
             holdVelocity = holdsVelocity / holding;
             player.velocity = KeepClear(velocity + change, dt);
+            foreach (var hand in Hands)
+                if (hand.Holding && hand.Firm) TurnWithHand(hand, dt);
             pushOff = Vector3.Lerp(pushOff, player.velocity - holdVelocity, 1f - Mathf.Exp(-dt / PushOffSmoothing));
         }
 
@@ -320,6 +338,24 @@ namespace ShipbreakerVR
             if (contactLogs++ < 20)
                 Plugin.Log.LogInfo($"Climbing: {(soft ? "touches" : "impact with")} '{collision.collider.name}' at {speed:0.00} m/s while holding on");
             return soft;
+        }
+
+        // Spins a firmly held part so that it reaches its turn in the hand by the end of the step.
+        private static void TurnWithHand(Hand hand, float dt)
+        {
+            if (hand.Body == null || !hand.Input.TryGetAimRotation(out var aim)) return;
+            var wanted = VrCamera.Instance.transform.parent.rotation * aim * hand.FirmTurn;
+            (wanted * Quaternion.Inverse(hand.Body.rotation)).ToAngleAxis(out var angle, out var axis);
+            if (angle > 180f) angle -= 360f;
+            if (Mathf.Abs(angle) < 0.01f || float.IsInfinity(axis.x)) hand.Body.angularVelocity = Vector3.zero;
+            else hand.Body.angularVelocity = Vector3.ClampMagnitude(axis * (angle * Mathf.Deg2Rad / dt), FirmSpin);
+        }
+
+        private static bool HeldByOther(Hand hand)
+        {
+            foreach (var each in Hands)
+                if (each != hand && each.Holding && each.Body == hand.Body) return true;
+            return false;
         }
 
         // Above the game's grab mass range (GrabController.RawGrabbedMassRange.AboveRange), through reflection: the range's
@@ -387,7 +423,7 @@ namespace ShipbreakerVR
 
         // The point the body is pulled by: the controller, closer to the head than it really is once it is near (see
         // ClimbContact.Closer).
-        private static Vector3 PullPoint(Hand hand) =>
+        private static Vector3 PullPoint(Hand hand) => hand.Movable ? HandWorld(hand) :
             VrCamera.Instance.transform.parent.TransformPoint(ClimbContact.Closer(hand.Local, VrCamera.Instance.transform.localPosition) + hand.PullOffset)
             + (player.position - bodyAtRig);
 
@@ -415,6 +451,8 @@ namespace ShipbreakerVR
         private static void LetGo(Hand hand, bool push, string reason)
         {
             VrHand.StopHolding(hand.Vr);
+            if (hand.Firm && hand.Body != null) hand.Body.maxAngularVelocity = hand.SpinBefore;
+            hand.Firm = false;
             hand.Anchor = null;
             hand.Collider = null;
             hand.Body = null;
