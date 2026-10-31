@@ -49,8 +49,10 @@ namespace ShipbreakerVR
         private const float FirmMass = 30f;
         // How fast a firmly held part may turn, in radians per second.
         private const float FirmSpin = 30f;
-        // How much of the way to the hand a firmly held part goes each step. All of it, as the body does, made it shake.
+        // How much of the way to the hand a firmly held part goes each step, the lightest (FirmFollow) to the heaviest
+        // (FirmFollowHeavy): heavier parts lag behind the hand more and more. All of it, as the body does, made them shake.
         private const float FirmFollow = 0.5f;
+        private const float FirmFollowHeavy = 0.08f;
         // A part let go collides with the body again once its bounds are this far from the body, or after that many seconds.
         private const float FirmClear = 0.45f;
         private const float FirmClearTime = 10f;
@@ -275,7 +277,7 @@ namespace ShipbreakerVR
             {
                 if (!hand.Holding) continue;
                 var error = Hold(hand) - PullPoint(hand);
-                if (!blocked && error.magnitude > TearOff * VrCamera.WorldScale) LetGo(hand, false, $"held back {error.magnitude:0.00} m from the hold");
+                if (!blocked && error.magnitude > (hand.Firm ? 2f : 1f) * TearOff * VrCamera.WorldScale) LetGo(hand, false, $"held back {error.magnitude:0.00} m from the hold");
                 else holding++;
             }
             // A firmly held part goes with the hand and pulls at nothing.
@@ -412,16 +414,17 @@ namespace ShipbreakerVR
             {
                 if (!hand.Holding || !hand.Firm || hand.Body == null || !hand.Input.TryGetAimRotation(out var aim)) continue;
                 var body = hand.Body;
+                var follow = ClimbContact.Follow(body.mass, FirmMass, FirmFollow, FirmFollowHeavy);
                 var wanted = VrCamera.Instance.transform.parent.rotation * aim * hand.FirmTurn;
                 var turn = wanted * Quaternion.Inverse(body.rotation);
                 turn.ToAngleAxis(out var angle, out var axis);
                 if (angle > 180f) angle -= 360f;
                 var center = body.worldCenterOfMass;
                 var wantedCenter = HandWorld(hand) - turn * (Hold(hand) - center);
-                body.velocity = player.velocity + Vector3.ClampMagnitude((wantedCenter - center) * FirmFollow / dt, MaxPull * VrCamera.WorldScale);
+                body.velocity = player.velocity + Vector3.ClampMagnitude((wantedCenter - center) * follow / dt, MaxPull * VrCamera.WorldScale);
                 body.angularVelocity = Mathf.Abs(angle) < 0.01f || float.IsInfinity(axis.x)
                     ? Vector3.zero
-                    : Vector3.ClampMagnitude(axis * (angle * Mathf.Deg2Rad * FirmFollow / dt), FirmSpin);
+                    : Vector3.ClampMagnitude(axis * (angle * Mathf.Deg2Rad * follow / dt), FirmSpin);
             }
         }
 
@@ -597,6 +600,10 @@ namespace ShipbreakerVR
         // An arm cannot bring its hand to the head: pulled in, it stops about 30 cm ahead, and the body with it, far from a
         // wall it reached for at arm's length. So the last part of a pull counts for more, up to the hand counting as at
         // the head. The game's hand stays on its hold either way (VrHands.Pose).
+        // How much of the way to the hand a part of that mass goes each step.
+        public static float Follow(float mass, float heaviest, float lightFollow, float heavyFollow) =>
+            Mathf.Lerp(lightFollow, heavyFollow, mass / heaviest);
+
         public static Vector3 Closer(Vector3 hand, Vector3 head)
         {
             var offset = hand - head;
