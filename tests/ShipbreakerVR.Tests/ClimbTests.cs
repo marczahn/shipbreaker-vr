@@ -72,6 +72,14 @@ namespace ShipbreakerVR.Tests
         }
 
         [Fact]
+        public void HeavierPartsLagBehindMore()
+        {
+            Assert.Equal(0.5f, ClimbContact.Follow(0f, 30f, 0.5f, 0.08f), 3);
+            Assert.Equal(0.29f, ClimbContact.Follow(15f, 30f, 0.5f, 0.08f), 3);
+            Assert.Equal(0.08f, ClimbContact.Follow(30f, 30f, 0.5f, 0.08f), 3);
+        }
+
+        [Fact]
         public void MovesAlongWithASurfaceComingCloser()
         {
             var limited = ClimbContact.LimitApproach(Vector3.zero, new Vector3(0f, 2f, 0f), Up, 0f, Step);

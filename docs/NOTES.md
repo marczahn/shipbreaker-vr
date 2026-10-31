@@ -604,7 +604,8 @@ far the body moved since. Letting go of the last hold keeps the body's velocity 
 While the left hand holds on, controller flying rests. Log lines start with "Climbing:".
 
 A firmly held part (up to 30 kg) must not use the deadbeat impulse: with the spin set on top it shook, and at the size of a
-crate it knocked into the body each step, deadly. It now goes half way to where the hand has it each step, by velocity,
+crate it knocked into the body each step, deadly. It now goes part of the way to the hand each step (half at no mass, 8 % at
+30 kg, so heavier parts lag behind), by velocity,
 interpolated, with no pull on the player, and does not collide with the body until its bounds are 45 cm away after letting go.
 
 While a hand holds on the game's squishy collide is off (`PlayerMotion.SetSquishyCollide`, its switch for noclip): it casts a
