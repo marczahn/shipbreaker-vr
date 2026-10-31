@@ -786,8 +786,8 @@ where one sits) it stays. That is the height held at the last recentering. The p
 camera (`Hab3DLocationNavigation.UpdateNavLocation`, `Hab3DPosterLocation.UpdateButtonLocations`, `UITrackTransform`),
 so patches place them as seen from the head instead. Poster buttons and the call prompt: the camera moved by
 `VrHab.StandShift` is the spot moved the other way. That left the spots' frames off, differently from each side, since
-the flat view's field of view differs from the canvas's, so those go where the line from the head to their
-`TransformToTrack` crosses the menu canvas (`VrUi.OnMenuCanvas`, log `Hab frame ...` with size and place). The canvas
+the flat view's field of view differs from the canvas's, so those go where the line from the resting head
+(`VrCamera.RestingHead`; from the tracked head they moved on the canvas with the head) to their `TransformToTrack` crosses the menu canvas (`VrUi.OnMenuCanvas`, log `Hab frame ...` with size and place). The canvas
 spans about 66 degrees, so a near spot such as the kitchen could lie beyond it, and its frame was gone; frames are held
 inside the canvas. The kitchen has one poster (`Posters_Kitchen/Poster_Kitchen`), the others three. The Hab keeps this way of use as one option; free walking is planned as the other.
 The floor has no collider (a ray from the head hits nothing within 5 m) and its mesh is static batched (`MeshFilter`

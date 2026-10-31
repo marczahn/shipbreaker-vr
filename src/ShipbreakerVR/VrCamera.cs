@@ -32,6 +32,9 @@ namespace ShipbreakerVR
         // Tracked head position that should coincide with the game camera (F4).
         private Vector3 recenterPosition;
 
+        // Where the head is when it stands as at the last recentering, whatever it does now.
+        public Vector3 RestingHead => rig != null ? rig.TransformPoint(recenterPosition) : transform.position;
+
         // Yaw that turns the head to the game camera's view direction in the Hab (F4).
         private Quaternion recenterRotation = Quaternion.identity;
 

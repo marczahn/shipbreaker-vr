@@ -354,8 +354,8 @@ namespace ShipbreakerVR
     }
 
     // The frames of the Hab's spots are placed through the game's camera, with its field of view and height, so on the
-    // menu canvas they sat beside what they frame, differently from each side. They go where the line from the head to
-    // their spot crosses the canvas.
+    // menu canvas they sat beside what they frame, differently from each side. They go where the line from the resting
+    // head to their spot crosses the canvas.
     [HarmonyPatch(typeof(Hab3DLocationNavigation), "UpdateNavLocation")]
     internal static class NavPromptPatch
     {
