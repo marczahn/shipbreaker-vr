@@ -19,12 +19,17 @@ namespace ShipbreakerVR
         private static Quaternion cameraOffset = Quaternion.identity;
         private static bool synced;
         private static bool offsetLogged;
+        private static bool levelNext;
 
         // Recently set targets; MoveRotation only applies on the next physics step, so the body is at one of these.
         private static readonly Quaternion[] recent = new Quaternion[RecentCount];
         private static int recentNext;
 
         public static void Resync() => synced = false;
+
+        // The game starts a shift looking up at the ship, which feels off with a real neck: the shift starts level instead,
+        // in the same heading.
+        public static void LevelNext() => levelNext = true;
 
         public static void MoveRotation(Rigidbody body, Quaternion gameTarget)
         {
@@ -53,6 +58,17 @@ namespace ShipbreakerVR
                 }
                 // Place the playspace so the view stays exactly where the game camera is looking.
                 vr.Playspace = current * cameraOffset * Quaternion.Inverse(head);
+                if (levelNext && GameSession.CurrentGameState == GameSession.GameState.Gameplay)
+                {
+                    levelNext = false;
+                    var ahead = (current * cameraOffset) * Vector3.forward;
+                    var look = head * Vector3.forward;
+                    ahead.y = 0f;
+                    look.y = 0f;
+                    if (ahead.sqrMagnitude > 1e-6f && look.sqrMagnitude > 1e-6f)
+                        vr.Playspace = Quaternion.LookRotation(ahead, Vector3.up) * Quaternion.Inverse(Quaternion.LookRotation(look, Vector3.up));
+                    Plugin.Log.LogInfo("Body: the shift starts level");
+                }
                 System.Array.Clear(recent, 0, RecentCount);
                 Remember(current);
                 synced = true;
