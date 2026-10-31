@@ -101,10 +101,12 @@ namespace ShipbreakerVR
                 interaction = Object.FindObjectOfType<InteractionController>();
             }
             var control = interaction != null ? interaction.CurrentInteractable : null;
-            if (control == null) return;
-            // Things to pick up have no HandTarget: the hand goes to the thing itself.
-            var target = control.HandTarget != null ? control.HandTarget : control.transform;
-            VrToolModels.Bend(arm.Upper, arm.Lower, arm.Wrist, target.position);
+            if (control == null || control.HandTarget == null) return;
+            // Things that float loose, as cassettes and cables to collect, sit off their HandTarget in the hand: the hand goes
+            // to the thing itself. Controls on the hull keep the place made for the hand.
+            var loose = control.GetComponentInParent<Rigidbody>();
+            var target = loose != null && !loose.isKinematic ? loose.worldCenterOfMass : control.HandTarget.position;
+            VrToolModels.Bend(arm.Upper, arm.Lower, arm.Wrist, target);
         }
 
         // Closes the hand while its grip is held, as long as it follows its controller: the same parameters HandGrab sets
