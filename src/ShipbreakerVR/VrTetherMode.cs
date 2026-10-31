@@ -15,7 +15,7 @@ namespace ShipbreakerVR
     // In the tether mode a tap on A lets go of the tether the laser points at (on its rope or near one of its ends), as
     // recalling does for all of them (TetherController.TryDespawnTether: Tether.DespawnRope); that tether is traced in
     // orange (VrAim). Pointing at no tether, A interacts as usual.
-    // Shown by the laser, orange instead of blue, a ring where the laser meets something, a line from where the tether
+    // Shown by the laser, orange instead of red, a ring where the laser meets something, a line from where the tether
     // started to where the hand points while the trigger is held (VrAim), and by the controller: one buzz when the grapple
     // mode comes back, two for the tether mode.
     internal static class VrTetherMode
