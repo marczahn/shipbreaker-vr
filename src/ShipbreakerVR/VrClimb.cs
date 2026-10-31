@@ -43,6 +43,8 @@ namespace ShipbreakerVR
         private const float PushOffSmoothing = 0.08f;
         // How far the body stays from what is ahead of it while holding on, in meters at world scale 1.
         private const float Clearance = 0.04f;
+        // The head's size for that, in meters at world scale 1.
+        private const float HeadRadius = 0.1f;
         // Up to this speed, in m/s at world scale 1, touching the thing held is no impact.
         private const float SoftContact = 3f;
         // Parts up to this mass, in kg, sit firmly in the hand: they turn with it. Heavier ones turn freely on the hold.
@@ -346,14 +348,22 @@ namespace ShipbreakerVR
         private static Vector3 KeepClear(Vector3 velocity, float dt)
         {
             blocked = false;
-            var relative = velocity - holdVelocity;
-            var speed = relative.magnitude;
-            if (speed < 1e-4f) return velocity;
-            var clearance = Clearance * VrCamera.WorldScale;
             // The body's solid sphere only: a Rigidbody sweep could also take its trigger sphere of 50 cm.
             var solid = BodySphere();
             var center = solid != null ? solid.transform.TransformPoint(solid.center) : player.position;
             var radius = solid != null ? solid.radius : 0.3f;
+            velocity = KeepClear(center, radius, velocity, dt);
+            // The hitbox sits low and back, and the real head leans out of it: the face went through walls it looked at.
+            var head = VrCamera.Instance.transform.position + (player.position - bodyAtRig);
+            return KeepClear(head, HeadRadius * VrCamera.WorldScale, velocity, dt);
+        }
+
+        private static Vector3 KeepClear(Vector3 center, float radius, Vector3 velocity, float dt)
+        {
+            var relative = velocity - holdVelocity;
+            var speed = relative.magnitude;
+            if (speed < 1e-4f) return velocity;
+            var clearance = Clearance * VrCamera.WorldScale;
             var hits = Physics.SphereCastAll(center, radius, relative / speed, speed * dt + clearance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             foreach (var hit in hits)
             {
