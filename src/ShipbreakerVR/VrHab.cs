@@ -352,18 +352,23 @@ namespace ShipbreakerVR
         }
     }
 
-    // The prompts of the Hab's spots are placed as seen from the game's camera; with the head standing higher they
-    // floated above what they point at.
+    // The frames of the Hab's spots are placed through the game's camera, with its field of view and height, so on the
+    // menu canvas they sat beside what they frame, differently from each side. They go where the line from the head to
+    // their spot crosses the canvas.
     [HarmonyPatch(typeof(Hab3DLocationNavigation), "UpdateNavLocation")]
     internal static class NavPromptPatch
     {
-        private static void Postfix(NavigationOption nav, Hab3DController ___mHab3DController)
+        private static readonly HashSet<NavigationOption> logged = new HashSet<NavigationOption>();
+
+        private static void Postfix(NavigationOption nav)
         {
-            if (VrHab.StandShift == Vector3.zero || nav.ClickableButton == null || nav.TransformToTrack == null) return;
+            if (nav.ClickableButton == null || nav.TransformToTrack == null) return;
             var prompt = nav.ClickableButton.RectTransform;
             var area = prompt.parent != null ? prompt.parent.parent as RectTransform : null;
-            if (area == null) return;
-            prompt.localPosition += VrHab.PromptShift(___mHab3DController.CinemachineBrain.OutputCamera, nav.TransformToTrack.position, area.rect, Screen.width, Screen.height);
+            var ui = VrUi.Instance;
+            if (area == null || ui == null || !ui.OnMenuCanvas(nav.TransformToTrack.position, out var place)) return;
+            prompt.localPosition = new Vector3(place.x * area.rect.width, place.y * area.rect.height, prompt.localPosition.z);
+            if (logged.Add(nav)) Plugin.Log.LogInfo($"Hab frame '{prompt.name}' on '{nav.TransformToTrack.name}': {prompt.rect.width:0} x {prompt.rect.height:0} of {area.rect.width:0} x {area.rect.height:0}, scale {prompt.localScale.x:0.00}");
         }
     }
 
@@ -386,6 +391,19 @@ namespace ShipbreakerVR
         private const float SitBelow = 1.5f;
 
         public static bool Sits(float spot) => spot < SitBelow;
+
+        // Where the line from an eye to a spot crosses the plane z = 0; false if the spot is not beyond the plane's side
+        // the line runs through, in front of the eye.
+        public static bool Across(Vector3 eye, Vector3 spot, out Vector2 place)
+        {
+            place = Vector2.zero;
+            var along = eye.z - spot.z;
+            if (Mathf.Abs(along) < 1e-5f) return false;
+            var share = eye.z / along;
+            if (share <= 0f) return false;
+            place = new Vector2(eye.x + (spot.x - eye.x) * share, eye.y + (spot.y - eye.y) * share);
+            return true;
+        }
 
         // Moves a point along up to standing height, keeping where it is in the room. A sitting spot stays.
         public static Vector3 Place(Vector3 point, Vector3 up, float floor, float scale)

@@ -20,6 +20,20 @@ namespace ShipbreakerVR.Tests
         }
 
         [Fact]
+        public void FrameSitsWhereTheLineToItsSpotCrossesTheCanvas()
+        {
+            Assert.True(HabStanding.Across(new Vector3(0f, 0f, -2f), new Vector3(1f, 2f, 2f), out var place));
+            Assert.Equal(0.5f, place.x, 3);
+            Assert.Equal(1f, place.y, 3);
+        }
+
+        [Fact]
+        public void NoFrameForASpotBehindTheEye()
+        {
+            Assert.False(HabStanding.Across(new Vector3(0f, 0f, -2f), new Vector3(1f, 2f, -3f), out _));
+        }
+
+        [Fact]
         public void SittingOnTheBedKeepsTheSpot()
         {
             var placed = HabStanding.Place(new Vector3(3f, 1.28f, 4f), Up, 0f, 1f);
