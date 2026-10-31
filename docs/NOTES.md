@@ -958,7 +958,7 @@ only when something changes (the options rows, the screen size, the F8 dump), no
 
 In the Hab each dump also writes `BepInExShipbreakerVR-hab-survey.txt` (`VrHabSurvey`): spots, ways, what blocks them, colliders and renderer boxes in the room's axes, the floor plan for walking through the Hab.
 
-F8 (`VrDiagnostics`) is for things only seen in the headset. It writes into the log: game state, head pose, what lies
+F8, or B and Y together, (`VrDiagnostics`) is for things only seen in the headset. It writes into the log: game state, head pose, what lies
 below the head along `VrHab.RoomUp` (solid colliders within 5 m, for the height above a floor), the camera the rig follows, where the UI canvas hangs, every active root canvas (render mode, camera, layer, whether `VrCanvases`
 attached it, direction and distance from the head for the non-overlay ones, and its dark, large or specially shaded
 graphics, and its visible texts with their position on the canvas, so a prompt that is off the canvas or covered

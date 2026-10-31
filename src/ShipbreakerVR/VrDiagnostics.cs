@@ -42,12 +42,17 @@ namespace ShipbreakerVR
                 return;
             }
             if (VrSettings.Pressed(VrSettings.DiagnosticsKey)) Dump(vr, VrSettings.DiagnosticsKey.Value.ToString());
+            // A key is hard to find with the headset on.
+            else if (BothTopButtons) Dump(vr, "B and Y");
             else if (dueAt >= 0f && Time.unscaledTime >= dueAt)
             {
                 dueAt = -1f;
                 Dump(vr, dueReason);
             }
         }
+
+        private static bool BothTopButtons => VrXr.IsRunning && VrInput.Left.Secondary.Down && VrInput.Right.Secondary.Down
+            && (VrInput.Left.Secondary.Pressed || VrInput.Right.Secondary.Pressed);
 
         public static void Dump(VrCamera vr, string reason, bool saveImages = true)
         {

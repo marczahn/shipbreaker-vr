@@ -159,7 +159,7 @@ namespace ShipbreakerVR
                     "Dein Körper bleibt aufrecht und zu deinen Händen gewandt, während du dich umschaust, und geht mit, wenn du dich vorbeugst: Die Hände reichen gleich weit, egal wohin du schaust. Aus: Der Körper dreht sich wie bisher mit jedem Blick mit und bleibt stehen, wenn du dich vorbeugst."));
 
             Diagnostics = Bind("Debug", "Diagnose", false,
-                "For finding problems: Tasten/Diagnose (F8) writes what is drawn around the player into the log and saves screenshots next to it (also on its own 6 s after entering the Hab), load screens are logged frame by frame, and frame times are logged every 30 s.");
+                "For finding problems: Tasten/Diagnose (F8, or B and Y together) writes what is drawn around the player into the log and saves screenshots next to it (also on its own 6 s after entering the Hab), load screens are logged frame by frame, and frame times are logged every 30 s.");
             ToolExport = Bind("Debug", "WerkzeugExport", false,
                 "Tasten/WerkzeugExport (Shift+F8) saves the model of the tool in the hand (meshes, textures, UV layouts) to BepInEx\\ShipbreakerVR-tools, for retexturing it.");
             TestMode = Bind("Test", "Testmodus", false,
