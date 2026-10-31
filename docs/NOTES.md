@@ -590,6 +590,9 @@ A grip pressed up to 0.25 s before a surface is in reach still catches. The game
 0.1 s, while the body keeps the hold at the controller, so catching moves nothing. Non-convex meshes have no
 `ClosestPoint`, so 26 rays around the hand find the surface.
 
+Parts up to 100 kg that a single hand holds turn with it (`VrClimb.TurnWithHand`): their angular velocity is set each step
+so they keep their turn relative to the controller. They also stay at the real hand, `Closer` is only for fixed holds.
+
 The last part of a pull counts for more (`ClimbContact.Closer`): within 40 cm of the head a hand counts as 1.5 m closer per
 meter nearer, since a real hand stops about 30 cm ahead of the head and left the body that far from a wall grabbed at
 arm's length. Taking hold stores the difference, so nothing moves then.
