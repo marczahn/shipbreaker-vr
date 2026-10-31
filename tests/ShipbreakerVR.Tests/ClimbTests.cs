@@ -67,7 +67,7 @@ namespace ShipbreakerVR.Tests
         [Fact]
         public void StopsInACorner()
         {
-            var from = new Vector2(132.1f, 113.6f);
+            var from = new Vector2(132.1f, 113.45f);
             Assert.Equal(from, HabFloor.Limit(from, new Vector2(132.5f, 113f)));
         }
 

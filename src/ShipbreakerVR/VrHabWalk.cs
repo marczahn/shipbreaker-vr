@@ -7,7 +7,7 @@ namespace ShipbreakerVR
     internal static class VrHabWalk
     {
         private const string SitSpot = "BedSitting_Virtual_Camera";
-        private const float Speed = 1.6f;
+        private const float Speed = 1.8f;
         private const float Deadzone = 0.2f;
         private const float TurnStep = 45f;
         private const float TurnPress = 0.6f;
@@ -103,8 +103,8 @@ namespace ShipbreakerVR
         // Lowest and highest corner of the aisle, the work area and the window niche.
         private static readonly Rect[] Areas =
         {
-            Rect.MinMaxRect(129.9f, 113.6f, 132.1f, 118.5f),
-            Rect.MinMaxRect(130.6f, 118.5f, 132.9f, 121.7f),
+            Rect.MinMaxRect(129.75f, 113.45f, 132.1f, 118.5f),
+            Rect.MinMaxRect(130.6f, 118.5f, 132.9f, 121.35f),
             Rect.MinMaxRect(128.7f, 115.95f, 130.1f, 116.8f),
         };
 
