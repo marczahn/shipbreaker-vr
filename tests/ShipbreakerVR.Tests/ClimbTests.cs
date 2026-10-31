@@ -28,6 +28,14 @@ namespace ShipbreakerVR.Tests
         }
 
         [Fact]
+        public void FrameBeyondTheCanvasStaysOnIt()
+        {
+            var seen = HabStanding.Inside(new Vector2(0.9f, -0.1f), 0.2f, 0.3f);
+            Assert.Equal(0.4f, seen.x, 3);
+            Assert.Equal(-0.1f, seen.y, 3);
+        }
+
+        [Fact]
         public void NoFrameForASpotBehindTheEye()
         {
             Assert.False(HabStanding.Across(new Vector3(0f, 0f, -2f), new Vector3(1f, 2f, -3f), out _));

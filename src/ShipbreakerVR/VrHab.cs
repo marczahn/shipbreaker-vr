@@ -211,6 +211,7 @@ namespace ShipbreakerVR
             if (Mathf.Abs(spot - loggedSpot) > 0.01f)
             {
                 loggedSpot = spot;
+                NavPromptPatch.LogAgain();
                 var name = cutBrain != null && cutBrain.ActiveVirtualCamera != null ? cutBrain.ActiveVirtualCamera.Name : "?";
                 Plugin.Log.LogInfo($"Hab: camera spot '{name}' {spot:0.00} m above the floor, {(HabStanding.Sits(spot) ? "sitting, stays" : $"standing at {HabStanding.Height:0.00} m")}");
             }
@@ -367,9 +368,13 @@ namespace ShipbreakerVR
             var area = prompt.parent != null ? prompt.parent.parent as RectTransform : null;
             var ui = VrUi.Instance;
             if (area == null || ui == null || !ui.OnMenuCanvas(nav.TransformToTrack.position, out var place)) return;
-            prompt.localPosition = new Vector3(place.x * area.rect.width, place.y * area.rect.height, prompt.localPosition.z);
-            if (logged.Add(nav)) Plugin.Log.LogInfo($"Hab frame '{prompt.name}' on '{nav.TransformToTrack.name}': {prompt.rect.width:0} x {prompt.rect.height:0} of {area.rect.width:0} x {area.rect.height:0}, scale {prompt.localScale.x:0.00}");
+            // A spot beyond the canvas's edge would lose its frame, and with it the only way to see that the spot can be reached.
+            var seen = HabStanding.Inside(place, prompt.rect.width / area.rect.width, prompt.rect.height / area.rect.height);
+            prompt.localPosition = new Vector3(seen.x * area.rect.width, seen.y * area.rect.height, prompt.localPosition.z);
+            if (logged.Add(nav)) Plugin.Log.LogInfo($"Hab frame on '{nav.TransformToTrack.name}': {prompt.rect.width:0} x {prompt.rect.height:0}, at {place.x:0.00} {place.y:0.00} of the canvas{(seen != place ? ", held inside it" : "")}");
         }
+
+        public static void LogAgain() => logged.Clear();
     }
 
     [HarmonyPatch(typeof(BBI.Unity.Game.UI.Hab.Hab3DPosterLocation), "UpdateButtonLocations")]
@@ -391,6 +396,14 @@ namespace ShipbreakerVR
         private const float SitBelow = 1.5f;
 
         public static bool Sits(float spot) => spot < SitBelow;
+
+        // A place on the canvas, kept so far in that a frame of the given shares of its size stays on it.
+        public static Vector2 Inside(Vector2 place, float width, float height)
+        {
+            var x = 0.5f - width * 0.5f;
+            var y = 0.5f - height * 0.5f;
+            return new Vector2(Mathf.Clamp(place.x, -x, x), Mathf.Clamp(place.y, -y, y));
+        }
 
         // Where the line from an eye to a spot crosses the plane z = 0; false if the spot is not beyond the plane's side
         // the line runs through, in front of the eye.
