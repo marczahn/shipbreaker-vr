@@ -139,6 +139,7 @@ namespace ShipbreakerVR
         private static Vector3 holdVelocity;
         private static int logs;
         private static int contactLogs;
+        private static int switchLogs;
         // Whether KeepClear held the body back in the last step.
         private static bool blocked;
 
@@ -235,6 +236,7 @@ namespace ShipbreakerVR
             }
             if (best == null)
             {
+                if (firstTry) LogTriggers(at, reach, hand);
                 if (firstTry && logs++ < 80) Plugin.Log.LogInfo($"Climbing: {hand.Name} hand grips, nothing within {reach:0.00} m");
                 return;
             }
@@ -256,6 +258,7 @@ namespace ShipbreakerVR
             if (hand.Movable && body.mass <= FirmMass && !HeldByOther(hand) && hand.Input.TryGetAimRotation(out var aim))
                 Firm(hand, aim);
             hand.PullOffset = hand.Local - ClimbContact.Closer(hand.Local, VrCamera.Instance.transform.localPosition);
+            LogControl(best, hand);
             if (first)
             {
                 pushOff = Vector3.zero;
@@ -473,6 +476,29 @@ namespace ShipbreakerVR
                 tensor.y > 0f ? torque.y / tensor.y : 0f,
                 tensor.z > 0f ? torque.z / tensor.z : 0f);
             return 1f / body.mass + Vector3.Dot(Vector3.Cross(spin, arm), direction);
+        }
+
+        // For finding out why door switches sometimes cannot be held: what the hand was near instead.
+        private static void LogTriggers(Vector3 at, float reach, Hand hand)
+        {
+            var count = Physics.OverlapSphereNonAlloc(at, reach, Found, ~0, QueryTriggerInteraction.Collide);
+            for (var i = 0; i < count && switchLogs < 40; i++)
+            {
+                if (Own(Found[i])) continue;
+                switchLogs++;
+                var control = Found[i].GetComponentInParent<InteractableObject>();
+                Plugin.Log.LogInfo($"Climbing: {hand.Name} hand near '{Found[i].name}' (layer {Found[i].gameObject.layer}{(Found[i].isTrigger ? ", trigger" : "")}"
+                    + $"{(control != null ? $", control '{control.name}'" : "")}), not held");
+            }
+        }
+
+        // And why a held switch sometimes shows no prompt: the game offers what the view centers on, not what the hand holds.
+        private static void LogControl(Collider held, Hand hand)
+        {
+            var control = held.GetComponentInParent<InteractableObject>();
+            if (control == null || switchLogs >= 40) return;
+            switchLogs++;
+            Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds the control '{control.name}'");
         }
 
         // The directions of a cube's faces and corners.
