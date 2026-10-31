@@ -506,9 +506,11 @@ namespace ShipbreakerVR
 {
     // The demo charges' placement marker goes by the game's own idea of the tool in hand, which can stay on them after
     // they were put away: the marker then stayed in the view. With another tool or none in the game's hand it goes.
-    [HarmonyPatch(typeof(DemoChargeController), "Update")]
+    [HarmonyPatch]
     internal static class ChargeMarkerPatch
     {
+        private static MethodBase TargetMethod() => AccessTools.Method(AccessTools.TypeByName("BBI.Unity.Game.DemoChargeController"), "Update");
+
         private static readonly AccessTools.FieldRef<DemoChargeController, StructurePart> Target =
             AccessTools.FieldRefAccess<DemoChargeController, StructurePart>("mPlacementTarget");
         private static readonly MethodInfo Clear = AccessTools.Method(typeof(DemoChargeController), "ClearPlacementData");
