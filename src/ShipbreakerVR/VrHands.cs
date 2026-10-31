@@ -27,6 +27,9 @@ namespace ShipbreakerVR
         private const float Blend = 0.2f;
         // How fast a hand that let go of a hold returns to its controller, in m/s at world scale 1.
         private const float HoldReturn = 2f;
+        // How thick a hand is against walls, in meters.
+        private const float HandRadius = 0.04f;
+        private static readonly RaycastHit[] WallHits = new RaycastHit[16];
 
         private class Arm
         {
@@ -147,10 +150,34 @@ namespace ShipbreakerVR
             else
                 arm.OffController = Vector3.MoveTowards(arm.OffController, Vector3.zero, HoldReturn * VrCamera.WorldScale * Time.unscaledDeltaTime);
             wrist += arm.OffController;
+            wrist = OutOfWalls(arm, wrist);
 
             var animated = arm.Wrist.rotation;
             VrToolModels.Bend(arm.Upper, arm.Lower, arm.Wrist, Vector3.Lerp(arm.Wrist.position, wrist, weight));
             arm.Wrist.rotation = Quaternion.Slerp(animated, HandRotation(arm, aim * hold, animated), weight);
+        }
+
+        // An empty hand stops at what is between the shoulder and the controller instead of going through it. Only the
+        // model: nothing pushes against it. A tool stays with its controller, so the hand holding one does too.
+        private static Vector3 OutOfWalls(Arm arm, Vector3 wrist)
+        {
+            var state = (arm == LeftArm ? VrHand.Left : VrHand.Right).State;
+            if (state != HandState.Empty) return wrist;
+            var shoulder = arm.Upper.position;
+            var way = wrist - shoulder;
+            var length = way.magnitude;
+            if (length < 0.01f) return wrist;
+            var direction = way / length;
+            var count = Physics.SphereCastNonAlloc(shoulder, HandRadius, direction, WallHits, length, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            var free = length;
+            var body = arm.Wrist.root;
+            for (var i = 0; i < count; i++)
+            {
+                var hit = WallHits[i];
+                // Hits from where the cast starts inside something have no place on the way.
+                if (hit.distance > 0f && hit.distance < free && !hit.collider.transform.IsChildOf(body)) free = hit.distance;
+            }
+            return shoulder + direction * free;
         }
 
         // With the charge in the left hand, that hand takes over how the animation turns the game's right hand, mirrored:

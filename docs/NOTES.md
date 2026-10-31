@@ -561,8 +561,8 @@ as before (log: "Grapple hold: '<part>' follows '<aim camera>' ...", once per ca
 The game has its own grab (`GrabController`, `HandGrab`): it reaches for a raycast hit and holds the player with springs
 1.75 m behind the grabbed point (`HandSettings.ConnectedAnchorZOffset`), with lead and sticky animations. That does not
 fit a hand that should stay exactly where it holds, so the mod does its own: the grip of a hand that is free
-(`VrToolInput.Free`: no tool, not at the belt, not fitting a tool) looks for the nearest non-trigger collider within 10 cm
-of the controller (`Physics.OverlapSphere`, the player's own colliders skipped) and fixes the hand's position on it (on
+(`VrToolInput.Free`: no tool, not at the belt, not fitting a tool) looks for the nearest non-trigger collider within 15 cm
+of the controller (`Physics.OverlapSphere`, the player's own colliders skipped; 15 cm since the magnet grip) and fixes the hand's position on it (on
 its rigidbody, or its transform without one). Each physics step (`VrCamera.FixedUpdate`) an impulse between the player's
 body (`GrabController.m_PlayerRigidbodyReference`) and the hold sets their relative velocity so the hand reaches the hold
 by the end of the step: a deadbeat constraint, no joints. Its share follows the masses; the station's static layer (27,
@@ -585,6 +585,12 @@ their velocity. Sliding along a surface stays. What still touches the thing held
 `OnCollisionEnter` (`ImpactPatch`); ship parts share one kinematic rigidbody, so that is the whole hull. Faster hits and
 other things stay impacts. The colliders stay on. The sweep sees only the body's colliders, not the head leaning out
 past them.
+
+A grip pressed up to 0.25 s before a surface is in reach still catches. The game's hand then goes to the surface within
+0.1 s, while the body keeps the hold at the controller, so catching moves nothing. Non-convex meshes have no
+`ClosestPoint`, so 26 rays around the hand find the surface.
+
+An empty hand stops at walls (`VrHands.OutOfWalls`, a sphere cast from the shoulder each frame): only the model, not physics.
 
 The last part of a pull counts for more (`ClimbContact.Closer`): within 40 cm of the head a hand counts as 1.5 m closer per
 meter nearer, since a real hand stops about 30 cm ahead of the head and left the body that far from a wall grabbed at
