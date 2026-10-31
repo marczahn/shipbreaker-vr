@@ -47,6 +47,9 @@ namespace ShipbreakerVR
         private static readonly AccessTools.FieldRef<GrabController, Rigidbody> PlayerBody =
             AccessTools.FieldRefAccess<GrabController, Rigidbody>("m_PlayerRigidbodyReference");
 
+        private static readonly AccessTools.FieldRef<PlayerMotion, bool> SquishyCollide =
+            AccessTools.FieldRefAccess<PlayerMotion, bool>("m_SquishyCollideEnabled");
+
         private static readonly System.Reflection.MethodInfo RawGrabbedMassRange =
             AccessTools.PropertyGetter(typeof(GrabController), "RawGrabbedMassRange");
 
@@ -85,6 +88,10 @@ namespace ShipbreakerVR
 
         private static GrabController grab;
         private static Rigidbody player;
+        private static PlayerMotion motion;
+        // The game's squishy collide as it was before the first hand took hold, while it is off for holding on.
+        private static bool squishyWas;
+        private static bool squishyOff;
         private static float nextSearch;
         // Where the body was when the rig was placed last (RigPlaced).
         private static Vector3 bodyAtRig;
@@ -137,9 +144,11 @@ namespace ShipbreakerVR
                 nextSearch = Time.unscaledTime + 1f;
                 grab = GameRefs.Grab;
                 player = grab != null ? PlayerBody(grab) : null;
+                motion = player != null ? player.GetComponent<PlayerMotion>() : null;
                 rigPlaced = false;
                 if (player != null && logs++ < 80)
                     Plugin.Log.LogInfo($"Climbing: player body '{player.name}', {player.mass:0.#} kg, interpolation {player.interpolation}");
+                if (player != null) LogColliders();
             }
             return player != null && rigPlaced;
         }
@@ -195,7 +204,11 @@ namespace ShipbreakerVR
                 && !TooHeavy(body.mass);
             hand.Anchor = body != null ? body.transform : best.transform;
             hand.Point = hand.Anchor.InverseTransformPoint(at);
-            if (first) pushOff = Vector3.zero;
+            if (first)
+            {
+                pushOff = Vector3.zero;
+                SquishyOff();
+            }
             hand.Input.Buzz(0.5f, 0.06f);
             if (logs++ < 80)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds '{best.name}' (layer {best.gameObject.layer}, "
@@ -365,7 +378,42 @@ namespace ShipbreakerVR
             if (push && last && player != null) player.velocity = holdVelocity + speed;
             if (logs++ < 80)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand lets go ({reason}){(push && last ? $", flies on at {speed.magnitude:0.00} m/s" : "")}");
-            if (last) pushOff = Vector3.zero;
+            if (last)
+            {
+                pushOff = Vector3.zero;
+                SquishyBack();
+            }
+        }
+
+        // PlayerMotion.HandleSquishyCollide: moving towards a surface within its range, it pushes the body away and plays
+        // a crackle, an effect and a shake. A hand pulling up to the hull would fight it all the time.
+        private static void SquishyOff()
+        {
+            if (motion == null || squishyOff) return;
+            squishyWas = SquishyCollide(motion);
+            motion.SetSquishyCollide(false);
+            squishyOff = true;
+        }
+
+        private static void SquishyBack()
+        {
+            if (!squishyOff) return;
+            squishyOff = false;
+            if (motion != null) motion.SetSquishyCollide(squishyWas);
+        }
+
+        // What the body collides with, for the log.
+        private static void LogColliders()
+        {
+            foreach (var collider in player.GetComponentsInChildren<Collider>(true))
+            {
+                var shape = collider is SphereCollider sphere ? $"sphere r {sphere.radius:0.00} at {sphere.center}"
+                    : collider is CapsuleCollider capsule ? $"capsule r {capsule.radius:0.00} h {capsule.height:0.00} axis {capsule.direction} at {capsule.center}"
+                    : collider is BoxCollider box ? $"box {box.size} at {box.center}"
+                    : collider.GetType().Name;
+                Plugin.Log.LogInfo($"Climbing: body collider {VrUtil.Chain(collider.transform)}: {shape}, local {collider.transform.position - player.position}, "
+                    + $"bounds {collider.bounds.size}{(collider.isTrigger ? ", trigger" : "")}{(collider.enabled ? "" : ", off")}");
+            }
         }
 
         private static void LetGoAll()
