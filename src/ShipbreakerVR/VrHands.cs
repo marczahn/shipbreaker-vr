@@ -187,6 +187,8 @@ namespace ShipbreakerVR
                 if (hit.distance > 0f && hit.distance < free && !hit.collider.transform.IsChildOf(body)) free = hit.distance;
             }
             return shoulder + direction * free;
+        }
+
         // Every this many seconds while an arm follows its controller, how often its wrist stayed short of it.
         private const float CountPeriod = 10f;
         // Shorter than this does not count (the solve leaves 1 mm).
