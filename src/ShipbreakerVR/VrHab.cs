@@ -187,6 +187,19 @@ namespace ShipbreakerVR
             }
         }
 
+        // How far the head stands from the game's camera. The game places its prompts as seen from that camera.
+        public static Vector3 StandShift { get; set; }
+
+        // Where a spot shows on the game's screen once the camera stands at the head instead.
+        public static Vector3 SeenFromHead(Camera camera, Vector3 spot) => camera.WorldToScreenPoint(spot - StandShift);
+
+        // How far a prompt on an area of the given size moves for that.
+        public static Vector3 PromptShift(Camera camera, Vector3 spot, Rect area, float screenWidth, float screenHeight)
+        {
+            var moved = SeenFromHead(camera, spot) - camera.WorldToScreenPoint(spot);
+            return new Vector3(moved.x / screenWidth * area.width, moved.y / screenHeight * area.height, 0f);
+        }
+
         // The camera moved to standing height over the room's floor. The floor has no collider, and the floor mesh is
         // static batched, so its bounds say nothing: the chair's foot stands for it.
         public static Vector3 Standing(Vector3 camera, float scale)
@@ -336,6 +349,31 @@ namespace ShipbreakerVR
             if (navOpt == null || !navOpt.GoesToNavigableScreen || navOpt.ScreenAnimator == null) return;
             if (VrUi.Instance == null || !VrUi.Instance.Active) return;
             navOpt.ScreenAnimator.ResetTrigger("FadeOut");
+        }
+    }
+
+    // The prompts of the Hab's spots are placed as seen from the game's camera; with the head standing higher they
+    // floated above what they point at.
+    [HarmonyPatch(typeof(Hab3DLocationNavigation), "UpdateNavLocation")]
+    internal static class NavPromptPatch
+    {
+        private static void Postfix(NavigationOption nav, Hab3DController ___mHab3DController)
+        {
+            if (VrHab.StandShift == Vector3.zero || nav.ClickableButton == null || nav.TransformToTrack == null) return;
+            var prompt = nav.ClickableButton.RectTransform;
+            var area = prompt.parent != null ? prompt.parent.parent as RectTransform : null;
+            if (area == null) return;
+            prompt.localPosition += VrHab.PromptShift(___mHab3DController.CinemachineBrain.OutputCamera, nav.TransformToTrack.position, area.rect, Screen.width, Screen.height);
+        }
+    }
+
+    [HarmonyPatch(typeof(BBI.Unity.Game.UI.Hab.Hab3DPosterLocation), "UpdateButtonLocations")]
+    internal static class PosterPromptPatch
+    {
+        private static void Postfix(Camera ___m_Camera, Doozy.Engine.UI.UIView ___m_TabButtons, RectTransform ___mTabButtonParentTransform, BBI.Unity.Game.UI.Hab.Hab3DPoster ___mCurrentlySelectedPoster)
+        {
+            if (VrHab.StandShift == Vector3.zero || ___m_TabButtons == null || ___m_Camera == null || ___mTabButtonParentTransform == null || ___mCurrentlySelectedPoster == null) return;
+            ___m_TabButtons.RectTransform.localPosition += VrHab.PromptShift(___m_Camera, ___mCurrentlySelectedPoster.RectTransform.position, ___mTabButtonParentTransform.rect, ___m_Camera.pixelWidth, ___m_Camera.pixelHeight);
         }
     }
 

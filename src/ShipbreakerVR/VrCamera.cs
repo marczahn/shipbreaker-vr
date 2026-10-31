@@ -336,6 +336,7 @@ namespace ShipbreakerVR
             if (FollowsHab && VrHab.Monitor != null) position = VrHab.MonitorViewpoint(VrHab.Monitor, position);
             // Each spot's height was made for the flat game: 32 cm apart between two spots where one stands.
             else if (FollowsHab && !Lying(cam.rotation)) position = VrHab.Standing(position, WorldScale);
+            VrHab.StandShift = FollowsHab && VrHab.Monitor == null ? position - cam.position : Vector3.zero;
             // The Hab camera swings between bed, kitchen and terminal; the playspace turns along, but only around the
             // vertical axis: its pitch would tilt the room. Looking up or down is up to the head. Except lying in bed.
             if (FollowsHab) Playspace = HabHeading(cam.rotation) * recenterRotation;
