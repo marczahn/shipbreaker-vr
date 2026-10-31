@@ -334,6 +334,8 @@ namespace ShipbreakerVR
             // At a monitor in the Hab the head goes in front of it instead of right up to it (VrHab.Monitor).
             var position = cam.position;
             if (FollowsHab && VrHab.Monitor != null) position = VrHab.MonitorViewpoint(VrHab.Monitor, position);
+            // Each spot's height was made for the flat game: 32 cm apart between two spots where one stands.
+            else if (FollowsHab && !Lying(cam.rotation)) position = VrHab.Standing(position, WorldScale);
             // The Hab camera swings between bed, kitchen and terminal; the playspace turns along, but only around the
             // vertical axis: its pitch would tilt the room. Looking up or down is up to the head. Except lying in bed.
             if (FollowsHab) Playspace = HabHeading(cam.rotation) * recenterRotation;
@@ -353,11 +355,13 @@ namespace ShipbreakerVR
         // with its menu. The tilt changes only during the fade between two spots. Elsewhere only the heading.
         private const float LyingPitch = 30f;
 
+        private static bool Lying(Quaternion rotation) => Vector3.Dot(rotation * Vector3.forward, VrHab.RoomUp) > Mathf.Sin(LyingPitch * Mathf.Deg2Rad);
+
         private static Quaternion HabHeading(Quaternion rotation)
         {
             var up = VrHab.RoomUp;
             var forward = rotation * Vector3.forward;
-            if (Vector3.Dot(forward, up) > Mathf.Sin(LyingPitch * Mathf.Deg2Rad)) return Quaternion.LookRotation(forward, up);
+            if (Lying(rotation)) return Quaternion.LookRotation(forward, up);
             // Its heading in the room, standing on the room's floor: the Hab is tilted in the world.
             var ahead = Vector3.ProjectOnPlane(forward, up);
             if (ahead.sqrMagnitude < 1e-4f) ahead = Vector3.ProjectOnPlane(rotation * Vector3.up, up);

@@ -16,6 +16,10 @@ namespace ShipbreakerVR
     {
         private static Hab3DController controller;
         private static Transform interior;
+        private static Transform floorOf;
+        private static bool floorFound;
+        private static Vector3 floorLocal;
+        private static float loggedSpot = float.MinValue;
         private static float nextControllerSearch;
 
         // Moving between bed, kitchen, terminal and so on, the Hab camera swings through the room for a second. In VR
@@ -183,6 +187,50 @@ namespace ShipbreakerVR
             }
         }
 
+        // The camera moved to standing height over the room's floor. The floor has no collider, and the floor mesh is
+        // static batched, so its bounds say nothing: the chair's foot stands for it.
+        public static Vector3 Standing(Vector3 camera, float scale)
+        {
+            var up = RoomUp;
+            if (!FindFloor()) return camera;
+            var floor = Vector3.Dot(interior.TransformPoint(floorLocal), up);
+            var spot = (Vector3.Dot(camera, up) - floor) / scale;
+            if (Mathf.Abs(spot - loggedSpot) > 0.01f)
+            {
+                loggedSpot = spot;
+                Plugin.Log.LogInfo($"Hab: camera spot {spot:0.00} m above the floor, standing at {HabStanding.Height:0.00} m");
+            }
+            return HabStanding.Place(camera, up, floor, scale);
+        }
+
+        private static bool FindFloor()
+        {
+            if (interior == null) return false;
+            if (floorOf == interior) return floorFound;
+            floorOf = interior;
+            var chair = interior.Find("PRF_Props_Hab_Chair/SM_Props_Hab_Chair");
+            var filter = chair != null ? chair.GetComponent<MeshFilter>() : null;
+            floorFound = filter != null && filter.sharedMesh != null;
+            if (!floorFound)
+            {
+                Plugin.Log.LogWarning("Hab: no chair to find the floor by, the camera spots keep their height");
+                return false;
+            }
+            var bounds = filter.sharedMesh.bounds;
+            var lowest = float.MaxValue;
+            for (var x = -1; x <= 1; x += 2)
+                for (var y = -1; y <= 1; y += 2)
+                    for (var z = -1; z <= 1; z += 2)
+                    {
+                        var corner = chair.TransformPoint(bounds.center + Vector3.Scale(bounds.extents, new Vector3(x, y, z)));
+                        var height = Vector3.Dot(corner, interior.up);
+                        if (height >= lowest) continue;
+                        lowest = height;
+                        floorLocal = interior.InverseTransformPoint(corner);
+                    }
+            return true;
+        }
+
         // In VR the sway moves the whole room around the player. Silenced while the rig follows the Hab camera,
         // restored afterwards. Rescanned now and then, since locations may be activated later.
         public static void Calm(bool calm)
@@ -288,6 +336,16 @@ namespace ShipbreakerVR
             if (VrUi.Instance == null || !VrUi.Instance.Active) return;
             navOpt.ScreenAnimator.ResetTrigger("FadeOut");
         }
+    }
+
+    internal static class HabStanding
+    {
+        // Eye height over the Hab's floor while standing, in meters at world scale 1.
+        public const float Height = 1.9f;
+
+        // Moves a point along up to standing height, keeping where it is in the room.
+        public static Vector3 Place(Vector3 point, Vector3 up, float floor, float scale) =>
+            point + up * (floor + Height * scale - Vector3.Dot(point, up));
     }
 
     [HarmonyPatch(typeof(LynxCameraController), "OnGameStateChangedEvent")]

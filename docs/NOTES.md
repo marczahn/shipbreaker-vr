@@ -779,6 +779,13 @@ runs after post-processing and the flat UI looked pasted onto the room: the UI t
 is drawn with `UI/Default` and textures made at runtime for the canvas's aspect; the plugin has no shaders of its own
 (an AssetBundle with shaders would need the Unity editor).
 
+The Hab's virtual cameras have heights made for the flat game: with the same tracked height the head was 1.68 m and
+2.00 m above the floor at two spots where one stands. While standing the head now goes to `HabStanding.Height` (1.90 m,
+Raik's value) along `VrHab.RoomUp`, at a monitor and lying it stays. That is the height held at the last recentering.
+The floor has no collider (a ray from the head hits nothing within 5 m) and its mesh is static batched (`MeshFilter`
+bounds cover the batch, in the F8 room list those come out around 358 m), so the foot of the loose chair stands for the
+floor. Log `Hab: camera spot N m above the floor`.
+
 Lying in bed (`Entry` after waking up and `WakeUpMonitor`) the Hab camera looks up at the ceiling (57 and 63 degrees).
 With only its heading the player looked straight ahead at the wall while the monitor with the morning menu was
 overhead. For a Hab camera looking up more than 30 degrees the playspace now takes its pitch too, as if lying on one's

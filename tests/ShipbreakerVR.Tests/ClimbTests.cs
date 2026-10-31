@@ -8,6 +8,25 @@ namespace ShipbreakerVR.Tests
         private const float Step = 0.02f;
         private static readonly Vector3 Up = new Vector3(0f, 1f, 0f);
 
+        [Theory]
+        [InlineData(361.2f)]
+        [InlineData(358f)]
+        public void StandsAtTheSameHeightFromEverySpot(float height)
+        {
+            var placed = HabStanding.Place(new Vector3(3f, height, 4f), Up, 359.3f, 1f);
+            Assert.Equal(361.2f, placed.y, 3);
+            Assert.Equal(3f, placed.x, 3);
+            Assert.Equal(4f, placed.z, 3);
+        }
+
+        [Fact]
+        public void StandsOnATiltedFloorAlongItsUp()
+        {
+            var up = new Vector3(0f, 0.99756f, 0.06976f);
+            var placed = HabStanding.Place(new Vector3(1f, 2f, 3f), up, 0f, 1f);
+            Assert.Equal(HabStanding.Height, Vector3.Dot(placed, up), 3);
+        }
+
         [Fact]
         public void StopsOnTheSpotWithNoRoomLeft()
         {
