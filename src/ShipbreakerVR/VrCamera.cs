@@ -402,6 +402,7 @@ namespace ShipbreakerVR
                 VrBody.Resync();
             }
             if (VrUi.Instance != null) VrUi.Instance.Recenter();
+            if (FollowsHab) VrHab.LogLevel(gameCamera);
             Plugin.Log.LogInfo($"Head recentered{(toGaze ? " (F4, left stick or options)" : "")} (tracked head position {head.localPosition})");
         }
     }
