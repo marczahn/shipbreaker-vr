@@ -69,6 +69,8 @@ namespace ShipbreakerVR
             // The hold: a point fixed on Anchor (the body, or the collider's transform without one).
             public Transform Anchor;
             public Vector3 Point;
+            // How far the pull point (PullPoint) sat from the controller at taking hold, in tracking space.
+            public Vector3 PullOffset;
 
             public Hand(VrHand vr)
             {
@@ -204,6 +206,7 @@ namespace ShipbreakerVR
                 && !TooHeavy(body.mass);
             hand.Anchor = body != null ? body.transform : best.transform;
             hand.Point = hand.Anchor.InverseTransformPoint(at);
+            hand.PullOffset = hand.Local - ClimbContact.Closer(hand.Local, VrCamera.Instance.transform.localPosition);
             if (first)
             {
                 pushOff = Vector3.zero;
@@ -224,7 +227,7 @@ namespace ShipbreakerVR
             foreach (var hand in Hands)
             {
                 if (!hand.Holding) continue;
-                var error = Hold(hand) - HandWorld(hand);
+                var error = Hold(hand) - PullPoint(hand);
                 if (!blocked && error.magnitude > TearOff * VrCamera.WorldScale) LetGo(hand, false, $"held back {error.magnitude:0.00} m from the hold");
                 else holding++;
             }
@@ -242,7 +245,7 @@ namespace ShipbreakerVR
             {
                 if (!hand.Holding) continue;
                 var hold = Hold(hand);
-                var error = hold - HandWorld(hand);
+                var error = hold - PullPoint(hand);
                 var holdVelocityHere = hand.Body != null ? hand.Body.GetPointVelocity(hold) : Vector3.zero;
                 holdsVelocity += holdVelocityHere;
                 // The player's velocity relative to the hold that closes the gap within this step.
@@ -355,6 +358,12 @@ namespace ShipbreakerVR
         private static Vector3 HandWorld(Hand hand) =>
             VrCamera.Instance.transform.parent.TransformPoint(hand.Local) + (player.position - bodyAtRig);
 
+        // The point the body is pulled by: the controller, closer to the head than it really is once it is near (see
+        // ClimbContact.Closer).
+        private static Vector3 PullPoint(Hand hand) =>
+            VrCamera.Instance.transform.parent.TransformPoint(ClimbContact.Closer(hand.Local, VrCamera.Instance.transform.localPosition) + hand.PullOffset)
+            + (player.position - bodyAtRig);
+
         // The player's own colliders (body, tools) are nothing to hold on to.
         private static bool Own(Collider collider) =>
             collider.attachedRigidbody == player || collider.transform.IsChildOf(player.transform);
@@ -426,6 +435,21 @@ namespace ShipbreakerVR
     // Outside VrClimb, whose static fields need the game: tests run this without it.
     internal static class ClimbContact
     {
+        // From this far from the head, in real meters, a hand counts as closer than it is, by Gain for each meter nearer.
+        private const float CloseFrom = 0.4f;
+        private const float Gain = 1.5f;
+
+        // An arm cannot bring its hand to the head: pulled in, it stops about 30 cm ahead, and the body with it, far from a
+        // wall it reached for at arm's length. So the last part of a pull counts for more, up to the hand counting as at
+        // the head. The game's hand stays on its hold either way (VrHands.Pose).
+        public static Vector3 Closer(Vector3 hand, Vector3 head)
+        {
+            var offset = hand - head;
+            var distance = offset.magnitude;
+            if (distance >= CloseFrom || distance < 1e-4f) return hand;
+            return head + offset / distance * Mathf.Max(distance - Gain * (CloseFrom - distance), 0f);
+        }
+
         // The velocity without the part that closes more than room meters on a surface (normal pointing at the body, moving
         // at other) within dt; no room left means no closing in at all.
         public static Vector3 LimitApproach(Vector3 velocity, Vector3 other, Vector3 normal, float room, float dt)

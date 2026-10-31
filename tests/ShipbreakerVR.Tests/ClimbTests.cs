@@ -52,6 +52,26 @@ namespace ShipbreakerVR.Tests
         }
 
         [Fact]
+        public void AHandFarFromTheHeadStaysWhereItIs()
+        {
+            var hand = new Vector3(0f, 0f, 0.5f);
+            Assert.Equal(hand, ClimbContact.Closer(hand, Vector3.zero));
+        }
+
+        [Fact]
+        public void AHandNearTheHeadCountsAsCloser()
+        {
+            Assert.Equal(0.15f, ClimbContact.Closer(new Vector3(0f, 0f, 0.3f), Vector3.zero).z, 3);
+        }
+
+        [Fact]
+        public void APulledInHandCountsAsAtTheHead()
+        {
+            var head = new Vector3(0f, 1.6f, 0f);
+            Assert.Equal(head, ClimbContact.Closer(new Vector3(0f, 1.6f, 0.2f), head));
+        }
+
+        [Fact]
         public void MovesAlongWithASurfaceComingCloser()
         {
             var limited = ClimbContact.LimitApproach(Vector3.zero, new Vector3(0f, 2f, 0f), Up, 0f, Step);

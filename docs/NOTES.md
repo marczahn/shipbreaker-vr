@@ -586,6 +586,10 @@ their velocity. Sliding along a surface stays. What still touches the thing held
 other things stay impacts. The colliders stay on. The sweep sees only the body's colliders, not the head leaning out
 past them.
 
+The last part of a pull counts for more (`ClimbContact.Closer`): within 40 cm of the head a hand counts as 1.5 m closer per
+meter nearer, since a real hand stops about 30 cm ahead of the head and left the body that far from a wall grabbed at
+arm's length. Taking hold stores the difference, so nothing moves then.
+
 With the body resting there the real hand can go on past the hold. The game's hand stays on the hold (`VrHands.Pose`
 adds the way from the controller to the hold to the wrist, and it returns at 2 m/s after letting go), and the 0.5 m tear
 off does not apply while `KeepClear` holds the body back: an early build let go at 0.51 m of pulling. Nothing pushes the
