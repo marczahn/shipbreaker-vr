@@ -63,7 +63,7 @@ points, from the tool's muzzle. A thin laser shows where; the crosshair in the m
 With an empty hand there is no laser: A uses what is in the middle of your view, marked by the game's dot, as in the
 flat game.
 - Squeeze the grip at your body to take a tool: grapple at the right hip, demo charges at the left hip, cutter over the
-  right shoulder, scanner at the right side of the helmet. The controller vibrates while it is in such a spot. The left
+  right shoulder, scanner at the right side of the helmet. The controller buzzes when it is in such a spot. The left
   hand at the left side of the helmet switches the flashlight on or off with the grip. Keep the
   grip squeezed to hold the tool; let go to put it away.
 - Each hand can hold a tool, so two of the cutter, the grapple and the demo charges can be out at once; each hand's
