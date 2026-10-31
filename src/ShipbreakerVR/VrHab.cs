@@ -99,11 +99,18 @@ namespace ShipbreakerVR
             FarClip = 0f;
             foreach (var camera in controller.GetComponentsInChildren<CinemachineVirtualCamera>(true))
                 FarClip = Mathf.Max(FarClip, camera.m_Lens.FarClipPlane);
+            TurnLeft = null;
             var options = AccessTools.FieldRefAccess<Hab3DLocationNavigation, List<NavigationOption>>("m_NavigationOptions");
             foreach (var location in Resources.FindObjectsOfTypeAll<Hab3DLocationNavigation>())
             {
                 if (!location.gameObject.scene.IsValid() || options(location) == null) continue;
-                foreach (var navOpt in options(location)) AddScreen(navOpt);
+                foreach (var navOpt in options(location))
+                {
+                    AddScreen(navOpt);
+                    var goesTo = navOpt.CameraToGoTo != null ? navOpt.CameraToGoTo.Name : "-";
+                    if (goesTo == HabTurnPatch.Target) TurnLeft = navOpt;
+                    Plugin.Log.LogInfo($"Hab spot '{(location.LocationVirtualCamera != null ? location.LocationVirtualCamera.Name : "-")}': {navOpt.ButtonOption} to '{goesTo}'{(navOpt.GoesToNavigableScreen ? " (screen)" : "")}, frame on '{(navOpt.TransformToTrack != null ? navOpt.TransformToTrack.name : "-")}'");
+                }
             }
             Plugin.Log.LogInfo($"Hab monitors: {monitors.Count} virtual camera(s), {markers.Count} waypoint marker renderer(s), farthest view {FarClip:0} m");
         }
@@ -186,6 +193,9 @@ namespace ShipbreakerVR
                 return interior != null ? interior.up : Vector3.up;
             }
         }
+
+        // The game's way to the turned view of the living area (HabTurnPatch).
+        public static NavigationOption TurnLeft { get; private set; }
 
         // How far the head stands from the game's camera. The game places its prompts as seen from that camera.
         public static Vector3 StandShift { get; set; }
@@ -387,6 +397,28 @@ namespace ShipbreakerVR
         }
     }
 
+    // Looking from the living area at the work area, the terminal and the window are a turn to the left away, but the game
+    // only goes there by way of another spot. The stick to the left takes the game's own way to the turned view.
+    [HarmonyPatch(typeof(Hab3DLocationNavigation), "Update")]
+    internal static class HabTurnPatch
+    {
+        private const string From = "Habitation_Virtual_Camera";
+        public const string Target = "HabitationTurned_Virtual_Camera";
+
+        private static void Postfix(Hab3DLocationNavigation __instance, List<NavigationOption> ___m_NavigationOptions, Hab3DController ___mHab3DController)
+        {
+            var turn = VrHab.TurnLeft;
+            if (turn == null || !VrXr.IsRunning || ___mHab3DController == null || ___mHab3DController.IsHabPaused || !__instance.isActiveAndEnabled) return;
+            var spot = __instance.LocationVirtualCamera;
+            if (spot == null || spot.Name != From || ___mHab3DController.CinemachineBrain.IsBlending) return;
+            if (!HabStanding.PointsLeft(LynxControls.Instance.GetTwoAxisInputControlVector(FrontEndActions.FrontEndActionSet.NavigateComposite))) return;
+            foreach (var navOpt in ___m_NavigationOptions)
+                if (navOpt.ButtonOption == FrontEndActions.FrontEndActionSet.NavigateLeft) return;
+            Plugin.Log.LogInfo("Hab: stick left, turning to the terminal side");
+            __instance.Navigate(turn);
+        }
+    }
+
     internal static class HabStanding
     {
         // Eye height over the Hab's floor while standing, in meters at world scale 1.
@@ -396,6 +428,9 @@ namespace ShipbreakerVR
         private const float SitBelow = 1.5f;
 
         public static bool Sits(float spot) => spot < SitBelow;
+
+        // The game's sector for left around its dead zone of 0.4.
+        public static bool PointsLeft(Vector2 stick) => stick.x < -0.4f && Mathf.Abs(stick.y) <= -stick.x;
 
         // A place on the canvas, kept so far in that a frame of the given shares of its size stays on it.
         public static Vector2 Inside(Vector2 place, float width, float height)
