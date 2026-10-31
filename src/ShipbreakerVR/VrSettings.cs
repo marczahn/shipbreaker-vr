@@ -51,6 +51,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> MirrorCutter;
         public static ConfigEntry<bool> TwoTools;
         public static ConfigEntry<bool> Climbing;
+        public static ConfigEntry<bool> UprightBody;
         public static ConfigEntry<bool> Diagnostics;
         public static ConfigEntry<bool> ToolExport;
         public static ConfigEntry<bool> TestMode;
@@ -152,6 +153,10 @@ namespace ShipbreakerVR
                 ("Grip with a hand that holds no tool, close to a surface, holds on there; moving the hand pulls you along it, hand over hand with both. A light part comes to the hand instead, the station and fixed hulls stay put. Letting go keeps your speed, so you can push off. While the left hand holds on, flying rests. At a control (airlock console, switch) the grip holds on too; A or X works it.",
                     "Grip mit einer Hand ohne Werkzeug, nah an einer Oberfläche, hält dich dort fest; bewegst du die Hand, ziehst du dich daran entlang, mit beiden Händen Hand über Hand. Ein leichtes Teil kommt stattdessen zur Hand, Station und feste Rümpfe bleiben, wo sie sind. Loslassen behält deinen Schwung, so kannst du dich abstoßen. Solange die linke Hand festhält, ruht das Fliegen. An einem Bedienelement (Schleusenkonsole, Schalter) hält der Grip dich ebenfalls fest; bedient wird es mit A oder X."),
                 "How far you and a light part move depends on both masses.");
+
+            UprightBody = Bind("Steuerung", "OberkoerperAufrecht", true,
+                ("Your body stays upright and faces your hands while you look around, and follows your head when you lean, so the hands reach the controllers the same way wherever you look. Off: the body turns with every look and stays put when you lean, as before.",
+                    "Dein Körper bleibt aufrecht und zu deinen Händen gewandt, während du dich umschaust, und geht mit, wenn du dich vorbeugst: Die Hände reichen gleich weit, egal wohin du schaust. Aus: Der Körper dreht sich wie bisher mit jedem Blick mit und bleibt stehen, wenn du dich vorbeugst."));
 
             Diagnostics = Bind("Debug", "Diagnose", false,
                 "For finding problems: Tasten/Diagnose (F8) writes what is drawn around the player into the log and saves screenshots next to it (also on its own 6 s after entering the Hab), load screens are logged frame by frame, and frame times are logged every 30 s.");

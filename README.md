@@ -177,6 +177,9 @@ likely to need:
 - **Aim with the hand:** switch it off to aim your tools at the center of your view again, as in the flat game.
 - **Two tools at once:** switch it off if you want a tool from one hand to replace the one in the other hand.
 - **Hold on and climb:** switch it off if the grip of an empty hand should do nothing.
+- **Upright body:** your suit's body stays upright and faces your hands while you look around, and leans with you, so
+  your hands reach the controllers the same way wherever you look. Switch it off to let the body turn with every look,
+  as before.
 - **Fit tools in the hand:** if the cutter or the grapple does not sit right in your hand, switch this on, grab the
   tool with your other hand and move it into place. Letting go stores it. Switch it off again when you are done.
 

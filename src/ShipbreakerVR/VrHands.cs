@@ -47,6 +47,12 @@ namespace ShipbreakerVR
             // From the controller to where the game's hand sits: to its hold while it holds on (VrClimb), so the hand stays
             // there however far the real one has gone, then back to nothing.
             public Vector3 OffController;
+            // The reach: measured once, then how often the wrist stayed short of the controller (Count).
+            public bool Measured;
+            public int Frames;
+            public int Short;
+            public float MostShort;
+            public float CountSince;
             // The animator's grab parameters of this hand, as HandGrab sets them.
             public readonly string Prep;
             public readonly string Grab;
@@ -153,7 +159,10 @@ namespace ShipbreakerVR
             wrist = OutOfWalls(arm, wrist);
 
             var animated = arm.Wrist.rotation;
-            VrToolModels.Bend(arm.Upper, arm.Lower, arm.Wrist, Vector3.Lerp(arm.Wrist.position, wrist, weight));
+            var target = Vector3.Lerp(arm.Wrist.position, wrist, weight);
+            if (!arm.Measured) Measure(arm, wrist);
+            var shortBy = VrToolModels.Reach(arm.Upper.parent, arm.Upper, arm.Lower, arm.Wrist, target);
+            Count(arm, weight >= 1f ? shortBy : 0f);
             arm.Wrist.rotation = Quaternion.Slerp(animated, HandRotation(arm, aim * hold, animated), weight);
         }
 
@@ -178,6 +187,41 @@ namespace ShipbreakerVR
                 if (hit.distance > 0f && hit.distance < free && !hit.collider.transform.IsChildOf(body)) free = hit.distance;
             }
             return shoulder + direction * free;
+        // Every this many seconds while an arm follows its controller, how often its wrist stayed short of it.
+        private const float CountPeriod = 10f;
+        // Shorter than this does not count (the solve leaves 1 mm).
+        private const float ShortFrom = 0.01f;
+
+        // Once per arm: its lengths and where the shoulder sits relative to the eye, in the camera's axes.
+        private static void Measure(Arm arm, Vector3 wrist)
+        {
+            arm.Measured = true;
+            var camera = VrCamera.Instance != null ? VrCamera.Instance.GameCamera : null;
+            if (camera == null) return;
+            var eye = camera.transform;
+            var upper = Vector3.Distance(arm.Upper.position, arm.Lower.position);
+            var lower = Vector3.Distance(arm.Lower.position, arm.Wrist.position);
+            var collar = arm.Upper.parent;
+            Plugin.Log.LogInfo($"Hands: {arm.Name} arm upper {upper:0.000} m, lower {lower:0.000} m, reach {upper + lower:0.000} m; "
+                + $"shoulder at {eye.InverseTransformPoint(arm.Upper.position)} from the eye, collarbone '{(collar != null ? collar.name : "none")}' "
+                + $"{(collar != null ? Vector3.Distance(collar.position, arm.Upper.position).ToString("0.000") : "-")} m; "
+                + $"controller wrist {Vector3.Distance(arm.Upper.position, wrist):0.000} m from the shoulder (world scale {VrCamera.WorldScale:0.00})");
+        }
+
+        private static void Count(Arm arm, float shortBy)
+        {
+            arm.Frames++;
+            if (shortBy > ShortFrom)
+            {
+                arm.Short++;
+                arm.MostShort = Mathf.Max(arm.MostShort, shortBy);
+            }
+            if (Time.unscaledTime - arm.CountSince < CountPeriod) return;
+            if (arm.CountSince > 0f && arm.Short > 0)
+                Plugin.Log.LogInfo($"Hands: {arm.Name} hand short of the controller in {100f * arm.Short / arm.Frames:0}% of {arm.Frames} frames, by up to {arm.MostShort:0.000} m (torso {(VrTorso.Correction == Quaternion.identity ? "as the game's" : "upright")})");
+            arm.CountSince = Time.unscaledTime;
+            arm.Frames = arm.Short = 0;
+            arm.MostShort = 0f;
         }
 
         // With the charge in the left hand, that hand takes over how the animation turns the game's right hand, mirrored:
@@ -189,7 +233,7 @@ namespace ShipbreakerVR
             hold = Quaternion.identity;
             var camera = VrCamera.Instance != null ? VrCamera.Instance.GameCamera : null;
             if (camera == null || !Frame(RightArm, out _, out var right)) return false;
-            var relative = Quaternion.Inverse(camera.transform.rotation) * right;
+            var relative = Quaternion.Inverse(VrTorso.Frame(camera.transform.rotation)) * right;
             hold = new Quaternion(relative.x, -relative.y, -relative.z, relative.w);
             return true;
         }
@@ -205,7 +249,7 @@ namespace ShipbreakerVR
                 return wanted * Quaternion.Inverse(current) * arm.Wrist.rotation;
             }
             var camera = VrCamera.Instance != null ? VrCamera.Instance.GameCamera : null;
-            return camera == null ? animated : aim * (Quaternion.Inverse(camera.transform.rotation) * animated);
+            return camera == null ? animated : aim * (Quaternion.Inverse(VrTorso.Frame(camera.transform.rotation)) * animated);
         }
 
         // The hand's own axes: forward along the knuckles (wrist to middle finger), up towards the thumb side (little to
@@ -310,6 +354,10 @@ namespace ShipbreakerVR
             arm.Little = animator != null ? animator.GetBoneTransform(little) : null;
             arm.Weight = 0f;
             arm.Driven = false;
+            arm.Measured = false;
+            arm.CountSince = 0f;
+            arm.Frames = arm.Short = 0;
+            arm.MostShort = 0f;
         }
 
         private static void SetLocal(Transform transform, Vector3 position, Quaternion rotation)

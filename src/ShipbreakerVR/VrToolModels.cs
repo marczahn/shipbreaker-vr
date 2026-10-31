@@ -271,9 +271,9 @@ namespace ShipbreakerVR
             if (!FindArm(hand)) return;
             var head = camera.transform;
             var animated = armTip.rotation;
-            var wristRotation = aim * (Quaternion.Inverse(head.rotation) * animated);
+            var wristRotation = aim * (Quaternion.Inverse(VrTorso.Frame(head.rotation)) * animated);
             if (weight >= 1f) LogArm(hand, head);
-            Bend(armRoot, armMid, armTip, Vector3.Lerp(armTip.position, wrist, weight));
+            Reach(armRoot.parent, armRoot, armMid, armTip, Vector3.Lerp(armTip.position, wrist, weight));
             armTip.rotation = Quaternion.Slerp(animated, wristRotation, weight);
         }
 
@@ -396,6 +396,67 @@ namespace ShipbreakerVR
         private static int stowLogs;
         private static bool stowed;
 
+        // How far the collarbone pushes the shoulder towards a target out of the arm's reach, in meters of the model.
+        public const float CollarReach = 0.08f;
+        // The most the collarbone turns for it, in degrees.
+        private const float CollarTurn = 30f;
+
+        // How much longer an arm may get for a target beyond its reach, as a share of its length. The model's arm (about
+        // 55 cm from shoulder to wrist, the forearm 22 cm) is shorter than most players' and capped the stretched-out hand.
+        public const float MostStretch = 0.15f;
+        // The bones an arm was stretched by (elbow and wrist) and their local positions before: put back every frame
+        // before the arms are posed again (Unstretch), and when an arm goes back to the game.
+        private static readonly Dictionary<Transform, Vector3> stretched = new Dictionary<Transform, Vector3>();
+
+        // Bend, with the collarbone (the shoulder's parent) first turning the shoulder towards a target the arm cannot
+        // reach, as one pushes the shoulder forward reaching for something, then the arm getting up to MostStretch
+        // longer. Returns how far the wrist still stays short of the target, in meters (0 when it gets there).
+        public static float Reach(Transform collar, Transform root, Transform mid, Transform tip, Vector3 target)
+        {
+            var length = Vector3.Distance(root.position, mid.position) + Vector3.Distance(mid.position, tip.position);
+            var over = Vector3.Distance(root.position, target) - length;
+            if (over > 0f && collar != null)
+            {
+                var shoulder = root.position;
+                var toShoulder = shoulder - collar.position;
+                var moved = shoulder + (target - shoulder).normalized * Mathf.Min(over, CollarReach) - collar.position;
+                var turn = Quaternion.FromToRotation(toShoulder, moved);
+                turn.ToAngleAxis(out var angle, out var axis);
+                if (angle > 180f) angle -= 360f;
+                if (axis.sqrMagnitude > 1e-8f && Mathf.Abs(angle) > 1e-3f)
+                    collar.rotation = Quaternion.AngleAxis(Mathf.Clamp(angle, -CollarTurn, CollarTurn), axis) * collar.rotation;
+            }
+            var distance = Vector3.Distance(root.position, target);
+            if (distance > length && length > 0.001f)
+            {
+                // Both bones get longer by the same share, along their own axes, so the elbow keeps its place on the arm.
+                var factor = Mathf.Min(distance / length, 1f + MostStretch);
+                Stretch(mid, factor);
+                Stretch(tip, factor);
+                length *= factor;
+            }
+            Bend(root, mid, tip, target);
+            return Mathf.Max(0f, distance - length);
+        }
+
+        private static void Stretch(Transform bone, float factor)
+        {
+            if (!stretched.TryGetValue(bone, out var rest))
+            {
+                rest = bone.localPosition;
+                stretched[bone] = rest;
+            }
+            bone.localPosition = rest * factor;
+        }
+
+        // From VrFrame, before the arms are posed: stretched arms back to their own length.
+        public static void Unstretch()
+        {
+            foreach (var bone in stretched)
+                if (bone.Key != null) bone.Key.localPosition = bone.Value;
+            stretched.Clear();
+        }
+
         // Two-bone IK: the elbow bends until shoulder to wrist is as long as shoulder to target, then the shoulder turns
         // the arm onto the target. The elbow stays in the plane the animation gave it.
         public static void Bend(Transform root, Transform mid, Transform tip, Vector3 target)
@@ -507,6 +568,7 @@ namespace ShipbreakerVR
         public static void Release()
         {
             HideProps(false);
+            Unstretch();
             PosesRightArm = false;
             ChargeInLeftHand = false;
             stowingSince = -1f;
