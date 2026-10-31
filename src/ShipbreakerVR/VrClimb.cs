@@ -46,7 +46,7 @@ namespace ShipbreakerVR
         // Up to this speed, in m/s at world scale 1, touching the thing held is no impact.
         private const float SoftContact = 3f;
         // Parts up to this mass, in kg, sit firmly in the hand: they turn with it. Heavier ones turn freely on the hold.
-        private const float FirmMass = 100f;
+        private const float FirmMass = 30f;
         // How fast a firmly held part may turn, in radians per second.
         private const float FirmSpin = 30f;
         // LynxUnityEngineExtensions.InStaticLayer: the station and other things that never move.
