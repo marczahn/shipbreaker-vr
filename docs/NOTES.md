@@ -1216,3 +1216,5 @@ Ideas not done yet, for after the measurements:
 The player collides as one sphere of radius 0.32 m on `Player Collider`, centered on the player and so on the head (a
 trigger sphere of 0.5 m, `PlayerTouchTransferCollider`, sits on it and stays). In VR `VrHitbox` makes it 0.22 m and moves
 it 0.1 m towards the legs, which have no collider, and 0.07 m back, so it reaches 15 cm ahead: airlocks were a tight fit. The body's center of mass is kept.
+## Steadier tools
+`VrToolSteady` filters the turn of cutter and grapple: within 0.5 degrees of the filtered turn it closes `(angle / 0.5)^2` of the gap, the micro filter of the ITR 2 aiming mod, and always follows with a lag of 40 ms for some weight in the hand. Only the turn: the tool stays at the hand, and the aim uses the same turn.

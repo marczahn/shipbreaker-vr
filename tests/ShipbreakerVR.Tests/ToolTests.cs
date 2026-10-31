@@ -49,6 +49,14 @@ namespace ShipbreakerVR.Tests
     public class ToolBeltTests
     {
         [Theory]
+        [InlineData(0f, 0f)]
+        [InlineData(0.25f, 0.25f)]
+        [InlineData(0.5f, 1f)]
+        [InlineData(10f, 1f)]
+        public void TremorCountsLittle(float angle, float share) =>
+            Assert.Equal(share, VrToolSteady.Share(angle, 0.5f), 3);
+
+        [Theory]
         [InlineData(0.2f, -0.6f, 0f, (int)Zone.Grapple)]
         [InlineData(-0.2f, -0.6f, 0f, (int)Zone.DemoCharge)]
         [InlineData(0f, -0.6f, 0f, (int)Zone.None)]
