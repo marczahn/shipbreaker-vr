@@ -779,6 +779,24 @@ runs after post-processing and the flat UI looked pasted onto the room: the UI t
 is drawn with `UI/Default` and textures made at runtime for the canvas's aspect; the plugin has no shaders of its own
 (an AssetBundle with shaders would need the Unity editor).
 
+The Hab's virtual cameras have heights made for the flat game: with the same tracked height the head was 1.68 m and
+2.00 m above the floor at two spots where one stands. While standing the head now goes to `HabStanding.Height` (1.90 m,
+Raik's value) along `VrHab.RoomUp`, at a monitor, lying and at spots below 1.5 m (the room seen from the bed, 1.28 m,
+where one sits) it stays. That is the height held at the last recentering. The prompts are placed through the game's
+camera (`Hab3DLocationNavigation.UpdateNavLocation`, `Hab3DPosterLocation.UpdateButtonLocations`, `UITrackTransform`),
+so patches place them as seen from the head instead. Poster buttons and the call prompt: the camera moved by
+`VrHab.StandShift` is the spot moved the other way. That left the spots' frames off, differently from each side, since
+the flat view's field of view differs from the canvas's, so those go where the line from the resting head
+(`VrCamera.RestingHead`; from the tracked head they moved on the canvas with the head) to their `TransformToTrack` crosses the menu canvas (`VrUi.OnMenuCanvas`, log `Hab frame ...` with size and place). The canvas
+spans about 66 degrees, so a near spot such as the kitchen could lie beyond it, and its frame was gone; frames are held
+inside the canvas. The kitchen has one poster (`Posters_Kitchen/Poster_Kitchen`), the others three. `Habitation_Virtual_Camera` leaves left free, so in VR it gets a copy of the bed's left to `Comms_Virtual_Camera`
+with a copied prompt (`VrHab.AddTerminalTurn`). The log lists every spot's options (`Hab spot ...`). The game reads a
+held stick every frame, so holding it spun between two spots that are each other's down; after a move
+`VrHab.WaitForStick` keeps the sticks at zero until they are let go. The Hab keeps this way of use as one option; free walking is planned as the other.
+The floor has no collider (a ray from the head hits nothing within 5 m) and its mesh is static batched (`MeshFilter`
+bounds cover the batch, in the F8 room list those come out around 358 m), so the foot of the loose chair stands for the
+floor. Log `Hab: camera spot N m above the floor`.
+
 Lying in bed (`Entry` after waking up and `WakeUpMonitor`) the Hab camera looks up at the ceiling (57 and 63 degrees).
 With only its heading the player looked straight ahead at the wall while the monitor with the morning menu was
 overhead. For a Hab camera looking up more than 30 degrees the playspace now takes its pitch too, as if lying on one's
@@ -938,8 +956,9 @@ The player's `EquipmentController`, `GrabController`, `CuttingToolController` an
 `GameRefs` and shared, searched again at most once a second while missing. Reflection left in the code runs once or
 only when something changes (the options rows, the screen size, the F8 dump), not every frame.
 
-F8 (`VrDiagnostics`) is for things only seen in the headset. It writes into the log: game state, head pose, the camera
-the rig follows, where the UI canvas hangs, every active root canvas (render mode, camera, layer, whether `VrCanvases`
+F8 (`VrDiagnostics`) is for things only seen in the headset. It writes into the log: game state, head pose, what lies
+below the head along `VrHab.RoomUp` (solid colliders within 5 m, for the height above a floor), in the Hab the heights
+of the meshes within 4 m (to compare the view with the furniture), the camera the rig follows, where the UI canvas hangs, every active root canvas (render mode, camera, layer, whether `VrCanvases`
 attached it, direction and distance from the head for the non-overlay ones, and its dark, large or specially shaded
 graphics, and its visible texts with their position on the canvas, so a prompt that is off the canvas or covered
 shows up), and the visible renderers within 4 m that reach above eye height. It also runs on its own 6 s after the rig

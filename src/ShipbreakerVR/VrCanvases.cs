@@ -201,10 +201,11 @@ namespace ShipbreakerVR
     [HarmonyPatch(typeof(UITrackTransform), "UpdateLocation")]
     internal static class UITrackTransformPatch
     {
-        private static void Postfix(RectTransform ___mTargetTransform)
+        private static void Postfix(RectTransform ___mTargetTransform, Camera ___m_CameraPOV, Vector3 ___mCachedPosition)
         {
             var ui = VrUi.Instance;
             if (ui == null || !ui.Active || ___mTargetTransform == null) return;
+            if (VrHab.StandShift != Vector3.zero && ___m_CameraPOV != null) ___mTargetTransform.position = VrHab.SeenFromHead(___m_CameraPOV, ___mCachedPosition);
             var canvas = ___mTargetTransform.GetComponentInParent<Canvas>();
             if (canvas == null) return;
             canvas = canvas.rootCanvas;

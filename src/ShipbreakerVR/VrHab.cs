@@ -16,6 +16,10 @@ namespace ShipbreakerVR
     {
         private static Hab3DController controller;
         private static Transform interior;
+        private static Transform floorOf;
+        private static bool floorFound;
+        private static Vector3 floorLocal;
+        private static float loggedSpot = float.MinValue;
         private static float nextControllerSearch;
 
         // Moving between bed, kitchen, terminal and so on, the Hab camera swings through the room for a second. In VR
@@ -99,9 +103,48 @@ namespace ShipbreakerVR
             foreach (var location in Resources.FindObjectsOfTypeAll<Hab3DLocationNavigation>())
             {
                 if (!location.gameObject.scene.IsValid() || options(location) == null) continue;
-                foreach (var navOpt in options(location)) AddScreen(navOpt);
+                foreach (var navOpt in options(location))
+                {
+                    AddScreen(navOpt);
+                    var goesTo = navOpt.CameraToGoTo != null ? navOpt.CameraToGoTo.Name : "-";
+                    Plugin.Log.LogInfo($"Hab spot '{(location.LocationVirtualCamera != null ? location.LocationVirtualCamera.Name : "-")}': {navOpt.ButtonOption} to '{goesTo}'{(navOpt.GoesToNavigableScreen ? " (screen)" : "")}, frame on '{(navOpt.TransformToTrack != null ? navOpt.TransformToTrack.name : "-")}'");
+                }
             }
+            AddTerminalTurn();
             Plugin.Log.LogInfo($"Hab monitors: {monitors.Count} virtual camera(s), {markers.Count} waypoint marker renderer(s), farthest view {FarClip:0} m");
+        }
+
+        // Looking from the living area at the work area, the terminal is a turn to the left away, but the game goes there
+        // only by way of the turned view. So that spot gets a copy of the bed's way to the terminal: the same left, with
+        // a prompt of its own, among the spot's other options.
+        private static void AddTerminalTurn()
+        {
+            if (!VrXr.IsRunning) return;
+            var options = AccessTools.FieldRefAccess<Hab3DLocationNavigation, List<NavigationOption>>("m_NavigationOptions");
+            List<NavigationOption> living = null, bed = null;
+            foreach (var location in Resources.FindObjectsOfTypeAll<Hab3DLocationNavigation>())
+            {
+                if (!location.gameObject.scene.IsValid() || location.LocationVirtualCamera == null) continue;
+                if (location.LocationVirtualCamera.Name == "Habitation_Virtual_Camera") living = options(location);
+                else if (location.LocationVirtualCamera.Name == "BedSitting_Virtual_Camera") bed = options(location);
+            }
+            if (living == null || bed == null || living.Exists(o => o.ButtonOption == FrontEndActions.FrontEndActionSet.NavigateLeft)) return;
+            var source = bed.Find(o => o.ButtonOption == FrontEndActions.FrontEndActionSet.NavigateLeft && o.ClickableButton != null && o.CameraToGoTo != null && o.CameraToGoTo.Name == "Comms_Virtual_Camera");
+            var sibling = living.Find(o => o.ClickableButton != null);
+            if (source == null || sibling == null)
+            {
+                Plugin.Log.LogWarning("Hab: no way to the terminal to copy");
+                return;
+            }
+            var prompt = Object.Instantiate(source.ClickableButton.gameObject, sibling.ClickableButton.RectTransform.parent);
+            prompt.SetActive(sibling.ClickableButton.gameObject.activeSelf);
+            var turn = (NavigationOption)AccessTools.Method(typeof(object), "MemberwiseClone").Invoke(source, null);
+            var fields = Traverse.Create(turn);
+            fields.Field("m_ClickableButton").SetValue(prompt.GetComponent<Doozy.Engine.UI.UIButton>());
+            fields.Field("m_GameEventListener").SetValue(null);
+            fields.Field("m_ButtonStateChanger").SetValue(source.ButtonStateChanger != null ? prompt.GetComponentInChildren(source.ButtonStateChanger.GetType(), true) : null);
+            living.Add(turn);
+            Plugin.Log.LogInfo("Hab: left from the living area goes to the terminal");
         }
 
         // Center, orientation (forward into the screen) and size of a monitor's screen.
@@ -181,6 +224,68 @@ namespace ShipbreakerVR
                 if (interior == null || interior.root != controller.transform.root) interior = controller.transform.root.Find("PRF_Hab_Interior");
                 return interior != null ? interior.up : Vector3.up;
             }
+        }
+
+        // Set by a move between spots: the stick has to come back before the next one, or holding it spins through the room.
+        public static bool WaitForStick { get; set; }
+
+        // How far the head stands from the game's camera. The game places its prompts as seen from that camera.
+        public static Vector3 StandShift { get; set; }
+
+        // Where a spot shows on the game's screen once the camera stands at the head instead.
+        public static Vector3 SeenFromHead(Camera camera, Vector3 spot) => camera.WorldToScreenPoint(spot - StandShift);
+
+        // How far a prompt on an area of the given size moves for that.
+        public static Vector3 PromptShift(Camera camera, Vector3 spot, Rect area, float screenWidth, float screenHeight)
+        {
+            var moved = SeenFromHead(camera, spot) - camera.WorldToScreenPoint(spot);
+            return new Vector3(moved.x / screenWidth * area.width, moved.y / screenHeight * area.height, 0f);
+        }
+
+        // The camera moved to standing height over the room's floor. The floor has no collider, and the floor mesh is
+        // static batched, so its bounds say nothing: the chair's foot stands for it.
+        public static Vector3 Standing(Vector3 camera, float scale)
+        {
+            var up = RoomUp;
+            if (!FindFloor()) return camera;
+            var floor = Vector3.Dot(interior.TransformPoint(floorLocal), up);
+            var spot = (Vector3.Dot(camera, up) - floor) / scale;
+            if (Mathf.Abs(spot - loggedSpot) > 0.01f)
+            {
+                loggedSpot = spot;
+                NavPromptPatch.LogAgain();
+                var name = cutBrain != null && cutBrain.ActiveVirtualCamera != null ? cutBrain.ActiveVirtualCamera.Name : "?";
+                Plugin.Log.LogInfo($"Hab: camera spot '{name}' {spot:0.00} m above the floor, {(HabStanding.Sits(spot) ? "sitting, stays" : $"standing at {HabStanding.Height:0.00} m")}");
+            }
+            return HabStanding.Place(camera, up, floor, scale);
+        }
+
+        private static bool FindFloor()
+        {
+            if (interior == null) return false;
+            if (floorOf == interior) return floorFound;
+            floorOf = interior;
+            var chair = interior.Find("PRF_Props_Hab_Chair/SM_Props_Hab_Chair");
+            var filter = chair != null ? chair.GetComponent<MeshFilter>() : null;
+            floorFound = filter != null && filter.sharedMesh != null;
+            if (!floorFound)
+            {
+                Plugin.Log.LogWarning("Hab: no chair to find the floor by, the camera spots keep their height");
+                return false;
+            }
+            var bounds = filter.sharedMesh.bounds;
+            var lowest = float.MaxValue;
+            for (var x = -1; x <= 1; x += 2)
+                for (var y = -1; y <= 1; y += 2)
+                    for (var z = -1; z <= 1; z += 2)
+                    {
+                        var corner = chair.TransformPoint(bounds.center + Vector3.Scale(bounds.extents, new Vector3(x, y, z)));
+                        var height = Vector3.Dot(corner, interior.up);
+                        if (height >= lowest) continue;
+                        lowest = height;
+                        floorLocal = interior.InverseTransformPoint(corner);
+                    }
+            return true;
         }
 
         // In VR the sway moves the whole room around the player. Silenced while the rig follows the Hab camera,
@@ -283,10 +388,88 @@ namespace ShipbreakerVR
     {
         private static void Postfix(NavigationOption navOpt)
         {
+            VrHab.WaitForStick = true;
             if (VrHab.AddScreen(navOpt)) return;
             if (navOpt == null || !navOpt.GoesToNavigableScreen || navOpt.ScreenAnimator == null) return;
             if (VrUi.Instance == null || !VrUi.Instance.Active) return;
             navOpt.ScreenAnimator.ResetTrigger("FadeOut");
+        }
+    }
+
+    // The frames of the Hab's spots are placed through the game's camera, with its field of view and height, so on the
+    // menu canvas they sat beside what they frame, differently from each side. They go where the line from the resting
+    // head to their spot crosses the canvas.
+    [HarmonyPatch(typeof(Hab3DLocationNavigation), "UpdateNavLocation")]
+    internal static class NavPromptPatch
+    {
+        private static readonly HashSet<NavigationOption> logged = new HashSet<NavigationOption>();
+
+        private static void Postfix(NavigationOption nav)
+        {
+            if (nav.ClickableButton == null || nav.TransformToTrack == null) return;
+            var prompt = nav.ClickableButton.RectTransform;
+            var area = prompt.parent != null ? prompt.parent.parent as RectTransform : null;
+            var ui = VrUi.Instance;
+            if (area == null || ui == null || !ui.OnMenuCanvas(nav.TransformToTrack.position, out var place)) return;
+            // A spot beyond the canvas's edge would lose its frame, and with it the only way to see that the spot can be reached.
+            var seen = HabStanding.Inside(place, prompt.rect.width / area.rect.width, prompt.rect.height / area.rect.height);
+            prompt.localPosition = new Vector3(seen.x * area.rect.width, seen.y * area.rect.height, prompt.localPosition.z);
+            if (logged.Add(nav)) Plugin.Log.LogInfo($"Hab frame on '{nav.TransformToTrack.name}': {prompt.rect.width:0} x {prompt.rect.height:0}, at {place.x:0.00} {place.y:0.00} of the canvas{(seen != place ? ", held inside it" : "")}");
+        }
+
+        public static void LogAgain() => logged.Clear();
+    }
+
+    [HarmonyPatch(typeof(BBI.Unity.Game.UI.Hab.Hab3DPosterLocation), "UpdateButtonLocations")]
+    internal static class PosterPromptPatch
+    {
+        private static void Postfix(Camera ___m_Camera, Doozy.Engine.UI.UIView ___m_TabButtons, RectTransform ___mTabButtonParentTransform, BBI.Unity.Game.UI.Hab.Hab3DPoster ___mCurrentlySelectedPoster)
+        {
+            if (!VrXr.IsRunning || VrHab.StandShift == Vector3.zero || ___m_TabButtons == null || ___m_Camera == null || ___mTabButtonParentTransform == null || ___mCurrentlySelectedPoster == null) return;
+            ___m_TabButtons.RectTransform.localPosition += VrHab.PromptShift(___m_Camera, ___mCurrentlySelectedPoster.RectTransform.position, ___mTabButtonParentTransform.rect, ___m_Camera.pixelWidth, ___m_Camera.pixelHeight);
+        }
+    }
+
+    internal static class HabStanding
+    {
+        // Eye height over the Hab's floor while standing, in meters at world scale 1.
+        public const float Height = 1.9f;
+
+        // A spot below this is one where one sits: the view of the room from the bed is at 1.28 m, the lowest one standing 1.81 m.
+        private const float SitBelow = 1.5f;
+
+        public static bool Sits(float spot) => spot < SitBelow;
+
+        // A place on the canvas, kept so far in that a frame of the given shares of its size stays on it.
+        public static Vector2 Inside(Vector2 place, float width, float height)
+        {
+            var x = 0.5f - width * 0.5f;
+            var y = 0.5f - height * 0.5f;
+            return new Vector2(Mathf.Clamp(place.x, -x, x), Mathf.Clamp(place.y, -y, y));
+        }
+
+        // Where the line from an eye to a spot crosses the plane z = 0. A spot behind the eye goes to the side it lies on,
+        // far out, so a frame for it ends up at that edge.
+        public static bool Across(Vector3 eye, Vector3 spot, out Vector2 place)
+        {
+            place = Vector2.zero;
+            var along = eye.z - spot.z;
+            if (Mathf.Abs(along) < 1e-5f) return false;
+            var share = eye.z / along;
+            if (share <= 0f)
+            {
+                place = new Vector2(spot.x < eye.x ? -1f : 1f, 0f);
+                return true;
+            }
+            place = new Vector2(eye.x + (spot.x - eye.x) * share, eye.y + (spot.y - eye.y) * share);
+            return true;
+        }
+
+        // Moves a point along up to standing height, keeping where it is in the room. A sitting spot stays.
+        public static Vector3 Place(Vector3 point, Vector3 up, float floor, float scale)
+        {
+            var height = Vector3.Dot(point, up);
+            return Sits((height - floor) / scale) ? point : point + up * (floor + Height * scale - height);
         }
     }
 
