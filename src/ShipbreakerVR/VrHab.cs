@@ -425,7 +425,7 @@ namespace ShipbreakerVR
     {
         private static void Postfix(Camera ___m_Camera, Doozy.Engine.UI.UIView ___m_TabButtons, RectTransform ___mTabButtonParentTransform, BBI.Unity.Game.UI.Hab.Hab3DPoster ___mCurrentlySelectedPoster)
         {
-            if (VrHab.StandShift == Vector3.zero || ___m_TabButtons == null || ___m_Camera == null || ___mTabButtonParentTransform == null || ___mCurrentlySelectedPoster == null) return;
+            if (!VrXr.IsRunning || VrHab.StandShift == Vector3.zero || ___m_TabButtons == null || ___m_Camera == null || ___mTabButtonParentTransform == null || ___mCurrentlySelectedPoster == null) return;
             ___m_TabButtons.RectTransform.localPosition += VrHab.PromptShift(___m_Camera, ___mCurrentlySelectedPoster.RectTransform.position, ___mTabButtonParentTransform.rect, ___m_Camera.pixelWidth, ___m_Camera.pixelHeight);
         }
     }
