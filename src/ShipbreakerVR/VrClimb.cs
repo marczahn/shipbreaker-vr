@@ -234,6 +234,21 @@ namespace ShipbreakerVR
                 bestDistance = distance;
                 surface = closest;
             }
+            // Some switches have no solid collider, only the trigger the game's interaction uses. It is no surface: the hand
+            // stays where it is.
+            if (best == null)
+            {
+                count = Physics.OverlapSphereNonAlloc(at, reach, Found, ~0, QueryTriggerInteraction.Collide);
+                for (var i = 0; i < count; i++)
+                {
+                    var collider = Found[i];
+                    if (!collider.isTrigger || Own(collider) || collider.GetComponentInParent<InteractableObject>() == null) continue;
+                    var distance = (collider.ClosestPoint(at) - at).sqrMagnitude;
+                    if (distance >= bestDistance) continue;
+                    best = collider;
+                    bestDistance = distance;
+                }
+            }
             if (best == null)
             {
                 if (firstTry) LogTriggers(at, reach, hand);
