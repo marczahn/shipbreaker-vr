@@ -116,7 +116,9 @@ namespace ShipbreakerVR
                 else gameCamera.enabled = VrCameraSilencer.GameWantsEnabled(gameCamera);
             }
             gameCamera = camera;
+            var wasInHab = FollowsHab;
             FollowsHab = VrHab.IsHabCamera(camera);
+            if (wasInHab && !FollowsHab) VrBody.LevelNext();
             if (camera == null)
             {
                 HideWorld();
