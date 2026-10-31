@@ -603,6 +603,9 @@ far the body moved since. Letting go of the last hold keeps the body's velocity 
 80 ms, capped at 5 m/s, so a push off flies on; a hand held back more than 0.5 m from its hold lets go without it.
 While the left hand holds on, controller flying rests. Log lines start with "Climbing:".
 
+Some door switches have only the trigger `Interaction Volume` (layer 15) and nothing solid: without a solid collider in reach, the
+grip holds on to that trigger of an `InteractableObject`.
+
 A firmly held part (up to 30 kg) must not use the deadbeat impulse: with the spin set on top it shook, and at the size of a
 crate it knocked into the body each step, deadly. It now goes part of the way to the hand each step (half at no mass, 8 % at
 30 kg, so heavier parts lag behind), by velocity,
