@@ -656,7 +656,8 @@ stuck to the head and swayed with the noise), and it painted over our UI pass, s
 Now a postfix on `OnGameStateChangedEvent` records whether the game has the main camera off (`VrHab.MainCameraOff`).
 While it is off and a `Hab3DController` exists, the rig follows the Hab camera and switches it off like any game
 camera; switching back never re-enables the main camera while the game wants it off. The playspace follows only the
-Hab camera's heading (its pitch would tilt the room), the Perlin noise amplitude of the Hab's virtual cameras is set
+Hab camera's heading (its pitch would tilt the room), standing on the room's floor: `PRF_Hab_Interior` is 3.99 degrees
+off the world's up (`Hab Container` 19.31), so with the world's up the floor rose about 4 degrees from the bed to the door, the Perlin noise amplitude of the Hab's virtual cameras is set
 to 0 while VR runs (the game itself toggles their enabled flag), and the helmet only follows the head while the rig
 is on the main camera (it would otherwise come along from the bay). The Hab's overlay and screen-space canvases
 (3D navigation prompts, the terminal `Hab ScreenStack` at 0.25 m) go onto the UI canvas like other menus.

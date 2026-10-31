@@ -230,7 +230,6 @@ namespace ShipbreakerVR
             {
                 Plugin.Log.LogInfo($"VR camera attached to the Hab camera '{hab.name}'");
                 Retarget(hab);
-                VrHab.LogLevel(hab);
                 VrDiagnostics.Schedule(6f, "Hab entered 6 s ago");
             }
 
@@ -354,8 +353,13 @@ namespace ShipbreakerVR
 
         private static Quaternion HabHeading(Quaternion rotation)
         {
+            var up = VrHab.RoomUp;
             var forward = rotation * Vector3.forward;
-            return forward.y > Mathf.Sin(LyingPitch * Mathf.Deg2Rad) ? Quaternion.LookRotation(forward, Vector3.up) : Yaw(rotation);
+            if (Vector3.Dot(forward, up) > Mathf.Sin(LyingPitch * Mathf.Deg2Rad)) return Quaternion.LookRotation(forward, up);
+            // Its heading in the room, standing on the room's floor: the Hab is tilted in the world.
+            var ahead = Vector3.ProjectOnPlane(forward, up);
+            if (ahead.sqrMagnitude < 1e-4f) ahead = Vector3.ProjectOnPlane(rotation * Vector3.up, up);
+            return ahead.sqrMagnitude < 1e-8f ? Yaw(rotation) : Quaternion.LookRotation(ahead, up);
         }
 
         // Heading of a rotation (turn around the world's up axis), from where it looks or, looking straight down or up, where its top points.
@@ -402,7 +406,6 @@ namespace ShipbreakerVR
                 VrBody.Resync();
             }
             if (VrUi.Instance != null) VrUi.Instance.Recenter();
-            if (FollowsHab) VrHab.LogLevel(gameCamera);
             Plugin.Log.LogInfo($"Head recentered{(toGaze ? " (F4, left stick or options)" : "")} (tracked head position {head.localPosition})");
         }
     }
