@@ -603,6 +603,10 @@ far the body moved since. Letting go of the last hold keeps the body's velocity 
 80 ms, capped at 5 m/s, so a push off flies on; a hand held back more than 0.5 m from its hold lets go without it.
 While the left hand holds on, controller flying rests. Log lines start with "Climbing:".
 
+A firmly held part (up to 30 kg) must not use the deadbeat impulse: with the spin set on top it shook, and at the size of a
+crate it knocked into the body each step, deadly. It now goes half way to where the hand has it each step, by velocity,
+interpolated, with no pull on the player, and does not collide with the body until its bounds are 45 cm away after letting go.
+
 While a hand holds on the game's squishy collide is off (`PlayerMotion.SetSquishyCollide`, its switch for noclip): it casts a
 ray along the velocity and pushes the body off a surface in range, with a crackle and a shake. Found on `climb-trace`.
 
