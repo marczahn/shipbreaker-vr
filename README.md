@@ -160,6 +160,9 @@ The controller buzzes twice when the tether mode starts and once when grappling 
 **In menus** both controllers act together like one Xbox gamepad: left stick to move around, A to confirm, B to go
 back, the triggers switch tabs.
 
+**In the station** a push of the left stick moves one spot; let go before the next. Looking at the work area, left takes you
+to the terminal.
+
 **Keyboard:** F3 turns VR on and off, F4 puts the view back in front of you. Both keys can be changed in the config file (section `[Tasten]`).
 
 ## Settings
