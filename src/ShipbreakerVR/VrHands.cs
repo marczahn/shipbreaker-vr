@@ -73,6 +73,8 @@ namespace ShipbreakerVR
 
         private static GrabController grab;
         private static Animator animator;
+        private static InteractionController interaction;
+        private static float nextInteractionSearch;
         private static int fingerLogs;
         private static int logs;
 
@@ -96,7 +98,25 @@ namespace ShipbreakerVR
             Fingers(RightArm, rightWasDriven);
             Pose(LeftArm, active && chargeLeft && Mirrored(out var hold) ? hold : Quaternion.identity);
             Pose(RightArm, Quaternion.identity);
+            AtControl(LeftArm);
+            AtControl(RightArm);
             Charges(active && chargeLeft);
+        }
+
+        // A hand working a control is the game's, which reaches for the control's HandTarget from where its body is. In VR the
+        // body is elsewhere, so the wrist is bent onto the target here.
+        private static void AtControl(Arm arm)
+        {
+            if (arm.Driven || arm.Hand == null || arm.Hand.CurrentHandState != HandGrab.HandState.Success) return;
+            if (arm.Upper == null || arm.Lower == null || arm.Wrist == null) return;
+            if (interaction == null && Time.unscaledTime >= nextInteractionSearch)
+            {
+                nextInteractionSearch = Time.unscaledTime + 1f;
+                interaction = Object.FindObjectOfType<InteractionController>();
+            }
+            var control = interaction != null ? interaction.CurrentInteractable : null;
+            if (control != null && control.HandTarget != null)
+                VrToolModels.Bend(arm.Upper, arm.Lower, arm.Wrist, control.HandTarget.position);
         }
 
         // Closes the hand while its grip is held, as long as it follows its controller: the same parameters HandGrab sets
