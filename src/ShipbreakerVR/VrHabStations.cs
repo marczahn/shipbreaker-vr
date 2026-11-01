@@ -55,7 +55,7 @@ namespace ShipbreakerVR
                 foreach (var way in Options(location))
                 {
                     var to = way.CameraToGoTo != null ? way.CameraToGoTo.Name : null;
-                    if (way.ClickableButton != null && sample == null) sample = way.ClickableButton.GetComponentInChildren<TMP_Text>(true);
+                    if (way.ClickableButton != null && sample == null) sample = Label(way.ClickableButton.transform);
                     if (to == HomeSpot && from == "Bed_Virtual_Camera") home = way;
                     if (way.TransformToTrack == null) continue;
                     if (to == "HabScreen_Virtual_Camera") stations.Add(new Station { Way = way, Name = VrOptions.L("Terminal", "Terminal") });
@@ -193,7 +193,15 @@ namespace ShipbreakerVR
             if (prompt != null && prompt.text != text) prompt.text = text;
         }
 
-        // A line of the game's font at the lower middle of its navigation canvas.
+        // The prompt's words, not its button symbol, which is text too.
+        private static TMP_Text Label(Transform button)
+        {
+            foreach (var text in button.GetComponentsInChildren<TMP_Text>(true))
+                if (text.GetComponent<LocalizedTextMeshProUGUI>() != null) return text;
+            return button.GetComponentInChildren<TMP_Text>(true);
+        }
+
+        // A line in the style of the game's prompts at the lower middle of its navigation canvas.
         private static void MakePrompt(TMP_Text sample)
         {
             if (prompt != null) return;
@@ -204,14 +212,19 @@ namespace ShipbreakerVR
             line.layer = canvas.gameObject.layer;
             var rect = (RectTransform)line.transform;
             rect.SetParent(canvas.GetComponent<Canvas>().rootCanvas.transform, false);
-            rect.sizeDelta = new Vector2(900f, 90f);
+            rect.sizeDelta = new Vector2(1200f, 120f);
             rect.anchoredPosition = new Vector2(0f, -300f);
             prompt = line.AddComponent<TextMeshProUGUI>();
             prompt.font = sample.font;
-            prompt.fontSize = 44f;
+            prompt.fontSharedMaterial = sample.fontSharedMaterial;
+            prompt.fontSize = (sample.enableAutoSizing ? sample.fontSizeMax : sample.fontSize) * sample.transform.lossyScale.y / rect.lossyScale.y;
+            prompt.fontStyle = sample.fontStyle;
+            prompt.characterSpacing = sample.characterSpacing;
+            prompt.color = new Color(sample.color.r, sample.color.g, sample.color.b, 1f);
             prompt.alignment = TextAlignmentOptions.Center;
             prompt.raycastTarget = false;
             prompt.text = "";
+            Plugin.Log.LogInfo($"Hab: station prompt in the style of '{sample.name}', '{sample.font.name}', size {prompt.fontSize:0}, {sample.fontStyle}");
         }
     }
 }
