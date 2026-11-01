@@ -9,7 +9,7 @@ namespace ShipbreakerVR
     // and line leave from where it ends up.
     internal static class VrGrappleSize
     {
-        private const float Size = 0.9f;
+        private const float Size = 0.8f;
         private const float SearchEvery = 1f;
 
         private static readonly List<StickerSlot> slots = new List<StickerSlot>();
