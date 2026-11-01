@@ -121,8 +121,8 @@ hand instead. Let go while the hand moves to push off; you keep that speed. Whil
 flying pauses. Near an airlock console or a switch the grip holds on too; A or X works it. The row "Hold on and climb"
 in the VR tab switches this off.
 
-### Walking in the station
-![Walking in the station](images/station.svg)
+### Free walking in the station
+![Free walking in the station](images/station.svg)
 
 ### Menus with the controllers
 ![Menus and keyboard](images/menus.svg)

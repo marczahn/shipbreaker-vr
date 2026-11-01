@@ -318,7 +318,7 @@ def main():
               "Hold A to charge. It goes where the grapple points."),
          ], heading=("Grappling", "Placing tethers", LASER, TETHER))
 
-    page("station.svg", "ShipbreakerVR walking in the station", "Walking in the station",
+    page("station.svg", "ShipbreakerVR free walking in the station", "Free walking in the station",
          "VR tab: Walk in the station, off by default. Without it the game's prompts show the way.", [
              (button("A"), "Stand up", "Walking on: sitting on the bed, A stands up.",
               "There is no way back to the bed."),
