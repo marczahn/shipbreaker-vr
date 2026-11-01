@@ -7,6 +7,9 @@ namespace ShipbreakerVR
     // Help for those who get lost or sick in free flight: straightening up, and a brake that needs no thought.
     internal static class VrFlightComfort
     {
+        // What happens without thrust: braking by oneself (SimpleThrustPatch), the game's auto brake, or nothing (NoAutoBrakePatch).
+        public enum Thrust { Einfach, Standard, Realistisch }
+
         // Degrees per second of the turn back to upright. Slow enough to follow, fast enough to be over soon.
         private const float AlignSpeed = 90f;
         private const float AlignDone = 0.5f;
@@ -72,7 +75,7 @@ namespace ShipbreakerVR
 
         public static bool Brakes(Rigidbody body, GrabController grab, GrapplingHook grapple, float charge)
         {
-            if (!VrSettings.SimpleThrust.Value || !VrControls.Flying || VrControls.Holding || VrControls.IsBraking()) return false;
+            if (VrSettings.ThrustMode.Value != VrFlightComfort.Thrust.Einfach || !VrControls.Flying || VrControls.Holding || VrControls.IsBraking()) return false;
             if (body.isKinematic || charge <= 0f || body.velocity.magnitude < Stopped) return false;
             if (grapple.IsSwinging || grapple.GrappledRigidbody != null || grab.IsGrabPreventingThrust) return false;
             return VrHand.Left.State != HandState.Holding && VrHand.Right.State != HandState.Holding;
@@ -90,6 +93,13 @@ namespace ShipbreakerVR
     }
 
     // The game sees no thrust and no brake there and would fill the tank meanwhile, which would make braking pay.
+    // Steuerung/Schubmodus Realistisch: the game's own brake stays off, so one keeps one's speed.
+    [HarmonyPatch(typeof(PlayerMotion), "HandleAutoBrake")]
+    internal static class NoAutoBrakePatch
+    {
+        private static bool Prefix() => VrSettings.ThrustMode.Value != VrFlightComfort.Thrust.Realistisch;
+    }
+
     [HarmonyPatch(typeof(ThrustController), "Update")]
     internal static class SimpleThrustChargePatch
     {

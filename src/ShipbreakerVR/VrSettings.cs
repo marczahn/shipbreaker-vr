@@ -31,7 +31,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<float> MenuWidth;
         public static ConfigEntry<bool> FlipUi;
         public static ConfigEntry<bool> MonitorLook;
-        public static ConfigEntry<bool> SimpleThrust;
+        public static ConfigEntry<VrFlightComfort.Thrust> ThrustMode;
         public static ConfigEntry<bool> FreeWalking;
         public static ConfigEntry<VrHelmet.Mode> Helmet;
         public static ConfigEntry<VrResolution.AntiAliasing> AntiAliasing;
@@ -201,8 +201,10 @@ namespace ShipbreakerVR
                     "Zeigt links oben in Visier und Menüs die Bildrate: Bilder pro Sekunde, die Rate des Headsets, den Anteil der Bilder, die sie verpasst haben, die Zeit des Hauptthreads für Spiellogik und für das Vorbereiten des Renderns, und die Einstellungen, die sie beeinflussen."),
                 "While it is on, frame times are also logged every 30 s, as with Debug/Diagnose.");
             FlipUi = Bind("Anzeige", "UiSpiegeln", false, "Flip the UI vertically in case it is upside down.");
-            SimpleThrust = Bind("Steuerung", "EinfacherSchub", false,
-                "Thrust only lasts while you hold it: let go of the left trigger and you brake to a stop by yourself, at a third of the brake's strength and fuel. Not while holding on or with the grapple.");
+            ThrustMode = Bind("Steuerung", "Schubmodus", VrFlightComfort.Thrust.Standard,
+                ("What happens when you stop thrusting. Simple: thrust only lasts while you hold it, you brake to a stop by yourself at a third of the brake's strength and fuel, not while holding on or with the grapple. Standard: as in the game, its auto brake slows you to 1 m/s after 3 seconds. Realistic: no auto brake, you keep your speed.",
+                    "Was passiert, wenn du keinen Schub gibst. Einfach: Schub wirkt nur, solange du ihn hältst, du bremst von selbst bis zum Stillstand, mit einem Drittel der Bremskraft und des Treibstoffs, nicht beim Festhalten oder mit dem Grappler. Standard: wie im Spiel, seine automatische Bremse verlangsamt dich nach 3 Sekunden auf 1 m/s. Realistisch: keine automatische Bremse, du behältst dein Tempo."),
+                (new[] { "Simple", "Standard", "Realistic" }, new[] { "Einfach", "Standard", "Realistisch" }));
             FreeWalking = Bind("Station", "FreiGehen", false,
                 "Walk through the station instead of hopping between its spots. Replaces the spots: sitting on the bed A stands up, the left stick walks, the right stick turns in steps, the triggers change the poster you look at, and A uses the screen or door you stand at. Walking with a stick can make you feel sick.");
             MonitorLook = Bind("Anzeige", "MonitorEffekt", true,
