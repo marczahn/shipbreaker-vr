@@ -369,9 +369,10 @@ namespace ShipbreakerVR
             var current = cutBrain.ActiveVirtualCamera;
             var now = Time.unscaledTime;
             var monitor = current != null && monitors.TryGetValue(current, out var found) && found != null ? found : null;
-            // Into the monitor above the bed the rig stays, and back out to where it stayed it doesn't move either.
+            // Into the monitor above the bed the rig stays, and back out to where it stayed it doesn't move either. Walking the rig does not
+            // move at all, so a screen just comes on.
             var stay = monitor != null && placeVirtualCamera != null && Overhead(monitor);
-            if (lastVirtualCamera != null && current != lastVirtualCamera && !stay && current != placeVirtualCamera)
+            if (lastVirtualCamera != null && current != lastVirtualCamera && !stay && current != placeVirtualCamera && !VrHabWalk.Walking)
             {
                 var elapsed = transitionStart >= 0f ? now - transitionStart : float.MaxValue;
                 // Fading out or black already: the rig jumps to wherever the camera is once it is black.
