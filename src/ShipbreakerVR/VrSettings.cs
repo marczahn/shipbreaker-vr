@@ -49,6 +49,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<VrControls.Turning> TurnMode;
         public static ConfigEntry<float> ThrustDeadzone;
         public static ConfigEntry<float> ThrustFull;
+        public static ConfigEntry<float> HandTilt;
         public static ConfigEntry<VrFlightGlobe.Mode> FlightGlobe;
         public static ConfigEntry<float> FlightGlobeSize;
         public static ConfigEntry<float> FlightGlobeX;
@@ -132,6 +133,10 @@ namespace ShipbreakerVR
                 ("How far you move the left controller for full thrust. Shorter needs less arm movement, longer gives finer control. Always at least 5 cm beyond the deadzone.",
                     "Wie weit du den linken Controller für vollen Schub bewegst. Kürzer braucht weniger Armbewegung, länger erlaubt feinere Kontrolle. Immer mindestens 5 cm mehr als die Totzone."),
                 "In centimeters.", Between(VrControls.MinThrustRange, VrControls.FullMax));
+            HandTilt = Bind("Steuerung", "HandNeigung", 0f,
+                ("Tips the hands, the tools and their beams forward (positive) or back against the controllers.",
+                    "Kippt Hände, Werkzeuge und ihre Strahlen gegenüber den Controllern nach vorn (positiv) oder zurück."),
+                "In degrees.", Between(-40f, 40f));
             ThrustDeadzone.SettingChanged += (_, __) => VrControls.KeepThrustRange(true);
             ThrustFull.SettingChanged += (_, __) => VrControls.KeepThrustRange(false);
             VrControls.KeepThrustRange(false);

@@ -118,6 +118,7 @@ namespace ShipbreakerVR
                 new BoolRow { Label = L("Push heavy parts", "Schwere Teile schieben"), Entry = VrSettings.BracedPush },
                 new SliderRow { Label = L("Thrust deadzone (cm)", "Schub-Totzone (cm)"), Entry = VrSettings.ThrustDeadzone, Format = "0", Step = 1f },
                 new SliderRow { Label = L("Full thrust at (cm)", "Voller Schub ab (cm)"), Entry = VrSettings.ThrustFull, Format = "0", Step = 1f },
+                new SliderRow { Label = L("Hand tilt (°)", "Handneigung (°)"), Entry = VrSettings.HandTilt, Format = "0", Step = 1f },
                 EnumRow(L("Flight globe", "Flugkugel"), VrSettings.FlightGlobe),
                 EnumRow(L("Anti-aliasing", "Kantenglättung"), VrSettings.AntiAliasing),
                 new SliderRow { Label = L("Render resolution", "Renderauflösung"), Entry = VrSettings.ResolutionScale, Format = "0.00" },
