@@ -30,6 +30,10 @@ The release is one ZIP laid out like the game folder; users extract it next to `
    wherever the user keeps it). Expect the plugin DLL, `BepInEx/plugins/ShipbreakerVR/licenses/` (the `licenses/`
    files plus `LICENSE` and `DISCLAIMER.md`), and `INSTALL.md`, `THIRD-PARTY-NOTICES.md`, `DISCLAIMER.md` at the root;
    nothing missing compared to the last release.
+   Nothing from the game may be in it, unchanged or modified (assets, code, data; see "No game files" in `CLAUDE.md`):
+   only the plugin, BepInEx, the Unity/OpenXR files from the helper project, the license texts and the docs. The script
+   stops when a staged file is identical to one in the game's `Shipbreaker_Data`; a modified game file it cannot catch,
+   so look at every new entry in the file list.
 5. Release notes: write `docs/releases/<version>.md` (English, user-facing: New, Fixed, Install), based on
    `git log` since the previous tag. Commit and push with any script and license changes.
 6. Deliver the ZIP and the notes to the user (check the copy's checksum if it goes through a network folder).

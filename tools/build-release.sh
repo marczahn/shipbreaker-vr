@@ -39,6 +39,22 @@ cp "$ROOT/LICENSE" "$ROOT/DISCLAIMER.md" "$PLUGIN/licenses/"
 cp "$ROOT/docs/INSTALL.md" "$ROOT/THIRD-PARTY-NOTICES.md" "$ROOT/DISCLAIMER.md" "$STAGE/"
 mkdir -p "$STAGE/images" && cp "$ROOT"/docs/images/* "$STAGE/images/"  # INSTALL.md links its images relative to itself
 
+# No game files in the release (copyright, see CLAUDE.md "No game files"): stop if any staged file is byte-identical
+# to a file of the game's Shipbreaker_Data folder. Only files of the same size are hashed, so this stays fast.
+GAME_DATA="$(cd "$MANAGED_DIR/.." && pwd)"
+SIZES="$(find "$STAGE" -type f -printf '%s\n' | sort -u)"
+CANDIDATES="$(find "$GAME_DATA" -type f -printf '%s\t%p\n' | awk -F'\t' 'NR==FNR { s[$1]; next } ($1 in s) { print $2 }' <(echo "$SIZES") -)"
+if [ -n "$CANDIDATES" ]; then
+  GAME_SUMS="$(echo "$CANDIDATES" | tr '\n' '\0' | xargs -0 sha256sum | cut -d' ' -f1 | sort -u)"
+  FOUND="$(cd "$STAGE" && find . -type f -print0 | xargs -0 sha256sum | grep -F -f <(echo "$GAME_SUMS") || true)"
+  if [ -n "$FOUND" ]; then
+    echo "Release contains files from the game, refusing to build the ZIP:" >&2
+    echo "$FOUND" >&2
+    rm -rf "$STAGE" "$BUILD"
+    exit 1
+  fi
+fi
+
 mkdir -p "$OUT"
 ZIP="$(cd "$OUT" && pwd)/ShipbreakerVR-$VERSION.zip"
 rm -f "$ZIP"
