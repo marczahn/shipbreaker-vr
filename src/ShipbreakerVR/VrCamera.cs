@@ -259,6 +259,7 @@ namespace ShipbreakerVR
             {
                 if (gameCamera != null) gameCamera.enabled = VrCameraSilencer.GameWantsEnabled(gameCamera);
                 VrResolution.Stopped();
+                VrBeltGrapple.Hide();
             }
             wasRunning = running;
             VrCameraSilencer.Update(running, vrCamera, gameCamera);

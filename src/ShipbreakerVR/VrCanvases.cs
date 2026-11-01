@@ -212,18 +212,28 @@ namespace ShipbreakerVR
     [HarmonyPatch(typeof(SubtitleTalkingHeadContainer), nameof(SubtitleTalkingHeadContainer.ShowHeadImage))]
     internal static class PortraitPatch
     {
+        static PortraitPatch() => VrSession.OnUnload("portraits", Release);
+
         private const string Cutout = "_CutoutTex";
 
         private static readonly Dictionary<Sprite, Sprite> cards = new Dictionary<Sprite, Sprite>();
         private static Texture cutout;
+        private static Material game;
 
         private static void Postfix(UnityEngine.UI.Image ___m_PortraitImage)
         {
             var image = ___m_PortraitImage;
-            if (!VrXr.IsRunning || image.sprite == null) return;
+            // Without VR the game's own material draws the game's own picture.
+            if (!VrXr.IsRunning)
+            {
+                if (game != null) image.material = game;
+                return;
+            }
+            if (image.sprite == null) return;
             if (image.material.HasProperty(Cutout))
             {
-                cutout = image.material.GetTexture(Cutout);
+                game = image.material;
+                cutout = game.GetTexture(Cutout);
                 image.material = new Material(Shader.Find("UI/Default"));
             }
             if (cutout == null) return;
@@ -234,6 +244,17 @@ namespace ShipbreakerVR
                 Plugin.Log.LogInfo($"Portrait '{image.sprite.name}' cut to its card");
             }
             image.sprite = card;
+        }
+
+        private static void Release()
+        {
+            foreach (var card in cards.Values)
+            {
+                if (card == null) continue;
+                Object.Destroy(card.texture);
+                Object.Destroy(card);
+            }
+            cards.Clear();
         }
 
         private static Sprite Card(Sprite portrait)

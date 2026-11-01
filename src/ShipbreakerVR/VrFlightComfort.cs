@@ -67,7 +67,7 @@ namespace ShipbreakerVR
         public static float Slowed(float speed, float braking, float dt) => Mathf.Max(speed - braking * dt, 0f);
     }
 
-    // Steuerung/EinfacherSchub: without the trigger the body brakes to a stop by itself, on the suit's fuel.
+    // Steuerung/Schubmodus Einfach: without the trigger the body brakes to a stop by itself, on the suit's fuel.
     [HarmonyPatch(typeof(ThrustController), "FixedUpdate")]
     internal static class SimpleThrustPatch
     {
@@ -92,7 +92,6 @@ namespace ShipbreakerVR
         }
     }
 
-    // The game sees no thrust and no brake there and would fill the tank meanwhile, which would make braking pay.
     // Steuerung/Schubmodus Realistisch: the game's own brake stays off, so one keeps one's speed.
     [HarmonyPatch(typeof(PlayerMotion), "HandleAutoBrake")]
     internal static class NoAutoBrakePatch
@@ -100,6 +99,7 @@ namespace ShipbreakerVR
         private static bool Prefix() => VrSettings.ThrustMode.Value != VrFlightComfort.Thrust.Realistisch;
     }
 
+    // The game sees no thrust and no brake there and would fill the tank meanwhile, which would make braking pay.
     [HarmonyPatch(typeof(ThrustController), "Update")]
     internal static class SimpleThrustChargePatch
     {

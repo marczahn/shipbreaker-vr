@@ -304,7 +304,7 @@ namespace ShipbreakerVR
             {
                 if (!hand.Holding) continue;
                 var error = Hold(hand) - (Pushes(hand) ? HandWorld(hand) : PullPoint(hand));
-                if (!blocked && error.magnitude > (hand.Firm || hand.Follower ? 2f : 1f) * TearOff * VrCamera.WorldScale) LetGo(hand, false, $"held back {error.magnitude:0.00} m from the hold");
+                if ((!blocked || Pushes(hand)) && error.magnitude > (hand.Firm || hand.Follower ? 2f : 1f) * TearOff * VrCamera.WorldScale) LetGo(hand, false, $"held back {error.magnitude:0.00} m from the hold");
                 else holding++;
             }
             // A firmly held part goes with the hand and pulls at nothing.
@@ -328,7 +328,7 @@ namespace ShipbreakerVR
                 var hold = Hold(hand);
                 if (Pushes(hand))
                 {
-                    hand.Body.AddForceAtPosition(BracedPush.Force(HandWorld(hand) - hold), hold, ForceMode.Force);
+                    hand.Body.AddForceAtPosition(BracedPush.Force((HandWorld(hand) - hold) / VrCamera.WorldScale), hold, ForceMode.Force);
                     continue;
                 }
                 var error = hold - PullPoint(hand);

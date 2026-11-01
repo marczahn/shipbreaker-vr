@@ -19,6 +19,7 @@ namespace ShipbreakerVR
         private static Transform copy;
         private static Transform model;
         private static Vector3 grip;
+        private static float nextBuild;
 
         public static void Update()
         {
@@ -57,6 +58,8 @@ namespace ShipbreakerVR
 
         private static bool Build()
         {
+            if (Time.unscaledTime < nextBuild) return false;
+            nextBuild = Time.unscaledTime + 1f;
             Release();
             var hook = GameRefs.Grapple;
             var part = hook != null ? VrToolModels.GrappleBarrelOf(hook) : null;
@@ -84,10 +87,15 @@ namespace ShipbreakerVR
             }
             foreach (var target in model.GetComponentsInChildren<Transform>(true))
                 if (target.name == Grip) grip = root.InverseTransformPoint(target.position);
+            if (pieces == 0)
+            {
+                Object.Destroy(root.gameObject);
+                return false;
+            }
             copy = root;
             root.gameObject.SetActive(false);
             Plugin.Log.LogInfo($"Belt grapple: {pieces} part(s), grip at {grip} of the model");
-            return pieces > 0;
+            return true;
         }
 
         // Parts the model switches off stay off the copy.
@@ -98,7 +106,8 @@ namespace ShipbreakerVR
             return true;
         }
 
-        private static void Hide()
+        // Also when VR stops, as Update then no longer runs.
+        public static void Hide()
         {
             if (copy != null) copy.gameObject.SetActive(false);
         }
