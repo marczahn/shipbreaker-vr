@@ -121,6 +121,7 @@ namespace ShipbreakerVR
                 EnumRow(L("Anti-aliasing", "Kantenglättung"), VrSettings.AntiAliasing),
                 new SliderRow { Label = L("Render resolution", "Renderauflösung"), Entry = VrSettings.ResolutionScale, Format = "0.00" },
                 new SliderRow { Label = L("Station resolution", "Auflösung Station"), Entry = VrSettings.StationResolution, Format = "0.00" },
+                new SliderRow { Label = L("Screen sharpness", "Monitor-Schärfe"), Entry = VrSettings.MonitorSharpness, Format = "0.0", Step = 0.1f },
                 new SliderRow { Label = L("World scale", "Weltmaßstab"), Entry = VrSettings.WorldScale, Format = "0.00" },
                 new SliderRow { Label = L("Head height (cm)", "Kopfhöhe (cm)"), Entry = VrSettings.HeadHeight, Format = "0", Step = 1f },
                 new SliderRow { Label = L("Head sideways (cm)", "Kopf seitlich (cm)"), Entry = VrSettings.HeadSideways, Format = "0", Step = 1f },

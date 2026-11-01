@@ -76,6 +76,7 @@ namespace ShipbreakerVR
         private const float GlowMargin = 0.12f;
         private const float ScreenCorner = 0.04f;
         private static readonly Color MonitorTint = new Color(0.9f, 0.93f, 0.96f, 1f);
+        private const int MaxMonitorWidth = 4096;
         private static readonly Color GlowColor = new Color(0.55f, 0.85f, 1f, 0.14f);
         private bool onMonitor;
         private Matrix4x4 glowMatrix;
@@ -199,14 +200,29 @@ namespace ShipbreakerVR
 
             var width = Mathf.Max(Screen.width, 640);
             var height = Mathf.Max(Screen.height, 360);
-            if (texture == null || texture.width != width || texture.height != height)
+            // At a Hab screen more pixels and mip levels keep the writing readable (Anzeige/MonitorSchaerfe).
+            var sharp = onMonitor && VrSettings.MonitorSharpness.Value > 1f;
+            if (sharp)
+            {
+                var factor = Mathf.Max(1f, Mathf.Min(VrSettings.MonitorSharpness.Value, (float)MaxMonitorWidth / width));
+                width = Mathf.RoundToInt(width * factor);
+                height = Mathf.RoundToInt(height * factor);
+            }
+            if (texture == null || texture.width != width || texture.height != height || texture.useMipMap != sharp)
             {
                 if (texture != null)
                 {
                     texture.Release();
                     Destroy(texture);
                 }
-                texture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGBHalf) { name = "ShipbreakerVR UI" };
+                texture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGBHalf)
+                {
+                    name = "ShipbreakerVR UI",
+                    useMipMap = sharp,
+                    autoGenerateMips = sharp,
+                    filterMode = sharp ? FilterMode.Trilinear : FilterMode.Bilinear,
+                    anisoLevel = sharp ? 8 : 1,
+                };
                 texture.Create();
                 if (material == null) material = VrUtil.OverlayMaterial();
                 material.mainTexture = texture;

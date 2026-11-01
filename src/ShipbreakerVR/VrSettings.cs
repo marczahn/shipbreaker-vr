@@ -25,6 +25,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> PerformanceOverlay;
         public static ConfigEntry<bool> UiInVr;
         public static ConfigEntry<float> HudDistance;
+        public static ConfigEntry<float> MonitorSharpness;
         public static ConfigEntry<float> HudHeight;
         public static ConfigEntry<float> HudScale;
         public static ConfigEntry<VrUi.Steadying> HudSteadying;
@@ -177,6 +178,10 @@ namespace ShipbreakerVR
                 ("Moves the visor display up (positive) or down (negative) in front of your eyes.",
                     "Verschiebt die Visieranzeige vor den Augen nach oben (positiv) oder unten (negativ)."),
                 "In centimeters.", Between(-20f, 20f));
+            MonitorSharpness = Bind("Anzeige", "MonitorSchaerfe", 1.5f,
+                ("How much sharper the station's screens are drawn while you use them. 1 is off, higher costs more at the screens only.",
+                    "Wie viel schärfer die Bildschirme der Station gezeichnet werden, während du sie benutzt. 1 ist aus, höher kostet nur an den Bildschirmen mehr Leistung."),
+                "Times the window's size, at most 4096 wide.", Between(1f, 2f));
             HudDistance = Bind("Anzeige", "HudAbstand", 1.5f,
                 ("How far in front of your eyes the visor display floats. Change it if reading the display or switching focus between it and the world is uncomfortable.",
                     "Wie weit die Visieranzeige vor den Augen schwebt. Anpassen, wenn das Lesen der Anzeige oder der Blickwechsel zwischen ihr und der Welt unangenehm ist."),

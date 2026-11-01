@@ -13,8 +13,8 @@ namespace ShipbreakerVR
         private const string ModelPrefix = "PRFB_GrappleGun";
         private const string Grip = "RHandTarget";
 
-        // The middle of the grapple's zone, from the head along its heading (x right, y up, z forward), in real meters.
-        private static readonly Vector3 Hip = new Vector3(0.26f, -0.62f, -0.12f);
+        // In the grapple's zone, from the head along its heading (x right, y up, z forward), in real meters.
+        private static readonly Vector3 Hip = new Vector3(0.22f, -0.62f, -0.18f);
 
         private static Transform copy;
         private static Transform model;
