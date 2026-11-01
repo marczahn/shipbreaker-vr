@@ -204,6 +204,20 @@ namespace ShipbreakerVR
         }
     }
 
+    // The speakers' portraits draw with the game's Lynx/Portrait_UI, whose picture stays away in the texture our UI
+    // camera renders into, though the image is there and active. With the plain UI material they show, without the game's
+    // scan lines and shaking, which only set values on that material.
+    [HarmonyPatch(typeof(SubtitleTalkingHeadContainer), nameof(SubtitleTalkingHeadContainer.ShowHeadImage))]
+    internal static class PortraitPatch
+    {
+        private static void Postfix(UnityEngine.UI.Image ___m_PortraitImage)
+        {
+            if (!VrXr.IsRunning || ___m_PortraitImage.material == ___m_PortraitImage.defaultMaterial) return;
+            Plugin.Log.LogInfo($"Portrait '{(___m_PortraitImage.sprite != null ? ___m_PortraitImage.sprite.name : "-")}' from {___m_PortraitImage.material.shader.name} to the plain UI material");
+            ___m_PortraitImage.material = null;
+        }
+    }
+
     // The yes/no prompts (quitting from the main menu) come from a pool, on the layer they last had.
     [HarmonyPatch(typeof(LynxPopupContainer), "OnShowLynxPopup")]
     internal static class PopupLayerPatch
