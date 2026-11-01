@@ -160,6 +160,10 @@ The controller buzzes twice when the tether mode starts and once when grappling 
 **In menus** both controllers act together like one Xbox gamepad: left stick to move around, A to confirm, B to go
 back, the triggers switch tabs.
 
+### The station
+
+![The station](docs/images/station.svg)
+
 **In the station** a push of the left stick moves one spot; let go before the next. Looking at the work area, left takes you
 to the terminal.
 
