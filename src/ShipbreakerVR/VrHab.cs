@@ -430,14 +430,11 @@ namespace ShipbreakerVR
 
         private static void Postfix(NavigationOption nav)
         {
-            if (nav.ClickableButton == null || nav.TransformToTrack == null) return;
+            if (nav.ClickableButton == null) return;
             var prompt = nav.ClickableButton.RectTransform;
+            prompt.localScale = VrHabWalk.HidesPrompts ? Vector3.zero : Vector3.one;
+            if (VrHabWalk.HidesPrompts || nav.TransformToTrack == null) return;
             var area = prompt.parent != null ? prompt.parent.parent as RectTransform : null;
-            if (area != null && VrHabWalk.Walking)
-            {
-                prompt.localPosition = new Vector3(area.rect.width * 2f, 0f, prompt.localPosition.z);
-                return;
-            }
             var ui = VrUi.Instance;
             if (area == null || ui == null || !ui.OnMenuCanvas(nav.TransformToTrack.position, out var place)) return;
             // A spot beyond the canvas's edge would lose its frame, and with it the only way to see that the spot can be reached.
@@ -457,6 +454,16 @@ namespace ShipbreakerVR
             if (!VrXr.IsRunning || VrHab.StandShift == Vector3.zero || ___m_TabButtons == null || ___m_Camera == null || ___mTabButtonParentTransform == null || ___mCurrentlySelectedPoster == null) return;
             ___m_TabButtons.RectTransform.localPosition += VrHab.PromptShift(___m_Camera, ___mCurrentlySelectedPoster.RectTransform.position, ___mTabButtonParentTransform.rect, ___m_Camera.pixelWidth, ___m_Camera.pixelHeight);
         }
+    }
+
+    // At a screen the game adds its base post-processing over the room, a colour cast one notices when the room stays in
+    // view. In the flat game and at the spots the screen covers it.
+    [HarmonyPatch]
+    internal static class HabScreenFilterPatch
+    {
+        private static System.Reflection.MethodBase TargetMethod() => AccessTools.Method(AccessTools.TypeByName("BBI.Unity.Game.Utilities.Rendering.HabNavigationBaseSessionPostToggler"), "OnHabStateChangedEvent");
+
+        private static bool Prefix() => !VrHabWalk.Walking;
     }
 
     internal static class HabStanding

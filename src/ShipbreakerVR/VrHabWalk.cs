@@ -15,6 +15,9 @@ namespace ShipbreakerVR
         private const float TurnPress = 0.6f;
         private const float TurnRest = 0.3f;
 
+        // A meter from the wall with the exit, in the room's z.
+        private const float ExitClear = 121.2f;
+
         // In front of the bed.
         private static readonly Vector2 Start = new Vector2(130.6f, 113.7f);
 
@@ -22,12 +25,19 @@ namespace ShipbreakerVR
         private static Quaternion heading;
         private static bool turned;
         private static bool mapping;
+        private static bool atBedShown;
         private static int updatedFrame = -1;
 
         public static bool Walking { get; private set; }
 
+        // With walking on the spots are out of use: from the bed one only stands up.
+        private static bool AtBed => VrSettings.FreeWalking.Value && !Walking && VrHab.ActiveSpot == SitSpot;
+
+        // True while the game's frames and prompts of its spots stay away.
+        public static bool HidesPrompts => Walking || AtBed;
+
         // True while the sticks and A and B belong to walking, not to the game.
-        public static bool TakesInput => Walking && !Paused && !VrHabStations.Using;
+        public static bool TakesInput => HidesPrompts && !Paused && !VrHabStations.Using;
 
         private static bool Paused => VrHab.Controller == null || VrHab.Controller.IsHabPaused;
 
@@ -40,13 +50,23 @@ namespace ShipbreakerVR
             updatedFrame = Time.frameCount;
             if (!Walking)
             {
-                if (VrSettings.FreeWalking.Value && VrInput.Right.Primary.Pressed && !Paused && !VrHab.Holding
-                    && VrHab.ActiveSpot == SitSpot && VrHab.TryRoomFloor(out _))
+                if (!AtBed)
+                {
+                    Stop();
+                    return;
+                }
+                if (!atBedShown)
+                {
+                    atBedShown = true;
+                    VrHabStations.Find();
+                    VrHabStations.ShowStandUp();
+                }
+                if (VrInput.Right.Primary.Pressed && !Paused && !VrHab.Holding && VrHab.TryRoomFloor(out _))
                 {
                     Walking = true;
                     place = Start;
                     heading = spotHeading;
-                    VrHabStations.Find();
+                    VrHabStations.Clear();
                     Plugin.Log.LogInfo("Hab: standing up, walking");
                 }
                 return;
@@ -62,11 +82,6 @@ namespace ShipbreakerVR
                 VrHabStations.Track();
                 return;
             }
-            if (VrInput.Right.Secondary.Pressed && !VrInput.Left.Secondary.Down)
-            {
-                Stop();
-                return;
-            }
             if (VrSettings.Diagnostics.Value) Map();
             Turn(VrInput.Right.Stick.x);
             Move(VrInput.Left.Stick);
@@ -76,12 +91,23 @@ namespace ShipbreakerVR
 
         public static void Stop()
         {
+            if (atBedShown)
+            {
+                atBedShown = false;
+                VrHabStations.Stop();
+            }
             if (!Walking) return;
             Walking = false;
             mapping = false;
             VrHabPosters.Stop();
             VrHabStations.Stop();
             Plugin.Log.LogInfo("Hab: sitting down again");
+        }
+
+        // A step back to where the exit's menu is not right at one's nose.
+        public static void StepBackFromExit()
+        {
+            place = HabFloor.Limit(place, new Vector2(place.x, Mathf.Min(place.y, ExitClear)));
         }
 
         // Where the head goes while walking.

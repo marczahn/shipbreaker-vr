@@ -11,7 +11,8 @@ namespace ShipbreakerVR
     // When the screen closes the game goes back to the bed, where it waits while one walks.
     internal static class VrHabStations
     {
-        private const float Range = 1.6f;
+        private const float Reach = 1.6f;
+        private const float ExitReach = 3f;
         private const float Cone = 50f;
         private const float OpenWait = 2f;
         private const float CloseWait = 3f;
@@ -22,6 +23,7 @@ namespace ShipbreakerVR
         {
             public NavigationOption Way;
             public string Name;
+            public float Reach = VrHabStations.Reach;
         }
 
         private static readonly AccessTools.FieldRef<Hab3DLocationNavigation, List<NavigationOption>> Options =
@@ -60,7 +62,7 @@ namespace ShipbreakerVR
                     else if (to == "Workstation_Screen_Virtual_Camera") stations.Add(new Station { Way = way, Name = VrOptions.L("Workbench", "Werkbank") });
                     else if (to == ExitSpot)
                     {
-                        exit = new Station { Way = way, Name = VrOptions.L("Exit", "Ausgang") };
+                        exit = new Station { Way = way, Name = VrOptions.L("Exit", "Ausgang"), Reach = ExitReach };
                         stations.Add(exit);
                     }
                 }
@@ -72,7 +74,7 @@ namespace ShipbreakerVR
         public static void Update(Transform head, float scale)
         {
             if (home == null) return;
-            var next = Nearest(head, Range * scale);
+            var next = Nearest(head, scale);
             if (next != near)
             {
                 near = next;
@@ -113,11 +115,30 @@ namespace ShipbreakerVR
             waitingSince = Time.unscaledTime;
         }
 
+        // Sitting on the bed before standing up.
+        public static void ShowStandUp()
+        {
+            HideNavigation(true);
+            Show($"[A] {VrOptions.L("Stand up", "Aufstehen")}");
+            if (VrUi.Instance != null) VrUi.Instance.Recenter();
+        }
+
+        public static void Clear() => Show("");
+
         public static void Stop()
         {
             Done();
             near = null;
             Show("");
+            HideNavigation(false);
+        }
+
+        // Everything else on the game's navigation canvas, such as the prompt to turn around.
+        private static void HideNavigation(bool hide)
+        {
+            if (prompt == null) return;
+            foreach (Transform part in prompt.transform.parent)
+                if (part != prompt.transform) part.localScale = hide ? Vector3.zero : Vector3.one;
         }
 
         private static void Done()
@@ -127,16 +148,16 @@ namespace ShipbreakerVR
             closing = false;
         }
 
-        private static Station Nearest(Transform head, float range)
+        private static Station Nearest(Transform head, float scale)
         {
             Station best = null;
-            var bestDistance = range;
+            var bestDistance = float.MaxValue;
             var controller = VrHab.Controller;
             foreach (var station in stations)
             {
                 if (station.Way.TransformToTrack == null || controller.IsInputBlocked(station.Way) || controller.IsCameraBlocked(station.Way)) continue;
                 var way = station.Way.TransformToTrack.position - head.position;
-                if (way.magnitude >= bestDistance || Vector3.Angle(head.forward, way) > Cone) continue;
+                if (way.magnitude > station.Reach * scale || way.magnitude >= bestDistance || Vector3.Angle(head.forward, way) > Cone) continue;
                 bestDistance = way.magnitude;
                 best = station;
             }
@@ -149,6 +170,7 @@ namespace ShipbreakerVR
             var controller = VrHab.Controller;
             if (location == null || controller.IsInputBlocked(station.Way) || controller.IsCameraBlocked(station.Way)) return;
             Plugin.Log.LogInfo($"Hab: opening {station.Name}");
+            if (station == exit) VrHabWalk.StepBackFromExit();
             target = station.Way.CameraToGoTo.Name;
             Using = true;
             opened = closing = false;
