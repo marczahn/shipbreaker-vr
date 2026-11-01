@@ -78,7 +78,7 @@ namespace ShipbreakerVR
             if (location == null || saved.Count <= looked.PosterIndex) return;
             Images(location) = Hab3DPosterLocation.GeneratePosterImageCollection();
             Selected(location) = looked;
-            looked.CurrentImageIndex = saved[looked.PosterIndex];
+            looked.CurrentImageIndex = VrHabCustomPosters.Place(looked, saved[looked.PosterIndex]);
             if (by > 0) location.TabToNextImage();
             else location.TabToPrevImage();
         }

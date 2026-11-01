@@ -43,6 +43,15 @@ namespace ShipbreakerVR.Tests
         }
 
         [Fact]
+        public void PosterChoicesSurviveTheFile()
+        {
+            var choices = PosterChoices.Parse(new[] { "2	mein bild.png", "kaputt", "0	auch.jpg" });
+            Assert.Equal(2, choices.Count);
+            Assert.Equal("mein bild.png", choices[2]);
+            Assert.Equal(new[] { "0	auch.jpg", "2	mein bild.png" }, System.Linq.Enumerable.ToArray(PosterChoices.Format(choices)));
+        }
+
+        [Fact]
         public void WalksFreelyInsideTheFloor()
         {
             var to = new Vector2(131f, 116f);
