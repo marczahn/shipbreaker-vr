@@ -160,12 +160,9 @@ The controller buzzes twice when the tether mode starts and once when grappling 
 **In menus** both controllers act together like one Xbox gamepad: left stick to move around, A to confirm, B to go
 back, the triggers switch tabs.
 
-### The station
+### Walking in the station
 
-![The station](docs/images/station.svg)
-
-**In the station** a push of the left stick moves one spot; let go before the next. Looking at the work area, left takes you
-to the terminal.
+![Walking in the station](docs/images/station.svg)
 
 **Walking in the station** is an option in the VR tab, off by default, and replaces the spots. Sitting on the bed, A stands up. The
 left stick walks, the right stick turns in steps. Near a screen or the exit, A uses it and B leaves it; X opens the exit from

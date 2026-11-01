@@ -318,12 +318,8 @@ def main():
               "Hold A to charge. It goes where the grapple points."),
          ], heading=("Grappling", "Placing tethers", LASER, TETHER))
 
-    page("station.svg", "ShipbreakerVR station controls", "The station",
-         "Between shifts. By spots as in the game, or walking (VR tab: Walk in the station, off by default). It is one or the other.", [
-             (stick(["left", "right", "up", "down"]), "Spots", "Left stick: move to the next spot.",
-              "One move per push; let go before the next."),
-             (stick(["left"]), "To the terminal", "Looking at the work area: left goes to the terminal.",
-              "The other spots go as in the game."),
+    page("station.svg", "ShipbreakerVR walking in the station", "Walking in the station",
+         "VR tab: Walk in the station, off by default. Without it the game's prompts show the way.", [
              (button("A"), "Stand up", "Walking on: sitting on the bed, A stands up.",
               "There is no way back to the bed."),
              (stick(["left", "right", "up", "down"]), "Walk", "Left stick, where you look.",
