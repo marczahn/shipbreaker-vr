@@ -226,6 +226,29 @@ namespace ShipbreakerVR
             }
         }
 
+        public static Hab3DController Controller => controller;
+
+        // The spot the game is on.
+        public static string ActiveSpot => cutBrain != null && cutBrain.ActiveVirtualCamera != null ? cutBrain.ActiveVirtualCamera.Name : null;
+
+        // The room the Hab's floor plan is measured in.
+        public static Transform Room
+        {
+            get
+            {
+                _ = RoomUp;
+                return interior;
+            }
+        }
+
+        // The floor's height in the room's axes.
+        public static bool TryRoomFloor(out float height)
+        {
+            var found = Room != null && FindFloor();
+            height = found ? floorLocal.y : 0f;
+            return found;
+        }
+
         // Set by a move between spots: the stick has to come back before the next one, or holding it spins through the room.
         public static bool WaitForStick { get; set; }
 
@@ -346,9 +369,10 @@ namespace ShipbreakerVR
             var current = cutBrain.ActiveVirtualCamera;
             var now = Time.unscaledTime;
             var monitor = current != null && monitors.TryGetValue(current, out var found) && found != null ? found : null;
-            // Into the monitor above the bed the rig stays, and back out to where it stayed it doesn't move either.
+            // Into the monitor above the bed the rig stays, and back out to where it stayed it doesn't move either. Walking the rig does not
+            // move at all, so a screen just comes on.
             var stay = monitor != null && placeVirtualCamera != null && Overhead(monitor);
-            if (lastVirtualCamera != null && current != lastVirtualCamera && !stay && current != placeVirtualCamera)
+            if (lastVirtualCamera != null && current != lastVirtualCamera && !stay && current != placeVirtualCamera && !VrHabWalk.Walking)
             {
                 var elapsed = transitionStart >= 0f ? now - transitionStart : float.MaxValue;
                 // Fading out or black already: the rig jumps to wherever the camera is once it is black.
@@ -406,8 +430,10 @@ namespace ShipbreakerVR
 
         private static void Postfix(NavigationOption nav)
         {
-            if (nav.ClickableButton == null || nav.TransformToTrack == null) return;
+            if (nav.ClickableButton == null) return;
             var prompt = nav.ClickableButton.RectTransform;
+            prompt.localScale = VrHabWalk.HidesPrompts ? Vector3.zero : Vector3.one;
+            if (VrHabWalk.HidesPrompts || nav.TransformToTrack == null) return;
             var area = prompt.parent != null ? prompt.parent.parent as RectTransform : null;
             var ui = VrUi.Instance;
             if (area == null || ui == null || !ui.OnMenuCanvas(nav.TransformToTrack.position, out var place)) return;
@@ -428,6 +454,16 @@ namespace ShipbreakerVR
             if (!VrXr.IsRunning || VrHab.StandShift == Vector3.zero || ___m_TabButtons == null || ___m_Camera == null || ___mTabButtonParentTransform == null || ___mCurrentlySelectedPoster == null) return;
             ___m_TabButtons.RectTransform.localPosition += VrHab.PromptShift(___m_Camera, ___mCurrentlySelectedPoster.RectTransform.position, ___mTabButtonParentTransform.rect, ___m_Camera.pixelWidth, ___m_Camera.pixelHeight);
         }
+    }
+
+    // At a screen the game adds its base post-processing over the room, a colour cast one notices when the room stays in
+    // view. In the flat game and at the spots the screen covers it.
+    [HarmonyPatch]
+    internal static class HabScreenFilterPatch
+    {
+        private static System.Reflection.MethodBase TargetMethod() => AccessTools.Method(AccessTools.TypeByName("BBI.Unity.Game.Utilities.Rendering.HabNavigationBaseSessionPostToggler"), "OnHabStateChangedEvent");
+
+        private static bool Prefix() => !VrHabWalk.Walking;
     }
 
     internal static class HabStanding

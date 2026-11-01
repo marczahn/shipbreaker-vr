@@ -140,6 +140,11 @@ namespace ShipbreakerVR
                     pressed[5] = right.Trigger.Down;
                     pressed[6] = right.StickClick.Down && !menu;
                     pressed[7] = menu && !hab;
+                    if (VrHabWalk.TakesInput)
+                    {
+                        leftStick = rightStick = Vector2.zero;
+                        pressed[0] = pressed[1] = pressed[2] = pressed[4] = pressed[5] = false;
+                    }
                 }
 
                 // A press that opened or closed a menu is still held when the next state starts; it must not act there

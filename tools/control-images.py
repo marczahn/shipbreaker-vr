@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draws the control overviews in docs/images (flying, hands, tool buttons, cutter, demo charges, grapple, menus) as SVG.
+"""Draws the control overviews in docs/images (flying, hands, tool buttons, cutter, demo charges, grapple, station, menus) as SVG.
 
 Run it after changing a control: python3 tools/control-images.py
 The texts here are the players' view of the controls; keep them in line with README.md and docs/INSTALL.md.
@@ -81,7 +81,7 @@ def laser(color, ring=False, dot=False):
         parts.append(f'<circle cx="72" cy="19" r="7" fill="{color}" opacity="0.5"/>'
                      f'<circle cx="72" cy="19" r="3" fill="#ffffff"/>')
     if ring:
-        parts.append(f'<circle cx="70" cy="21" r="7" fill="none" stroke="{color}" stroke-width="3"/>')
+        parts.append(f'<circle cx="70" cy="21" r="7" fill="none" stroke="{TETHER}" stroke-width="3"/>')
     return "".join(parts)
 
 
@@ -209,7 +209,7 @@ def main():
              (controller(ghost=True, dx=-8, dy=8) + controller(dx=8, dy=-6) + arrow("M24 60 L56 22"),
               "Thrust", "Hold the left trigger and move the controller.", "Thrust goes where you move it; farther = stronger."),
              (controller(tilt=-25) + f'<path d="M8 20 A36 36 0 0 0 8 58" stroke="{ACCENT}" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>',
-              "Roll", "Trigger held: tilt the controller sideways.", "The farther you tilt, the faster you roll."),
+              "Roll", "Trigger held: tilt the controller sideways.", "From 12° on, faster up to 90°. Tilting alone gives no thrust."),
              (stick(["left", "right"]), "Turn", "Right stick left / right.", "Smooth or 30° / 45° / 90° steps (VR tab: Turning)."),
              (stick(["up", "down"]), "Pitch", "Right stick up / down.", "Stick up looks up, like the mouse."),
              (button("Y"), "Brake", "Y on the left controller.", "Uses the game's own brake, fuel and HUD."),
@@ -220,14 +220,16 @@ def main():
 
     page("hands.svg", "ShipbreakerVR hands", "Your hands",
          "Taking tools from the body and holding on. Either hand can do all of it.", [
-             (grip(), "Take a tool", "Squeeze the grip at your body; it buzzes in a zone.",
+             (grip(), "Take a tool", "Squeeze the grip at your body; a short buzz marks a spot.",
               "Keep squeezing to hold it, let go to put it away."),
              (f'<circle cx="38" cy="14" r="10" fill="{PART}" stroke="{ACCENT}" stroke-width="2"/>'
               f'<rect x="24" y="26" width="28" height="36" rx="8" fill="{PART}" stroke="{ACCENT}" stroke-width="2"/>'
               f'<circle cx="56" cy="20" r="4" fill="{ACCENT}"/><circle cx="58" cy="34" r="4" fill="{ACCENT}"/>'
               f'<circle cx="52" cy="58" r="4" fill="{ACCENT}"/><circle cx="24" cy="58" r="4" fill="{ACCENT}"/>',
-              "Where the tools are", "Right hip grapple · left hip demo charges",
-              "Over the right shoulder cutter · right side of the helmet scanner"),
+              "Where the tools are", "Hips, slightly behind: right grapple, left demo charges",
+              "Over the right shoulder cutter · right of the helmet scanner"),
+             (grip(), "Flashlight", "Left hand at the left of the helmet: squeeze the grip.",
+              "Switches it on or off."),
              (two_tools(),
               "Two tools at once", "Take a second tool with the other hand.",
               "Cutter, grapple, demo charges; each hand works its own."),
@@ -235,24 +237,26 @@ def main():
               "and squeeze the grip: that hand takes it over."),
              (scanner(), "Scan", "Take the scanner: the other hand's tool hides.",
               "Keep that hand's grip squeezed and it comes back after the scan."),
-             (holding(), "Hold on and climb", "Grip with an empty hand close to anything holds on.",
-              "Move the hand to pull yourself; let go moving to push off."),
-             (console(), "Consoles and switches", "Look at it and press A or X.",
-              "The grip only holds on there."),
+             (holding(), "Hold on and climb", "Grip with an empty hand within 15 cm of anything holds on.",
+              "Parts up to 30 kg sit firmly in the hand. Let go moving to push off."),
+             (console(), "Consoles and switches", "With an empty hand: look at it and press A or X.",
+              "Switches can be held with the grip too."),
              (two_buttons("X", "Y"), "Left hand", "A tool in the left hand: X works as A, Y as B.",
               "Flying pauses until you let go; the right stick still turns."),
          ], footer="The suit's hands follow your controllers and close with the grip.")
 
     page("tools.svg", "ShipbreakerVR tool buttons", "Tool buttons",
          "Aim with the hand (VR tab: Aim with the hand). The buttons are on the controller of the hand that holds the tool.", [
-             (laser(LASER), "Aim", "Point the controller. A laser shows where.",
-              "Empty hand: no laser; A uses the middle of the view."),
+             (laser(LASER), "Aim", "Point the controller. Cutter red, grapple light blue.",
+              "Demo charges and an empty hand have no laser."),
              (trigger(), "Use the tool", "Trigger: cut, grapple, place or detonate demo charges.",
               "Hold the trigger to keep hold with the grapple."),
              (button("A"), "Use", "A: use what you point at, with either hand.",
-              "On the cutter A turns the cut; use the other hand."),
+              "On the cutter A turns the cut; the grapple pushes instead."),
              (trigger_and("A"), "Throw", "Trigger held + A: throw what the grapple holds.",
               "Hold A to charge, let go to throw."),
+             (button("A"), "Push", "Grapple holding nothing: A pushes things away.",
+              "Hold A to charge. It goes where the grapple points."),
              (button("B"), "Tool mode", "B: switch the tool's mode.",
               "Demo charges: detonator. Grapple: tethers (see below)."),
              (trigger_and("B"), "Reel in", "Trigger held + B: reel in what the grapple holds.",
@@ -280,7 +284,7 @@ def main():
          ])
 
     page("charges.svg", "ShipbreakerVR demo charges", "Demo charges",
-         "At the left hip. The charge sits in your hand; the laser shows where it goes.", [
+         "At the left hip, slightly behind you. The charge sits in your hand, without a laser.", [
              (charge(), "Place a charge", "Trigger while pointing at a surface.",
               "The game's marker shows where it sticks."),
              (charge(thrown=True), "Throw a charge", "Trigger while pointing at nothing.",
@@ -297,8 +301,8 @@ def main():
 
     page("grapple.svg", "ShipbreakerVR grapple and tethers", "Grapple and tethers",
          "B switches the grapple between grappling and placing tethers. Two buzzes: tether mode, one buzz: grappling.", [
-             (laser(LASER), "Blue laser", "The grapple grapples.", "As in the flat game."),
-             (laser(TETHER, ring=True), "Orange laser with a ring", "The grapple places tethers.",
+             (laser(LASER), "Light blue laser", "The grapple grapples.", "As in the flat game."),
+             (laser(LASER, ring=True), "Light blue laser with an orange ring", "The grapple places tethers.",
               "The ring marks where the tether would hold."),
              (trigger(), "Grapple", "Trigger: grapple, hold to keep hold.",
               "Trigger held + A throws, trigger held + B reels in."),
@@ -310,7 +314,24 @@ def main():
               "Pointing at no tether, A uses what you point at."),
              (button("B"), "Tether mode", "B: switch to the tether mode.", "However long you press it."),
              (button("A"), "Recall all tethers", "Hold A.", "B switches back to grappling, however long you hold it."),
+             (button("A"), "Push", "Nothing held: A pushes, also at consoles.",
+              "Hold A to charge. It goes where the grapple points."),
          ], heading=("Grappling", "Placing tethers", LASER, TETHER))
+
+    page("station.svg", "ShipbreakerVR free walking in the station", "Free walking in the station",
+         "VR tab: Walk in the station, off by default. Without it the game's prompts show the way.", [
+             (button("A"), "Stand up", "Walking on: sitting on the bed, A stands up.",
+              "There is no way back to the bed."),
+             (stick(["left", "right", "up", "down"]), "Walk", "Left stick, where you look.",
+              "You slide along the edges. Can make you feel sick."),
+             (stick(["left", "right"]), "Turn", "Right stick: steps of 45°.", "Your head moves freely."),
+             (button("A"), "Screens and exit", "Near one and looking at it: A uses it.",
+              "B leaves it as usual. You stay where you stand."),
+             (button("X"), "Exit from anywhere", "X opens the exit's menu.",
+              "It steps you a meter back from the door if needed."),
+             (trigger(), "Posters", "Look at one from close by: triggers change it.",
+              "Own pictures: PNG or JPG in BepInEx/ShipbreakerVR-Poster."),
+         ])
 
     page("menus.svg", "ShipbreakerVR menu controls", "Menus and keyboard",
          "In menus both controllers act as one Xbox gamepad, each button where its twin sits.", [
@@ -319,7 +340,7 @@ def main():
              (two_buttons("B", "A"), "A / B", "A confirms, B goes back.", "X and Y are X and Y."),
              (trigger(), "Triggers", "Switch tabs (the gamepad's shoulder buttons).",
               "The grips are the gamepad's triggers."),
-         ], footer="Keyboard: F3 VR on/off · F4 center view · F7 monitor look · F8 debug dump · "
+         ], footer="Keyboard: F3 VR on/off · F4 center view · F7 monitor look · F8 or B + Y debug dump · "
                    "The left menu button stays with Virtual Desktop.")
 
 

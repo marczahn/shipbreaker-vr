@@ -31,6 +31,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<float> MenuWidth;
         public static ConfigEntry<bool> FlipUi;
         public static ConfigEntry<bool> MonitorLook;
+        public static ConfigEntry<bool> FreeWalking;
         public static ConfigEntry<VrHelmet.Mode> Helmet;
         public static ConfigEntry<VrResolution.AntiAliasing> AntiAliasing;
         public static ConfigEntry<float> ResolutionScale;
@@ -159,7 +160,7 @@ namespace ShipbreakerVR
                     "Dein Körper bleibt aufrecht und zu deinen Händen gewandt, während du dich umschaust, und geht mit, wenn du dich vorbeugst: Die Hände reichen gleich weit, egal wohin du schaust. Aus: Der Körper dreht sich wie bisher mit jedem Blick mit und bleibt stehen, wenn du dich vorbeugst."));
 
             Diagnostics = Bind("Debug", "Diagnose", false,
-                "For finding problems: Tasten/Diagnose (F8) writes what is drawn around the player into the log and saves screenshots next to it (also on its own 6 s after entering the Hab), load screens are logged frame by frame, and frame times are logged every 30 s.");
+                "For finding problems: Tasten/Diagnose (F8, or B and Y together) writes what is drawn around the player into the log and saves screenshots next to it (also on its own 6 s after entering the Hab), load screens are logged frame by frame, and frame times are logged every 30 s.");
             ToolExport = Bind("Debug", "WerkzeugExport", false,
                 "Tasten/WerkzeugExport (Shift+F8) saves the model of the tool in the hand (meshes, textures, UV layouts) to BepInEx\\ShipbreakerVR-tools, for retexturing it.");
             TestMode = Bind("Test", "Testmodus", false,
@@ -199,6 +200,8 @@ namespace ShipbreakerVR
                     "Zeigt links oben in Visier und Menüs die Bildrate: Bilder pro Sekunde, die Rate des Headsets, den Anteil der Bilder, die sie verpasst haben, die Zeit des Hauptthreads für Spiellogik und für das Vorbereiten des Renderns, und die Einstellungen, die sie beeinflussen."),
                 "While it is on, frame times are also logged every 30 s, as with Debug/Diagnose.");
             FlipUi = Bind("Anzeige", "UiSpiegeln", false, "Flip the UI vertically in case it is upside down.");
+            FreeWalking = Bind("Station", "FreiGehen", false,
+                "Walk through the station instead of hopping between its spots. Replaces the spots: sitting on the bed A stands up, the left stick walks, the right stick turns in steps, the triggers change the poster you look at, and A uses the screen or door you stand at. Walking with a stick can make you feel sick.");
             MonitorLook = Bind("Anzeige", "MonitorEffekt", true,
                 "Screen look for the menus on the station's monitors: a little dimmer, fine scan lines, darker edges, a faint reflection on the glass and light on the frame. Tasten/MonitorEffektUmschalten (F7) switches it on and off.");
             Helmet = Bind("Anzeige", "Helm", VrHelmet.Mode.Kopf,

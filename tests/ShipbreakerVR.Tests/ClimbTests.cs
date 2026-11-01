@@ -43,6 +43,99 @@ namespace ShipbreakerVR.Tests
         }
 
         [Fact]
+        public void PosterChoicesSurviveTheFile()
+        {
+            var choices = PosterChoices.Parse(new[] { "2	mein bild.png", "kaputt", "0	auch.jpg" });
+            Assert.Equal(2, choices.Count);
+            Assert.Equal("mein bild.png", choices[2]);
+            Assert.Equal(new[] { "0	auch.jpg", "2	mein bild.png" }, System.Linq.Enumerable.ToArray(PosterChoices.Format(choices)));
+        }
+
+        [Fact]
+        public void WalksFreelyInsideTheFloor()
+        {
+            var to = new Vector2(131f, 116f);
+            Assert.Equal(to.y, HabFloor.Limit(new Vector2(131f, 115f), to).y, 3);
+        }
+
+        [Fact]
+        public void SlidesAlongAnEdge()
+        {
+            var limited = HabFloor.Limit(new Vector2(132.3f, 114.7f), new Vector2(133f, 115f));
+            Assert.True(limited.x > 132.3f && limited.x < 132.4f);
+            Assert.Equal(115f, limited.y, 2);
+        }
+
+        [Fact]
+        public void SlidesAlongASlantedEdge()
+        {
+            var start = new Vector2(132.3f, 121.2f);
+            var place = start;
+            for (var i = 0; i < 60; i++) place = HabFloor.Limit(place, place + new Vector2(0.02f, 0f));
+            Assert.True(place.x > start.x + 0.2f);
+            Assert.True(place.y < start.y - 0.1f);
+            Assert.True(HabFloor.Inside(place));
+        }
+
+        [Fact]
+        public void ALongFrameDoesNotJumpOverAnEdge()
+        {
+            Assert.True(HabFloor.Inside(HabFloor.Limit(new Vector2(131f, 116f), new Vector2(131f, 125f))));
+        }
+
+        [Fact]
+        public void TheFloorsEdgeDoesNotCrossItself()
+        {
+            var edge = HabFloor.Outline;
+            for (var i = 0; i < edge.Length; i++)
+                for (var j = i + 2; j < edge.Length; j++)
+                {
+                    if (i == 0 && j == edge.Length - 1) continue;
+                    Assert.False(Crosses(edge[i], edge[i + 1], edge[j], edge[(j + 1) % edge.Length]), $"edges {i} and {j}");
+                }
+        }
+
+        private static bool Crosses(Vector2 a, Vector2 b, Vector2 c, Vector2 d) =>
+            Side(a, b, c) * Side(a, b, d) < 0f && Side(c, d, a) * Side(c, d, b) < 0f;
+
+        private static float Side(Vector2 a, Vector2 b, Vector2 point) =>
+            (b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x);
+
+        [Theory]
+        [InlineData(130.6f, 113.7f)]
+        [InlineData(131.11f, 114.61f)]
+        [InlineData(131.07f, 116.67f)]
+        [InlineData(131.86f, 119.17f)]
+        [InlineData(131.63f, 120.17f)]
+        [InlineData(131.36f, 120.85f)]
+        public void CanWalkWhereTheGameStands(float x, float z)
+        {
+            Assert.True(HabFloor.Inside(new Vector2(x, z)));
+        }
+
+        [Theory]
+        [InlineData(133.4f, 121.2f)]
+        [InlineData(130f, 111f)]
+        [InlineData(129f, 114f)]
+        public void CannotWalkIntoFurniture(float x, float z)
+        {
+            Assert.False(HabFloor.Inside(new Vector2(x, z)));
+        }
+
+        [Fact]
+        public void WalksFromTheAisleToTheWorkArea()
+        {
+            Assert.True(HabFloor.Inside(new Vector2(131f, 118.5f)));
+            Assert.True(HabFloor.Inside(new Vector2(132.5f, 120f)));
+        }
+
+        [Fact]
+        public void StopsInACorner()
+        {
+            Assert.True(HabFloor.Inside(HabFloor.Limit(new Vector2(130.6f, 113.7f), new Vector2(120f, 100f))));
+        }
+
+        [Fact]
         public void SittingOnTheBedKeepsTheSpot()
         {
             var placed = HabStanding.Place(new Vector3(3f, 1.28f, 4f), Up, 0f, 1f);

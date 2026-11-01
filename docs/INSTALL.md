@@ -16,9 +16,10 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
 - **F4** (or pressing the **left stick** on the controllers) recenters the view on the headset: position, and in menus also view direction and the menu canvas.
   Menus always appear at eye height, also when you look up or down.
   The row "Center view" at the top of the VR tab does the same.
+- Own posters: put PNG or JPG files into `BepInExShipbreakerVR-Poster`, the folder appears after the first visit to the station. They join the pictures you can choose for the posters there.
 - **F7** at one of the station's monitors switches its screen look.
 - For bug reports, set `Diagnose = true` under `[Debug]` in `BepInEx\config\de.marczahn.shipbreakervr.cfg`. Then
-  **F8** writes what is drawn around you into the log, and load screens and frame times are logged too. With
+  **F8** or **B and Y together** writes what is drawn around you into the log, and load screens and frame times are logged too. With
   `WerkzeugExport = true`, **Shift+F8** saves the model of the tool in your hand (textures, mesh, UV layout) to
   `BepInEx\ShipbreakerVR-tools`, for modding work.
 - The keys can be changed under `[Tasten]` in the config file, for example `AnsichtZentrieren = F9` or
@@ -119,6 +120,9 @@ the masses: the station, fixed hulls and anything too heavy for the game's own g
 hand instead. Let go while the hand moves to push off; you keep that speed. While the left hand holds on, controller
 flying pauses. Near an airlock console or a switch the grip holds on too; A or X works it. The row "Hold on and climb"
 in the VR tab switches this off.
+
+### Free walking in the station
+![Free walking in the station](images/station.svg)
 
 ### Menus with the controllers
 ![Menus and keyboard](images/menus.svg)

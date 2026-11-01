@@ -160,8 +160,15 @@ The controller buzzes twice when the tether mode starts and once when grappling 
 **In menus** both controllers act together like one Xbox gamepad: left stick to move around, A to confirm, B to go
 back, the triggers switch tabs.
 
-**In the station** a push of the left stick moves one spot; let go before the next. Looking at the work area, left takes you
-to the terminal.
+### Free walking in the station
+
+![Free walking in the station](docs/images/station.svg)
+
+**Walking in the station** is an option in the VR tab, off by default, and replaces the spots. Sitting on the bed, A stands up. The
+left stick walks, the right stick turns in steps. Near a screen or the exit, A uses it and B leaves it; X opens the exit from
+anywhere. Look at a poster from close by and the triggers change its picture. Walking with a stick can make you feel sick.
+
+**Own posters:** put PNG or JPG files into `BepInExShipbreakerVR-Poster` and they join the pictures for the station's posters.
 
 **Keyboard:** F3 turns VR on and off, F4 puts the view back in front of you. Both keys can be changed in the config file (section `[Tasten]`).
 

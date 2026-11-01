@@ -23,8 +23,6 @@ namespace ShipbreakerVR
         private const int MaxRenderers = 30;
         private const float MaxBelow = 5f;
         private const int MaxBelowHits = 4;
-        private const float RoomRange = 4f;
-        private const int MaxRoomMeshes = 150;
 
         private static float dueAt = -1f;
         private static string dueReason;
@@ -44,12 +42,17 @@ namespace ShipbreakerVR
                 return;
             }
             if (VrSettings.Pressed(VrSettings.DiagnosticsKey)) Dump(vr, VrSettings.DiagnosticsKey.Value.ToString());
+            // A key is hard to find with the headset on.
+            else if (BothTopButtons) Dump(vr, "B and Y");
             else if (dueAt >= 0f && Time.unscaledTime >= dueAt)
             {
                 dueAt = -1f;
                 Dump(vr, dueReason);
             }
         }
+
+        private static bool BothTopButtons => VrXr.IsRunning && VrInput.Left.Secondary.Down && VrInput.Right.Secondary.Down
+            && (VrInput.Left.Secondary.Pressed || VrInput.Right.Secondary.Pressed);
 
         public static void Dump(VrCamera vr, string reason, bool saveImages = true)
         {
@@ -58,7 +61,7 @@ namespace ShipbreakerVR
             text.AppendLine($"Dump ({reason}) at {Time.unscaledTime:0.0} s, game state {GameSession.CurrentGameState}, load screen {(SceneLoader.Instance != null && SceneLoader.Instance.LoadScreenVisible)}, VR {VrXr.IsRunning}, screen {Screen.width}x{Screen.height}, eye {UnityEngine.XR.XRSettings.eyeTextureWidth}x{UnityEngine.XR.XRSettings.eyeTextureHeight}");
             text.AppendLine($"  head at {head.position}, looking {Direction(head, head.position + head.forward)}, rig scale {head.parent.localScale.x:0.00}");
             text.AppendLine($"  below the head (tracked at {head.localPosition}): {Below(head)}");
-            if (vr.FollowsHab) DescribeRoom(text, head);
+            if (vr.FollowsHab) VrHabSurvey.Write();
             var game = vr.GameCamera;
             if (game != null)
                 text.AppendLine($"  following '{VrUtil.Path(game.transform)}' at {Direction(head, game.transform.position)} {Vector3.Distance(head.position, game.transform.position):0.00} m, its view {Direction(head, head.position + game.transform.forward)}, fov {game.fieldOfView:0}, pixels {game.pixelWidth}x{game.pixelHeight}, stereo {game.stereoEnabled}, mask {game.cullingMask}, far {game.farClipPlane:0}, Hab {vr.FollowsHab}, fade {VrHab.Fade:0.00}");
@@ -98,41 +101,6 @@ namespace ShipbreakerVR
                 .Select(h => $"{h.distance:0.00} m '{VrUtil.Path(h.collider.transform)}' layer {h.collider.gameObject.layer}")
                 .ToList();
             return hits.Count > 0 ? string.Join(", ", hits) : $"nothing within {MaxBelow:0} m";
-        }
-
-        // The furniture's heights, to judge the view's height by things of known size. Measured on the meshes' own boxes,
-        // since the world's boxes of a tilted room come out too tall.
-        private static void DescribeRoom(StringBuilder text, Transform head)
-        {
-            text.AppendLine($"  Meshes within {RoomRange:0} m, lowest and highest point in m against the head along the room's up:");
-            var up = VrHab.RoomUp;
-            var meshes = UnityEngine.Object.FindObjectsOfType<MeshRenderer>()
-                .Where(r => r.enabled && r.bounds.SqrDistance(head.position) < RoomRange * RoomRange)
-                .Select(r => (renderer: r, filter: r.GetComponent<MeshFilter>()))
-                .Where(e => e.filter != null && e.filter.sharedMesh != null)
-                .Select(e => (e.renderer, span: Span(e.filter, head.position, up)))
-                .OrderBy(e => e.span.Item1)
-                .ThenBy(e => e.span.Item2)
-                .Take(MaxRoomMeshes);
-            foreach (var (renderer, span) in meshes)
-                text.AppendLine($"    {span.Item1:0.00} to {span.Item2:0.00} '{VrUtil.Path(renderer.transform)}'");
-        }
-
-        private static (float, float) Span(MeshFilter filter, Vector3 origin, Vector3 up)
-        {
-            var bounds = filter.sharedMesh.bounds;
-            var low = float.MaxValue;
-            var high = float.MinValue;
-            for (var x = -1; x <= 1; x += 2)
-                for (var y = -1; y <= 1; y += 2)
-                    for (var z = -1; z <= 1; z += 2)
-                    {
-                        var corner = bounds.center + Vector3.Scale(bounds.extents, new Vector3(x, y, z));
-                        var height = Vector3.Dot(filter.transform.TransformPoint(corner) - origin, up);
-                        low = Mathf.Min(low, height);
-                        high = Mathf.Max(high, height);
-                    }
-            return (low, high);
         }
 
         private static void DescribeCanvas(StringBuilder text, Transform head, Canvas canvas, VrUi ui)
