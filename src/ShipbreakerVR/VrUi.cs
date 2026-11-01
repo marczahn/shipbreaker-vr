@@ -77,6 +77,8 @@ namespace ShipbreakerVR
         private const float ScreenCorner = 0.04f;
         private static readonly Color MonitorTint = new Color(0.9f, 0.93f, 0.96f, 1f);
         private const int MaxMonitorWidth = 4096;
+        // Mip levels alone left the writing soft: a finer level than the distance asks for keeps it sharp, without shimmer yet.
+        private const float MonitorMipBias = -0.8f;
         private static readonly Color GlowColor = new Color(0.55f, 0.85f, 1f, 0.14f);
         private bool onMonitor;
         private Matrix4x4 glowMatrix;
@@ -222,6 +224,7 @@ namespace ShipbreakerVR
                     autoGenerateMips = sharp,
                     filterMode = sharp ? FilterMode.Trilinear : FilterMode.Bilinear,
                     anisoLevel = sharp ? 8 : 1,
+                    mipMapBias = sharp ? MonitorMipBias : 0f,
                 };
                 texture.Create();
                 if (material == null) material = VrUtil.OverlayMaterial();
