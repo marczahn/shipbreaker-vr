@@ -134,6 +134,8 @@ namespace ShipbreakerVR
 
         public bool IsConverted(Canvas canvas) => canvases.IsConverted(canvas);
 
+        public void Adopt(Transform part) => canvases.Adopt(part);
+
         // Where a spot in the room shows on the menu canvas: -0.5 to 0.5 across, 0 in the middle. Seen from the resting
         // head, not the tracked one: from that the prompts swam across the canvas with every move of the head.
         public bool OnMenuCanvas(Vector3 spot, out Vector2 place)

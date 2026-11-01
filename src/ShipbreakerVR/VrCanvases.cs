@@ -120,6 +120,16 @@ namespace ShipbreakerVR
 
         public bool IsConverted(Canvas canvas) => converted.ContainsKey(canvas);
 
+        // UI that comes up later under a canvas keeps the layer it had, which the UI camera may not draw.
+        public void Adopt(Transform part)
+        {
+            var canvas = part.GetComponentInParent<Canvas>();
+            var root = canvas != null ? canvas.rootCanvas : null;
+            nextScan = 0f;
+            Plugin.Log.LogInfo($"UI added: '{VrUtil.Path(part)}' layer {part.gameObject.layer}, root canvas '{(root != null ? root.name : "-")}' {(root != null ? root.renderMode.ToString() : "-")}, {(root != null && converted.ContainsKey(root) ? "on the VR canvas" : "not on the VR canvas")}");
+            if (root != null && converted.ContainsKey(root)) SetLayer(part, LayerFor(root));
+        }
+
         // How dark the hidden fades would make the screen, 0 to 1.
         public float FadeAlpha()
         {
@@ -191,6 +201,17 @@ namespace ShipbreakerVR
         {
             t.gameObject.layer = layer;
             for (var i = 0; i < t.childCount; i++) SetLayer(t.GetChild(i), layer);
+        }
+    }
+
+    // The yes/no prompts (quitting from the main menu) come from a pool, on the layer they last had.
+    [HarmonyPatch(typeof(LynxPopupContainer), "OnShowLynxPopup")]
+    internal static class PopupLayerPatch
+    {
+        private static void Postfix(Transform ___m_PopupContainer)
+        {
+            var ui = VrUi.Instance;
+            if (ui != null && ui.Active && ___m_PopupContainer != null) ui.Adopt(___m_PopupContainer);
         }
     }
 
