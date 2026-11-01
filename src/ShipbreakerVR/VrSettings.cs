@@ -25,6 +25,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> PerformanceOverlay;
         public static ConfigEntry<bool> UiInVr;
         public static ConfigEntry<float> HudDistance;
+        public static ConfigEntry<float> HudHeight;
         public static ConfigEntry<float> HudScale;
         public static ConfigEntry<VrUi.Steadying> HudSteadying;
         public static ConfigEntry<float> MenuDistance;
@@ -171,6 +172,10 @@ namespace ShipbreakerVR
             UiInVr = Bind("Anzeige", "UiImRaum", true,
                 ("Shows the HUD and the menus on a surface in the room instead of flat over the image. Leave it on; off is only for troubleshooting.",
                     "Zeigt HUD und Menüs auf einer Fläche im Raum statt flach über dem Bild. An lassen; aus nur zur Fehlersuche."));
+            HudHeight = Bind("Anzeige", "VisierHoehe", -2f,
+                ("Moves the visor display up (positive) or down (negative) in front of your eyes.",
+                    "Verschiebt die Visieranzeige vor den Augen nach oben (positiv) oder unten (negativ)."),
+                "In centimeters.", Between(-20f, 20f));
             HudDistance = Bind("Anzeige", "HudAbstand", 1.5f,
                 ("How far in front of your eyes the visor display floats. Change it if reading the display or switching focus between it and the world is uncomfortable.",
                     "Wie weit die Visieranzeige vor den Augen schwebt. Anpassen, wenn das Lesen der Anzeige oder der Blickwechsel zwischen ihr und der Welt unangenehm ist."),

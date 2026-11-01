@@ -277,7 +277,8 @@ namespace ShipbreakerVR
                 var h = 2f * distance * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad) * VrSettings.HudScale.Value;
                 // Stays centered on the head, only its rotation lags; the rig's rotation (turning the body) applies at once.
                 var rotation = head.parent.rotation * SteadyVisor(head.localRotation);
-                screenMatrix = Matrix4x4.TRS(head.position + rotation * new Vector3(0, 0, distance), rotation, new Vector3(h * aspect, h, 1f));
+                var height = VrSettings.HudHeight.Value * 0.01f * VrCamera.WorldScale;
+                screenMatrix = Matrix4x4.TRS(head.position + rotation * new Vector3(0, height, distance), rotation, new Vector3(h * aspect, h, 1f));
                 return;
             }
 

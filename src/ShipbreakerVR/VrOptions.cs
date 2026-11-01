@@ -131,6 +131,7 @@ namespace ShipbreakerVR
                 EnumRow(L("Visor steadying", "Visierberuhigung"), VrSettings.HudSteadying),
                 new SliderRow { Label = L("Visor size", "Visiergröße"), Entry = VrSettings.HudScale, Format = "0.00" },
                 new SliderRow { Label = L("Visor distance (m)", "Visierabstand (m)"), Entry = VrSettings.HudDistance, Format = "0.0" },
+                new SliderRow { Label = L("Visor height (cm)", "Visierhöhe (cm)"), Entry = VrSettings.HudHeight, Format = "0", Step = 1f },
                 new SliderRow { Label = L("Menu distance (m)", "Menüabstand (m)"), Entry = VrSettings.MenuDistance, Format = "0.0" },
                 new SliderRow { Label = L("Menu width (m)", "Menübreite (m)"), Entry = VrSettings.MenuWidth, Format = "0.0" },
                 new BoolRow { Label = L("Performance display", "Leistungsanzeige"), Entry = VrSettings.PerformanceOverlay },
