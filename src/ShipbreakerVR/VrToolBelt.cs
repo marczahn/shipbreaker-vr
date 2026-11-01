@@ -21,7 +21,7 @@ namespace ShipbreakerVR
         private const float HipSide = 0.1f;
         private const float HipOutside = 0.35f;
         // The grapple's zone lies further out: from HipSide the hand would reach into the body for it.
-        private const float GrappleOut = 0.06f;
+        private const float GrappleOut = 0.08f;
         // And further back, around where it hangs (VrBeltGrapple).
         private const float GrappleBack = 0.19f;
         private const float HipForward = 0.1f;
