@@ -4,6 +4,15 @@ namespace ShipbreakerVR.Tests
 {
     public class ComfortTests
     {
+        [Theory]
+        [InlineData(0f, 0f, 1f, 0f)]
+        [InlineData(0f, 1f, 0f, 90f)]
+        [InlineData(0f, -1f, 0f, -90f)]
+        public void GazeIsMeasuredFromTheHorizon(float x, float y, float z, float pitch)
+        {
+            Assert.Equal(pitch, FlightGaze.Pitch(new UnityEngine.Vector3(x, y, z)), 2);
+        }
+
         [Fact]
         public void BrakesByTheStep()
         {

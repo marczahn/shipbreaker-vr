@@ -21,6 +21,16 @@ namespace ShipbreakerVR
             Plugin.Log.LogInfo("Flight: straightening up");
         }
 
+        // The last small turn, so the view itself ends level. Looking clearly up or down stays as it is.
+        private static Quaternion GazeLevel(Quaternion playspace)
+        {
+            var gaze = playspace * VrCamera.Instance.HeadRotation * Vector3.forward;
+            var pitch = FlightGaze.Pitch(gaze);
+            Plugin.Log.LogInfo($"Flight: upright, body {Vector3.Angle(playspace * Vector3.up, Vector3.up):0.0}, gaze {pitch:0.0} degrees off");
+            if (Mathf.Abs(pitch) > FlightGaze.Trim) return Quaternion.identity;
+            return Quaternion.FromToRotation(gaze, Vector3.ProjectOnPlane(gaze, Vector3.up).normalized);
+        }
+
         // The turn for this frame, in the world.
         public static Quaternion AlignStep(Quaternion playspace, float dt)
         {
@@ -30,10 +40,19 @@ namespace ShipbreakerVR
             if (angle < AlignDone)
             {
                 aligning = false;
-                return Quaternion.identity;
+                return GazeLevel(playspace);
             }
             return Quaternion.RotateTowards(Quaternion.identity, Quaternion.FromToRotation(up, Vector3.up), AlignSpeed * dt);
         }
+    }
+
+    internal static class FlightGaze
+    {
+        // A head held a little off level at the end of straightening up left the view that far off the horizon.
+        public const float Trim = 5f;
+
+        // Degrees the gaze lies above the horizon, up being the world's.
+        public static float Pitch(Vector3 gaze) => 90f - Vector3.Angle(gaze, Vector3.up);
     }
 
     internal static class SimpleThrust
