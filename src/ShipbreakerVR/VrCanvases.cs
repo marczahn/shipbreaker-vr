@@ -212,7 +212,7 @@ namespace ShipbreakerVR
     {
         private static void Postfix(UnityEngine.UI.Image ___m_PortraitImage)
         {
-            if (!VrXr.IsRunning || ___m_PortraitImage.material == ___m_PortraitImage.defaultMaterial) return;
+            if (!VrXr.IsRunning || ___m_PortraitImage.material.shader.name == "UI/Default") return;
             Plugin.Log.LogInfo($"Portrait '{(___m_PortraitImage.sprite != null ? ___m_PortraitImage.sprite.name : "-")}' from {___m_PortraitImage.material.shader.name} to the plain UI material");
             ___m_PortraitImage.material = null;
         }
