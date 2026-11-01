@@ -295,8 +295,6 @@ def main():
               "Back only while charges are left."),
              (detonator(), "Detonate", "Trigger with the detonator in the hand.",
               "Blows all placed charges."),
-             (wrist(), "Charges by hand", "VR tab: Charges by hand. Held level: cut across the view.",
-              "Held on edge: along the view. A does not turn it then."),
              (two_tools(), "Charges and another tool", "Take the cutter or grapple with the other hand.",
               "Each hand's trigger and buttons work its own tool."),
              (two_buttons("X", "Y"), "Left hand", "Charges in the left hand: X works as A, Y as B.",

@@ -114,7 +114,6 @@ namespace ShipbreakerVR
                 EnumRow(L("Controller flying", "Controllersteuerung"), VrSettings.ControlScheme),
                 EnumRow(L("Turning", "Drehen"), VrSettings.TurnMode),
                 new BoolRow { Label = L("Simple thrust", "Einfacher Schub"), Entry = VrSettings.SimpleThrust },
-                new BoolRow { Label = L("Charges by hand", "Minen per Hand"), Entry = VrSettings.ChargeByHand },
                 new SliderRow { Label = L("Thrust deadzone (cm)", "Schub-Totzone (cm)"), Entry = VrSettings.ThrustDeadzone, Format = "0", Step = 1f },
                 new SliderRow { Label = L("Full thrust at (cm)", "Voller Schub ab (cm)"), Entry = VrSettings.ThrustFull, Format = "0", Step = 1f },
                 EnumRow(L("Flight globe", "Flugkugel"), VrSettings.FlightGlobe),

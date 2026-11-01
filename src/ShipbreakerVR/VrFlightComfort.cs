@@ -81,42 +81,4 @@ namespace ShipbreakerVR
             if (___mCharge > __state && SimpleThrustPatch.Brakes(___m_Rigidbody, ___m_GrabController, ___m_GrapplingHook, __state)) ___mCharge = __state;
         }
     }
-
-    // Steuerung/MinenPerHand: the cut goes by how the hand holds the charge instead of A.
-    internal static class ChargeHold
-    {
-        private const float Upright = 45f;
-        private const float Margin = 8f;
-
-        // tilt: 0 with the hand level, 90 on edge. Past the middle only by a margin, so it does not flicker there.
-        public static bool OnEdge(float tilt, bool wasOnEdge) => tilt > (wasOnEdge ? Upright - Margin : Upright + Margin);
-
-        public static float Tilt(Quaternion hand, Quaternion head) =>
-            Mathf.Abs(90f - Vector3.Angle(hand * Vector3.right, head * Vector3.up));
-    }
-
-    [HarmonyPatch(typeof(DemoChargeController), "UpdateTargeting")]
-    internal static class ChargeHoldPatch
-    {
-        private static readonly Quaternion Vertical = Quaternion.Euler(0f, 0f, 90f);
-
-        private static void Prefix(ref bool ___mHorizontalCutNext, ref Quaternion ___mCutRotation)
-        {
-            if (!VrSettings.ChargeByHand.Value || !VrAim.Active || VrCamera.Instance == null) return;
-            var hand = VrToolModels.ChargeInLeftHand ? VrInput.Left : VrInput.Right;
-            if (!hand.TryGetAimRotation(out var rotation)) return;
-            var wasOnEdge = ___mHorizontalCutNext == false;
-            var onEdge = ChargeHold.OnEdge(ChargeHold.Tilt(rotation, VrCamera.Instance.HeadRotation), wasOnEdge);
-            if (onEdge == wasOnEdge) return;
-            ___mHorizontalCutNext = !onEdge;
-            ___mCutRotation = onEdge ? Vertical : Quaternion.identity;
-            ((Carbon.Core.Events.IEventBroadcaster)Main.EventSystem).Post(DemoChargeRotationChangedEvent.GetEvent(___mCutRotation));
-        }
-    }
-
-    [HarmonyPatch(typeof(DemoChargeController), "ToggleCutRotation")]
-    internal static class ChargeTogglePatch
-    {
-        private static bool Prefix() => !VrSettings.ChargeByHand.Value;
-    }
 }
