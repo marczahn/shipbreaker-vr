@@ -51,18 +51,34 @@ namespace ShipbreakerVR
     {
         private const float Stopped = 0.01f;
 
+        public static bool Brakes(Rigidbody body, GrabController grab, GrapplingHook grapple, float charge)
+        {
+            if (!VrSettings.SimpleThrust.Value || !VrControls.Flying || VrControls.Holding || VrControls.IsBraking()) return false;
+            if (body.isKinematic || charge <= 0f || body.velocity.magnitude < Stopped) return false;
+            if (grapple.IsSwinging || grapple.GrappledRigidbody != null || grab.IsGrabPreventingThrust) return false;
+            return VrHand.Left.State != HandState.Holding && VrHand.Right.State != HandState.Holding;
+        }
+
         private static void Postfix(Rigidbody ___m_Rigidbody, GrabController ___m_GrabController, GrapplingHook ___m_GrapplingHook, IThrusterData ___mData, ref float ___mCharge)
         {
-            if (!VrSettings.SimpleThrust.Value || !VrControls.Flying || VrControls.Holding || VrControls.IsBraking()) return;
-            if (___m_Rigidbody.isKinematic || ___mCharge <= 0f) return;
-            if (___m_GrapplingHook.IsSwinging || ___m_GrapplingHook.GrappledRigidbody != null || ___m_GrabController.IsGrabPreventingThrust) return;
-            if (VrHand.Left.State == HandState.Holding || VrHand.Right.State == HandState.Holding) return;
+            if (!Brakes(___m_Rigidbody, ___m_GrabController, ___m_GrapplingHook, ___mCharge)) return;
             var velocity = ___m_Rigidbody.velocity;
             var speed = velocity.magnitude;
-            if (speed < Stopped) return;
             var dt = Time.fixedDeltaTime;
             ___m_Rigidbody.velocity = velocity * (SimpleThrust.Slowed(speed, ___mData.BrakingForce * SimpleThrust.Share, dt) / speed);
             ___mCharge = Mathf.Max(___mCharge - ___mData.BrakingDrainPerSecond * SimpleThrust.Share * dt, 0f);
+        }
+    }
+
+    // The game sees no thrust and no brake there and would fill the tank meanwhile, which would make braking pay.
+    [HarmonyPatch(typeof(ThrustController), "Update")]
+    internal static class SimpleThrustChargePatch
+    {
+        private static void Prefix(float ___mCharge, out float __state) => __state = ___mCharge;
+
+        private static void Postfix(Rigidbody ___m_Rigidbody, GrabController ___m_GrabController, GrapplingHook ___m_GrapplingHook, ref float ___mCharge, float __state)
+        {
+            if (___mCharge > __state && SimpleThrustPatch.Brakes(___m_Rigidbody, ___m_GrabController, ___m_GrapplingHook, __state)) ___mCharge = __state;
         }
     }
 
