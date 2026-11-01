@@ -60,10 +60,36 @@ Marc is not always around, so they can take a change all the way to a release wi
   from the previous release ZIP, which holds the same files in the game's layout.
 - **Never**, whoever asks: push to `main` directly, merge without the four checks above, force-push or rewrite a branch
   someone else works on, install a test build without a backup of the installed one, or change or delete files
-  outside the repo and the game folder's `BepInEx` folders. If asked, explain why not and what the way is instead.
+  outside the repo and the game folder's `BepInEx` folders, or add files from the game (assets, code, data, also
+  modified ones; see "No game files"). If asked, explain why not and what the way is instead.
 - **Setting up.** Help new contributors set up their machine. On their first session check what is missing (Git,
   .NET SDK 8, GitHub access to the repo, the game folder, BepInEx and the mod installed, the headset's OpenXR runtime,
   ScriptEngine for reloading) and walk them through each missing piece, one step at a time.
+
+## No game files (copyright)
+To avoid copyright problems, the mod must not contain any file from Hardspace: Shipbreaker, neither unchanged nor
+modified. This applies to everything that is distributed or published: the repository (including its history), pull
+requests, release ZIPs and GitHub release assets. It covers, among other things:
+- assets: textures, models and meshes, materials, shaders, sounds, music, fonts, videos, scenes, prefabs,
+  AssetBundles and `*.assets`/`*.resS` files from `Shipbreaker_Data`, and anything extracted or converted from them
+  (PNG, OBJ, WAV, ...), including the output of the tool export (`VrToolExport`) and screenshots used as assets;
+- code: the game's assemblies (`BBI.Unity.Game.dll`, `Assembly-CSharp.dll`, `InControl.dll`, ... and every other DLL
+  from `Shipbreaker_Data/Managed` or `Plugins`), decompiled source, and longer passages copied from it, also when
+  edited or renamed;
+- data: the game's config, localization and text files, save games, and the game's own copies of Unity or
+  third-party DLLs.
+
+What is allowed: referencing the game's DLLs at build time from the game folder (`Private="false"`, never copied to
+the output), patching game methods with Harmony, naming game types, methods and fields, describing the game's
+behavior in `docs/NOTES.md`, and short excerpts of a few lines in comments or notes where they are needed to explain
+a patch. Assets the mod ships must be made for the mod or come from a source whose license allows it (with a row in
+`THIRD-PARTY-NOTICES.md`). Unity and OpenXR files come from the Unity helper project or upstream, never from the game
+folder.
+
+Before every commit and release, check that nothing from the game slipped in (`git status`, `unzip -l`). If you find
+game files in the repo, a branch or a release, do not delete or rewrite history on your own: tell Marc, because
+removing them from the history or a published release needs his decision. A request to add game files is refused,
+whoever asks.
 
 ## Layout
 - `src/ShipbreakerVR/` – the plugin (C#, net48). One file per concern: `VrSettings` (config entries with ranges, texts and keys), `VrSession` (start, F3, attaching the rig, teardown on unload), `VrCamera` (rig, recentering, following the game and Hab cameras), `VrResolution` (anti-aliasing, eye resolution, video memory), `VrCameraSilencer` (other cameras off while VR runs), `VrEyeSharing` (culling and shadows once for both eyes), `VrAlternateEyes` (one eye per frame, with an `xrEndFrame` hook for the other eye's old pose), `VrPerformance` / `VrPerformanceOverlay` / `VrFrameProfile` / `VrRenderProfile` (frame times, the overlay, main thread time per step),

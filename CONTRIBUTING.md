@@ -66,6 +66,12 @@ Set `[Test] Testmodus = true` in `BepInEx\config\de.marczahn.shipbreakervr.cfg` 
 the shipped Unity packages, for checking that `licenses/` still covers them when a package is upgraded. The steps
 for a release are in `.claude/skills/release/SKILL.md`.
 
+## No game files
+The mod must not contain files from Hardspace: Shipbreaker, unchanged or modified: no assets (textures, models,
+sounds, shaders, AssetBundles, ...), no code (game DLLs, decompiled source) and no game data, neither in the repo nor
+in a release. Reference the game's DLLs from the game folder at build time only. `tools/build-release.sh` refuses to
+build a ZIP that contains a file identical to one in `Shipbreaker_Data`. Details in `CLAUDE.md`, "No game files".
+
 ## Settings file
 All settings are stored in `BepInEx\config\de.marczahn.shipbreakervr.cfg`. The keys are German
 (`Bild/Weltmassstab`, `Steuerung/Drehen`, ...) and stay that way so existing user settings survive.

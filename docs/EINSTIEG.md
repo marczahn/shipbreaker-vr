@@ -127,7 +127,9 @@ nächsten Abschnitt bleibt Claude aber hart.
 - mergen, ohne dass die Prüfungen grün sind, der Code geprüft ist und du getestet hast,
 - einen Branch überschreiben, an dem jemand anderes arbeitet,
 - eine Testversion installieren, ohne vorher ein Backup anzulegen,
-- Dateien außerhalb des Spielordners und des Repos ändern oder löschen.
+- Dateien außerhalb des Spielordners und des Repos ändern oder löschen,
+- Dateien aus dem Spiel in die Mod übernehmen, auch keine veränderten (Bilder, Modelle, Sounds, Code und alles
+  andere). Das wäre eine Urheberrechtsverletzung; die Mod enthält nur eigene oder frei lizenzierte Dateien.
 
 ## Wenn etwas schiefgeht
 
