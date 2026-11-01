@@ -409,7 +409,10 @@ namespace ShipbreakerVR
             secondBeamDot = secondBeamVisible && secondBeamHit && Dotted(VrDualTools.Second);
             cutPoints.Clear();
             if (secondBeamVisible && VrDualTools.Second == EquipmentController.Equipment.CuttingTool)
+            {
                 CutLine(secondBeamStart, secondRotation);
+                VrStingerDots.Add(cutPoints, secondBeamStart);
+            }
             beamVisible = Aiming && TryGetAim(out beamStart, out rotation);
             if (!beamVisible)
             {
@@ -421,6 +424,7 @@ namespace ShipbreakerVR
             }
             beamHit = Cast(beamStart, rotation, out beamEnd, out var hit);
             beamDot = beamHit && Dotted(VrToolModels.Equipped);
+            if (VrToolModels.Equipped == EquipmentController.Equipment.CuttingTool) VrStingerDots.Add(cutPoints, beamStart);
             if (VrToolModels.Equipped == EquipmentController.Equipment.CuttingTool && VrDualTools.Second != EquipmentController.Equipment.CuttingTool)
                 CutLine(beamStart, rotation);
             beamTether = VrTetherMode.Applies(VrToolModels.Equipped) ? VrTetherMode.Targeted(beamStart, rotation * Vector3.forward) : null;

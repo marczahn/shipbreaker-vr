@@ -63,6 +63,7 @@ interacting, the grapple and the "entity of interest".
   along now that the model is in the hand. Before that, with the model in front of the head, `CutRotation` there went
   through a conversion to the hand's cut direction as seen from the head; with the model in the hand that turned the
   rail twice and was removed.
+- `VrStingerDots`: three dots circle the Stinger's end point while `ScalpelController.Target.Part` is set, so within its `Range`.
 - The Stinger (`CutterMode.Scalpel`) is a separate controller: `ScalpelController` (polls `CutterFire`, raycasts along
   `MainCameraTransform`), `ScalpelFXController` and `ScalpelTarget`. They are in both patch lists; without them the
   Stinger ignored the trigger while the Splitsaw worked.
