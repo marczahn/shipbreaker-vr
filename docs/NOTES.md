@@ -960,7 +960,7 @@ With Debug/Diagnose on, Y while walking switches the floor limits off and A then
 
 Own posters (`VrHabCustomPosters`): PNG and JPG files in `BepInExShipbreakerVR-Poster` join `GeneratePosterImageCollection`, at most 2048 pixels, keeping their shape. `HabSavedPosters` holds places in that list, which grows with messages read, so the choice of an own picture is saved by name in `auswahl.txt` there, and the save game gets the empty picture.
 
-The grapple model is at 0.8 of its size while hand aiming is active (`VrGrappleSize`), scaled around `RHandTarget`; its `StickerSlot`s are scaled back up so stickers keep their size.
+The grapple model is at 0.9 of its size while hand aiming is active (`VrGrappleSize`), scaled around `RHandTarget`; its `StickerSlot`s are scaled back up so stickers keep their size.
 
 Comfort in flight (`VrFlightComfort`). Holding the left stick in for 0.5 s while flying turns the rig to the world's up at 90 degrees per second through `VrControls`' turn, keeping the heading; at the end a gaze within 5 degrees of level is turned level, as a head held a little off level left the view off the horizon; a shorter press recenters on release. `Steuerung/EinfacherSchub`: in `ThrustController.FixedUpdate`, without the trigger, brake or a hold, the velocity drops by a third of `BrakingForce` and the charge by a third of `BrakingDrainPerSecond`, with the game's refill held back in `Update`; directly, not through the brake action, which has only full strength.
 
