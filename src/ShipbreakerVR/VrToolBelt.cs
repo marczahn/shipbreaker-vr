@@ -22,6 +22,8 @@ namespace ShipbreakerVR
         private const float HipOutside = 0.35f;
         // The grapple's zone lies further out: from HipSide the hand would reach into the body for it.
         private const float GrappleOut = 0.06f;
+        // And further back, around where it hangs (VrBeltGrapple).
+        private const float GrappleBack = 0.12f;
         private const float HipForward = 0.1f;
         private const float HipBehind = -0.2f;
         // The hip zones are turned this far around the head towards the back, in degrees, so a hand reaching out to the
@@ -83,7 +85,8 @@ namespace ShipbreakerVR
                 var turnedSide = side * HipTurnCos - local.z * HipTurnSin;
                 var turnedForward = local.z * HipTurnCos + side * HipTurnSin;
                 var outward = local.x > 0f ? GrappleOut : 0f;
-                if (turnedForward < HipForward && turnedForward > HipBehind && turnedSide > HipSide + outward && turnedSide < HipOutside + outward) return local.x > 0f ? Zone.Grapple : Zone.DemoCharge;
+                var behind = local.x > 0f ? HipBehind - GrappleBack : HipBehind;
+                if (turnedForward < HipForward && turnedForward > behind && turnedSide > HipSide + outward && turnedSide < HipOutside + outward) return local.x > 0f ? Zone.Grapple : Zone.DemoCharge;
             }
             if (local.magnitude < HelmetReach && local.x > HelmetSide && local.z > ShoulderBehind) return Zone.Scanner;
             if (local.magnitude < HelmetReach && local.x < -HelmetSide && local.z > ShoulderBehind) return Zone.Flashlight;
