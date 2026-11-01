@@ -215,6 +215,8 @@ def main():
              (button("Y"), "Brake", "Y on the left controller.", "Uses the game's own brake, fuel and HUD."),
              (stick_press("R3"), "Pause", "Press the right stick (also in the station).", "On loading screens it shows the next tip."),
              (stick_press("L3"), "Center the view", "Press the left stick, or F4 on the keyboard.", "Puts the view and the menus in front of you again."),
+             (stick_press("L3"), "Get upright", "Hold the left stick in for half a second.", "Back to level, keeping your heading."),
+             (trigger(), "Simple thrust", "VR tab: Simple thrust. Let go of the trigger to stop.", "You brake by yourself, at a third of the brake's strength."),
              (holding(), "Grapple holds something big", "Fly and brake as usual.", "Fly farther than the grapple reaches and the rope snaps."),
          ])
 
@@ -293,6 +295,8 @@ def main():
               "Back only while charges are left."),
              (detonator(), "Detonate", "Trigger with the detonator in the hand.",
               "Blows all placed charges."),
+             (wrist(), "Charges by hand", "VR tab: Charges by hand. Held level: cut across the view.",
+              "Held on edge: along the view. A does not turn it then."),
              (two_tools(), "Charges and another tool", "Take the cutter or grapple with the other hand.",
               "Each hand's trigger and buttons work its own tool."),
              (two_buttons("X", "Y"), "Left hand", "Charges in the left hand: X works as A, Y as B.",

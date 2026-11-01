@@ -86,6 +86,8 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | Brake | Press Y. |
 | Open the pause menu | Press the right stick (also in the station). |
 | Put the view back in front of me | Press the left stick (or F4 on the keyboard). |
+| Get upright again | Hold the left stick in for half a second. You turn back to level, keeping your heading. |
+| Stop by letting go | Switch on **Simple thrust** in the VR tab: without the left trigger you brake to a stop by yourself. |
 | Fly while the grapple holds something big | Fly and brake as usual. If you fly farther away than the grapple reaches, the rope snaps. |
 
 ### Your hands

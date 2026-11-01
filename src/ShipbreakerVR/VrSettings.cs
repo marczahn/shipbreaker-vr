@@ -31,6 +31,8 @@ namespace ShipbreakerVR
         public static ConfigEntry<float> MenuWidth;
         public static ConfigEntry<bool> FlipUi;
         public static ConfigEntry<bool> MonitorLook;
+        public static ConfigEntry<bool> SimpleThrust;
+        public static ConfigEntry<bool> ChargeByHand;
         public static ConfigEntry<bool> FreeWalking;
         public static ConfigEntry<VrHelmet.Mode> Helmet;
         public static ConfigEntry<VrResolution.AntiAliasing> AntiAliasing;
@@ -200,6 +202,10 @@ namespace ShipbreakerVR
                     "Zeigt links oben in Visier und Menüs die Bildrate: Bilder pro Sekunde, die Rate des Headsets, den Anteil der Bilder, die sie verpasst haben, die Zeit des Hauptthreads für Spiellogik und für das Vorbereiten des Renderns, und die Einstellungen, die sie beeinflussen."),
                 "While it is on, frame times are also logged every 30 s, as with Debug/Diagnose.");
             FlipUi = Bind("Anzeige", "UiSpiegeln", false, "Flip the UI vertically in case it is upside down.");
+            SimpleThrust = Bind("Steuerung", "EinfacherSchub", false,
+                "Thrust only lasts while you hold it: let go of the left trigger and you brake to a stop by yourself, at a third of the brake's strength and fuel. Not while holding on or with the grapple.");
+            ChargeByHand = Bind("Steuerung", "MinenPerHand", false,
+                "The demo charge's cut follows your hand: held level it runs across your view, held on edge along it. A no longer turns it.");
             FreeWalking = Bind("Station", "FreiGehen", false,
                 "Walk through the station instead of hopping between its spots. Replaces the spots: sitting on the bed A stands up, the left stick walks, the right stick turns in steps, the triggers change the poster you look at, and A uses the screen or door you stand at. Walking with a stick can make you feel sick.");
             MonitorLook = Bind("Anzeige", "MonitorEffekt", true,

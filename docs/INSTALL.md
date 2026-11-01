@@ -44,7 +44,7 @@ both; full thrust always stays at least 5 cm beyond the deadzone.
 
 The right stick turns (left/right) and pitches (up/down), the further, the faster; it needs no trigger. The row "Turning"
 switches turning to steps of 30, 45 or 90 degrees per flick. Y brakes. Pressing the right stick opens the pause menu
-(also in the station), pressing the left stick recenters the view. Mouse, keyboard and gamepad keep working.
+(also in the station), pressing the left stick recenters the view, and holding it in for half a second while flying straightens you up. Mouse, keyboard and gamepad keep working.
 
 While the grapple holds something heavy, the flat game stops thrust and brake and lets you swing on the rope instead.
 With controller flying you keep flying and braking as usual; the rope keeps pulling, and it snaps if you fly farther
