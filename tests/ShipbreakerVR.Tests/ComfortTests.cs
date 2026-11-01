@@ -14,6 +14,15 @@ namespace ShipbreakerVR.Tests
         }
 
         [Fact]
+        public void APortraitKeepsItsColorsInsideTheCard()
+        {
+            var card = PortraitCard.Cut(new[] { new UnityEngine.Color32(10, 20, 30, 0) }, new[] { new UnityEngine.Color32(200, 5, 0, 255) });
+            Assert.Equal(10, card[0].r);
+            Assert.Equal(30, card[0].b);
+            Assert.Equal(200, card[0].a);
+        }
+
+        [Fact]
         public void BrakesByTheStep()
         {
             Assert.Equal(1.5f, SimpleThrust.Slowed(2f, 1f, 0.5f), 3);
