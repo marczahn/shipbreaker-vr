@@ -23,6 +23,18 @@ namespace ShipbreakerVR.Tests
         }
 
         [Fact]
+        public void APushGrowsWithTheHandsWay()
+        {
+            Assert.Equal(150f, BracedPush.Force(new UnityEngine.Vector3(0.05f, 0f, 0f)).x, 2);
+        }
+
+        [Fact]
+        public void APushStopsAtItsLimit()
+        {
+            Assert.Equal(300f, BracedPush.Force(new UnityEngine.Vector3(0f, 0.5f, 0f)).y, 2);
+        }
+
+        [Fact]
         public void BrakesByTheStep()
         {
             Assert.Equal(1.5f, SimpleThrust.Slowed(2f, 1f, 0.5f), 3);

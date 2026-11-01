@@ -226,6 +226,7 @@ interacting, the grapple and the "entity of interest".
   `m_CutOriginOffset`, Stinger `ScalpelFXController.m_CutOriginTransform` + `m_CutOriginOffset`. The muzzle's offset to
   the point is measured in `Place` and applied to the current hand pose in `VrAim` (which runs in the game's update,
   before `Place`). Without a tool model the aim stays on the hand's aim pose.
+- `Steuerung/SchwereTeileSchieben` (`BracedPush`): braced on something fixed, the other hand pushes parts of 30 kg to 5 t with up to 300 N, also those above the grab mass range. Off by default.
 - `VrBeltGrapple`: a runtime copy of the grapple's visible parts hangs at the right hip while it is not in a hand, grip in the middle of the zone, which lies 6 cm further out than the left hip's.
 - Tool belt (`VrToolBelt`): zones relative to the head in tracking space, turned with the head's heading (x right,
   y up, z forward): hips below -0.45 m and less than 0.25 m forward, right of +0.08 m grapple, left of -0.08 m demo

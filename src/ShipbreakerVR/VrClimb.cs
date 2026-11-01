@@ -22,6 +22,8 @@ namespace ShipbreakerVR
     // is an impact to the game (PlayerMotion.OnCollisionEnter: sound, sparks, shake and damage). So a sweep along the
     // velocity stops the body just short of anything ahead (KeepClear), and what still touches the thing held at low
     // speed is no impact (Soft, ImpactPatch). The colliders stay on, so the body does not go through it.
+    // Steuerung/SchwereTeileSchieben: with one hand braced on something fixed, the other works a heavy part with a limited
+    // force (Pushes, BracedPush): it gathers speed slowly, keeps it, and is out of reach when the hold tears off.
     internal static class VrClimb
     {
         static VrClimb() => VrSession.OnUnload("climbing", Release);
@@ -301,14 +303,14 @@ namespace ShipbreakerVR
             foreach (var hand in Hands)
             {
                 if (!hand.Holding) continue;
-                var error = Hold(hand) - PullPoint(hand);
+                var error = Hold(hand) - (Pushes(hand) ? HandWorld(hand) : PullPoint(hand));
                 if (!blocked && error.magnitude > (hand.Firm || hand.Follower ? 2f : 1f) * TearOff * VrCamera.WorldScale) LetGo(hand, false, $"held back {error.magnitude:0.00} m from the hold");
                 else holding++;
             }
             // A firmly held part goes with the hand and pulls at nothing.
             var pulling = 0;
             foreach (var hand in Hands)
-                if (hand.Holding && !hand.Firm && !hand.Follower) pulling++;
+                if (hand.Holding && !hand.Firm && !hand.Follower && !Pushes(hand)) pulling++;
             if (pulling == 0)
             {
                 blocked = false;
@@ -324,6 +326,11 @@ namespace ShipbreakerVR
             {
                 if (!hand.Holding || hand.Firm || hand.Follower) continue;
                 var hold = Hold(hand);
+                if (Pushes(hand))
+                {
+                    hand.Body.AddForceAtPosition(BracedPush.Force(HandWorld(hand) - hold), hold, ForceMode.Force);
+                    continue;
+                }
                 var error = hold - PullPoint(hand);
                 var holdVelocityHere = hand.Body != null ? hand.Body.GetPointVelocity(hold) : Vector3.zero;
                 holdsVelocity += holdVelocityHere;
@@ -566,6 +573,16 @@ namespace ShipbreakerVR
 
         private static Vector3 Hold(Hand hand) => hand.Anchor.TransformPoint(hand.Point);
 
+        // That hand works a heavy part while the other is braced on something that does not move.
+        private static bool Pushes(Hand hand)
+        {
+            var body = hand.Body;
+            if (!VrSettings.BracedPush.Value || !hand.Holding || hand.Firm || hand.Follower || body == null || body.isKinematic) return false;
+            if (body.gameObject.layer == StaticLayer || body.mass <= FirmMass || body.mass > BracedPush.MaxMass) return false;
+            var other = hand == LeftHand ? RightHand : LeftHand;
+            return other.Holding && !other.Movable && other.Body != body;
+        }
+
         // Where that controller's hand holds on, if it does, for the game's hand (VrHands.Pose).
         public static bool TryGetHold(VrInput.Hand input, out Vector3 point)
         {
@@ -721,5 +738,21 @@ namespace ShipbreakerVR
             AccessTools.Method(AccessTools.TypeByName("BBI.Unity.Game.PlayerMotion"), "OnCollisionEnter", new[] { typeof(Collision) });
 
         private static bool Prefix(Collision collision) => !VrClimb.Soft(collision);
+    }
+
+    internal static class BracedPush
+    {
+        // Somewhat more than a person could, not enough to replace the grapple.
+        public const float MaxForce = 300f;
+        public const float MaxMass = 5000f;
+        // Newtons per meter the hand is away from its hold: the full force comes at 10 cm.
+        private const float Stiffness = 3000f;
+
+        // The force on the hold, towards the hand.
+        public static Vector3 Force(Vector3 toHand)
+        {
+            var force = toHand * Stiffness;
+            return force.magnitude > MaxForce ? force.normalized * MaxForce : force;
+        }
     }
 }
