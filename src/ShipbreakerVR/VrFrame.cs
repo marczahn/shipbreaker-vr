@@ -64,6 +64,7 @@ namespace ShipbreakerVR
         {
             ("climbing", VrClimb.RigPlaced),
             ("tool models", VrToolModels.Place),
+            ("belt grapple", VrBeltGrapple.Update),
         };
 
         // From the VR camera's Update, FixedUpdate and LateUpdate, and from FollowGameCamera once the rig is placed.

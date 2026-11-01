@@ -33,6 +33,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> FlipUi;
         public static ConfigEntry<bool> MonitorLook;
         public static ConfigEntry<VrFlightComfort.Thrust> ThrustMode;
+        public static ConfigEntry<bool> BeltGrapple;
         public static ConfigEntry<bool> FreeWalking;
         public static ConfigEntry<VrHelmet.Mode> Helmet;
         public static ConfigEntry<VrResolution.AntiAliasing> AntiAliasing;
@@ -206,6 +207,8 @@ namespace ShipbreakerVR
                 ("What happens when you stop thrusting. Simple: thrust only lasts while you hold it, you brake to a stop by yourself at a third of the brake's strength and fuel, not while holding on or with the grapple. Standard: as in the game, its auto brake slows you to 1 m/s after 3 seconds. Realistic: no auto brake, you keep your speed.",
                     "Was passiert, wenn du keinen Schub gibst. Einfach: Schub wirkt nur, solange du ihn hältst, du bremst von selbst bis zum Stillstand, mit einem Drittel der Bremskraft und des Treibstoffs, nicht beim Festhalten oder mit dem Grappler. Standard: wie im Spiel, seine automatische Bremse verlangsamt dich nach 3 Sekunden auf 1 m/s. Realistisch: keine automatische Bremse, du behältst dein Tempo."),
                 (new[] { "Simple", "Standard", "Realistic" }, new[] { "Einfach", "Standard", "Realistisch" }));
+            BeltGrapple = Bind("Steuerung", "GrapplerAmKoerper", true,
+                "Shows the grapple at your right hip, where you draw it from, while it is not in a hand.");
             FreeWalking = Bind("Station", "FreiGehen", false,
                 "Walk through the station instead of hopping between its spots. Replaces the spots: sitting on the bed A stands up, the left stick walks, the right stick turns in steps, the triggers change the poster you look at, and A uses the screen or door you stand at. Walking with a stick can make you feel sick.");
             MonitorLook = Bind("Anzeige", "MonitorEffekt", true,
