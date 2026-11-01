@@ -19,9 +19,7 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
 - Own posters: put PNG or JPG files into `BepInExShipbreakerVR-Poster`, the folder appears after the first visit to the station. They join the pictures you can choose for the posters there.
 - **F7** at one of the station's monitors switches its screen look.
 - For bug reports, set `Diagnose = true` under `[Debug]` in `BepInEx\config\de.marczahn.shipbreakervr.cfg`. Then
-  **F8** or **B and Y together** writes what is drawn around you into the log, and load screens and frame times are logged too. With
-  `WerkzeugExport = true`, **Shift+F8** saves the model of the tool in your hand (textures, mesh, UV layout) to
-  `BepInEx\ShipbreakerVR-tools`, for modding work.
+  **F8** or **B and Y together** writes what is drawn around you into the log, and load screens and frame times are logged too.
 - The keys can be changed under `[Tasten]` in the config file, for example `AnsichtZentrieren = F9` or
   `VrAnAus = F3 + LeftControl`.
 - The station between shifts has its own render resolution, the row "Station resolution" in the VR tab. If the view wobbles

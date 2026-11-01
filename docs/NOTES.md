@@ -938,8 +938,7 @@ as `Hands: left Empty -> GameTool (GrappleHook)`, and F8 lists both hands.
 
 ## Diagnostics
 The tools below are off by default, so players' logs stay readable: config `Debug/Diagnose` turns on F8, the automatic
-dump in the Hab, the load trace and the frame time statistics (`VrPerformance`); `Debug/WerkzeugExport` turns on
-Shift+F8.
+dump in the Hab, the load trace and the frame time statistics (`VrPerformance`).
 
 After patching, `PatchReport` logs one line per transpiler, `Patch <name>: N call(s) redirected in M method(s)`. It
 warns when a transpiler reached fewer methods than with game 1.3.0.1263554, or redirected nothing in one of them: a
@@ -979,15 +978,6 @@ shows up), and the visible renderers within 4 m that reach above eye height. It 
 enters the Hab, for things that show right after waking up. Directions are relative to the gaze: "ahead 10, up 60"
 is 10 degrees right of where the head points and 60 degrees above the horizon. It also saves the UI texture and the
 game window as PNG files to `BepInEx\ShipbreakerVR-F8`.
-
-Shift+F8 (`VrToolExport`) saves the model of the tool in the hand to `BepInEx\ShipbreakerVR-tools\<time>-<tool>`, for
-retexturing it: the log lists each renderer under the equipment point with its mesh, materials (shader, keywords, the
-main HDRP Lit values) and textures (size, format, filtering). The textures are saved as PNG (through a render texture,
-since the game's are not CPU-readable; normal, mask and detail maps as linear data). Where the mesh is readable it is
-also saved as OBJ, and per submesh the log gives the texture resolution per side of the tool (texels per cm, by the
-face normal in the equipment point's axes) and a PNG shows the UV layout over the base color, right side red, left
-blue, top/bottom green, front/back gray. That shows whether the right side has its own texture space or shares the
-left side's.
 
 ## The cutter's right side
 The flat game only ever showed the cutter (`SM_CuttingTool_02` on `PRF_CuttingTool_02`, shader

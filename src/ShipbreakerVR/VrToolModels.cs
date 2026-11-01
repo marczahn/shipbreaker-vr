@@ -120,16 +120,6 @@ namespace ShipbreakerVR
             }
         }
 
-        // The point the equipped tool's model hangs on (VrToolExport).
-        public static Transform EquipmentPoint
-        {
-            get
-            {
-                var hand = RightHand();
-                return hand != null ? hand.EquipmentGeoTransform : null;
-            }
-        }
-
         private static int Key(EquipmentController.Equipment equipment)
         {
             if (equipment != EquipmentController.Equipment.CuttingTool) return (int)equipment;

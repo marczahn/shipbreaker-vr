@@ -55,14 +55,12 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> Climbing;
         public static ConfigEntry<bool> UprightBody;
         public static ConfigEntry<bool> Diagnostics;
-        public static ConfigEntry<bool> ToolExport;
         public static ConfigEntry<bool> TestMode;
         public static ConfigEntry<bool> MockRuntime;
         public static ConfigEntry<KeyboardShortcut> ToggleVrKey;
         public static ConfigEntry<KeyboardShortcut> CenterKey;
         public static ConfigEntry<KeyboardShortcut> MonitorLookKey;
         public static ConfigEntry<KeyboardShortcut> DiagnosticsKey;
-        public static ConfigEntry<KeyboardShortcut> ToolExportKey;
         public static ConfigEntry<KeyboardShortcut> EyeSharingKey;
         public static ConfigEntry<KeyboardShortcut> AlternateEyesKey;
 
@@ -162,8 +160,6 @@ namespace ShipbreakerVR
 
             Diagnostics = Bind("Debug", "Diagnose", false,
                 "For finding problems: Tasten/Diagnose (F8, or B and Y together) writes what is drawn around the player into the log and saves screenshots next to it (also on its own 6 s after entering the Hab), load screens are logged frame by frame, and frame times are logged every 30 s.");
-            ToolExport = Bind("Debug", "WerkzeugExport", false,
-                "Tasten/WerkzeugExport (Shift+F8) saves the model of the tool in the hand (meshes, textures, UV layouts) to BepInEx\\ShipbreakerVR-tools, for retexturing it.");
             TestMode = Bind("Test", "Testmodus", false,
                 "For development: test scripts dropped into BepInEx\\ShipbreakerVR-test\\inbox move the head and the controllers and press their buttons, and save screenshots and logs to ...\\results (see VrTestScript). Needs a restart to switch on.");
             MockRuntime = Bind("Test", "MockRuntime", false,
@@ -248,8 +244,6 @@ namespace ShipbreakerVR
                 "Switches the screen look of the station's monitors (Anzeige/MonitorEffekt) on and off while a monitor shows.");
             DiagnosticsKey = Bind("Tasten", "Diagnose", new KeyboardShortcut(KeyCode.F8),
                 "With Debug/Diagnose on: writes what is drawn around the player into the log and saves screenshots.");
-            ToolExportKey = Bind("Tasten", "WerkzeugExport", new KeyboardShortcut(KeyCode.F8, KeyCode.LeftShift),
-                "With Debug/WerkzeugExport on: saves the model of the tool in the hand.");
             EyeSharingKey = Bind("Tasten", "AugenTeilen", new KeyboardShortcut(KeyCode.F10),
                 "Switches Rendering/AugenTeilen on and off.");
             AlternateEyesKey = Bind("Tasten", "AugenAbwechselnd", new KeyboardShortcut(KeyCode.F11),
