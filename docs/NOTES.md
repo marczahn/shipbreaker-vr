@@ -63,6 +63,7 @@ interacting, the grapple and the "entity of interest".
   along now that the model is in the hand. Before that, with the model in front of the head, `CutRotation` there went
   through a conversion to the hand's cut direction as seen from the head; with the model in the hand that turned the
   rail twice and was removed.
+- `VrStingerDots`: three dots circle the Stinger's end point while `ScalpelController.Target.Part` is set, so within its `Range`.
 - The Stinger (`CutterMode.Scalpel`) is a separate controller: `ScalpelController` (polls `CutterFire`, raycasts along
   `MainCameraTransform`), `ScalpelFXController` and `ScalpelTarget`. They are in both patch lists; without them the
   Stinger ignored the trigger while the Splitsaw worked.
@@ -225,6 +226,8 @@ interacting, the grapple and the "entity of interest".
   `m_CutOriginOffset`, Stinger `ScalpelFXController.m_CutOriginTransform` + `m_CutOriginOffset`. The muzzle's offset to
   the point is measured in `Place` and applied to the current hand pose in `VrAim` (which runs in the game's update,
   before `Place`). Without a tool model the aim stays on the hand's aim pose.
+- `Steuerung/SchwereTeileSchieben` (`BracedPush`): braced on something fixed, the other hand pushes parts of 30 kg to 5 t with up to 250 N, also those above the grab mass range. Off by default.
+- `VrBeltGrapple`: a runtime copy of the grapple's visible parts hangs at the right hip while it is not in a hand, grip in the middle of the zone, which lies 6 cm further out than the left hip's.
 - Tool belt (`VrToolBelt`): zones relative to the head in tracking space, turned with the head's heading (x right,
   y up, z forward): hips below -0.45 m and less than 0.25 m forward, right of +0.08 m grapple, left of -0.08 m demo
   charges; the right side of the helmet (within 0.22 m, x > 0.06, z > -0.05) scanner; over the shoulder (y > -0.12,
@@ -937,8 +940,7 @@ as `Hands: left Empty -> GameTool (GrappleHook)`, and F8 lists both hands.
 
 ## Diagnostics
 The tools below are off by default, so players' logs stay readable: config `Debug/Diagnose` turns on F8, the automatic
-dump in the Hab, the load trace and the frame time statistics (`VrPerformance`); `Debug/WerkzeugExport` turns on
-Shift+F8.
+dump in the Hab, the load trace and the frame time statistics (`VrPerformance`).
 
 After patching, `PatchReport` logs one line per transpiler, `Patch <name>: N call(s) redirected in M method(s)`. It
 warns when a transpiler reached fewer methods than with game 1.3.0.1263554, or redirected nothing in one of them: a
@@ -960,7 +962,13 @@ With Debug/Diagnose on, Y while walking switches the floor limits off and A then
 
 Own posters (`VrHabCustomPosters`): PNG and JPG files in `BepInExShipbreakerVR-Poster` join `GeneratePosterImageCollection`, at most 2048 pixels, keeping their shape. `HabSavedPosters` holds places in that list, which grows with messages read, so the choice of an own picture is saved by name in `auswahl.txt` there, and the save game gets the empty picture.
 
-`Station/FreiGehen` (`VrHabWalk`, off by default): it replaces the spots: on `BedSitting_Virtual_Camera` the sticks and the game's prompts are out, A stands up, there is no way back to the bed; the game stays on that spot, only the rig leaves it, at `HabStanding.Height`, inside `HabFloor.Outline`, a floor edge Raik walked and measured, then smoothed to 47 points (no walls or floor have colliders), 10 cm in from it. Left stick walks along the head's heading, right stick turns 45 degrees. `HabScreenFilterPatch` keeps the base post-processing off at screens while walking. `VrHabStations`: near the terminal, workbench or exit one looks at, a prompt shows and A takes the game's own way to them from any spot, X the exit from anywhere; the rig stays, except that the exit, reachable from 3 m, puts it 1 m from its wall. When the screen closes the game goes back to the bed spot. No fades while walking: the rig does not move. The poster looked at from within 1.2 m gets the game's border, and the triggers change its picture through a `Hab3DPosterLocation` (`VrHabPosters`), without the game's poster spots. While walking the spot's frames are off the canvas and the sticks, A, B and X do not reach the game, unless a screen is open.
+The grapple model is at 0.9 of its size while hand aiming is active (`VrGrappleSize`), scaled around `RHandTarget`; its `StickerSlot`s are scaled back up so stickers keep their size.
+
+Comfort in flight (`VrFlightComfort`). Holding the left stick in for 0.5 s while flying turns the rig to the world's up at 90 degrees per second through `VrControls`' turn, keeping the heading; at the end a gaze within 5 degrees of level is turned level, as a head held a little off level left the view off the horizon; a shorter press recenters on release. `Steuerung/EinfacherSchub`: in `ThrustController.FixedUpdate`, without the trigger, brake or a hold, the velocity drops by a third of `BrakingForce` and the charge by a third of `BrakingDrainPerSecond`, with the game's refill held back in `Update`; directly, not through the brake action, which has only full strength.
+
+`Station/FreiGehen` (`VrHabWalk`, off by default): it replaces the spots: on `BedSitting_Virtual_Camera` the sticks and the game's prompts are out, A stands up, there is no way back to the bed; the game stays on that spot, only the rig leaves it, at `HabStanding.Height`, inside `HabFloor.Outline`, a floor edge Raik walked and measured, then smoothed to 47 points (no walls or floor have colliders), 10 cm in from it. Left stick walks along the head's heading, right stick turns 45 degrees. `HabScreenFilterPatch` keeps the base post-processing off with this option from waking up on, except towards the exit, which leaves it on for the shift. `VrHabStations`: near the terminal, workbench or exit one looks at, a prompt shows and A takes the game's own way to them from any spot, X the exit from anywhere; the rig stays, except that the exit, reachable from 3 m, puts it 1 m from its wall. When the screen closes the game goes back to the bed spot. No fades while walking: the rig does not move. The poster looked at from within 1.2 m gets the game's border, and the triggers change its picture through a `Hab3DPosterLocation` (`VrHabPosters`), without the game's poster spots. While walking the spot's frames are off the canvas and the sticks, A, B and X do not reach the game, unless a screen is open.
+
+The speakers' portraits (`SubtitleTalkingHeadContainer`) use `Lynx/Portrait_UI`, whose picture did not show in the UI camera's texture although `Head_Image` was active on the canvas. In VR they get the plain UI material (`PortraitPatch`), which loses the game's scan lines and shake. A portrait's alpha marks only its background and is 0 on the person, and `_CutoutTex` (red) cuts the card out of the 512 square, so `PortraitPatch` builds a texture per portrait with the colors and that red as alpha.
 
 In the Hab each dump also writes `BepInExShipbreakerVR-hab-survey.txt` (`VrHabSurvey`): spots, ways, what blocks them, colliders and renderer boxes in the room's axes, the floor plan for walking through the Hab.
 
@@ -972,15 +980,6 @@ shows up), and the visible renderers within 4 m that reach above eye height. It 
 enters the Hab, for things that show right after waking up. Directions are relative to the gaze: "ahead 10, up 60"
 is 10 degrees right of where the head points and 60 degrees above the horizon. It also saves the UI texture and the
 game window as PNG files to `BepInEx\ShipbreakerVR-F8`.
-
-Shift+F8 (`VrToolExport`) saves the model of the tool in the hand to `BepInEx\ShipbreakerVR-tools\<time>-<tool>`, for
-retexturing it: the log lists each renderer under the equipment point with its mesh, materials (shader, keywords, the
-main HDRP Lit values) and textures (size, format, filtering). The textures are saved as PNG (through a render texture,
-since the game's are not CPU-readable; normal, mask and detail maps as linear data). Where the mesh is readable it is
-also saved as OBJ, and per submesh the log gives the texture resolution per side of the tool (texels per cm, by the
-face normal in the equipment point's axes) and a PNG shows the UV layout over the base color, right side red, left
-blue, top/bottom green, front/back gray. That shows whether the right side has its own texture space or shares the
-left side's.
 
 ## The cutter's right side
 The flat game only ever showed the cutter (`SM_CuttingTool_02` on `PRF_CuttingTool_02`, shader

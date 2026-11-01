@@ -19,6 +19,7 @@ tools off your suit and aim them with your hands, and use the menus with your mo
 - [What does not work yet](#what-does-not-work-yet)
 - [Getting help and reporting bugs](#getting-help-and-reporting-bugs)
 - [Uninstalling](#uninstalling)
+- [Keeping it free](#keeping-it-free)
 - [Thanks](#thanks)
 
 ## What you get
@@ -86,6 +87,8 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | Brake | Press Y. |
 | Open the pause menu | Press the right stick (also in the station). |
 | Put the view back in front of me | Press the left stick (or F4 on the keyboard). |
+| Get upright again | Hold the left stick in for half a second. You turn back to level, keeping your heading. |
+| Stop by letting go | Set **Thrust mode** to Simple in the VR tab: without the left trigger you brake to a stop by yourself. |
 | Fly while the grapple holds something big | Fly and brake as usual. If you fly farther away than the grapple reaches, the rope snaps. |
 
 ### Your hands
@@ -263,6 +266,13 @@ That has not been tested.
 To switch off the mod, delete the file `winhttp.dll` in the game folder. To remove it completely, also delete the
 `BepInEx` folder there. The [installation guide](docs/INSTALL.md#uninstall) lists the few remaining files, which do
 nothing on their own.
+
+## Keeping it free
+
+This mod is a free fan project, and we want it to stay that way. Please do not sell it, put it behind a paywall or
+otherwise make money with it, and if you share or build on it, please credit
+**[marczahn](https://github.com/marczahn)** and **[Bobmightypirate](https://github.com/Bobmightypirate)**. This is our
+request to you; the legal terms are in [LICENSE](LICENSE).
 
 ## Thanks
 

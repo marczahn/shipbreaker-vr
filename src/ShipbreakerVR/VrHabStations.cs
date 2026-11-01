@@ -39,6 +39,8 @@ namespace ShipbreakerVR
         private static bool closing;
         private static float waitingSince;
 
+        public static bool AtExit => Using && target == ExitSpot;
+
         // True while the game has a screen open or is on its way there or back.
         public static bool Using { get; private set; }
 

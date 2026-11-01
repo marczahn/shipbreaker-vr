@@ -74,7 +74,7 @@ namespace ShipbreakerVR.Tests
         [InlineData(0.25f, -0.6f, -0.1f, (int)Zone.Grapple)]
         [InlineData(-0.25f, -0.6f, -0.1f, (int)Zone.DemoCharge)]
         [InlineData(0.45f, -0.6f, -0.1f, (int)Zone.None)]
-        [InlineData(0.2f, -0.6f, -0.35f, (int)Zone.None)]
+        [InlineData(0.2f, -0.6f, -0.55f, (int)Zone.None)]
         [InlineData(0.2f, -0.95f, 0f, (int)Zone.None)]
         [InlineData(0.1f, 0.1f, -0.3f, (int)Zone.Cutter)]
         [InlineData(0.15f, 0f, 0.05f, (int)Zone.Scanner)]

@@ -120,6 +120,16 @@ namespace ShipbreakerVR
 
         public bool IsConverted(Canvas canvas) => converted.ContainsKey(canvas);
 
+        // UI that comes up later under a canvas keeps the layer it had, which the UI camera may not draw.
+        public void Adopt(Transform part)
+        {
+            var canvas = part.GetComponentInParent<Canvas>();
+            var root = canvas != null ? canvas.rootCanvas : null;
+            nextScan = 0f;
+            Plugin.Log.LogInfo($"UI added: '{VrUtil.Path(part)}' layer {part.gameObject.layer}, root canvas '{(root != null ? root.name : "-")}' {(root != null ? root.renderMode.ToString() : "-")}, {(root != null && converted.ContainsKey(root) ? "on the VR canvas" : "not on the VR canvas")}");
+            if (root != null && converted.ContainsKey(root)) SetLayer(part, LayerFor(root));
+        }
+
         // How dark the hidden fades would make the screen, 0 to 1.
         public float FadeAlpha()
         {
@@ -191,6 +201,109 @@ namespace ShipbreakerVR
         {
             t.gameObject.layer = layer;
             for (var i = 0; i < t.childCount; i++) SetLayer(t.GetChild(i), layer);
+        }
+    }
+
+    // The speakers' portraits draw with the game's Lynx/Portrait_UI, whose picture stays away in the texture our UI
+    // camera renders into, though the image is there and active. That shader takes the picture from the texture's colors
+    // only: its alpha marks the background for the game's own, and the red of _CutoutTex cuts the card out of the
+    // square. So each portrait becomes a texture with that card as its alpha, for the plain UI material. The game's
+    // scan lines and shaking go with its shader; they only set values on the image's material, a copy of our own here.
+    [HarmonyPatch(typeof(SubtitleTalkingHeadContainer), nameof(SubtitleTalkingHeadContainer.ShowHeadImage))]
+    internal static class PortraitPatch
+    {
+        static PortraitPatch() => VrSession.OnUnload("portraits", Release);
+
+        private const string Cutout = "_CutoutTex";
+
+        private static readonly Dictionary<Sprite, Sprite> cards = new Dictionary<Sprite, Sprite>();
+        private static Texture cutout;
+        private static Material game;
+
+        private static void Postfix(UnityEngine.UI.Image ___m_PortraitImage)
+        {
+            var image = ___m_PortraitImage;
+            // Without VR the game's own material draws the game's own picture.
+            if (!VrXr.IsRunning)
+            {
+                if (game != null) image.material = game;
+                return;
+            }
+            if (image.sprite == null) return;
+            if (image.material.HasProperty(Cutout))
+            {
+                game = image.material;
+                cutout = game.GetTexture(Cutout);
+                image.material = new Material(Shader.Find("UI/Default"));
+            }
+            if (cutout == null) return;
+            if (!cards.TryGetValue(image.sprite, out var card) || card == null)
+            {
+                card = Card(image.sprite);
+                cards[image.sprite] = card;
+                Plugin.Log.LogInfo($"Portrait '{image.sprite.name}' cut to its card");
+            }
+            image.sprite = card;
+        }
+
+        private static void Release()
+        {
+            foreach (var card in cards.Values)
+            {
+                if (card == null) continue;
+                Object.Destroy(card.texture);
+                Object.Destroy(card);
+            }
+            cards.Clear();
+        }
+
+        private static Sprite Card(Sprite portrait)
+        {
+            var size = portrait.texture.width;
+            var card = new Texture2D(size, size, TextureFormat.RGBA32, false) { hideFlags = HideFlags.HideAndDontSave };
+            card.SetPixels32(PortraitCard.Cut(Pixels(portrait.texture, size, RenderTextureReadWrite.sRGB), Pixels(cutout, size, RenderTextureReadWrite.Linear)));
+            card.Apply();
+            var sprite = Sprite.Create(card, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f));
+            sprite.hideFlags = HideFlags.HideAndDontSave;
+            return sprite;
+        }
+
+        private static Color32[] Pixels(Texture texture, int size, RenderTextureReadWrite space)
+        {
+            var target = RenderTexture.GetTemporary(size, size, 0, RenderTextureFormat.ARGB32, space);
+            var previous = RenderTexture.active;
+            Graphics.Blit(texture, target);
+            RenderTexture.active = target;
+            var copy = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            copy.ReadPixels(new Rect(0f, 0f, size, size), 0, 0);
+            RenderTexture.active = previous;
+            RenderTexture.ReleaseTemporary(target);
+            var pixels = copy.GetPixels32();
+            Object.Destroy(copy);
+            return pixels;
+        }
+    }
+
+    internal static class PortraitCard
+    {
+        // The picture's colors, seen where the red of the cutout says so.
+        public static Color32[] Cut(Color32[] picture, Color32[] cutout)
+        {
+            var card = new Color32[picture.Length];
+            for (var i = 0; i < picture.Length; i++)
+                card[i] = new Color32(picture[i].r, picture[i].g, picture[i].b, cutout[i].r);
+            return card;
+        }
+    }
+
+    // The yes/no prompts (quitting from the main menu) come from a pool, on the layer they last had.
+    [HarmonyPatch(typeof(LynxPopupContainer), "OnShowLynxPopup")]
+    internal static class PopupLayerPatch
+    {
+        private static void Postfix(Transform ___m_PopupContainer)
+        {
+            var ui = VrUi.Instance;
+            if (ui != null && ui.Active && ___m_PopupContainer != null) ui.Adopt(___m_PopupContainer);
         }
     }
 

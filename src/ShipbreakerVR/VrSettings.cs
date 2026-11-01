@@ -25,12 +25,17 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> PerformanceOverlay;
         public static ConfigEntry<bool> UiInVr;
         public static ConfigEntry<float> HudDistance;
+        public static ConfigEntry<float> MonitorSharpness;
+        public static ConfigEntry<float> HudHeight;
         public static ConfigEntry<float> HudScale;
         public static ConfigEntry<VrUi.Steadying> HudSteadying;
         public static ConfigEntry<float> MenuDistance;
         public static ConfigEntry<float> MenuWidth;
         public static ConfigEntry<bool> FlipUi;
         public static ConfigEntry<bool> MonitorLook;
+        public static ConfigEntry<VrFlightComfort.Thrust> ThrustMode;
+        public static ConfigEntry<bool> BeltGrapple;
+        public static ConfigEntry<bool> BracedPush;
         public static ConfigEntry<bool> FreeWalking;
         public static ConfigEntry<VrHelmet.Mode> Helmet;
         public static ConfigEntry<VrResolution.AntiAliasing> AntiAliasing;
@@ -44,6 +49,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<VrControls.Turning> TurnMode;
         public static ConfigEntry<float> ThrustDeadzone;
         public static ConfigEntry<float> ThrustFull;
+        public static ConfigEntry<float> HandTilt;
         public static ConfigEntry<VrFlightGlobe.Mode> FlightGlobe;
         public static ConfigEntry<float> FlightGlobeSize;
         public static ConfigEntry<float> FlightGlobeX;
@@ -54,14 +60,12 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> Climbing;
         public static ConfigEntry<bool> UprightBody;
         public static ConfigEntry<bool> Diagnostics;
-        public static ConfigEntry<bool> ToolExport;
         public static ConfigEntry<bool> TestMode;
         public static ConfigEntry<bool> MockRuntime;
         public static ConfigEntry<KeyboardShortcut> ToggleVrKey;
         public static ConfigEntry<KeyboardShortcut> CenterKey;
         public static ConfigEntry<KeyboardShortcut> MonitorLookKey;
         public static ConfigEntry<KeyboardShortcut> DiagnosticsKey;
-        public static ConfigEntry<KeyboardShortcut> ToolExportKey;
         public static ConfigEntry<KeyboardShortcut> EyeSharingKey;
         public static ConfigEntry<KeyboardShortcut> AlternateEyesKey;
 
@@ -129,6 +133,10 @@ namespace ShipbreakerVR
                 ("How far you move the left controller for full thrust. Shorter needs less arm movement, longer gives finer control. Always at least 5 cm beyond the deadzone.",
                     "Wie weit du den linken Controller für vollen Schub bewegst. Kürzer braucht weniger Armbewegung, länger erlaubt feinere Kontrolle. Immer mindestens 5 cm mehr als die Totzone."),
                 "In centimeters.", Between(VrControls.MinThrustRange, VrControls.FullMax));
+            HandTilt = Bind("Steuerung", "HandNeigung", 0f,
+                ("Tips the hands, the tools and their beams forward (positive) or back against the controllers.",
+                    "Kippt Hände, Werkzeuge und ihre Strahlen gegenüber den Controllern nach vorn (positiv) oder zurück."),
+                "In degrees.", Between(-40f, 40f));
             ThrustDeadzone.SettingChanged += (_, __) => VrControls.KeepThrustRange(true);
             ThrustFull.SettingChanged += (_, __) => VrControls.KeepThrustRange(false);
             VrControls.KeepThrustRange(false);
@@ -161,8 +169,6 @@ namespace ShipbreakerVR
 
             Diagnostics = Bind("Debug", "Diagnose", false,
                 "For finding problems: Tasten/Diagnose (F8, or B and Y together) writes what is drawn around the player into the log and saves screenshots next to it (also on its own 6 s after entering the Hab), load screens are logged frame by frame, and frame times are logged every 30 s.");
-            ToolExport = Bind("Debug", "WerkzeugExport", false,
-                "Tasten/WerkzeugExport (Shift+F8) saves the model of the tool in the hand (meshes, textures, UV layouts) to BepInEx\\ShipbreakerVR-tools, for retexturing it.");
             TestMode = Bind("Test", "Testmodus", false,
                 "For development: test scripts dropped into BepInEx\\ShipbreakerVR-test\\inbox move the head and the controllers and press their buttons, and save screenshots and logs to ...\\results (see VrTestScript). Needs a restart to switch on.");
             MockRuntime = Bind("Test", "MockRuntime", false,
@@ -174,6 +180,14 @@ namespace ShipbreakerVR
             UiInVr = Bind("Anzeige", "UiImRaum", true,
                 ("Shows the HUD and the menus on a surface in the room instead of flat over the image. Leave it on; off is only for troubleshooting.",
                     "Zeigt HUD und Menüs auf einer Fläche im Raum statt flach über dem Bild. An lassen; aus nur zur Fehlersuche."));
+            HudHeight = Bind("Anzeige", "VisierHoehe", -2f,
+                ("Moves the visor display up (positive) or down (negative) in front of your eyes.",
+                    "Verschiebt die Visieranzeige vor den Augen nach oben (positiv) oder unten (negativ)."),
+                "In centimeters.", Between(-20f, 20f));
+            MonitorSharpness = Bind("Anzeige", "MonitorSchaerfe", 1.5f,
+                ("How much sharper the station's screens are drawn while you use them. 1 is off, higher costs more at the screens only.",
+                    "Wie viel schärfer die Bildschirme der Station gezeichnet werden, während du sie benutzt. 1 ist aus, höher kostet nur an den Bildschirmen mehr Leistung."),
+                "Times the window's size, at most 4096 wide.", Between(1f, 2f));
             HudDistance = Bind("Anzeige", "HudAbstand", 1.5f,
                 ("How far in front of your eyes the visor display floats. Change it if reading the display or switching focus between it and the world is uncomfortable.",
                     "Wie weit die Visieranzeige vor den Augen schwebt. Anpassen, wenn das Lesen der Anzeige oder der Blickwechsel zwischen ihr und der Welt unangenehm ist."),
@@ -200,6 +214,14 @@ namespace ShipbreakerVR
                     "Zeigt links oben in Visier und Menüs die Bildrate: Bilder pro Sekunde, die Rate des Headsets, den Anteil der Bilder, die sie verpasst haben, die Zeit des Hauptthreads für Spiellogik und für das Vorbereiten des Renderns, und die Einstellungen, die sie beeinflussen."),
                 "While it is on, frame times are also logged every 30 s, as with Debug/Diagnose.");
             FlipUi = Bind("Anzeige", "UiSpiegeln", false, "Flip the UI vertically in case it is upside down.");
+            ThrustMode = Bind("Steuerung", "Schubmodus", VrFlightComfort.Thrust.Standard,
+                ("What happens when you stop thrusting. Simple: thrust only lasts while you hold it, you brake to a stop by yourself at a third of the brake's strength and fuel, not while holding on or with the grapple. Standard: as in the game, its auto brake slows you to 1 m/s after 3 seconds. Realistic: no auto brake, you keep your speed.",
+                    "Was passiert, wenn du keinen Schub gibst. Einfach: Schub wirkt nur, solange du ihn hältst, du bremst von selbst bis zum Stillstand, mit einem Drittel der Bremskraft und des Treibstoffs, nicht beim Festhalten oder mit dem Grappler. Standard: wie im Spiel, seine automatische Bremse verlangsamt dich nach 3 Sekunden auf 1 m/s. Realistisch: keine automatische Bremse, du behältst dein Tempo."),
+                (new[] { "Simple", "Standard", "Realistic" }, new[] { "Einfach", "Standard", "Realistisch" }));
+            BracedPush = Bind("Steuerung", "SchwereTeileSchieben", false,
+                "With one hand braced on something fixed, the other moves heavy parts up to 5 t with a limited force of 250 N: they gather speed slowly.");
+            BeltGrapple = Bind("Steuerung", "GrapplerAmKoerper", true,
+                "Shows the grapple at your right hip, where you draw it from, while it is not in a hand.");
             FreeWalking = Bind("Station", "FreiGehen", false,
                 "Walk through the station instead of hopping between its spots. Replaces the spots: sitting on the bed A stands up, the left stick walks, the right stick turns in steps, the triggers change the poster you look at, and A uses the screen or door you stand at. Walking with a stick can make you feel sick.");
             MonitorLook = Bind("Anzeige", "MonitorEffekt", true,
@@ -243,8 +265,6 @@ namespace ShipbreakerVR
                 "Switches the screen look of the station's monitors (Anzeige/MonitorEffekt) on and off while a monitor shows.");
             DiagnosticsKey = Bind("Tasten", "Diagnose", new KeyboardShortcut(KeyCode.F8),
                 "With Debug/Diagnose on: writes what is drawn around the player into the log and saves screenshots.");
-            ToolExportKey = Bind("Tasten", "WerkzeugExport", new KeyboardShortcut(KeyCode.F8, KeyCode.LeftShift),
-                "With Debug/WerkzeugExport on: saves the model of the tool in the hand.");
             EyeSharingKey = Bind("Tasten", "AugenTeilen", new KeyboardShortcut(KeyCode.F10),
                 "Switches Rendering/AugenTeilen on and off.");
             AlternateEyesKey = Bind("Tasten", "AugenAbwechselnd", new KeyboardShortcut(KeyCode.F11),
