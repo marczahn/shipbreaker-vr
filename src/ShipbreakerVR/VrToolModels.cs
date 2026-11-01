@@ -89,6 +89,7 @@ namespace ShipbreakerVR
                 return;
             }
 
+            VrGrappleSize.Apply();
             // The muzzle relative to the point, in the point's axes but world units.
             var equipment = hand.CurrentEquipmentType;
             var muzzle = MuzzleTransform(equipment, out var muzzleWorld);
@@ -184,9 +185,12 @@ namespace ShipbreakerVR
             return targets != null && index > 0 && index < targets.Count ? targets[index] : null;
         }
 
+        internal static Transform GrappleBarrelOf(GrapplingHook hook) => GrappleBarrel(hook);
+
         private static void Restore()
         {
             hasMuzzle = false;
+            VrGrappleSize.Reset();
             if (!moved) return;
             moved = false;
             if (point == null) return;
