@@ -25,13 +25,13 @@ namespace ShipbreakerVR.Tests
         [Fact]
         public void APushGrowsWithTheHandsWay()
         {
-            Assert.Equal(150f, BracedPush.Force(new UnityEngine.Vector3(0.05f, 0f, 0f)).x, 2);
+            Assert.Equal(125f, BracedPush.Force(new UnityEngine.Vector3(0.05f, 0f, 0f)).x, 2);
         }
 
         [Fact]
         public void APushStopsAtItsLimit()
         {
-            Assert.Equal(300f, BracedPush.Force(new UnityEngine.Vector3(0f, 0.5f, 0f)).y, 2);
+            Assert.Equal(250f, BracedPush.Force(new UnityEngine.Vector3(0f, 0.5f, 0f)).y, 2);
         }
 
         [Fact]

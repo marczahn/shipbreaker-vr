@@ -743,10 +743,10 @@ namespace ShipbreakerVR
     internal static class BracedPush
     {
         // Somewhat more than a person could, not enough to replace the grapple.
-        public const float MaxForce = 300f;
+        public const float MaxForce = 250f;
         public const float MaxMass = 5000f;
         // Newtons per meter the hand is away from its hold: the full force comes at 10 cm.
-        private const float Stiffness = 3000f;
+        private const float Stiffness = 2500f;
 
         // The force on the hold, towards the hand.
         public static Vector3 Force(Vector3 toHand)
