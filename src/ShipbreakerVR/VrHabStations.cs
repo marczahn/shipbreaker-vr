@@ -37,6 +37,8 @@ namespace ShipbreakerVR
         private static string target;
         private static bool opened;
         private static bool closing;
+        // Sent home after a screen: Using until the game is back at the bed, so no other screen opens on the way there.
+        private static bool returning;
         private static float waitingSince;
 
         public static bool AtExit => Using && target == ExitSpot;
@@ -91,13 +93,19 @@ namespace ShipbreakerVR
         public static void Track()
         {
             var spot = VrHab.ActiveSpot;
+            if (returning)
+            {
+                if (spot == HomeSpot || Time.unscaledTime - waitingSince > CloseWait) Done();
+                return;
+            }
             if (closing)
             {
                 var location = Current();
                 if (location != null && location.isActiveAndEnabled)
                 {
                     location.Navigate(home);
-                    Done();
+                    returning = true;
+                    waitingSince = Time.unscaledTime;
                 }
                 else if (Time.unscaledTime - waitingSince > CloseWait) Done();
                 return;
@@ -148,6 +156,7 @@ namespace ShipbreakerVR
             Using = false;
             opened = false;
             closing = false;
+            returning = false;
         }
 
         private static Station Nearest(Transform head, float scale)
@@ -171,11 +180,18 @@ namespace ShipbreakerVR
             var location = Current();
             var controller = VrHab.Controller;
             if (location == null || controller.IsInputBlocked(station.Way) || controller.IsCameraBlocked(station.Way)) return;
+            // Only from the bed, where the ways to the screens start: opened from elsewhere, as on the way back from a
+            // screen, the game went nowhere and the player could neither walk nor open anything (Raik).
+            if (VrHab.ActiveSpot != HomeSpot)
+            {
+                Plugin.Log.LogInfo($"Hab: {station.Name} not opened, the game is at '{VrHab.ActiveSpot}'");
+                return;
+            }
             Plugin.Log.LogInfo($"Hab: opening {station.Name}");
             if (station == exit) VrHabWalk.StepBackFromExit();
             target = station.Way.CameraToGoTo.Name;
             Using = true;
-            opened = closing = false;
+            opened = closing = returning = false;
             waitingSince = Time.unscaledTime;
             near = null;
             Show("");
