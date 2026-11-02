@@ -23,7 +23,7 @@ namespace ShipbreakerVR
     // velocity stops the body just short of anything ahead (KeepClear), and what still touches the thing held at low
     // speed is no impact (Soft, ImpactPatch). The colliders stay on, so the body does not go through it.
     // Steuerung/SchwereTeileSchieben: with one hand braced on something fixed, the other works a heavy part with a limited
-    // force (Pushes, BracedPush): it gathers speed slowly, keeps it, and is out of reach when the hold tears off. With
+    // force (Pushes, BracedPush), less the heavier it is: it gathers speed slowly, keeps it, and is out of reach when the hold tears off. With
     // both hands on two heavy parts they push each other apart, the body between them, shared by the masses.
     internal static class VrClimb
     {
@@ -607,7 +607,7 @@ namespace ShipbreakerVR
         private static void Push(Hand hand)
         {
             var hold = Hold(hand);
-            var force = BracedPush.Force((HandWorld(hand) - hold) / VrCamera.WorldScale);
+            var force = BracedPush.Force((HandWorld(hand) - hold) / VrCamera.WorldScale, hand.Body.mass);
             hand.Body.AddForceAtPosition(force, hold, ForceMode.Force);
             if (!Braced(hand)) player.AddForce(-force, ForceMode.Force);
         }
@@ -785,12 +785,29 @@ namespace ShipbreakerVR
         public const float MaxMass = 5000f;
         // Newtons per meter the hand is away from its hold: the full force comes at 10 cm.
         private const float Stiffness = 2500f;
+        // Big parts gather speed slowly, the heavier the slower: at most 0.4 m/s² at 200 kg, down to 0.2 at 1000 kg (Raik,
+        // after pushing a 600 kg hoist truck). Lighter parts get more force on the way down to 30 kg, where MaxForce is.
+        private const float LightMass = 30f;
+        private const float BigMass = 200f;
+        private const float HeavyMass = 1000f;
+        private const float BigAcceleration = 0.4f;
+        private const float HeavyAcceleration = 0.2f;
 
         // The force on the hold, towards the hand.
-        public static Vector3 Force(Vector3 toHand)
+        public static Vector3 Force(Vector3 toHand, float mass)
         {
             var force = toHand * Stiffness;
-            return force.magnitude > MaxForce ? force.normalized * MaxForce : force;
+            var limit = Limit(mass);
+            return force.magnitude > limit ? force.normalized * limit : force;
+        }
+
+        // The most force for a part of that mass.
+        public static float Limit(float mass)
+        {
+            if (mass < BigMass)
+                return Mathf.Lerp(MaxForce, BigMass * BigAcceleration, Mathf.InverseLerp(LightMass, BigMass, mass));
+            var acceleration = Mathf.Lerp(BigAcceleration, HeavyAcceleration, Mathf.InverseLerp(BigMass, HeavyMass, mass));
+            return Mathf.Min(MaxForce, mass * acceleration);
         }
     }
 }

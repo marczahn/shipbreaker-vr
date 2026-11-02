@@ -25,13 +25,35 @@ namespace ShipbreakerVR.Tests
         [Fact]
         public void APushGrowsWithTheHandsWay()
         {
-            Assert.Equal(125f, BracedPush.Force(new UnityEngine.Vector3(0.05f, 0f, 0f)).x, 2);
+            Assert.Equal(125f, BracedPush.Force(new UnityEngine.Vector3(0.05f, 0f, 0f), 30f).x, 2);
         }
 
         [Fact]
         public void APushStopsAtItsLimit()
         {
-            Assert.Equal(250f, BracedPush.Force(new UnityEngine.Vector3(0f, 0.5f, 0f)).y, 2);
+            Assert.Equal(250f, BracedPush.Force(new UnityEngine.Vector3(0f, 0.5f, 0f), 30f).y, 2);
+        }
+
+        [Theory]
+        [InlineData(200f, 0.4f)]
+        [InlineData(600f, 0.3f)]
+        [InlineData(1000f, 0.2f)]
+        public void HeavyPartsGatherSpeedSlowly(float mass, float acceleration)
+        {
+            Assert.Equal(acceleration, BracedPush.Force(new UnityEngine.Vector3(0f, 0.5f, 0f), mass).y / mass, 3);
+        }
+
+        [Fact]
+        public void TheVeryHeaviestGetTheLimit()
+        {
+            Assert.Equal(250f, BracedPush.Limit(5000f), 2);
+        }
+
+        [Fact]
+        public void LighterPartsGetMoreForce()
+        {
+            Assert.True(BracedPush.Limit(100f) > BracedPush.Limit(200f));
+            Assert.True(BracedPush.Limit(100f) < BracedPush.Limit(30f));
         }
 
         [Fact]

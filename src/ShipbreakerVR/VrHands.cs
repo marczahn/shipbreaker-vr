@@ -18,8 +18,8 @@ namespace ShipbreakerVR
     // hand, the left arm follows its controller like any other, the right one its own, and the charge's pieces go over to
     // the left hand (Charges).
     // The fingers are bent here too: the animator's grab pose barely moves them, so a hand that follows its controller
-    // curls its finger bones itself (Curl), around a tool or a small part or into a fist while its grip is held, and stays
-    // flat on a wall, a console or a large part. The animator is only given the open pose then (Fingers).
+    // curls its finger bones itself (Curl), around a tool or a small part or into a fist while its grip is held, and
+    // straightens them flat on a wall, a console or a large part. The animator is only given the open pose then (Fingers).
     internal static class VrHands
     {
         static VrHands() => VrSession.OnUnload("hands", Release);
@@ -61,6 +61,8 @@ namespace ShipbreakerVR
             // How far the fingers are closed (0 open, 1 the full bend), and towards what.
             public float Closed;
             public bool Fist;
+            // How far the fingers are straightened on a large hold (0 as animated, 1 straight).
+            public float Flat;
             public float Weight;
             public bool Driven;
             // From the controller to where the game's hand sits: to its hold while it holds on (VrClimb), so the hand stays
@@ -174,21 +176,24 @@ namespace ShipbreakerVR
             if (fingerLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} hand {(closed ? "closes" : "opens")}{(arm.Driven ? "" : " (back to the game)")}");
         }
 
-        // Bends the fingers of a hand that follows its controller: around its tool (not a demo charge, whose animation holds
-        // it), around a small part that turns with the hand (VrClimb.HoldsFlat false) or into a fist while its grip is
-        // held; open on a wall, a console or a large part, and with the grip let go. Each joint turns about the hand's own
-        // thumb-side axis (Frame) towards the palm, which faces inwards: to the left on the right hand, to the right on the
-        // left one. The thumb turns about the knuckles' axis over the palm.
+        // Bends the fingers of a hand that follows its controller: around its tool (not a demo charge, whose animation
+        // holds it), around a small part that turns with the hand (VrClimb.HoldsFlat false) or into a fist while its
+        // grip is held; straight on a wall, a console or a large part (Straighten), as animated with the grip let go.
+        // Each joint turns about the hand's own thumb-side axis (Frame) towards the palm, which faces inwards: to the
+        // left on the right hand, to the right on the left one. The thumb turns about the knuckles' axis over the palm.
         private static void Curl(Arm arm)
         {
             var hand = arm == LeftArm ? VrHand.Left : VrHand.Right;
             var tool = hand.HoldsTool && hand.Tool != EquipmentController.Equipment.DemoCharge;
             var grip = arm.Input.Grip.Down && hand.State != HandState.HiddenTool;
-            var closing = arm.Driven && (tool || (grip && !VrClimb.HoldsFlat(arm.Input)));
+            var flat = arm.Driven && !tool && grip && VrClimb.HoldsFlat(arm.Input);
+            var closing = arm.Driven && (tool || (grip && !flat));
             if (closing) arm.Fist = !tool && hand.State != HandState.Holding;
             arm.Closed = Mathf.MoveTowards(arm.Closed, closing ? 1f : 0f, Time.unscaledDeltaTime / CurlTime);
+            arm.Flat = Mathf.MoveTowards(arm.Flat, flat ? 1f : 0f, Time.unscaledDeltaTime / CurlTime);
             var amount = arm.Closed * arm.Weight;
-            if (amount <= 0f || !Frame(arm, out _, out var frame))
+            var flatness = arm.Flat * arm.Weight;
+            if ((amount <= 0f && flatness <= 0f) || !Frame(arm, out _, out var frame))
             {
                 Open(arm);
                 return;
@@ -196,6 +201,13 @@ namespace ShipbreakerVR
             var side = arm == LeftArm ? 1f : -1f;
             var across = frame * Vector3.up;
             var along = frame * Vector3.forward;
+            if (amount <= 0f)
+            {
+                // Held on by the glove, as by a magnet: the fingers straight along the knuckles, the thumb as it was.
+                for (var i = 0; i < arm.Joints.Length; i++) Straighten(arm, i, across, along, flatness);
+                for (var i = 0; i < arm.Thumb.Length; i++) Restore(arm, arm.Thumb[i], arm.Joints.Length + i);
+                return;
+            }
             var bend = arm.Fist ? FistBend : GripBend;
             for (var i = 0; i < arm.Joints.Length; i++)
                 Turn(arm, arm.Joints[i], i, Quaternion.AngleAxis(side * bend[i % 3] * amount, across));
@@ -217,11 +229,34 @@ namespace ShipbreakerVR
 
         private static void Turn(Arm arm, Transform joint, int index, Quaternion by)
         {
-            if (joint == null) return;
-            if (joint.localRotation == arm.Set[index]) joint.localRotation = arm.Base[index];
-            arm.Base[index] = joint.localRotation;
+            if (!Restore(arm, joint, index)) return;
             joint.rotation = by * joint.rotation;
             arm.Set[index] = joint.localRotation;
+        }
+
+        // A finger joint turned about the hand's thumb-side axis until the bone to its next joint (or, at the tip, to its
+        // child) runs along the knuckles, by that share.
+        private static void Straighten(Arm arm, int index, Vector3 across, Vector3 along, float share)
+        {
+            var joint = arm.Joints[index];
+            if (!Restore(arm, joint, index)) return;
+            var next = index % 3 < 2 ? arm.Joints[index + 1] : joint.childCount > 0 ? joint.GetChild(0) : null;
+            if (next == null) return;
+            var bone = Vector3.ProjectOnPlane(next.position - joint.position, across);
+            if (bone.sqrMagnitude <= 1e-10f) return;
+            var angle = Vector3.SignedAngle(bone, along, across);
+            joint.rotation = Quaternion.AngleAxis(angle * share, across) * joint.rotation;
+            arm.Set[index] = joint.localRotation;
+        }
+
+        // The joint back to the animation's pose if it is still as it was set here, that pose kept as its base.
+        private static bool Restore(Arm arm, Transform joint, int index)
+        {
+            if (joint == null) return false;
+            if (joint.localRotation == arm.Set[index]) joint.localRotation = arm.Base[index];
+            arm.Base[index] = joint.localRotation;
+            arm.Set[index] = joint.localRotation;
+            return true;
         }
 
         // Not grabbing, gesturing, hurt or holding a tool.
@@ -462,7 +497,7 @@ namespace ShipbreakerVR
                 arm.Thumb[i] = animator != null ? animator.GetBoneTransform((HumanBodyBones)(first - 3 + i)) : null;
                 arm.Set[arm.Joints.Length + i] = new Quaternion(0f, 0f, 0f, 0f);
             }
-            arm.Closed = 0f;
+            arm.Closed = arm.Flat = 0f;
             arm.Weight = 0f;
             arm.Driven = false;
             arm.Measured = false;
@@ -486,7 +521,7 @@ namespace ShipbreakerVR
             {
                 if (animator != null && arm.Driven && arm.Hand != null && Idle(arm.Hand)) animator.SetBool(arm.Grab, false);
                 Open(arm);
-                arm.Closed = 0f;
+                arm.Closed = arm.Flat = 0f;
             }
             animator = null;
             grab = null;
