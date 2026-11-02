@@ -46,6 +46,8 @@
     <Reference Include="UnityEngine.ScreenCaptureModule" HintPath="$(ManagedDir)\UnityEngine.ScreenCaptureModule.dll" Private="false" />
     <Reference Include="UnityEngine.ImageConversionModule" HintPath="$(ManagedDir)\UnityEngine.ImageConversionModule.dll" Private="false" />
     <Reference Include="UnityEngine.JSONSerializeModule" HintPath="$(ManagedDir)\UnityEngine.JSONSerializeModule.dll" Private="false" />
+    <Reference Include="Unity.Addressables" HintPath="$(ManagedDir)\Unity.Addressables.dll" Private="false" />
+    <Reference Include="Unity.ResourceManager" HintPath="$(ManagedDir)\Unity.ResourceManager.dll" Private="false" />
     <!-- From the Unity helper project (Output\BepInEx\plugins\ShipbreakerVR), next to the plugin in the game -->
     <Reference Include="Unity.XR.Management" HintPath="$(XrDir)\Unity.XR.Management.dll" Private="false" />
     <Reference Include="Unity.XR.OpenXR" HintPath="$(XrDir)\Unity.XR.OpenXR.dll" Private="false" />

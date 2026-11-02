@@ -42,6 +42,7 @@ namespace ShipbreakerVR
             ("frame statistics", VrPerformance.FrameStart),
             ("load trace", () => VrLoadTrace.EndFrame(VrCamera.Instance)),
             ("diagnostics", () => VrDiagnostics.Update(VrCamera.Instance)),
+            ("suit body", VrSuitBody.Update),
         };
 
         private static readonly (string Name, System.Action Step)[] FixedSteps =

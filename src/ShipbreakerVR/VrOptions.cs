@@ -139,6 +139,7 @@ namespace ShipbreakerVR
                 new SliderRow { Label = L("Full thrust at (cm)", "Voller Schub ab (cm)"), Entry = VrSettings.ThrustFull, Format = "0", Step = 1f },
                 EnumRow(L("Flight globe", "Flugkugel"), VrSettings.FlightGlobe),
                 Header(L("Graphics", "Grafik")),
+                new BoolRow { Label = L("Suit as body", "Raumanzug als Körper"), Entry = VrSettings.SuitBody },
                 new SliderRow { Label = L("Render resolution", "Renderauflösung"), Entry = VrSettings.ResolutionScale, Format = "0.00" },
                 new SliderRow { Label = L("Station resolution", "Auflösung Station"), Entry = VrSettings.StationResolution, Format = "0.00" },
                 new SliderRow { Label = L("Screen sharpness", "Monitor-Schärfe"), Entry = VrSettings.MonitorSharpness, Format = "0.0", Step = 0.1f },

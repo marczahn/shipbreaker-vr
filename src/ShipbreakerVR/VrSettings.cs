@@ -35,6 +35,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> MonitorLook;
         public static ConfigEntry<VrFlightComfort.Thrust> ThrustMode;
         public static ConfigEntry<bool> BeltGrapple;
+        public static ConfigEntry<bool> SuitBody;
         public static ConfigEntry<bool> BracedPush;
         public static ConfigEntry<bool> FreeWalking;
         public static ConfigEntry<VrHelmet.Mode> Helmet;
@@ -226,6 +227,8 @@ namespace ShipbreakerVR
             BracedPush = Bind("Steuerung", "SchwereTeileSchieben", false,
                 ("On: holding on to something fixed, the other hand moves heavy parts up to 5 t with a limited force of 250 N, and with each hand on a heavy part they push each other apart. Off: the game's own physics, where such parts do not move.",
                     "An: Hältst du dich an etwas Festem, bewegt die andere Hand schwere Teile bis 5 t mit begrenzter Kraft von 250 N, und mit je einer Hand an zwei schweren Teilen drückst du sie auseinander. Aus: die Physik des Spiels, in der solche Teile sich nicht bewegen."));
+            SuitBody = Bind("Bild", "Raumanzug", true,
+                "Dresses your body in the suit from the station when you look down. It is loaded from the game at runtime.");
             BeltGrapple = Bind("Steuerung", "GrapplerAmKoerper", true,
                 "Shows the grapple at your right hip, where you draw it from, while it is not in a hand.");
             FreeWalking = Bind("Station", "FreiGehen", false,
