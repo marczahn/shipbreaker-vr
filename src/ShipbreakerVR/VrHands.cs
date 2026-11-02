@@ -40,9 +40,13 @@ namespace ShipbreakerVR
         private const float CurlTime = 0.12f;
         // The bend of each finger joint (base, middle, tip) in degrees, and the thumb's over the palm: into a fist, and
         // around a handle (a tool, a small part).
-        private static readonly float[] FistBend = { 75f, 95f, 60f };
+        // The fist is loose, a tunnel the thumb closes over the middle finger's tip (ThumbOver), not a tight one (Raik).
+        private static readonly float[] FistBend = { 60f, 75f, 50f };
         private static readonly float[] GripBend = { 55f, 70f, 45f };
         private const float FistThumb = 35f;
+        // On a fist the thumb's tip goes this far off the middle finger's last joint, on the outside of the curled
+        // fingers (where the palm faces), in meters at world scale 1: it lies over it.
+        private const float ThumbOver = 0.015f;
         private const float GripThumb = 25f;
         // A flat hand is not stiff: each finger joint (base, middle, tip) stays bent this much towards the palm, in
         // degrees. The thumb lies in the palm's plane with the fingers, each of its bones this much towards the palm, about
@@ -252,6 +256,21 @@ namespace ShipbreakerVR
             var thumb = (arm.Fist ? FistThumb : GripThumb) * amount;
             for (var i = 0; i < arm.Thumb.Length; i++)
                 Turn(arm, arm.Thumb[i], arm.Joints.Length + i, Quaternion.AngleAxis(-side * thumb, along));
+            if (arm.Fist) ThumbOnMiddle(arm, frame * Vector3.right * side, amount);
+        }
+
+        // The thumb's base turned so that its tip lies over the middle finger's last joint, closing the fist's tunnel.
+        private static void ThumbOnMiddle(Arm arm, Vector3 palm, float share)
+        {
+            var root = arm.Thumb[0];
+            var last = arm.Thumb[arm.Thumb.Length - 1];
+            var middle = arm.Joints[5];
+            if (root == null || last == null || middle == null) return;
+            var tip = last.childCount > 0 ? last.GetChild(0).position : last.position;
+            var target = middle.position + palm * ThumbOver * VrCamera.WorldScale;
+            var turn = Quaternion.FromToRotation(tip - root.position, target - root.position);
+            root.rotation = Quaternion.Slerp(Quaternion.identity, turn, share) * root.rotation;
+            arm.Set[arm.Joints.Length] = root.localRotation;
         }
 
         // The joints that are still as Curl left them back to the animation's pose.
