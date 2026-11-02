@@ -95,6 +95,8 @@ namespace ShipbreakerVR
             public float PressedAt = -1f;
             // The surface under the hand when it took hold, on Anchor: the game's hand goes there, the body keeps to Point.
             public Vector3 Surface;
+            // The surface's outward direction there, on Anchor: a flat hand lies on it (VrHands).
+            public Vector3 Normal;
             // A part that turns with the hand: its turn relative to the controller, and its speed limit before.
             public bool Firm;
             // The second hand on a firmly held part: it stays on the part, the first hand moves it.
@@ -275,6 +277,7 @@ namespace ShipbreakerVR
             hand.Anchor = body != null ? body.transform : best.transform;
             hand.Point = hand.Anchor.InverseTransformPoint(at);
             hand.Surface = hand.Anchor.InverseTransformPoint(surface);
+            hand.Normal = hand.Anchor.InverseTransformDirection(SurfaceNormal(best, at, surface, hand));
             hand.HeldAt = Time.time;
             hand.Firm = false;
             hand.Follower = false;
@@ -380,7 +383,9 @@ namespace ShipbreakerVR
                 // What the sphere already touches has no place ahead of it.
                 if (hit.distance <= 0f) continue;
                 var body = hit.collider.attachedRigidbody;
-                if (Own(hit.collider) || HeldFirmly(body)) continue;
+                // A part held that moves takes the pull's push back itself: stopping the body short of it as well would
+                // take the body's share away, and each stroke of the arms gave the two more speed.
+                if (Own(hit.collider) || HeldFirmly(body) || HeldMovable(body)) continue;
                 var other = body != null ? body.GetPointVelocity(hit.point) : Vector3.zero;
                 var limited = ClimbContact.LimitApproach(velocity, other, hit.normal, hit.distance - clearance, dt);
                 if (limited != velocity)
@@ -491,6 +496,23 @@ namespace ShipbreakerVR
             foreach (var hand in Hands)
                 if (hand.Firm && body != null && hand.Body == body) return true;
             return false;
+        }
+
+        private static bool HeldMovable(Rigidbody body)
+        {
+            foreach (var hand in Hands)
+                if (hand.Holding && hand.Movable && body != null && hand.Body == body) return true;
+            return false;
+        }
+
+        // Outward from the surface at the hold: from it to the hand, or, with the hand on it, from a ray back at it.
+        private static Vector3 SurfaceNormal(Collider collider, Vector3 at, Vector3 surface, Hand hand)
+        {
+            var away = at - surface;
+            if (away.sqrMagnitude > 1e-4f * VrCamera.WorldScale * VrCamera.WorldScale) return away.normalized;
+            var back = hand.Input.TryGetAimRotation(out var aim) ? VrCamera.Instance.transform.parent.rotation * aim * Vector3.forward : Vector3.down;
+            var ray = new Ray(at - back * Reach * VrCamera.WorldScale, back);
+            return collider.Raycast(ray, out var hit, 2f * Reach * VrCamera.WorldScale) ? hit.normal : -back;
         }
 
         private static bool Held(Rigidbody body)
@@ -622,6 +644,21 @@ namespace ShipbreakerVR
         }
 
         // Where that controller's hand holds on, if it does, for the game's hand (VrHands.Pose).
+        // The thing that hand holds on to, and the surface's outward direction there.
+        public static bool TryGetGrip(VrInput.Hand input, out Transform anchor, out Vector3 normal)
+        {
+            anchor = null;
+            normal = Vector3.up;
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input || !hand.Holding || hand.Anchor == null) continue;
+                anchor = hand.Anchor;
+                normal = hand.Anchor.TransformDirection(hand.Normal).normalized;
+                return true;
+            }
+            return false;
+        }
+
         public static bool TryGetHold(VrInput.Hand input, out Vector3 point)
         {
             point = Vector3.zero;
@@ -669,6 +706,7 @@ namespace ShipbreakerVR
         {
             VrHand.StopHolding(hand.Vr);
             var firm = hand.Firm;
+            var movable = hand.Movable && hand.Body != null;
             hand.Follower = false;
             var body = hand.Body;
             if (firm) Unfirm(hand);
@@ -681,9 +719,12 @@ namespace ShipbreakerVR
             // A firmly held part does not count: it pulls at nothing.
             var last = !Pulling();
             var speed = Vector3.ClampMagnitude(pushOff, MaxPushOff * VrCamera.WorldScale);
-            if (push && last && !firm && player != null) player.velocity = holdVelocity + speed;
+            // Off a part that moves the body keeps the speed the pulls gave it, as the part does: set from the hands, the
+            // two would not add up.
+            var flies = push && last && !firm && !movable;
+            if (flies && player != null) player.velocity = holdVelocity + speed;
             if (logs++ < 80)
-                Plugin.Log.LogInfo($"Climbing: {hand.Name} hand lets go ({reason}){(push && last && !firm ? $", flies on at {speed.magnitude:0.00} m/s" : "")}");
+                Plugin.Log.LogInfo($"Climbing: {hand.Name} hand lets go ({reason}){(flies ? $", flies on at {speed.magnitude:0.00} m/s" : "")}");
             if (last)
             {
                 pushOff = Vector3.zero;

@@ -30,6 +30,12 @@ namespace ShipbreakerVR
         private const float HoldReturn = 2f;
         // How thick a hand is against walls, in meters.
         private const float HandRadius = 0.04f;
+        // How long a hand takes to settle on its hold, and to come back to its controller after.
+        private const float GripTime = 0.1f;
+        // A flat hand on its hold: the wrist this far behind the middle of the palm, and the palm this far off the surface,
+        // in meters at world scale 1.
+        private const float PalmLength = 0.08f;
+        private const float PalmThickness = 0.025f;
         // How long the fingers take to close or open.
         private const float CurlTime = 0.12f;
         // The bend of each finger joint (base, middle, tip) in degrees, and the thumb's over the palm: into a fist, and
@@ -63,6 +69,14 @@ namespace ShipbreakerVR
             public bool Fist;
             // How far the fingers are straightened on a large hold (0 as animated, 1 straight).
             public float Flat;
+            // The hand on its hold (Grip): fixed on the thing held, turned (GripTurn) and placed (GripPoint, GripOffset)
+            // as it took hold, flat on large ones; blended in and out over GripTime.
+            public bool Gripping;
+            public Transform GripAnchor;
+            public Quaternion GripTurn;
+            public Vector3 GripPoint;
+            public Vector3 GripOffset;
+            public float GripBlend;
             public float Weight;
             public bool Driven;
             // From the controller to where the game's hand sits: to its hold while it holds on (VrClimb), so the hand stays
@@ -282,19 +296,74 @@ namespace ShipbreakerVR
             if (weight <= 0f || arm.Wrist == null || arm.Upper == null || arm.Lower == null) return;
             if (!arm.Input.TryGetPosition(out var gripLocal) || !arm.Input.TryGetAimRotation(out var aimLocal)) return;
             if (!VrToolModels.TrackingToWorld(gripLocal + aimLocal * VrInput.WristBehindGrip, aimLocal, out var wrist, out var aim)) return;
-            if (VrClimb.TryGetHold(arm.Input, out var point) && VrToolModels.TrackingToWorld(gripLocal, aimLocal, out var grip, out _))
+            var held = VrClimb.TryGetHold(arm.Input, out var point);
+            if (held && VrToolModels.TrackingToWorld(gripLocal, aimLocal, out var grip, out _))
                 arm.OffController = point - grip;
             else
                 arm.OffController = Vector3.MoveTowards(arm.OffController, Vector3.zero, HoldReturn * VrCamera.WorldScale * Time.unscaledDeltaTime);
             wrist += arm.OffController;
             wrist = OutOfWalls(arm, wrist);
+            var aimed = aim * hold;
+            var frame = Quaternion.LookRotation(aimed * Vector3.forward, aimed * Vector3.up);
+            Grip(arm, held, point, ref wrist, ref frame);
 
             var animated = arm.Wrist.rotation;
             var target = Vector3.Lerp(arm.Wrist.position, wrist, weight);
             if (!arm.Measured) Measure(arm, wrist);
             var shortBy = VrToolModels.Reach(arm.Upper.parent, arm.Upper, arm.Lower, arm.Wrist, target);
             Count(arm, weight >= 1f ? shortBy : 0f);
-            arm.Wrist.rotation = Quaternion.Slerp(animated, HandRotation(arm, aim * hold, animated), weight);
+            arm.Wrist.rotation = Quaternion.Slerp(animated, HandRotation(arm, frame, aimed, animated), weight);
+        }
+
+        // A hand that holds on stays fixed on the thing held, as Raik asked: it no longer turns with its controller, so its
+        // fingers do not turn into the thing, and only the arm moves around it. On a wall, a hull or a large part
+        // (VrClimb.HoldsFlat) it lies flat on the surface, the knuckles along the controller's aim; around a small part it
+        // keeps the turn and place it took hold with. Letting go it goes back to its controller.
+        private static void Grip(Arm arm, bool held, Vector3 point, ref Vector3 wrist, ref Quaternion frame)
+        {
+            if (held && VrClimb.TryGetGrip(arm.Input, out var anchor, out var normal))
+            {
+                if (!arm.Gripping || anchor != arm.GripAnchor)
+                {
+                    arm.Gripping = true;
+                    arm.GripAnchor = anchor;
+                    var flat = VrClimb.HoldsFlat(arm.Input);
+                    var start = flat ? FlatFrame(arm, frame, normal) : frame;
+                    arm.GripTurn = Quaternion.Inverse(anchor.rotation) * start;
+                    var side = arm == LeftArm ? 1f : -1f;
+                    arm.GripOffset = flat
+                        ? new Vector3(-side * PalmThickness, 0f, -PalmLength) * VrCamera.WorldScale
+                        : Quaternion.Inverse(start) * (wrist - point);
+                    if (logs++ < 40) Plugin.Log.LogInfo($"Hands: {arm.Name} hand fixed on '{anchor.name}'{(flat ? ", flat on the surface" : "")}");
+                }
+                arm.GripPoint = anchor.InverseTransformPoint(point);
+                arm.GripBlend = Mathf.MoveTowards(arm.GripBlend, 1f, Time.unscaledDeltaTime / GripTime);
+            }
+            else
+            {
+                arm.Gripping = false;
+                arm.GripBlend = Mathf.MoveTowards(arm.GripBlend, 0f, Time.unscaledDeltaTime / GripTime);
+            }
+            if (arm.GripBlend <= 0f || arm.GripAnchor == null)
+            {
+                if (!arm.Gripping) arm.GripAnchor = null;
+                return;
+            }
+            var turn = arm.GripAnchor.rotation * arm.GripTurn;
+            var placed = arm.GripAnchor.TransformPoint(arm.GripPoint) + turn * arm.GripOffset;
+            wrist = Vector3.Lerp(wrist, placed, arm.GripBlend);
+            frame = Quaternion.Slerp(frame, turn, arm.GripBlend);
+        }
+
+        // The hand's axes (Frame) lying flat on a surface: the palm on it (to the left of the right hand, to the right of
+        // the left one), the knuckles along the surface where the controller points.
+        private static Quaternion FlatFrame(Arm arm, Quaternion frame, Vector3 normal)
+        {
+            var forward = Vector3.ProjectOnPlane(frame * Vector3.forward, normal);
+            if (forward.sqrMagnitude < 1e-4f) forward = Vector3.ProjectOnPlane(frame * Vector3.up, normal);
+            forward.Normalize();
+            var up = arm == LeftArm ? Vector3.Cross(normal, forward) : Vector3.Cross(forward, normal);
+            return Quaternion.LookRotation(forward, up);
         }
 
         // An empty hand stops at what is between the shoulder and the controller instead of going through it. Only the
@@ -371,16 +440,14 @@ namespace ShipbreakerVR
             return true;
         }
 
-        // The hand's knuckles (wrist to the middle finger) along the controller's aim, the thumb side (little finger to
-        // index finger) up, as when holding a Touch controller: the palm then faces inwards on either hand. Without
-        // finger bones the hand keeps the angle to the eye that the animation gave it.
-        private static Quaternion HandRotation(Arm arm, Quaternion aim, Quaternion animated)
+        // The hand's own axes (Frame) turned to wanted: usually the controller's aim, the knuckles (wrist to the middle
+        // finger) along it, the thumb side (little finger to index finger) up, as when holding a Touch controller: the palm
+        // then faces inwards on either hand; on a hold, as Grip has it. Without finger bones the hand keeps the angle to
+        // the eye that the animation gave it, turned with aim.
+        private static Quaternion HandRotation(Arm arm, Quaternion wanted, Quaternion aim, Quaternion animated)
         {
             if (Frame(arm, out _, out var current))
-            {
-                var wanted = Quaternion.LookRotation(aim * Vector3.forward, aim * Vector3.up);
                 return wanted * Quaternion.Inverse(current) * arm.Wrist.rotation;
-            }
             var camera = VrCamera.Instance != null ? VrCamera.Instance.GameCamera : null;
             return camera == null ? animated : aim * (Quaternion.Inverse(VrTorso.Frame(camera.transform.rotation)) * animated);
         }
@@ -528,6 +595,12 @@ namespace ShipbreakerVR
             LeftArm.Weight = RightArm.Weight = 0f;
             LeftArm.Driven = RightArm.Driven = false;
             LeftArm.OffController = RightArm.OffController = Vector3.zero;
+            foreach (var arm in new[] { LeftArm, RightArm })
+            {
+                arm.Gripping = false;
+                arm.GripAnchor = null;
+                arm.GripBlend = 0f;
+            }
             Charges(false);
             chargePieces.Clear();
             chargesOn = null;
