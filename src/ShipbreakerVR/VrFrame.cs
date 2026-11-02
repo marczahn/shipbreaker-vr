@@ -35,6 +35,7 @@ namespace ShipbreakerVR
             ("aim", VrAim.Update),
             ("second aim", VrDualTools.UpdateAim),
             ("flying", VrControls.Update),
+            ("tool haptics", VrToolHaptics.Update),
         };
 
         private static readonly (string Name, System.Action Step)[] UpdateSteps =
