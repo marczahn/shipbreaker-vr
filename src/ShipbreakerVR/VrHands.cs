@@ -44,6 +44,16 @@ namespace ShipbreakerVR
         private static readonly float[] GripBend = { 55f, 70f, 45f };
         private const float FistThumb = 35f;
         private const float GripThumb = 25f;
+        // A flat hand is not stiff: each finger joint (base, middle, tip) stays bent this much towards the palm, and the
+        // thumb is lifted this much off the surface the palm lies on, in degrees.
+        private static readonly float[] FlatBend = { 4f, 6f, 4f };
+        private const float ThumbLift = 6f;
+        // The points of a flat hand kept out of the surface (OutOfSurface), in the hand's axes from the wrist, in meters
+        // at world scale 1: along the knuckles, and to either side.
+        private static readonly float[] HandAlong = { 0f, 0.08f, 0.17f };
+        private const float HandAcross = 0.04f;
+        // How far outside the surface a ray for that starts.
+        private const float SurfaceProbe = 0.2f;
         private static readonly RaycastHit[] WallHits = new RaycastHit[16];
 
         private class Arm
@@ -76,6 +86,7 @@ namespace ShipbreakerVR
             public Quaternion GripTurn;
             public Vector3 GripPoint;
             public Vector3 GripOffset;
+            public bool GripFlat;
             public float GripBlend;
             public float Weight;
             public bool Driven;
@@ -202,7 +213,7 @@ namespace ShipbreakerVR
             var grip = arm.Input.Grip.Down && hand.State != HandState.HiddenTool;
             var flat = arm.Driven && !tool && grip && VrClimb.HoldsFlat(arm.Input);
             var closing = arm.Driven && (tool || (grip && !flat));
-            if (closing) arm.Fist = !tool && hand.State != HandState.Holding;
+            if (closing) arm.Fist = !tool && (hand.State != HandState.Holding || VrClimb.HoldsControl(arm.Input));
             arm.Closed = Mathf.MoveTowards(arm.Closed, closing ? 1f : 0f, Time.unscaledDeltaTime / CurlTime);
             arm.Flat = Mathf.MoveTowards(arm.Flat, flat ? 1f : 0f, Time.unscaledDeltaTime / CurlTime);
             var amount = arm.Closed * arm.Weight;
@@ -217,9 +228,12 @@ namespace ShipbreakerVR
             var along = frame * Vector3.forward;
             if (amount <= 0f)
             {
-                // Held on by the glove, as by a magnet: the fingers straight along the knuckles, the thumb as it was.
-                for (var i = 0; i < arm.Joints.Length; i++) Straighten(arm, i, across, along, flatness);
-                for (var i = 0; i < arm.Thumb.Length; i++) Restore(arm, arm.Thumb[i], arm.Joints.Length + i);
+                // Held on by the glove, as by a magnet: the fingers along the knuckles, barely bent, the thumb lifted
+                // to lie along the surface instead of in it.
+                for (var i = 0; i < arm.Joints.Length; i++)
+                    Straighten(arm, i, across, Quaternion.AngleAxis(side * FlatBend[i % 3], across) * along, across, flatness);
+                var palm = frame * Vector3.right * side;
+                for (var i = 0; i < arm.Thumb.Length; i++) LiftThumb(arm, i, palm, flatness);
                 return;
             }
             var bend = arm.Fist ? FistBend : GripBend;
@@ -250,7 +264,7 @@ namespace ShipbreakerVR
 
         // A finger joint turned about the hand's thumb-side axis until the bone to its next joint (or, at the tip, to its
         // child) runs along the knuckles, by that share.
-        private static void Straighten(Arm arm, int index, Vector3 across, Vector3 along, float share)
+        private static void Straighten(Arm arm, int index, Vector3 across, Vector3 along, Vector3 axis, float share)
         {
             var joint = arm.Joints[index];
             if (!Restore(arm, joint, index)) return;
@@ -258,9 +272,28 @@ namespace ShipbreakerVR
             if (next == null) return;
             var bone = Vector3.ProjectOnPlane(next.position - joint.position, across);
             if (bone.sqrMagnitude <= 1e-10f) return;
-            var angle = Vector3.SignedAngle(bone, along, across);
-            joint.rotation = Quaternion.AngleAxis(angle * share, across) * joint.rotation;
+            var angle = Vector3.SignedAngle(bone, Vector3.ProjectOnPlane(along, across), axis);
+            joint.rotation = Quaternion.AngleAxis(angle * share, axis) * joint.rotation;
             arm.Set[index] = joint.localRotation;
+        }
+
+        // A thumb joint turned so that its bone runs ThumbLift off the palm's plane, away from the surface: on a flat hand
+        // the animation's thumb pointed into the wall.
+        private static void LiftThumb(Arm arm, int index, Vector3 palm, float share)
+        {
+            var joint = arm.Thumb[index];
+            var at = arm.Joints.Length + index;
+            if (!Restore(arm, joint, at)) return;
+            var next = index < arm.Thumb.Length - 1 ? arm.Thumb[index + 1] : joint.childCount > 0 ? joint.GetChild(0) : null;
+            if (next == null) return;
+            var bone = next.position - joint.position;
+            var axis = Vector3.Cross(bone, palm);
+            if (axis.sqrMagnitude <= 1e-12f) return;
+            // Only a thumb that is not lifted that far yet; one further off stays as animated.
+            var into = 90f - Vector3.Angle(bone, palm) + ThumbLift;
+            if (into <= 0f) return;
+            joint.rotation = Quaternion.AngleAxis(-into * share, axis.normalized) * joint.rotation;
+            arm.Set[at] = joint.localRotation;
         }
 
         // The joint back to the animation's pose if it is still as it was set here, that pose kept as its base.
@@ -328,6 +361,7 @@ namespace ShipbreakerVR
                     arm.Gripping = true;
                     arm.GripAnchor = anchor;
                     var flat = VrClimb.HoldsFlat(arm.Input);
+                    arm.GripFlat = flat;
                     var start = flat ? FlatFrame(arm, frame, normal) : frame;
                     arm.GripTurn = Quaternion.Inverse(anchor.rotation) * start;
                     var side = arm == LeftArm ? 1f : -1f;
@@ -351,8 +385,36 @@ namespace ShipbreakerVR
             }
             var turn = arm.GripAnchor.rotation * arm.GripTurn;
             var placed = arm.GripAnchor.TransformPoint(arm.GripPoint) + turn * arm.GripOffset;
+            if (arm.GripFlat) placed = OutOfSurface(arm, placed, turn);
             wrist = Vector3.Lerp(wrist, placed, arm.GripBlend);
             frame = Quaternion.Slerp(frame, turn, arm.GripBlend);
+        }
+
+        // A flat hand placed on its hold, moved out along the palm's way as far as the deepest of its points (HandAlong,
+        // HandAcross on the palm's side) went into anything: a ray from outside towards each point finds what is in front
+        // of it. Only what has a collider counts; where a hull's visible skin lies outside its collider, the hand still
+        // goes into the skin.
+        private static Vector3 OutOfSurface(Arm arm, Vector3 wrist, Quaternion turn)
+        {
+            var side = arm == LeftArm ? 1f : -1f;
+            var scale = VrCamera.WorldScale;
+            var palm = turn * Vector3.right * side;
+            var probe = SurfaceProbe * scale;
+            var deepest = 0f;
+            var body = arm.Wrist.root;
+            foreach (var along in HandAlong)
+                for (var across = -1; across <= 1; across += 2)
+                {
+                    var point = wrist + turn * new Vector3(side * PalmThickness, across * HandAcross, along) * scale;
+                    var count = Physics.RaycastNonAlloc(point - palm * probe, palm, WallHits, probe, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                    for (var i = 0; i < count; i++)
+                    {
+                        var hit = WallHits[i];
+                        if (hit.distance <= 0f || hit.collider.transform.IsChildOf(body)) continue;
+                        deepest = Mathf.Max(deepest, probe - hit.distance);
+                    }
+                }
+            return wrist - palm * deepest;
         }
 
         // The hand's axes (Frame) lying flat on a surface: the palm on it (to the left of the right hand, to the right of

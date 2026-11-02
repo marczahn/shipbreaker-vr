@@ -97,6 +97,8 @@ namespace ShipbreakerVR
             public Vector3 Surface;
             // The surface's outward direction there, on Anchor: a flat hand lies on it (VrHands).
             public Vector3 Normal;
+            // On a control's HandTarget (NearestControl): the hand makes a fist there.
+            public bool Control;
             // A part that turns with the hand: its turn relative to the controller, and its speed limit before.
             public bool Firm;
             // The second hand on a firmly held part: it stays on the part, the first hand moves it.
@@ -245,6 +247,16 @@ namespace ShipbreakerVR
                 bestDistance = distance;
                 surface = closest;
             }
+            // A control within reach (a door switch, a console) comes first, even with the hull nearer: the hand goes onto
+            // the control's HandTarget, where the game puts its own hand, as a fist (HoldsControl). Before, the hand held
+            // the hull under the switch or stayed a few centimeters off it (Raik).
+            var control = NearestControl(at, reach, out var controlCollider);
+            if (control != null)
+            {
+                best = controlCollider;
+                surface = control.HandTarget.position;
+                bestDistance = (surface - at).sqrMagnitude;
+            }
             // Some switches have no solid collider, only the trigger the game's interaction uses. It is no surface: the hand
             // stays where it is.
             if (best == null)
@@ -277,6 +289,7 @@ namespace ShipbreakerVR
             hand.Anchor = body != null ? body.transform : best.transform;
             hand.Point = hand.Anchor.InverseTransformPoint(at);
             hand.Surface = hand.Anchor.InverseTransformPoint(surface);
+            hand.Control = control != null;
             hand.Normal = hand.Anchor.InverseTransformDirection(SurfaceNormal(best, at, surface, hand));
             hand.HeldAt = Time.time;
             hand.Firm = false;
@@ -639,8 +652,40 @@ namespace ShipbreakerVR
         public static bool HoldsFlat(VrInput.Hand input)
         {
             foreach (var hand in Hands)
-                if (hand.Input == input && hand.Holding) return !hand.Firm && !hand.Follower;
+                if (hand.Input == input && hand.Holding) return !hand.Firm && !hand.Follower && !hand.Control;
             return false;
+        }
+
+        // True while that controller's hand holds a control (a door switch, a console's button) as a fist.
+        public static bool HoldsControl(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input && hand.Holding) return hand.Control;
+            return false;
+        }
+
+        // The fixed control whose HandTarget is nearest to the hand within reach, with one of its colliders, or null.
+        private static InteractableObject NearestControl(Vector3 at, float reach, out Collider collider)
+        {
+            collider = null;
+            InteractableObject best = null;
+            var bestDistance = reach * reach;
+            var count = Physics.OverlapSphereNonAlloc(at, reach, Found, ~0, QueryTriggerInteraction.Collide);
+            for (var i = 0; i < count; i++)
+            {
+                if (Own(Found[i])) continue;
+                var control = Found[i].GetComponentInParent<InteractableObject>();
+                if (control == null || control.HandTarget == null || !control.isActiveAndEnabled) continue;
+                // Things that float loose, as cassettes to collect, are held as parts.
+                var loose = control.GetComponentInParent<Rigidbody>();
+                if (loose != null && !loose.isKinematic) continue;
+                var distance = (control.HandTarget.position - at).sqrMagnitude;
+                if (distance >= bestDistance) continue;
+                best = control;
+                bestDistance = distance;
+                collider = Found[i];
+            }
+            return best;
         }
 
         // Where that controller's hand holds on, if it does, for the game's hand (VrHands.Pose).
