@@ -396,9 +396,7 @@ namespace ShipbreakerVR
                 // What the sphere already touches has no place ahead of it.
                 if (hit.distance <= 0f) continue;
                 var body = hit.collider.attachedRigidbody;
-                // A part held that moves takes the pull's push back itself: stopping the body short of it as well would
-                // take the body's share away, and each stroke of the arms gave the two more speed.
-                if (Own(hit.collider) || HeldFirmly(body) || HeldMovable(body)) continue;
+                if (Own(hit.collider) || HeldFirmly(body)) continue;
                 var other = body != null ? body.GetPointVelocity(hit.point) : Vector3.zero;
                 var limited = ClimbContact.LimitApproach(velocity, other, hit.normal, hit.distance - clearance, dt);
                 if (limited != velocity)
@@ -508,13 +506,6 @@ namespace ShipbreakerVR
         {
             foreach (var hand in Hands)
                 if (hand.Firm && body != null && hand.Body == body) return true;
-            return false;
-        }
-
-        private static bool HeldMovable(Rigidbody body)
-        {
-            foreach (var hand in Hands)
-                if (hand.Holding && hand.Movable && body != null && hand.Body == body) return true;
             return false;
         }
 
@@ -751,7 +742,6 @@ namespace ShipbreakerVR
         {
             VrHand.StopHolding(hand.Vr);
             var firm = hand.Firm;
-            var movable = hand.Movable && hand.Body != null;
             hand.Follower = false;
             var body = hand.Body;
             if (firm) Unfirm(hand);
@@ -764,9 +754,7 @@ namespace ShipbreakerVR
             // A firmly held part does not count: it pulls at nothing.
             var last = !Pulling();
             var speed = Vector3.ClampMagnitude(pushOff, MaxPushOff * VrCamera.WorldScale);
-            // Off a part that moves the body keeps the speed the pulls gave it, as the part does: set from the hands, the
-            // two would not add up.
-            var flies = push && last && !firm && !movable;
+            var flies = push && last && !firm;
             if (flies && player != null) player.velocity = holdVelocity + speed;
             if (logs++ < 80)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand lets go ({reason}){(flies ? $", flies on at {speed.magnitude:0.00} m/s" : "")}");
