@@ -23,7 +23,8 @@ namespace ShipbreakerVR
     // velocity stops the body just short of anything ahead (KeepClear), and what still touches the thing held at low
     // speed is no impact (Soft, ImpactPatch). The colliders stay on, so the body does not go through it.
     // Steuerung/SchwereTeileSchieben: with one hand braced on something fixed, the other works a heavy part with a limited
-    // force (Pushes, BracedPush): it gathers speed slowly, keeps it, and is out of reach when the hold tears off.
+    // force (Pushes, BracedPush): it gathers speed slowly, keeps it, and is out of reach when the hold tears off. With
+    // both hands on two heavy parts they push each other apart, the body between them, shared by the masses.
     internal static class VrClimb
     {
         static VrClimb() => VrSession.OnUnload("climbing", Release);
@@ -313,6 +314,8 @@ namespace ShipbreakerVR
                 if (hand.Holding && !hand.Firm && !hand.Follower && !Pushes(hand)) pulling++;
             if (pulling == 0)
             {
+                foreach (var hand in Hands)
+                    if (Pushes(hand)) Push(hand);
                 blocked = false;
                 MoveFirm(Time.fixedDeltaTime);
                 return;
@@ -328,7 +331,7 @@ namespace ShipbreakerVR
                 var hold = Hold(hand);
                 if (Pushes(hand))
                 {
-                    hand.Body.AddForceAtPosition(BracedPush.Force((HandWorld(hand) - hold) / VrCamera.WorldScale), hold, ForceMode.Force);
+                    Push(hand);
                     continue;
                 }
                 var error = hold - PullPoint(hand);
@@ -574,13 +577,39 @@ namespace ShipbreakerVR
         private static Vector3 Hold(Hand hand) => hand.Anchor.TransformPoint(hand.Point);
 
         // That hand works a heavy part while the other is braced on something that does not move.
+        // With the other hand on a second part too heavy to grab instead, the two push each other apart through the body
+        // (Braced false): what one hand gives its part, the body takes back, so the masses share it.
         private static bool Pushes(Hand hand)
+        {
+            if (!Pushable(hand)) return false;
+            var other = Other(hand);
+            if (!other.Holding || other.Body == hand.Body) return false;
+            // Two parts the game lets one grab and move keep sharing the pull as before (Pull).
+            return Fixed(other) || (Pushable(other) && !hand.Movable && !other.Movable);
+        }
+
+        private static bool Pushable(Hand hand)
         {
             var body = hand.Body;
             if (!VrSettings.BracedPush.Value || !hand.Holding || hand.Firm || hand.Follower || body == null || body.isKinematic) return false;
-            if (body.gameObject.layer == StaticLayer || body.mass <= FirmMass || body.mass > BracedPush.MaxMass) return false;
-            var other = hand == LeftHand ? RightHand : LeftHand;
-            return other.Holding && !other.Movable && other.Body != body;
+            return body.gameObject.layer != StaticLayer && body.mass > FirmMass && body.mass <= BracedPush.MaxMass;
+        }
+
+        // A hold that does not move at all: the station, a hull, anything kinematic, or too heavy to push.
+        private static bool Fixed(Hand hand) =>
+            hand.Body == null || hand.Body.isKinematic || hand.Body.gameObject.layer == StaticLayer || hand.Body.mass > BracedPush.MaxMass;
+
+        private static bool Braced(Hand hand) => Fixed(Other(hand));
+
+        private static Hand Other(Hand hand) => hand == LeftHand ? RightHand : LeftHand;
+
+        // The hand's force on its part; between two parts the body pushes back.
+        private static void Push(Hand hand)
+        {
+            var hold = Hold(hand);
+            var force = BracedPush.Force((HandWorld(hand) - hold) / VrCamera.WorldScale);
+            hand.Body.AddForceAtPosition(force, hold, ForceMode.Force);
+            if (!Braced(hand)) player.AddForce(-force, ForceMode.Force);
         }
 
         // Where that controller's hand holds on, if it does, for the game's hand (VrHands.Pose).
