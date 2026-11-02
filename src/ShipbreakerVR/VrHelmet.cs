@@ -25,7 +25,8 @@ namespace ShipbreakerVR
         private Vector3 originalLocalScale;
         private bool moved;
         private float nextSearch;
-        private bool hidden;
+        // The helmet model hidden here, to show again.
+        private GameObject hiddenMesh;
 
         public static VrHelmet Attach(VrCamera vr)
         {
@@ -108,12 +109,18 @@ namespace ShipbreakerVR
             container.localScale = originalLocalScale * VrCamera.WorldScale;
         }
 
+        // Checked every frame: a new shift brings a new helmet, and the game may switch its model on again itself.
         private void SetHidden(bool hide)
         {
-            if (hidden == hide || controller == null || controller.CurrentHelment == null) return;
-            hidden = hide;
-            var mesh = controller.CurrentHelment.MeshGameObject;
-            if (mesh != null) mesh.SetActive(!hide);
+            var mesh = controller != null && controller.CurrentHelment != null ? controller.CurrentHelment.MeshGameObject : null;
+            if (hiddenMesh != null && (!hide || hiddenMesh != mesh))
+            {
+                hiddenMesh.SetActive(true);
+                hiddenMesh = null;
+            }
+            if (!hide || mesh == null || !mesh.activeSelf) return;
+            mesh.SetActive(false);
+            hiddenMesh = mesh;
         }
 
     }
