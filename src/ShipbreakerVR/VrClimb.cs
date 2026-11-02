@@ -612,6 +612,15 @@ namespace ShipbreakerVR
             if (!Braced(hand)) player.AddForce(-force, ForceMode.Force);
         }
 
+        // True while that controller's hand holds on to something large: a wall, the hull, a console, a heavy part. The hand
+        // lies flat on it there (VrHands.Fingers); around a small part that turns with the hand (Firm) it closes.
+        public static bool HoldsFlat(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input && hand.Holding) return !hand.Firm && !hand.Follower;
+            return false;
+        }
+
         // Where that controller's hand holds on, if it does, for the game's hand (VrHands.Pose).
         public static bool TryGetHold(VrInput.Hand input, out Vector3 point)
         {

@@ -18,7 +18,8 @@ namespace ShipbreakerVR
     // hand, the left arm follows its controller like any other, the right one its own, and the charge's pieces go over to
     // the left hand (Charges).
     // The fingers come from the animation too: a hand that follows its controller closes while its grip is held (around
-    // the tool in the left hand, or into a fist), through the animator's own grab pose (Fingers).
+    // the tool in the left hand, a small part or into a fist; flat on a wall, a console or a large part), through the
+    // animator's own grab pose (Fingers).
     internal static class VrHands
     {
         static VrHands() => VrSession.OnUnload("hands", Release);
@@ -136,7 +137,8 @@ namespace ShipbreakerVR
                 // around a second tool (VrDualTools). The grab pose set here would take the arm's animator out of the
                 // charge's states, and the charge vanished from the other hand.
                 if (arm.Hand.CurrentEquipmentType == EquipmentController.Equipment.DemoCharge) return;
-                closed = arm.Input.Grip.Down;
+                // Flat on walls, consoles and large parts, closed around a tool, a small part or into a fist.
+                closed = arm.Input.Grip.Down && !VrClimb.HoldsFlat(arm.Input);
             }
             else if (wasDriven)
             {
