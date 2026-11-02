@@ -111,6 +111,7 @@ namespace ShipbreakerVR
                         $"Richtet Blick und Menüs wieder vor dir aus, wie {VrSettings.CenterKey.Value} oder ein Druck auf den linken Stick. Nutzen, wenn du dich umgedreht oder von deinem Platz entfernt hast."),
                 },
                 EnumRow(L("Turning", "Drehen"), VrSettings.TurnMode),
+                EnumRow(L("Turn around", "Drehen um"), VrSettings.TurnAround),
                 new BoolRow { Label = L("Upright body", "Oberkörper aufrecht"), Entry = VrSettings.UprightBody },
                 EnumRow(L("Thrust mode", "Schubmodus"), VrSettings.ThrustMode),
                 new SliderRow { Label = L("Hand tilt (°)", "Handneigung (°)"), Entry = VrSettings.HandTilt, Format = "0", Step = 1f },
