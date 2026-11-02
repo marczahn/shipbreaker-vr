@@ -49,6 +49,12 @@ namespace ShipbreakerVR
         // 2 to 3 mm over its length (Raik).
         private static readonly float[] FlatBend = { 4f, 6f, 4f };
         private const float ThumbIn = 3f;
+        // Over an edge a flat hand's fingers curl around it: each joint whose next bone finds no surface under it bends
+        // this much (base, middle, tip, in degrees), over EdgeTime. Under a bone means within EdgeProbe of it towards the
+        // palm, in meters at world scale 1.
+        private static readonly float[] EdgeBend = { 30f, 35f, 25f };
+        private const float EdgeTime = 0.15f;
+        private const float EdgeProbe = 0.035f;
         // The points of a flat hand kept out of the surface (OutOfSurface), in the hand's axes from the wrist, in meters
         // at world scale 1: along the knuckles, and to either side.
         private static readonly float[] HandAlong = { 0f, 0.08f, 0.17f };
@@ -80,6 +86,8 @@ namespace ShipbreakerVR
             public bool Fist;
             // How far the fingers are straightened on a large hold (0 as animated, 1 straight).
             public float Flat;
+            // How far each finger joint is curled over an edge (0 to 1), as Joints.
+            public readonly float[] Edge = new float[12];
             // The hand on its hold (Grip): fixed on the thing held, turned (GripTurn) and placed (GripPoint, GripOffset)
             // as it took hold, flat on large ones; blended in and out over GripTime.
             public bool Gripping;
@@ -234,6 +242,7 @@ namespace ShipbreakerVR
                 for (var i = 0; i < arm.Joints.Length; i++)
                     Straighten(arm, i, across, Quaternion.AngleAxis(side * FlatBend[i % 3], across) * along, across, flatness);
                 var palm = frame * Vector3.right * side;
+                OverEdges(arm, palm, across, side, flatness);
                 for (var i = 0; i < arm.Thumb.Length; i++) LiftThumb(arm, i, palm, flatness);
                 return;
             }
@@ -276,6 +285,43 @@ namespace ShipbreakerVR
             var angle = Vector3.SignedAngle(bone, Vector3.ProjectOnPlane(along, across), axis);
             joint.rotation = Quaternion.AngleAxis(angle * share, axis) * joint.rotation;
             arm.Set[index] = joint.localRotation;
+        }
+
+        // Each finger, straight as Straighten left it, curls from the first joint whose next bone has no surface under it:
+        // there it reaches over an edge. Found on the straight finger, so the curl does not change what is found.
+        private static void OverEdges(Arm arm, Vector3 palm, Vector3 across, float side, float share)
+        {
+            var body = arm.Wrist.root;
+            var probe = EdgeProbe * VrCamera.WorldScale;
+            for (var finger = 0; finger < arm.Joints.Length / 3; finger++)
+            {
+                var over = false;
+                for (var k = 0; k < 3; k++)
+                {
+                    var index = finger * 3 + k;
+                    var joint = arm.Joints[index];
+                    var next = k < 2 ? arm.Joints[index + 1] : joint != null && joint.childCount > 0 ? joint.GetChild(0) : null;
+                    if (!over && next != null && !Supported(next.position, palm, probe, body)) over = true;
+                    arm.Edge[index] = Mathf.MoveTowards(arm.Edge[index], over ? 1f : 0f, Time.unscaledDeltaTime / EdgeTime);
+                }
+                for (var k = 0; k < 3; k++)
+                {
+                    var index = finger * 3 + k;
+                    var joint = arm.Joints[index];
+                    if (joint == null || arm.Edge[index] <= 0f) continue;
+                    joint.rotation = Quaternion.AngleAxis(side * EdgeBend[k] * arm.Edge[index] * share, across) * joint.rotation;
+                    arm.Set[index] = joint.localRotation;
+                }
+            }
+        }
+
+        // Whether something solid lies within probe of that point towards the palm (or the point is in it).
+        private static bool Supported(Vector3 point, Vector3 palm, float probe, Transform body)
+        {
+            var count = Physics.RaycastNonAlloc(point - palm * probe, palm, WallHits, 2f * probe, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (var i = 0; i < count; i++)
+                if (!WallHits[i].collider.transform.IsChildOf(body)) return true;
+            return false;
         }
 
         // A thumb joint turned so that its bone runs ThumbIn from the palm's plane towards the palm: on a flat hand the
@@ -626,6 +672,7 @@ namespace ShipbreakerVR
                 arm.Set[arm.Joints.Length + i] = new Quaternion(0f, 0f, 0f, 0f);
             }
             arm.Closed = arm.Flat = 0f;
+            System.Array.Clear(arm.Edge, 0, arm.Edge.Length);
             arm.Weight = 0f;
             arm.Driven = false;
             arm.Measured = false;
@@ -650,6 +697,7 @@ namespace ShipbreakerVR
                 if (animator != null && arm.Driven && arm.Hand != null && Idle(arm.Hand)) animator.SetBool(arm.Grab, false);
                 Open(arm);
                 arm.Closed = arm.Flat = 0f;
+            System.Array.Clear(arm.Edge, 0, arm.Edge.Length);
             }
             animator = null;
             grab = null;
