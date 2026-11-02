@@ -219,7 +219,8 @@ namespace ShipbreakerVR
                     "Was passiert, wenn du keinen Schub gibst. Einfach: Schub wirkt nur, solange du ihn hältst, du bremst von selbst bis zum Stillstand, mit einem Drittel der Bremskraft und des Treibstoffs, nicht beim Festhalten oder mit dem Grappler. Standard: wie im Spiel, seine automatische Bremse verlangsamt dich nach 3 Sekunden auf 1 m/s. Realistisch: keine automatische Bremse, du behältst dein Tempo."),
                 (new[] { "Simple", "Standard", "Realistic" }, new[] { "Einfach", "Standard", "Realistisch" }));
             BracedPush = Bind("Steuerung", "SchwereTeileSchieben", false,
-                "With one hand braced on something fixed, the other moves heavy parts up to 5 t with a limited force of 250 N: they gather speed slowly.");
+                ("On: holding on to something fixed, the other hand moves heavy parts up to 5 t with a limited force of 250 N, and with each hand on a heavy part they push each other apart. Off: the game's own physics, where such parts do not move.",
+                    "An: Hältst du dich an etwas Festem, bewegt die andere Hand schwere Teile bis 5 t mit begrenzter Kraft von 250 N, und mit je einer Hand an zwei schweren Teilen drückst du sie auseinander. Aus: die Physik des Spiels, in der solche Teile sich nicht bewegen."));
             BeltGrapple = Bind("Steuerung", "GrapplerAmKoerper", true,
                 "Shows the grapple at your right hip, where you draw it from, while it is not in a hand.");
             FreeWalking = Bind("Station", "FreiGehen", false,
