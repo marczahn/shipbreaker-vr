@@ -396,7 +396,9 @@ namespace ShipbreakerVR
                 // What the sphere already touches has no place ahead of it.
                 if (hit.distance <= 0f) continue;
                 var body = hit.collider.attachedRigidbody;
-                if (Own(hit.collider) || HeldFirmly(body)) continue;
+                // A light part held that moves takes the pull's push back itself: stopping the body short of it as well
+                // took the body's share away, and each stroke of the arms gave the two more speed (Raik, a 60 kg barrel).
+                if (Own(hit.collider) || HeldFirmly(body) || PulledLight(body)) continue;
                 var other = body != null ? body.GetPointVelocity(hit.point) : Vector3.zero;
                 var limited = ClimbContact.LimitApproach(velocity, other, hit.normal, hit.distance - clearance, dt);
                 if (limited != velocity)
@@ -517,6 +519,15 @@ namespace ShipbreakerVR
             var back = hand.Input.TryGetAimRotation(out var aim) ? VrCamera.Instance.transform.parent.rotation * aim * Vector3.forward : Vector3.down;
             var ray = new Ray(at - back * Reach * VrCamera.WorldScale, back);
             return collider.Raycast(ray, out var hit, 2f * Reach * VrCamera.WorldScale) ? hit.normal : -back;
+        }
+
+        // A part the game lets one move, held by a hand that pulls it (not one pushing a heavy part, BracedPush).
+        private static bool PulledLight(Rigidbody body)
+        {
+            foreach (var hand in Hands)
+                if (hand.Holding && hand.Movable && !hand.Firm && !hand.Follower && body != null && hand.Body == body && !Pushes(hand))
+                    return true;
+            return false;
         }
 
         private static bool Held(Rigidbody body)
@@ -740,6 +751,9 @@ namespace ShipbreakerVR
         // Letting go keeps the speed the hands gave the body once the last hand is off: a push off flies on.
         private static void LetGo(Hand hand, bool push, string reason)
         {
+            // Off a light part that moves the body keeps the speed the pulls gave it, as the part does: set from the
+            // hands, the two did not add up. Asked while the hand still holds, as Pushes needs.
+            var light = hand.Movable && hand.Body != null && !Pushes(hand);
             VrHand.StopHolding(hand.Vr);
             var firm = hand.Firm;
             hand.Follower = false;
@@ -754,7 +768,7 @@ namespace ShipbreakerVR
             // A firmly held part does not count: it pulls at nothing.
             var last = !Pulling();
             var speed = Vector3.ClampMagnitude(pushOff, MaxPushOff * VrCamera.WorldScale);
-            var flies = push && last && !firm;
+            var flies = push && last && !firm && !light;
             if (flies && player != null) player.velocity = holdVelocity + speed;
             if (logs++ < 80)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand lets go ({reason}){(flies ? $", flies on at {speed.magnitude:0.00} m/s" : "")}");
