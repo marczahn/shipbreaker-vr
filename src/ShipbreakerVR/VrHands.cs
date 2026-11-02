@@ -44,10 +44,11 @@ namespace ShipbreakerVR
         private static readonly float[] GripBend = { 55f, 70f, 45f };
         private const float FistThumb = 35f;
         private const float GripThumb = 25f;
-        // A flat hand is not stiff: each finger joint (base, middle, tip) stays bent this much towards the palm, and the
-        // thumb is lifted this much off the surface the palm lies on, in degrees.
+        // A flat hand is not stiff: each finger joint (base, middle, tip) stays bent this much towards the palm, in
+        // degrees. The thumb lies in the palm's plane with the fingers, each of its bones this much towards the palm, about
+        // 2 to 3 mm over its length (Raik).
         private static readonly float[] FlatBend = { 4f, 6f, 4f };
-        private const float ThumbLift = 6f;
+        private const float ThumbIn = 3f;
         // The points of a flat hand kept out of the surface (OutOfSurface), in the hand's axes from the wrist, in meters
         // at world scale 1: along the knuckles, and to either side.
         private static readonly float[] HandAlong = { 0f, 0.08f, 0.17f };
@@ -228,8 +229,8 @@ namespace ShipbreakerVR
             var along = frame * Vector3.forward;
             if (amount <= 0f)
             {
-                // Held on by the glove, as by a magnet: the fingers along the knuckles, barely bent, the thumb lifted
-                // to lie along the surface instead of in it.
+                // Held on by the glove, as by a magnet: the fingers along the knuckles, barely bent, the thumb in
+                // their plane instead of in the surface.
                 for (var i = 0; i < arm.Joints.Length; i++)
                     Straighten(arm, i, across, Quaternion.AngleAxis(side * FlatBend[i % 3], across) * along, across, flatness);
                 var palm = frame * Vector3.right * side;
@@ -277,8 +278,8 @@ namespace ShipbreakerVR
             arm.Set[index] = joint.localRotation;
         }
 
-        // A thumb joint turned so that its bone runs ThumbLift off the palm's plane, away from the surface: on a flat hand
-        // the animation's thumb pointed into the wall.
+        // A thumb joint turned so that its bone runs ThumbIn from the palm's plane towards the palm: on a flat hand the
+        // animation's thumb pointed into the wall.
         private static void LiftThumb(Arm arm, int index, Vector3 palm, float share)
         {
             var joint = arm.Thumb[index];
@@ -289,9 +290,7 @@ namespace ShipbreakerVR
             var bone = next.position - joint.position;
             var axis = Vector3.Cross(bone, palm);
             if (axis.sqrMagnitude <= 1e-12f) return;
-            // Only a thumb that is not lifted that far yet; one further off stays as animated.
-            var into = 90f - Vector3.Angle(bone, palm) + ThumbLift;
-            if (into <= 0f) return;
+            var into = 90f - Vector3.Angle(bone, palm) - ThumbIn;
             joint.rotation = Quaternion.AngleAxis(-into * share, axis.normalized) * joint.rotation;
             arm.Set[at] = joint.localRotation;
         }
