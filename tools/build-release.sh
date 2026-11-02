@@ -43,7 +43,10 @@ mkdir -p "$STAGE/images" && cp "$ROOT"/docs/images/* "$STAGE/images/"  # INSTALL
 # to a file of the game's Shipbreaker_Data folder. Only files of the same size are hashed, so this stays fast.
 GAME_DATA="$(cd "$MANAGED_DIR/.." && pwd)"
 SIZES="$(find "$STAGE" -type f -printf '%s\n' | sort -u)"
-CANDIDATES="$(find "$GAME_DATA" -type f -printf '%s\t%p\n' | awk -F'\t' 'NR==FNR { s[$1]; next } ($1 in s) { print $2 }' <(echo "$SIZES") -)"
+# The files this release itself puts into Shipbreaker_Data (OpenXR from the Unity helper project) are no game files:
+# with the mod installed they lie in the game folder too and would match themselves. The game ships without XR.
+OWN_FILES='/Plugins/x86_64/(UnityOpenXR|openxr_loader)\.dll$|/UnitySubsystems/UnityOpenXR/'
+CANDIDATES="$(find "$GAME_DATA" -type f -printf '%s\t%p\n' | grep -Ev "$OWN_FILES" | awk -F'\t' 'NR==FNR { s[$1]; next } ($1 in s) { print $2 }' <(echo "$SIZES") -)"
 if [ -n "$CANDIDATES" ]; then
   GAME_SUMS="$(echo "$CANDIDATES" | tr '\n' '\0' | xargs -0 sha256sum | cut -d' ' -f1 | sort -u)"
   FOUND="$(cd "$STAGE" && find . -type f -print0 | xargs -0 sha256sum | grep -F -f <(echo "$GAME_SUMS") || true)"
