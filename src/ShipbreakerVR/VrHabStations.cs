@@ -16,6 +16,9 @@ namespace ShipbreakerVR
         private const float Cone = 50f;
         private const float OpenWait = 2f;
         private const float CloseWait = 3f;
+        // After a screen closed, A and X wait this long before they open anything: the game is still on its way back to
+        // the bed, and the exit opened from there went nowhere, no walking, no screens (Raik).
+        private const float InputLock = 1.5f;
         private const string HomeSpot = "BedSitting_Virtual_Camera";
         private const string ExitSpot = "Exit_Virtual_Camera";
 
@@ -37,9 +40,8 @@ namespace ShipbreakerVR
         private static string target;
         private static bool opened;
         private static bool closing;
-        // Sent home after a screen: Using until the game is back at the bed, so no other screen opens on the way there.
-        private static bool returning;
         private static float waitingSince;
+        private static float lockedUntil;
 
         public static bool AtExit => Using && target == ExitSpot;
 
@@ -86,6 +88,7 @@ namespace ShipbreakerVR
                 if (near != null && VrUi.Instance != null) VrUi.Instance.Recenter();
                 Show(near != null ? $"[A] {near.Name}" : "");
             }
+            if (Time.unscaledTime < lockedUntil) return;
             if (near != null && VrInput.Right.Primary.Pressed) Open(near);
             else if (exit != null && VrInput.Left.Primary.Pressed) Open(exit);
         }
@@ -93,21 +96,20 @@ namespace ShipbreakerVR
         public static void Track()
         {
             var spot = VrHab.ActiveSpot;
-            if (returning)
-            {
-                if (spot == HomeSpot || Time.unscaledTime - waitingSince > CloseWait) Done();
-                return;
-            }
             if (closing)
             {
                 var location = Current();
                 if (location != null && location.isActiveAndEnabled)
                 {
                     location.Navigate(home);
-                    returning = true;
-                    waitingSince = Time.unscaledTime;
+                    Done();
+                    lockedUntil = Time.unscaledTime + InputLock;
                 }
-                else if (Time.unscaledTime - waitingSince > CloseWait) Done();
+                else if (Time.unscaledTime - waitingSince > CloseWait)
+                {
+                    Done();
+                    lockedUntil = Time.unscaledTime + InputLock;
+                }
                 return;
             }
             if (!opened)
@@ -156,7 +158,6 @@ namespace ShipbreakerVR
             Using = false;
             opened = false;
             closing = false;
-            returning = false;
         }
 
         private static Station Nearest(Transform head, float scale)
@@ -180,18 +181,11 @@ namespace ShipbreakerVR
             var location = Current();
             var controller = VrHab.Controller;
             if (location == null || controller.IsInputBlocked(station.Way) || controller.IsCameraBlocked(station.Way)) return;
-            // Only from the bed, where the ways to the screens start: opened from elsewhere, as on the way back from a
-            // screen, the game went nowhere and the player could neither walk nor open anything (Raik).
-            if (VrHab.ActiveSpot != HomeSpot)
-            {
-                Plugin.Log.LogInfo($"Hab: {station.Name} not opened, the game is at '{VrHab.ActiveSpot}'");
-                return;
-            }
             Plugin.Log.LogInfo($"Hab: opening {station.Name}");
             if (station == exit) VrHabWalk.StepBackFromExit();
             target = station.Way.CameraToGoTo.Name;
             Using = true;
-            opened = closing = returning = false;
+            opened = closing = false;
             waitingSince = Time.unscaledTime;
             near = null;
             Show("");
