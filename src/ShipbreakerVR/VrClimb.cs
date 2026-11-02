@@ -511,11 +511,20 @@ namespace ShipbreakerVR
             return false;
         }
 
-        // Outward from the surface at the hold: from it to the hand, or, with the hand on it, from a ray back at it.
+        // Outward from the surface at the hold: the face a ray from the hand to its nearest point meets, or, with the hand
+        // on it, the face a ray along the controller meets. The way from the nearest point to the hand alone tipped the
+        // hand at edges and on uneven tops, one grip flat, the next at a slant (Raik, the terminal at the start).
         private static Vector3 SurfaceNormal(Collider collider, Vector3 at, Vector3 surface, Hand hand)
         {
             var away = at - surface;
-            if (away.sqrMagnitude > 1e-4f * VrCamera.WorldScale * VrCamera.WorldScale) return away.normalized;
+            var distance = away.magnitude;
+            if (distance > 0.01f * VrCamera.WorldScale)
+            {
+                var toward = -away / distance;
+                if (collider.Raycast(new Ray(at, toward), out var face, distance + 0.02f * VrCamera.WorldScale)
+                    && Vector3.Dot(face.normal, away) > 0f) return face.normal;
+                return away / distance;
+            }
             var back = hand.Input.TryGetAimRotation(out var aim) ? VrCamera.Instance.transform.parent.rotation * aim * Vector3.forward : Vector3.down;
             var ray = new Ray(at - back * Reach * VrCamera.WorldScale, back);
             return collider.Raycast(ray, out var hit, 2f * Reach * VrCamera.WorldScale) ? hit.normal : -back;

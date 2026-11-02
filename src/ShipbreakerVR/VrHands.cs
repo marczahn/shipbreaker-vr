@@ -41,7 +41,7 @@ namespace ShipbreakerVR
         // The bend of each finger joint (base, middle, tip) in degrees, and the thumb's over the palm: into a fist, and
         // around a handle (a tool, a small part).
         // The fist is loose, a tunnel the thumb closes over the middle finger's tip (ThumbOver), not a tight one (Raik).
-        private static readonly float[] FistBend = { 60f, 75f, 50f };
+        private static readonly float[] FistBend = { 52f, 66f, 44f };
         private static readonly float[] GripBend = { 55f, 70f, 45f };
         private const float FistThumb = 35f;
         // On a fist the thumb's tip goes this far off the middle finger's last joint, on the outside of the curled
@@ -80,11 +80,14 @@ namespace ShipbreakerVR
             public Transform Little;
             // The finger joints, index to little, each from the base to the tip (Phalanges), and the thumb's.
             public readonly Transform[] Joints = new Transform[12];
-            public readonly Transform[] Thumb = new Transform[3];
+            // The thumb: its three humanoid bones, then the rig's further ones down to the last with a child (Setup).
+            public readonly Transform[] Thumb = new Transform[5];
             // What the animation gave each joint, and what Curl set: a joint the animation leaves alone starts from its
             // own pose again, instead of bending further every frame.
-            public readonly Quaternion[] Base = new Quaternion[15];
-            public readonly Quaternion[] Set = new Quaternion[15];
+            public readonly Quaternion[] Base = new Quaternion[17];
+            public readonly Quaternion[] Set = new Quaternion[17];
+            // The thumb's angles to the palm's plane once logged for this flat hold.
+            public bool ThumbLogged;
             // How far the fingers are closed (0 open, 1 the full bend), and towards what.
             public float Closed;
             public bool Fist;
@@ -135,6 +138,7 @@ namespace ShipbreakerVR
         private static InteractionController interaction;
         private static float nextInteractionSearch;
         private static int fingerLogs;
+        private static int thumbLogs;
         private static int logs;
 
         // From VrCamera.LateUpdate, after VrToolModels.PoseArm: which arms follow their controllers, blended in and out
@@ -229,6 +233,7 @@ namespace ShipbreakerVR
             if (closing) arm.Fist = !tool && (hand.State != HandState.Holding || VrClimb.HoldsControl(arm.Input));
             arm.Closed = Mathf.MoveTowards(arm.Closed, closing ? 1f : 0f, Time.unscaledDeltaTime / CurlTime);
             arm.Flat = Mathf.MoveTowards(arm.Flat, flat ? 1f : 0f, Time.unscaledDeltaTime / CurlTime);
+            if (!flat) arm.ThumbLogged = false;
             var amount = arm.Closed * arm.Weight;
             var flatness = arm.Flat * arm.Weight;
             if ((amount <= 0f && flatness <= 0f) || !Frame(arm, out _, out var frame))
@@ -248,6 +253,7 @@ namespace ShipbreakerVR
                 var palm = frame * Vector3.right * side;
                 OverEdges(arm, palm, across, side, flatness);
                 for (var i = 0; i < arm.Thumb.Length; i++) LiftThumb(arm, i, palm, flatness);
+                LogThumb(arm, palm, flatness);
                 return;
             }
             var bend = arm.Fist ? FistBend : GripBend;
@@ -263,7 +269,7 @@ namespace ShipbreakerVR
         private static void ThumbOnMiddle(Arm arm, Vector3 palm, float share)
         {
             var root = arm.Thumb[0];
-            var last = arm.Thumb[arm.Thumb.Length - 1];
+            var last = arm.Thumb.LastOrDefault(j => j != null);
             var middle = arm.Joints[5];
             if (root == null || last == null || middle == null) return;
             var tip = last.childCount > 0 ? last.GetChild(0).position : last.position;
@@ -343,6 +349,28 @@ namespace ShipbreakerVR
             return false;
         }
 
+        // The last bone of a chain's tip, or null.
+        private static Transform Tip(Transform[] chain)
+        {
+            var last = chain.LastOrDefault(j => j != null);
+            return last != null && last.childCount > 0 ? last.GetChild(0) : null;
+        }
+
+        // Once per flat hold, the first few times: each thumb bone's angle to the palm's plane (negative towards the palm).
+        private static void LogThumb(Arm arm, Vector3 palm, float share)
+        {
+            if (share < 1f || arm.ThumbLogged || thumbLogs >= 12) return;
+            arm.ThumbLogged = true;
+            thumbLogs++;
+            var angles = new List<string>();
+            var chain = arm.Thumb.Where(j => j != null).ToList();
+            var tip = Tip(arm.Thumb);
+            if (tip != null) chain.Add(tip);
+            for (var i = 0; i + 1 < chain.Count; i++)
+                angles.Add($"{chain[i].name} {Vector3.Angle(chain[i + 1].position - chain[i].position, palm) - 90f:0}°");
+            Plugin.Log.LogInfo($"Hands: {arm.Name} flat thumb to the palm's plane: {string.Join(", ", angles)}");
+        }
+
         // A thumb joint turned so that its bone runs ThumbIn from the palm's plane towards the palm: on a flat hand the
         // animation's thumb pointed into the wall.
         private static void LiftThumb(Arm arm, int index, Vector3 palm, float share)
@@ -350,7 +378,8 @@ namespace ShipbreakerVR
             var joint = arm.Thumb[index];
             var at = arm.Joints.Length + index;
             if (!Restore(arm, joint, at)) return;
-            var next = index < arm.Thumb.Length - 1 ? arm.Thumb[index + 1] : joint.childCount > 0 ? joint.GetChild(0) : null;
+            var next = index + 1 < arm.Thumb.Length && arm.Thumb[index + 1] != null ? arm.Thumb[index + 1]
+                : joint.childCount > 0 ? joint.GetChild(0) : null;
             if (next == null) return;
             var bone = next.position - joint.position;
             var axis = Vector3.Cross(bone, palm);
@@ -664,7 +693,7 @@ namespace ShipbreakerVR
             Setup(RightArm, grab.RightHand, animator, HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand,
                 HumanBodyBones.RightIndexProximal, HumanBodyBones.RightMiddleProximal, HumanBodyBones.RightLittleProximal);
             foreach (var arm in new[] { LeftArm, RightArm })
-                Plugin.Log.LogInfo($"Hands: {arm.Name} arm {Name(arm.Upper)} > {Name(arm.Lower)} > {Name(arm.Wrist)}, fingers {(arm.Index != null && arm.Middle != null && arm.Little != null ? "found" : "missing")}, {arm.Joints.Count(j => j != null)} finger joints, {arm.Thumb.Count(j => j != null)} thumb joints ({Name(arm.Thumb[0])} > {Name(arm.Joints[0])})");
+                Plugin.Log.LogInfo($"Hands: {arm.Name} arm {Name(arm.Upper)} > {Name(arm.Lower)} > {Name(arm.Wrist)}, fingers {(arm.Index != null && arm.Middle != null && arm.Little != null ? "found" : "missing")}, {arm.Joints.Count(j => j != null)} finger joints, {arm.Thumb.Count(j => j != null)} thumb joints ({string.Join(" > ", arm.Thumb.Where(j => j != null).Select(Name))}, tip {Name(Tip(arm.Thumb))}), index {Name(arm.Joints[0])}");
             return true;
         }
 
@@ -687,7 +716,12 @@ namespace ShipbreakerVR
             }
             for (var i = 0; i < arm.Thumb.Length; i++)
             {
-                arm.Thumb[i] = animator != null ? animator.GetBoneTransform((HumanBodyBones)(first - 3 + i)) : null;
+                // Past the humanoid three, the rig's next bone down, while that one has a bone after it: the tip's
+                // segment stayed bent up on a flat hand without it (Raik).
+                var above = i > 0 ? arm.Thumb[i - 1] : null;
+                arm.Thumb[i] = animator == null ? null
+                    : i < 3 ? animator.GetBoneTransform((HumanBodyBones)(first - 3 + i))
+                    : above != null && above.childCount > 0 && above.GetChild(0).childCount > 0 ? above.GetChild(0) : null;
                 arm.Set[arm.Joints.Length + i] = new Quaternion(0f, 0f, 0f, 0f);
             }
             arm.Closed = arm.Flat = 0f;
