@@ -35,7 +35,6 @@ namespace ShipbreakerVR
 
         public static void Update(VrCamera vr)
         {
-            if (VrSettings.ToolExport.Value) VrToolExport.Update();
             if (!VrSettings.Diagnostics.Value)
             {
                 dueAt = -1f;

@@ -39,9 +39,10 @@ namespace ShipbreakerVR
         {
             public Action Run;
             public Func<string> Explained;
+            public bool Silent;
             public override ConfigEntryBase Setting => null;
             public override string Hint => Explained();
-            public override string ValueText => L("Go", "Los");
+            public override string ValueText => Silent ? "" : L("Go", "Los");
         }
 
         // A number setting; the slider's ends are the setting's range.
@@ -97,41 +98,53 @@ namespace ShipbreakerVR
                 };
             }
 
+            // A heading: a row that does nothing, in capitals.
+            ActionRow Header(string label) => new ActionRow { Label = $"— {label.ToUpperInvariant()} —", Run = () => { }, Explained = () => "", Silent = true };
+
             return new Row[]
             {
+                Header(L("Comfort", "Komfort")),
                 new ActionRow
                 {
                     Label = L("Center view", "Ansicht zentrieren"), Run = VrCamera.RecenterView,
                     Explained = () => L($"Puts the view and the menus in front of you again, like {VrSettings.CenterKey.Value} or pressing the left stick. Use it after you turned around or moved away from your spot.",
                         $"Richtet Blick und Menüs wieder vor dir aus, wie {VrSettings.CenterKey.Value} oder ein Druck auf den linken Stick. Nutzen, wenn du dich umgedreht oder von deinem Platz entfernt hast."),
                 },
-                new BoolRow { Label = L("Aim with the hand", "Zielen mit der Hand"), Entry = VrSettings.AimWithHand },
-                new BoolRow { Label = L("Two tools at once", "Zwei Werkzeuge gleichzeitig"), Entry = VrSettings.TwoTools },
-                new BoolRow { Label = L("Hold on and climb", "Festhalten und Hangeln"), Entry = VrSettings.Climbing },
-                new BoolRow { Label = L("Upright body", "Oberkörper aufrecht"), Entry = VrSettings.UprightBody },
-                new BoolRow { Label = L("Walk in the station", "Frei gehen in der Station"), Entry = VrSettings.FreeWalking },
-                new BoolRow { Label = L("Fit tools in the hand", "Werkzeuge justieren"), Entry = VrToolFit.Adjusting },
-                EnumRow(L("Controller flying", "Controllersteuerung"), VrSettings.ControlScheme),
                 EnumRow(L("Turning", "Drehen"), VrSettings.TurnMode),
-                new SliderRow { Label = L("Thrust deadzone (cm)", "Schub-Totzone (cm)"), Entry = VrSettings.ThrustDeadzone, Format = "0", Step = 1f },
-                new SliderRow { Label = L("Full thrust at (cm)", "Voller Schub ab (cm)"), Entry = VrSettings.ThrustFull, Format = "0", Step = 1f },
-                EnumRow(L("Flight globe", "Flugkugel"), VrSettings.FlightGlobe),
-                EnumRow(L("Anti-aliasing", "Kantenglättung"), VrSettings.AntiAliasing),
-                new SliderRow { Label = L("Render resolution", "Renderauflösung"), Entry = VrSettings.ResolutionScale, Format = "0.00" },
-                new SliderRow { Label = L("Station resolution", "Auflösung Station"), Entry = VrSettings.StationResolution, Format = "0.00" },
-                new SliderRow { Label = L("World scale", "Weltmaßstab"), Entry = VrSettings.WorldScale, Format = "0.00" },
+                new BoolRow { Label = L("Upright body", "Oberkörper aufrecht"), Entry = VrSettings.UprightBody },
+                EnumRow(L("Thrust mode", "Schubmodus"), VrSettings.ThrustMode),
+                new SliderRow { Label = L("Hand tilt (°)", "Handneigung (°)"), Entry = VrSettings.HandTilt, Format = "0", Step = 1f },
                 new SliderRow { Label = L("Head height (cm)", "Kopfhöhe (cm)"), Entry = VrSettings.HeadHeight, Format = "0", Step = 1f },
                 new SliderRow { Label = L("Head sideways (cm)", "Kopf seitlich (cm)"), Entry = VrSettings.HeadSideways, Format = "0", Step = 1f },
-                EnumRow(L("Ambient occlusion", "Umgebungsverdeckung"), VrSettings.AmbientOcclusion),
-                new BoolRow { Label = L("Share work between eyes", "Augen teilen"), Entry = VrSettings.EyeSharing },
-                new BoolRow { Label = L("Alternate eyes", "Augen abwechselnd"), Entry = VrSettings.AlternateEyes },
+                new SliderRow { Label = L("World scale", "Weltmaßstab"), Entry = VrSettings.WorldScale, Format = "0.00" },
                 EnumRow(L("Helmet", "Helm"), VrSettings.Helmet),
                 new BoolRow { Label = L("HUD and menus in world", "HUD und Menüs im Raum"), Entry = VrSettings.UiInVr },
                 EnumRow(L("Visor steadying", "Visierberuhigung"), VrSettings.HudSteadying),
                 new SliderRow { Label = L("Visor size", "Visiergröße"), Entry = VrSettings.HudScale, Format = "0.00" },
                 new SliderRow { Label = L("Visor distance (m)", "Visierabstand (m)"), Entry = VrSettings.HudDistance, Format = "0.0" },
+                new SliderRow { Label = L("Visor height (cm)", "Visierhöhe (cm)"), Entry = VrSettings.HudHeight, Format = "0", Step = 1f },
                 new SliderRow { Label = L("Menu distance (m)", "Menüabstand (m)"), Entry = VrSettings.MenuDistance, Format = "0.0" },
                 new SliderRow { Label = L("Menu width (m)", "Menübreite (m)"), Entry = VrSettings.MenuWidth, Format = "0.0" },
+                Header(L("Gameplay", "Gameplay")),
+                new BoolRow { Label = L("Aim with the hand", "Zielen mit der Hand"), Entry = VrSettings.AimWithHand },
+                new BoolRow { Label = L("Two tools at once", "Zwei Werkzeuge gleichzeitig"), Entry = VrSettings.TwoTools },
+                new BoolRow { Label = L("Fit tools in the hand", "Werkzeuge justieren"), Entry = VrToolFit.Adjusting },
+                new BoolRow { Label = L("Grapple at the hip", "Grappler am Körper"), Entry = VrSettings.BeltGrapple },
+                new BoolRow { Label = L("Hold on and climb", "Festhalten und Hangeln"), Entry = VrSettings.Climbing },
+                new BoolRow { Label = L("Push heavy parts", "Schwere Teile schieben"), Entry = VrSettings.BracedPush },
+                new BoolRow { Label = L("Walk in the station", "Frei gehen in der Station"), Entry = VrSettings.FreeWalking },
+                EnumRow(L("Controller flying", "Controllersteuerung"), VrSettings.ControlScheme),
+                new SliderRow { Label = L("Thrust deadzone (cm)", "Schub-Totzone (cm)"), Entry = VrSettings.ThrustDeadzone, Format = "0", Step = 1f },
+                new SliderRow { Label = L("Full thrust at (cm)", "Voller Schub ab (cm)"), Entry = VrSettings.ThrustFull, Format = "0", Step = 1f },
+                EnumRow(L("Flight globe", "Flugkugel"), VrSettings.FlightGlobe),
+                Header(L("Graphics", "Grafik")),
+                new SliderRow { Label = L("Render resolution", "Renderauflösung"), Entry = VrSettings.ResolutionScale, Format = "0.00" },
+                new SliderRow { Label = L("Station resolution", "Auflösung Station"), Entry = VrSettings.StationResolution, Format = "0.00" },
+                new SliderRow { Label = L("Screen sharpness", "Monitor-Schärfe"), Entry = VrSettings.MonitorSharpness, Format = "0.0", Step = 0.1f },
+                EnumRow(L("Anti-aliasing", "Kantenglättung"), VrSettings.AntiAliasing),
+                EnumRow(L("Ambient occlusion", "Umgebungsverdeckung"), VrSettings.AmbientOcclusion),
+                new BoolRow { Label = L("Share work between eyes", "Augen teilen"), Entry = VrSettings.EyeSharing },
+                new BoolRow { Label = L("Alternate eyes", "Augen abwechselnd"), Entry = VrSettings.AlternateEyes },
                 new BoolRow { Label = L("Performance display", "Leistungsanzeige"), Entry = VrSettings.PerformanceOverlay },
             };
         }

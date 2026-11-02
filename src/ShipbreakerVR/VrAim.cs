@@ -332,13 +332,15 @@ namespace ShipbreakerVR
             // The demo charges show where they go with the game's marker, they need no laser.
             var tool = VrToolModels.Equipped;
             var secondTool = VrDualTools.Second;
-            if (tool != EquipmentController.Equipment.DemoCharge)
+            var pointing = !Busy(tool);
+            var secondPointing = !Busy(secondTool);
+            if (tool != EquipmentController.Equipment.DemoCharge && pointing)
                 DrawBeam(cmd, eye, scale, beamStart, beamEnd, beamHit, tethers, handNode, beamTether, tool);
-            if (secondBeamVisible && secondTool != EquipmentController.Equipment.DemoCharge)
+            if (secondBeamVisible && secondTool != EquipmentController.Equipment.DemoCharge && secondPointing)
                 DrawBeam(cmd, eye, scale, secondBeamStart, secondBeamEnd, secondBeamHit, secondTethers, VrDualTools.SecondNode, secondBeamTether, secondTool);
             foreach (var point in cutPoints) DrawImpact(cmd, eye, scale, point, beamMaterial, coreMaterial);
-            if (beamDot) DrawImpact(cmd, eye, scale, beamEnd, Beam(tool), Core(tool));
-            if (secondBeamDot) DrawImpact(cmd, eye, scale, secondBeamEnd, Beam(secondTool), Core(secondTool));
+            if (beamDot && pointing) DrawImpact(cmd, eye, scale, beamEnd, Beam(tool), Core(tool));
+            if (secondBeamDot && secondPointing) DrawImpact(cmd, eye, scale, secondBeamEnd, Beam(secondTool), Core(secondTool));
             context.renderContext.ExecuteCommandBuffer(cmd);
             cmd.Clear();
             context.renderContext.SetupCameraProperties(context.hdCamera.camera, true);
@@ -346,6 +348,16 @@ namespace ShipbreakerVR
 
         // One tool's laser; in the tether mode orange, with the ring where it hits, the line of the tether being placed by
         // that hand and the tether it points at traced.
+        // A tool that is at work has no use for its pointer: the cutter while it fires, the grapple while it holds something.
+        private static bool Busy(EquipmentController.Equipment tool)
+        {
+            if (tool == EquipmentController.Equipment.CuttingTool)
+                return GameRefs.Cutter != null && GameRefs.Cutter.State == CuttingState.Cutting;
+            if (tool != EquipmentController.Equipment.GrappleHook || VrTetherMode.Applies(tool)) return false;
+            var hook = GameRefs.Grapple;
+            return hook != null && (hook.GrappledRigidbody != null || hook.IsSwinging);
+        }
+
         private static void DrawBeam(CommandBuffer cmd, Vector3 eye, float scale, Vector3 start, Vector3 end, bool hit, bool tethers, XRNode node, Tether target, EquipmentController.Equipment tool)
         {
             DrawLine(cmd, eye, scale, start, end, Beam(tool));
@@ -409,7 +421,10 @@ namespace ShipbreakerVR
             secondBeamDot = secondBeamVisible && secondBeamHit && Dotted(VrDualTools.Second);
             cutPoints.Clear();
             if (secondBeamVisible && VrDualTools.Second == EquipmentController.Equipment.CuttingTool)
+            {
                 CutLine(secondBeamStart, secondRotation);
+                VrStingerDots.Add(cutPoints, secondBeamStart);
+            }
             beamVisible = Aiming && TryGetAim(out beamStart, out rotation);
             if (!beamVisible)
             {
@@ -421,6 +436,7 @@ namespace ShipbreakerVR
             }
             beamHit = Cast(beamStart, rotation, out beamEnd, out var hit);
             beamDot = beamHit && Dotted(VrToolModels.Equipped);
+            if (VrToolModels.Equipped == EquipmentController.Equipment.CuttingTool) VrStingerDots.Add(cutPoints, beamStart);
             if (VrToolModels.Equipped == EquipmentController.Equipment.CuttingTool && VrDualTools.Second != EquipmentController.Equipment.CuttingTool)
                 CutLine(beamStart, rotation);
             beamTether = VrTetherMode.Applies(VrToolModels.Equipped) ? VrTetherMode.Targeted(beamStart, rotation * Vector3.forward) : null;

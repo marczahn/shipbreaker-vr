@@ -215,6 +215,8 @@ def main():
              (button("Y"), "Brake", "Y on the left controller.", "Uses the game's own brake, fuel and HUD."),
              (stick_press("R3"), "Pause", "Press the right stick (also in the station).", "On loading screens it shows the next tip."),
              (stick_press("L3"), "Center the view", "Press the left stick, or F4 on the keyboard.", "Puts the view and the menus in front of you again."),
+             (stick_press("L3"), "Get upright", "Hold the left stick in for half a second.", "Back to level, keeping your heading."),
+             (trigger(), "Simple thrust", "VR tab: Simple thrust. Let go of the trigger to stop.", "You brake by yourself, at a third of the brake's strength."),
              (holding(), "Grapple holds something big", "Fly and brake as usual.", "Fly farther than the grapple reaches and the rope snaps."),
          ])
 

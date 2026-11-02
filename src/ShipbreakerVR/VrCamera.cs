@@ -259,6 +259,7 @@ namespace ShipbreakerVR
             {
                 if (gameCamera != null) gameCamera.enabled = VrCameraSilencer.GameWantsEnabled(gameCamera);
                 VrResolution.Stopped();
+                VrBeltGrapple.Hide();
             }
             wasRunning = running;
             VrCameraSilencer.Update(running, vrCamera, gameCamera);
@@ -388,10 +389,26 @@ namespace ShipbreakerVR
             return forward.sqrMagnitude < 1e-8f ? Quaternion.identity : Quaternion.LookRotation(forward, Vector3.up);
         }
 
+        private const float StickHold = 0.5f;
+
+        private float stickPressedAt = -1f;
+
         // Pressing the left stick: the same as F4. Nothing else uses that press (VrMenuInput sends no L3).
         private void UpdateCenterPress()
         {
-            if (!VrXr.IsRunning || !VrInput.Left.StickClick.Pressed) return;
+            if (!VrXr.IsRunning) return;
+            var stick = VrInput.Left.StickClick;
+            if (stick.Pressed) stickPressedAt = Time.unscaledTime;
+            if (stickPressedAt < 0f) return;
+            // Flying, holding it straightens up instead, so centering waits for the stick to come back.
+            if (VrControls.Flying && stick.Down)
+            {
+                if (Time.unscaledTime - stickPressedAt < StickHold) return;
+                stickPressedAt = -1f;
+                VrFlightComfort.StartAligning();
+                return;
+            }
+            stickPressedAt = -1f;
             Plugin.Log.LogInfo("Left stick pressed: centering the view");
             Recenter(true);
         }

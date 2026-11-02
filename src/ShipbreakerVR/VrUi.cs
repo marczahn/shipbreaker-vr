@@ -76,6 +76,9 @@ namespace ShipbreakerVR
         private const float GlowMargin = 0.12f;
         private const float ScreenCorner = 0.04f;
         private static readonly Color MonitorTint = new Color(0.9f, 0.93f, 0.96f, 1f);
+        private const int MaxMonitorWidth = 4096;
+        // Mip levels alone left the writing soft: a finer level than the distance asks for keeps it sharp, without shimmer yet.
+        private const float MonitorMipBias = -0.8f;
         private static readonly Color GlowColor = new Color(0.55f, 0.85f, 1f, 0.14f);
         private bool onMonitor;
         private Matrix4x4 glowMatrix;
@@ -133,6 +136,8 @@ namespace ShipbreakerVR
         public RenderTexture Texture => texture;
 
         public bool IsConverted(Canvas canvas) => canvases.IsConverted(canvas);
+
+        public void Adopt(Transform part) => canvases.Adopt(part);
 
         // Where a spot in the room shows on the menu canvas: -0.5 to 0.5 across, 0 in the middle. Seen from the resting
         // head, not the tracked one: from that the prompts swam across the canvas with every move of the head.
@@ -197,14 +202,30 @@ namespace ShipbreakerVR
 
             var width = Mathf.Max(Screen.width, 640);
             var height = Mathf.Max(Screen.height, 360);
-            if (texture == null || texture.width != width || texture.height != height)
+            // At a Hab screen more pixels and mip levels keep the writing readable (Anzeige/MonitorSchaerfe).
+            var sharp = onMonitor && VrSettings.MonitorSharpness.Value > 1f;
+            if (sharp)
+            {
+                var factor = Mathf.Max(1f, Mathf.Min(VrSettings.MonitorSharpness.Value, (float)MaxMonitorWidth / width));
+                width = Mathf.RoundToInt(width * factor);
+                height = Mathf.RoundToInt(height * factor);
+            }
+            if (texture == null || texture.width != width || texture.height != height || texture.useMipMap != sharp)
             {
                 if (texture != null)
                 {
                     texture.Release();
                     Destroy(texture);
                 }
-                texture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGBHalf) { name = "ShipbreakerVR UI" };
+                texture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGBHalf)
+                {
+                    name = "ShipbreakerVR UI",
+                    useMipMap = sharp,
+                    autoGenerateMips = sharp,
+                    filterMode = sharp ? FilterMode.Trilinear : FilterMode.Bilinear,
+                    anisoLevel = sharp ? 8 : 1,
+                    mipMapBias = sharp ? MonitorMipBias : 0f,
+                };
                 texture.Create();
                 if (material == null) material = VrUtil.OverlayMaterial();
                 material.mainTexture = texture;
@@ -275,7 +296,8 @@ namespace ShipbreakerVR
                 var h = 2f * distance * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad) * VrSettings.HudScale.Value;
                 // Stays centered on the head, only its rotation lags; the rig's rotation (turning the body) applies at once.
                 var rotation = head.parent.rotation * SteadyVisor(head.localRotation);
-                screenMatrix = Matrix4x4.TRS(head.position + rotation * new Vector3(0, 0, distance), rotation, new Vector3(h * aspect, h, 1f));
+                var height = VrSettings.HudHeight.Value * 0.01f * VrCamera.WorldScale;
+                screenMatrix = Matrix4x4.TRS(head.position + rotation * new Vector3(0, height, distance), rotation, new Vector3(h * aspect, h, 1f));
                 return;
             }
 

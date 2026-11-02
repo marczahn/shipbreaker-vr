@@ -457,13 +457,19 @@ namespace ShipbreakerVR
     }
 
     // At a screen the game adds its base post-processing over the room, a colour cast one notices when the room stays in
-    // view. In the flat game and at the spots the screen covers it.
+    // view. In the flat game and at the spots the screen covers it. With walking on it stays off from waking up, except
+    // towards the exit, which leaves it on for the shift.
     [HarmonyPatch]
     internal static class HabScreenFilterPatch
     {
         private static System.Reflection.MethodBase TargetMethod() => AccessTools.Method(AccessTools.TypeByName("BBI.Unity.Game.Utilities.Rendering.HabNavigationBaseSessionPostToggler"), "OnHabStateChangedEvent");
 
-        private static bool Prefix() => !VrHabWalk.Walking;
+        private static bool Prefix(Behaviour ___m_BaseSessionPostVolume)
+        {
+            if (!VrSettings.FreeWalking.Value || !VrXr.IsRunning || VrHabStations.AtExit) return true;
+            ___m_BaseSessionPostVolume.enabled = false;
+            return false;
+        }
     }
 
     internal static class HabStanding

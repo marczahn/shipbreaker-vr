@@ -98,12 +98,22 @@ namespace ShipbreakerVR
                 if (!Get()) return false;
                 if (Device.TryGetFeatureValue(CommonUsages.isTracked, out var tracked) && !tracked) return false;
                 pointer = Device.TryGetFeatureValue(PointerPosition, out position) && Device.TryGetFeatureValue(PointerRotation, out rotation);
-                return pointer || TryGetGripPose(out position, out rotation);
+                if (!pointer && !TryGetGripPose(out position, out rotation)) return false;
+                rotation *= Tilt;
+                return true;
             }
 
             // Where the controller points: the aim pose's rotation, or the grip pose's without one.
-            public bool TryGetAimRotation(out Quaternion rotation) =>
-                (Get() && Device.TryGetFeatureValue(PointerRotation, out rotation)) || TryGetGripPose(out _, out rotation);
+            public bool TryGetAimRotation(out Quaternion rotation)
+            {
+                rotation = Quaternion.identity;
+                if (!(Get() && Device.TryGetFeatureValue(PointerRotation, out rotation)) && !TryGetGripPose(out _, out rotation)) return false;
+                rotation *= Tilt;
+                return true;
+            }
+
+            // Steuerung/HandNeigung: hands, tools and beams tipped forward (positive) or back against the controller.
+            private static Quaternion Tilt => Quaternion.AngleAxis(VrSettings.HandTilt.Value, Vector3.right);
 
             public void Buzz(float amplitude, float seconds)
             {
