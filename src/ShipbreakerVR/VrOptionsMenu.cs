@@ -56,6 +56,27 @@ namespace ShipbreakerVR
                 listed = true;
                 Log("main menu: no Options button among " + string.Join(", ", buttons.Select(b => $"'{VrUtil.Path(b.transform)}' (id '{(MainText(b) != null ? LocId(MainText(b)) : "-")}', text '{Text(b.gameObject)}')")));
             }
+            Survey();
+        }
+
+        // Every text that reads "Option..." and the button it belongs to, once each: where the menus' Options buttons
+        // are, for placing the entry (the first test found none, the main menu's buttons are no MainMenuButtons).
+        private static readonly System.Collections.Generic.HashSet<string> surveyed = new System.Collections.Generic.HashSet<string>();
+
+        private static void Survey()
+        {
+            if (surveyed.Count >= 20) return;
+            foreach (var text in Object.FindObjectsOfType<TextMeshProUGUI>())
+            {
+                if (text.text == null || text.text.IndexOf("option", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
+                var path = VrUtil.Path(text.transform);
+                if (!surveyed.Add(path)) continue;
+                var localized = text.GetComponentInParent<LocalizedTextMeshProUGUI>();
+                var button = (Component)text.GetComponentInParent<UIButton>() ?? text.GetComponentInParent<Button>();
+                var components = button != null ? string.Join(", ", button.GetComponents<Component>().Select(c => c.GetType().Name)) : "-";
+                var layout = button != null && button.transform.parent != null && button.transform.parent.GetComponent<LayoutGroup>() != null;
+                Log($"survey: text '{text.text}' at '{path}', id '{(localized != null ? LocId(localized) : "-")}', button '{(button != null ? VrUtil.Path(button.transform) : "-")}' ({components}), layout group {layout}");
+            }
         }
 
         private static bool listed;
@@ -163,7 +184,7 @@ namespace ShipbreakerVR
 
         private static void Log(string text)
         {
-            if (logs++ < 20) Plugin.Log.LogInfo($"VR options entry, {text}");
+            if (logs++ < 60) Plugin.Log.LogInfo($"VR options entry, {text}");
         }
     }
 
