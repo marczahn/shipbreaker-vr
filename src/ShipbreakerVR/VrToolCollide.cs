@@ -21,6 +21,8 @@ namespace ShipbreakerVR
         private const float MostOut = 80f;
         // A turn this far off the controller is given up: the tool goes back to the controller.
         private const float MostOff = 120f;
+        // A tool that was held off comes back to the controller over about this time, in seconds, not in one frame.
+        private const float CatchUp = 0.12f;
 
         private static readonly AccessTools.FieldRef<GrabController, Rigidbody> PlayerBody =
             AccessTools.FieldRefAccess<GrabController, Rigidbody>("m_PlayerRigidbodyReference");
@@ -32,6 +34,7 @@ namespace ShipbreakerVR
             public int Frame;
             public Quaternion Rotation;
             public Quaternion Result;
+            // Off the controller last frame: blocked, or catching up after it.
             public bool Blocked;
         }
 
@@ -58,27 +61,33 @@ namespace ShipbreakerVR
             state.Running = true;
             var length = Length(pivot, desired);
 
+            // Free of the obstacle it was held off by, the tool follows the controller with a short lag, not at once.
+            var most = state.Blocked ? 1f - Mathf.Exp(-Time.unscaledDeltaTime / CatchUp) : 1f;
             Quaternion result;
-            if (Free(pivot, desired, length, out _)) result = desired;
+            if (most >= 1f && Free(pivot, desired, length, out _)) result = desired;
             else
             {
                 // The hand's movement may have put the last turn into something: turned out of it first.
                 if (!Free(pivot, previous, length, out var hit)) previous = Out(pivot, previous, length, hit);
-                // Then as far towards the controller as it is free.
+                // Then as far towards the controller as it is free, at most the catch-up's share.
                 var from = 0f;
-                var to = 1f;
-                for (var i = 0; i < 7; i++)
+                var to = most;
+                if (Free(pivot, Quaternion.Slerp(previous, desired, to), length, out _)) from = to;
+                else
                 {
-                    var middle = (from + to) * 0.5f;
-                    if (Free(pivot, Quaternion.Slerp(previous, desired, middle), length, out _)) from = middle;
-                    else to = middle;
+                    for (var i = 0; i < 7; i++)
+                    {
+                        var middle = (from + to) * 0.5f;
+                        if (Free(pivot, Quaternion.Slerp(previous, desired, middle), length, out _)) from = middle;
+                        else to = middle;
+                    }
                 }
                 result = Quaternion.Slerp(previous, desired, from);
                 if (Quaternion.Angle(result, desired) > MostOff) result = desired;
             }
             var blocked = Quaternion.Angle(result, desired) > 1f;
             if (blocked != state.Blocked && logs++ < 30)
-                Plugin.Log.LogInfo($"Tool collision: {hand.Name} {tool} {(blocked ? $"blocked, {Quaternion.Angle(result, desired):0}° off the controller" : "free again")}");
+                Plugin.Log.LogInfo($"Tool collision: {hand.Name} {tool} {(blocked ? $"held off, {Quaternion.Angle(result, desired):0}° from the controller" : "with the controller again")}");
             state.Blocked = blocked;
             state.Rotation = Quaternion.Inverse(rig.rotation) * result;
             state.Result = state.Rotation;
