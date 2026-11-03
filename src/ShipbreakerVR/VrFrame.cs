@@ -35,6 +35,7 @@ namespace ShipbreakerVR
             ("aim", VrAim.Update),
             ("second aim", VrDualTools.UpdateAim),
             ("flying", VrControls.Update),
+            ("tool haptics", VrToolHaptics.Update),
         };
 
         private static readonly (string Name, System.Action Step)[] UpdateSteps =
@@ -42,6 +43,7 @@ namespace ShipbreakerVR
             ("frame statistics", VrPerformance.FrameStart),
             ("load trace", () => VrLoadTrace.EndFrame(VrCamera.Instance)),
             ("diagnostics", () => VrDiagnostics.Update(VrCamera.Instance)),
+            ("vr options entry", VrOptionsMenu.Update),
         };
 
         private static readonly (string Name, System.Action Step)[] FixedSteps =

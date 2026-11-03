@@ -16,6 +16,9 @@ namespace ShipbreakerVR
         private const float Cone = 50f;
         private const float OpenWait = 2f;
         private const float CloseWait = 3f;
+        // After a screen closed, A and X wait this long before they open anything: the game is still on its way back to
+        // the bed, and the exit opened from there went nowhere, no walking, no screens (Raik).
+        private const float InputLock = 1.5f;
         private const string HomeSpot = "BedSitting_Virtual_Camera";
         private const string ExitSpot = "Exit_Virtual_Camera";
 
@@ -38,6 +41,7 @@ namespace ShipbreakerVR
         private static bool opened;
         private static bool closing;
         private static float waitingSince;
+        private static float lockedUntil;
 
         public static bool AtExit => Using && target == ExitSpot;
 
@@ -84,6 +88,7 @@ namespace ShipbreakerVR
                 if (near != null && VrUi.Instance != null) VrUi.Instance.Recenter();
                 Show(near != null ? $"[A] {near.Name}" : "");
             }
+            if (Time.unscaledTime < lockedUntil) return;
             if (near != null && VrInput.Right.Primary.Pressed) Open(near);
             else if (exit != null && VrInput.Left.Primary.Pressed) Open(exit);
         }
@@ -98,8 +103,13 @@ namespace ShipbreakerVR
                 {
                     location.Navigate(home);
                     Done();
+                    lockedUntil = Time.unscaledTime + InputLock;
                 }
-                else if (Time.unscaledTime - waitingSince > CloseWait) Done();
+                else if (Time.unscaledTime - waitingSince > CloseWait)
+                {
+                    Done();
+                    lockedUntil = Time.unscaledTime + InputLock;
+                }
                 return;
             }
             if (!opened)

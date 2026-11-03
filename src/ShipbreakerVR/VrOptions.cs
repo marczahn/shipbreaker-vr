@@ -37,6 +37,8 @@ namespace ShipbreakerVR
         // A row that runs something when activated, shown as a toggle row without the toggle.
         private class ActionRow : Row
         {
+            // A group's heading: in the single list it separates the groups, in the VR options each group has its tab.
+            public string Group;
             public Action Run;
             public Func<string> Explained;
             public bool Silent;
@@ -99,7 +101,7 @@ namespace ShipbreakerVR
             }
 
             // A heading: a row that does nothing, in capitals.
-            ActionRow Header(string label) => new ActionRow { Label = $"— {label.ToUpperInvariant()} —", Run = () => { }, Explained = () => "", Silent = true };
+            ActionRow Header(string label) => new ActionRow { Label = $"— {label.ToUpperInvariant()} —", Group = label, Run = () => { }, Explained = () => "", Silent = true };
 
             return new Row[]
             {
@@ -111,9 +113,11 @@ namespace ShipbreakerVR
                         $"Richtet Blick und Menüs wieder vor dir aus, wie {VrSettings.CenterKey.Value} oder ein Druck auf den linken Stick. Nutzen, wenn du dich umgedreht oder von deinem Platz entfernt hast."),
                 },
                 EnumRow(L("Turning", "Drehen"), VrSettings.TurnMode),
+                EnumRow(L("Turn around", "Drehen um"), VrSettings.TurnAround),
                 new BoolRow { Label = L("Upright body", "Oberkörper aufrecht"), Entry = VrSettings.UprightBody },
                 EnumRow(L("Thrust mode", "Schubmodus"), VrSettings.ThrustMode),
                 new SliderRow { Label = L("Hand tilt (°)", "Handneigung (°)"), Entry = VrSettings.HandTilt, Format = "0", Step = 1f },
+                new BoolRow { Label = L("Fit tools in the hand", "Werkzeuge justieren"), Entry = VrToolFit.Adjusting },
                 new SliderRow { Label = L("Head height (cm)", "Kopfhöhe (cm)"), Entry = VrSettings.HeadHeight, Format = "0", Step = 1f },
                 new SliderRow { Label = L("Head sideways (cm)", "Kopf seitlich (cm)"), Entry = VrSettings.HeadSideways, Format = "0", Step = 1f },
                 new SliderRow { Label = L("World scale", "Weltmaßstab"), Entry = VrSettings.WorldScale, Format = "0.00" },
@@ -128,10 +132,9 @@ namespace ShipbreakerVR
                 Header(L("Gameplay", "Gameplay")),
                 new BoolRow { Label = L("Aim with the hand", "Zielen mit der Hand"), Entry = VrSettings.AimWithHand },
                 new BoolRow { Label = L("Two tools at once", "Zwei Werkzeuge gleichzeitig"), Entry = VrSettings.TwoTools },
-                new BoolRow { Label = L("Fit tools in the hand", "Werkzeuge justieren"), Entry = VrToolFit.Adjusting },
                 new BoolRow { Label = L("Grapple at the hip", "Grappler am Körper"), Entry = VrSettings.BeltGrapple },
                 new BoolRow { Label = L("Hold on and climb", "Festhalten und Hangeln"), Entry = VrSettings.Climbing },
-                new BoolRow { Label = L("Push heavy parts", "Schwere Teile schieben"), Entry = VrSettings.BracedPush },
+                new BoolRow { Label = L("Extended physics", "Erweiterte Physik"), Entry = VrSettings.BracedPush },
                 new BoolRow { Label = L("Walk in the station", "Frei gehen in der Station"), Entry = VrSettings.FreeWalking },
                 EnumRow(L("Controller flying", "Controllersteuerung"), VrSettings.ControlScheme),
                 new SliderRow { Label = L("Thrust deadzone (cm)", "Schub-Totzone (cm)"), Entry = VrSettings.ThrustDeadzone, Format = "0", Step = 1f },
@@ -169,9 +172,28 @@ namespace ShipbreakerVR
             if (added > 0) parent.gameObject.AddComponent<VrOptionsNavigation>();
         }
 
-        // Adds a copy of a game option row for each VR setting to parent. The templates come from all option rows under
-        // templateRoot, so every row type is available. Returns the height of the added rows and their number.
-        public static (float height, int count) AddRows(Transform parent, Transform templateRoot, bool firstIsTop)
+        // The groups' names (Comfort, Gameplay, Graphics), in order: the VR options have a tab for each.
+        public static string[] Groups() => CreateRows().OfType<ActionRow>().Where(row => row.Group != null).Select(row => row.Group).ToArray();
+
+        // The rows of one group (by its place in Groups), without its heading; all rows with the headings for -1.
+        private static IEnumerable<Row> RowsOf(int group)
+        {
+            var at = -1;
+            foreach (var row in CreateRows())
+            {
+                if (row is ActionRow action && action.Group != null)
+                {
+                    at++;
+                    if (group >= 0) continue;
+                }
+                if (group < 0 || at == group) yield return row;
+            }
+        }
+
+        // Adds a copy of a game option row for each VR setting to parent, of one group (Groups) or all of them (-1). The
+        // templates come from all option rows under templateRoot, so every row type is available. Returns the height of
+        // the added rows and their number.
+        public static (float height, int count) AddRows(Transform parent, Transform templateRoot, bool firstIsTop, int group = -1)
         {
             Prune();
             var all = templateRoot.GetComponentsInChildren<OptionEntry>(true);
@@ -182,7 +204,7 @@ namespace ShipbreakerVR
 
             var addedHeight = 0f;
             var added = 0;
-            foreach (var row in CreateRows())
+            foreach (var row in RowsOf(group))
             {
                 OptionEntry template = row switch
                 {
@@ -210,10 +232,11 @@ namespace ShipbreakerVR
             return (addedHeight, added);
         }
 
-        // Puts every VR setting back to its default and shows it.
-        public static void ResetToDefaults()
+        // Puts the VR settings back to their defaults and shows them: those with a row under within (one tab), or all.
+        public static void ResetToDefaults(Transform within = null)
         {
-            foreach (var setting in Rows.Values.Select(row => row.Setting).Where(setting => setting != null).Distinct().ToList())
+            foreach (var setting in Rows.Where(pair => pair.Key != null && (within == null || pair.Key.transform.IsChildOf(within)))
+                .Select(pair => pair.Value.Setting).Where(setting => setting != null).Distinct().ToList())
                 setting.BoxedValue = setting.DefaultValue;
         }
 

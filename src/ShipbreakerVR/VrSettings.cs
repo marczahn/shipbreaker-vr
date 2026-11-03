@@ -47,6 +47,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<VrPerformance.Occlusion> AmbientOcclusion;
         public static ConfigEntry<VrControls.Scheme> ControlScheme;
         public static ConfigEntry<VrControls.Turning> TurnMode;
+        public static ConfigEntry<VrControls.TurnAxis> TurnAround;
         public static ConfigEntry<float> ThrustDeadzone;
         public static ConfigEntry<float> ThrustFull;
         public static ConfigEntry<float> HandTilt;
@@ -125,6 +126,10 @@ namespace ShipbreakerVR
                 ("How the right stick turns you when flying with the controllers: smoothly, or in steps of 30, 45 or 90 degrees per flick. Steps are easier on the stomach.",
                     "Wie der rechte Stick dich beim Fliegen mit den Controllern dreht: fließend oder in Schritten von 30, 45 oder 90 Grad pro Antippen. Schritte sind magenfreundlicher."),
                 (new[] { "Smooth", "30°", "45°", "90°" }, new[] { "Fließend", "30°", "45°", "90°" }));
+            TurnAround = Bind("Steuerung", "DrehenUm", VrControls.TurnAxis.Kopf,
+                ("What the right stick turns you left and right around when flying: your head's up, so you turn where you look, or your body's, so looking up or down does not tip the turn.",
+                    "Worum der rechte Stick dich beim Fliegen nach links und rechts dreht: um die Hochachse des Kopfes, also dorthin, wohin du schaust, oder um die des Körpers, sodass Hoch- oder Runterschauen die Drehung nicht kippt."),
+                (new[] { "Head", "Body" }, new[] { "Kopf", "Körper" }));
             ThrustDeadzone = Bind("Steuerung", "SchubTotzone", 2f,
                 ("How far you move the left controller from where you pressed the trigger before thrust starts. Raise it if you drift without meaning to.",
                     "Wie weit du den linken Controller von dort, wo du den Trigger gedrückt hast, bewegen musst, bevor Schub einsetzt. Erhöhen, wenn du ungewollt driftest."),
@@ -219,7 +224,8 @@ namespace ShipbreakerVR
                     "Was passiert, wenn du keinen Schub gibst. Einfach: Schub wirkt nur, solange du ihn hältst, du bremst von selbst bis zum Stillstand, mit einem Drittel der Bremskraft und des Treibstoffs, nicht beim Festhalten oder mit dem Grappler. Standard: wie im Spiel, seine automatische Bremse verlangsamt dich nach 3 Sekunden auf 1 m/s. Realistisch: keine automatische Bremse, du behältst dein Tempo."),
                 (new[] { "Simple", "Standard", "Realistic" }, new[] { "Einfach", "Standard", "Realistisch" }));
             BracedPush = Bind("Steuerung", "SchwereTeileSchieben", false,
-                "With one hand braced on something fixed, the other moves heavy parts up to 5 t with a limited force of 250 N: they gather speed slowly.");
+                ("On: holding on to something fixed, the other hand moves heavy parts up to 5 t with a limited force of 250 N, and with each hand on a heavy part they push each other apart. Off: the game's own physics, where such parts do not move.",
+                    "An: Hältst du dich an etwas Festem, bewegt die andere Hand schwere Teile bis 5 t mit begrenzter Kraft von 250 N, und mit je einer Hand an zwei schweren Teilen drückst du sie auseinander. Aus: die Physik des Spiels, in der solche Teile sich nicht bewegen."));
             BeltGrapple = Bind("Steuerung", "GrapplerAmKoerper", true,
                 "Shows the grapple at your right hip, where you draw it from, while it is not in a hand.");
             FreeWalking = Bind("Station", "FreiGehen", false,

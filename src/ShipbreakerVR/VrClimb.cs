@@ -23,13 +23,18 @@ namespace ShipbreakerVR
     // velocity stops the body just short of anything ahead (KeepClear), and what still touches the thing held at low
     // speed is no impact (Soft, ImpactPatch). The colliders stay on, so the body does not go through it.
     // Steuerung/SchwereTeileSchieben: with one hand braced on something fixed, the other works a heavy part with a limited
-    // force (Pushes, BracedPush): it gathers speed slowly, keeps it, and is out of reach when the hold tears off.
+    // force (Pushes, BracedPush), less the heavier it is: it gathers speed slowly, keeps it, and is out of reach when the
+    // hold tears off. With both hands on two heavy parts they push each other apart, the body between them, shared by the
+    // masses.
     internal static class VrClimb
     {
         static VrClimb() => VrSession.OnUnload("climbing", Release);
 
         // How far from the controller a surface may be to hold on, in meters at world scale 1.
         private const float Reach = 0.15f;
+        // A control's HandTarget wins over the nearest surface only up to this much farther away, in meters at world scale
+        // 1: a hand climbing past a switch keeps the wall.
+        private const float ControlPreference = 0.05f;
         // A grip pressed just before the hand arrives still catches, for this many seconds: a moving hand misses less.
         private const float CatchTime = 0.25f;
         // How long the game's hand takes to come to the surface it caught, in seconds.
@@ -94,6 +99,10 @@ namespace ShipbreakerVR
             public float PressedAt = -1f;
             // The surface under the hand when it took hold, on Anchor: the game's hand goes there, the body keeps to Point.
             public Vector3 Surface;
+            // The surface's outward direction there, on Anchor: a flat hand lies on it (VrHands).
+            public Vector3 Normal;
+            // On a control's HandTarget (NearestControl): the hand makes a fist there.
+            public bool Control;
             // A part that turns with the hand: its turn relative to the controller, and its speed limit before.
             public bool Firm;
             // The second hand on a firmly held part: it stays on the part, the first hand moves it.
@@ -242,6 +251,19 @@ namespace ShipbreakerVR
                 bestDistance = distance;
                 surface = closest;
             }
+            // A control within reach (a door switch, a console) comes first, unless the nearest surface is more than
+            // ControlPreference nearer: the hand goes onto the control's HandTarget, where the game puts its own hand, as a
+            // fist (HoldsControl). Before, the hand held the hull under the switch or stayed a few centimeters off it (Raik).
+            var control = NearestControl(at, reach, out var controlCollider);
+            if (control != null && best != null
+                && (control.HandTarget.position - at).magnitude > Mathf.Sqrt(bestDistance) + ControlPreference * VrCamera.WorldScale)
+                control = null;
+            if (control != null)
+            {
+                best = controlCollider;
+                surface = control.HandTarget.position;
+                bestDistance = (surface - at).sqrMagnitude;
+            }
             // Some switches have no solid collider, only the trigger the game's interaction uses. It is no surface: the hand
             // stays where it is.
             if (best == null)
@@ -274,6 +296,8 @@ namespace ShipbreakerVR
             hand.Anchor = body != null ? body.transform : best.transform;
             hand.Point = hand.Anchor.InverseTransformPoint(at);
             hand.Surface = hand.Anchor.InverseTransformPoint(surface);
+            hand.Control = control != null;
+            hand.Normal = hand.Anchor.InverseTransformDirection(SurfaceNormal(best, at, surface, hand));
             hand.HeldAt = Time.time;
             hand.Firm = false;
             hand.Follower = false;
@@ -313,6 +337,8 @@ namespace ShipbreakerVR
                 if (hand.Holding && !hand.Firm && !hand.Follower && !Pushes(hand)) pulling++;
             if (pulling == 0)
             {
+                foreach (var hand in Hands)
+                    if (Pushes(hand)) Push(hand);
                 blocked = false;
                 MoveFirm(Time.fixedDeltaTime);
                 return;
@@ -328,7 +354,7 @@ namespace ShipbreakerVR
                 var hold = Hold(hand);
                 if (Pushes(hand))
                 {
-                    hand.Body.AddForceAtPosition(BracedPush.Force((HandWorld(hand) - hold) / VrCamera.WorldScale), hold, ForceMode.Force);
+                    Push(hand);
                     continue;
                 }
                 var error = hold - PullPoint(hand);
@@ -377,7 +403,9 @@ namespace ShipbreakerVR
                 // What the sphere already touches has no place ahead of it.
                 if (hit.distance <= 0f) continue;
                 var body = hit.collider.attachedRigidbody;
-                if (Own(hit.collider) || HeldFirmly(body)) continue;
+                // A light part held that moves takes the pull's push back itself: stopping the body short of it as well
+                // took the body's share away, and each stroke of the arms gave the two more speed (Raik, a 60 kg barrel).
+                if (Own(hit.collider) || HeldFirmly(body) || PulledLight(body)) continue;
                 var other = body != null ? body.GetPointVelocity(hit.point) : Vector3.zero;
                 var limited = ClimbContact.LimitApproach(velocity, other, hit.normal, hit.distance - clearance, dt);
                 if (limited != velocity)
@@ -490,6 +518,34 @@ namespace ShipbreakerVR
             return false;
         }
 
+        // Outward from the surface at the hold: the face a ray from the hand to its nearest point meets, or, with the hand
+        // on it, the face a ray along the controller meets. The way from the nearest point to the hand alone tipped the
+        // hand at edges and on uneven tops, one grip flat, the next at a slant (Raik, the terminal at the start).
+        private static Vector3 SurfaceNormal(Collider collider, Vector3 at, Vector3 surface, Hand hand)
+        {
+            var away = at - surface;
+            var distance = away.magnitude;
+            if (distance > 0.01f * VrCamera.WorldScale)
+            {
+                var toward = -away / distance;
+                if (collider.Raycast(new Ray(at, toward), out var face, distance + 0.02f * VrCamera.WorldScale)
+                    && Vector3.Dot(face.normal, away) > 0f) return face.normal;
+                return away / distance;
+            }
+            var back = hand.Input.TryGetAimRotation(out var aim) ? VrCamera.Instance.transform.parent.rotation * aim * Vector3.forward : Vector3.down;
+            var ray = new Ray(at - back * Reach * VrCamera.WorldScale, back);
+            return collider.Raycast(ray, out var hit, 2f * Reach * VrCamera.WorldScale) ? hit.normal : -back;
+        }
+
+        // A part the game lets one move, held by a hand that pulls it (not one pushing a heavy part, BracedPush).
+        private static bool PulledLight(Rigidbody body)
+        {
+            foreach (var hand in Hands)
+                if (hand.Holding && hand.Movable && !hand.Firm && !hand.Follower && body != null && hand.Body == body && !Pushes(hand))
+                    return true;
+            return false;
+        }
+
         private static bool Held(Rigidbody body)
         {
             foreach (var hand in Hands)
@@ -574,16 +630,98 @@ namespace ShipbreakerVR
         private static Vector3 Hold(Hand hand) => hand.Anchor.TransformPoint(hand.Point);
 
         // That hand works a heavy part while the other is braced on something that does not move.
+        // With the other hand on a second part too heavy to grab instead, the two push each other apart through the body
+        // (Braced false): what one hand gives its part, the body takes back, so the masses share it.
         private static bool Pushes(Hand hand)
+        {
+            if (!Pushable(hand)) return false;
+            var other = Other(hand);
+            if (!other.Holding || other.Body == hand.Body) return false;
+            // Two parts the game lets one grab and move keep sharing the pull as before (Pull).
+            return Fixed(other) || (Pushable(other) && !hand.Movable && !other.Movable);
+        }
+
+        private static bool Pushable(Hand hand)
         {
             var body = hand.Body;
             if (!VrSettings.BracedPush.Value || !hand.Holding || hand.Firm || hand.Follower || body == null || body.isKinematic) return false;
-            if (body.gameObject.layer == StaticLayer || body.mass <= FirmMass || body.mass > BracedPush.MaxMass) return false;
-            var other = hand == LeftHand ? RightHand : LeftHand;
-            return other.Holding && !other.Movable && other.Body != body;
+            return body.gameObject.layer != StaticLayer && body.mass > FirmMass && body.mass <= BracedPush.MaxMass;
+        }
+
+        // A hold that does not move at all: the station, a hull, anything kinematic, or too heavy to push.
+        private static bool Fixed(Hand hand) =>
+            hand.Body == null || hand.Body.isKinematic || hand.Body.gameObject.layer == StaticLayer || hand.Body.mass > BracedPush.MaxMass;
+
+        private static bool Braced(Hand hand) => Fixed(Other(hand));
+
+        private static Hand Other(Hand hand) => hand == LeftHand ? RightHand : LeftHand;
+
+        // The hand's force on its part; between two parts the body pushes back.
+        private static void Push(Hand hand)
+        {
+            var hold = Hold(hand);
+            var force = BracedPush.Force((HandWorld(hand) - hold) / VrCamera.WorldScale, hand.Body.mass);
+            hand.Body.AddForceAtPosition(force, hold, ForceMode.Force);
+            if (!Braced(hand)) player.AddForce(-force, ForceMode.Force);
+        }
+
+        // True while that controller's hand holds on to something large: a wall, the hull, a console, a heavy part. The hand
+        // lies flat on it there (VrHands.Curl); around a small part that turns with the hand (Firm) it closes.
+        public static bool HoldsFlat(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input && hand.Holding) return !hand.Firm && !hand.Follower && !hand.Control;
+            return false;
+        }
+
+        // True while that controller's hand holds a control (a door switch, a console's button) as a fist.
+        public static bool HoldsControl(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input && hand.Holding) return hand.Control;
+            return false;
+        }
+
+        // The fixed control whose HandTarget is nearest to the hand within reach, with one of its colliders, or null.
+        private static InteractableObject NearestControl(Vector3 at, float reach, out Collider collider)
+        {
+            collider = null;
+            InteractableObject best = null;
+            var bestDistance = reach * reach;
+            var count = Physics.OverlapSphereNonAlloc(at, reach, Found, ~0, QueryTriggerInteraction.Collide);
+            for (var i = 0; i < count; i++)
+            {
+                if (Own(Found[i])) continue;
+                var control = Found[i].GetComponentInParent<InteractableObject>();
+                if (control == null || control.HandTarget == null || !control.isActiveAndEnabled) continue;
+                // Things that float loose, as cassettes to collect, are held as parts.
+                var loose = control.GetComponentInParent<Rigidbody>();
+                if (loose != null && !loose.isKinematic) continue;
+                var distance = (control.HandTarget.position - at).sqrMagnitude;
+                if (distance >= bestDistance) continue;
+                best = control;
+                bestDistance = distance;
+                collider = Found[i];
+            }
+            return best;
         }
 
         // Where that controller's hand holds on, if it does, for the game's hand (VrHands.Pose).
+        // The thing that hand holds on to, and the surface's outward direction there.
+        public static bool TryGetGrip(VrInput.Hand input, out Transform anchor, out Vector3 normal)
+        {
+            anchor = null;
+            normal = Vector3.up;
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input || !hand.Holding || hand.Anchor == null) continue;
+                anchor = hand.Anchor;
+                normal = hand.Anchor.TransformDirection(hand.Normal).normalized;
+                return true;
+            }
+            return false;
+        }
+
         public static bool TryGetHold(VrInput.Hand input, out Vector3 point)
         {
             point = Vector3.zero;
@@ -629,6 +767,9 @@ namespace ShipbreakerVR
         // Letting go keeps the speed the hands gave the body once the last hand is off: a push off flies on.
         private static void LetGo(Hand hand, bool push, string reason)
         {
+            // Off a light part that moves the body keeps the speed the pulls gave it, as the part does: set from the
+            // hands, the two did not add up. Asked while the hand still holds, as Pushes needs.
+            var light = hand.Movable && hand.Body != null && !Pushes(hand);
             VrHand.StopHolding(hand.Vr);
             var firm = hand.Firm;
             hand.Follower = false;
@@ -643,9 +784,10 @@ namespace ShipbreakerVR
             // A firmly held part does not count: it pulls at nothing.
             var last = !Pulling();
             var speed = Vector3.ClampMagnitude(pushOff, MaxPushOff * VrCamera.WorldScale);
-            if (push && last && !firm && player != null) player.velocity = holdVelocity + speed;
+            var flies = push && last && !firm && !light;
+            if (flies && player != null) player.velocity = holdVelocity + speed;
             if (logs++ < 80)
-                Plugin.Log.LogInfo($"Climbing: {hand.Name} hand lets go ({reason}){(push && last && !firm ? $", flies on at {speed.magnitude:0.00} m/s" : "")}");
+                Plugin.Log.LogInfo($"Climbing: {hand.Name} hand lets go ({reason}){(flies ? $", flies on at {speed.magnitude:0.00} m/s" : "")}");
             if (last)
             {
                 pushOff = Vector3.zero;
@@ -747,12 +889,30 @@ namespace ShipbreakerVR
         public const float MaxMass = 5000f;
         // Newtons per meter the hand is away from its hold: the full force comes at 10 cm.
         private const float Stiffness = 2500f;
+        // Big parts gather speed slowly, the heavier the slower: at most 0.35 m/s² at 200 kg, down to 0.17 at 1000 kg, so
+        // the 636 kg hoist truck gets 0.25 (Raik; first 0.4 to 0.2, which gave it 0.29). Lighter parts get more force on
+        // the way down to 30 kg, where MaxForce is.
+        private const float LightMass = 30f;
+        private const float BigMass = 200f;
+        private const float HeavyMass = 1000f;
+        private const float BigAcceleration = 0.35f;
+        private const float HeavyAcceleration = 0.17f;
 
         // The force on the hold, towards the hand.
-        public static Vector3 Force(Vector3 toHand)
+        public static Vector3 Force(Vector3 toHand, float mass)
         {
             var force = toHand * Stiffness;
-            return force.magnitude > MaxForce ? force.normalized * MaxForce : force;
+            var limit = Limit(mass);
+            return force.magnitude > limit ? force.normalized * limit : force;
+        }
+
+        // The most force for a part of that mass.
+        public static float Limit(float mass)
+        {
+            if (mass < BigMass)
+                return Mathf.Lerp(MaxForce, BigMass * BigAcceleration, Mathf.InverseLerp(LightMass, BigMass, mass));
+            var acceleration = Mathf.Lerp(BigAcceleration, HeavyAcceleration, Mathf.InverseLerp(BigMass, HeavyMass, mass));
+            return Mathf.Min(MaxForce, mass * acceleration);
         }
     }
 }

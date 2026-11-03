@@ -226,7 +226,7 @@ interacting, the grapple and the "entity of interest".
   `m_CutOriginOffset`, Stinger `ScalpelFXController.m_CutOriginTransform` + `m_CutOriginOffset`. The muzzle's offset to
   the point is measured in `Place` and applied to the current hand pose in `VrAim` (which runs in the game's update,
   before `Place`). Without a tool model the aim stays on the hand's aim pose.
-- `Steuerung/SchwereTeileSchieben` (`BracedPush`): braced on something fixed, the other hand pushes parts of 30 kg to 5 t with up to 250 N, also those above the grab mass range. Off by default.
+- `Steuerung/SchwereTeileSchieben` (`BracedPush`): braced on something fixed, the other hand pushes parts of 30 kg to 5 t with up to 250 N, also those above the grab mass range. Off by default. With both hands on two parts above that range (none of them fixed), they push each other apart: each hand's force goes to its part and back onto the body.
 - `VrBeltGrapple`: a runtime copy of the grapple's visible parts hangs at the right hip while it is not in a hand, grip in the middle of the zone, which lies 6 cm further out than the left hip's.
 - Tool belt (`VrToolBelt`): zones relative to the head in tracking space, turned with the head's heading (x right,
   y up, z forward): hips below -0.45 m and less than 0.25 m forward, right of +0.08 m grapple, left of -0.08 m demo
@@ -341,12 +341,27 @@ interacting, the grapple and the "entity of interest".
   (`VrHands.Mirrored`). Its fingers stay in the grab pose. Logs: `Hands: <left|right> arm ...` once (bones,
   fingers) and `Hands: <arm> follows the controller | back to the game`. Marc found both hands looking good in the first
   test.
-- Fingers: a hand that follows its controller closes while its grip is held (fist, or around the tool), through the
-  animator's grab parameters as `HandGrab` sets them (`xPrepGrab` trigger + `xGrab` on; `xGrab` off + `xCancelGrab`
-  trigger). The game sets them only on its hand's state changes (`SetGrabState` returns early for the same state), so
-  they stay as set. Handed back to the game, the hand gets closed for `Success` and `Equipped` (not demo charges), open
-  otherwise; this restores the grip pose when a tool goes back from the left to the right hand. Log `Hands: <hand>
-  closes | opens`.
+- Fingers: the animator's grab parameters (`xPrepGrab` trigger + `xGrab` on; `xGrab` off + `xCancelGrab` trigger, as
+  `HandGrab` sets them) barely move the fingers: in the headset they only stretched a little (Raik). So while a hand
+  follows its controller the animator gets the open pose, and `VrHands.Curl` bends the humanoid finger bones itself
+  after the animation, each about the hand's thumb-side axis towards the palm (left of the right hand, right of the left
+  one): around a tool or a small part (`GripBend`), into a loose fist with the grip held or on a control, the thumb's
+  base turned so that its tip lies over the middle finger's last joint (`FistBend`, `ThumbOnMiddle`), and flat on a
+  wall, a hull or a large part (`VrClimb.HoldsFlat`): the fingers along the knuckles with a few degrees of bend, the
+  thumb in their plane 3 degrees towards the palm down to its tip (the rig has thumb bones past the humanoid three), and
+  each finger curled from the first joint whose next bone has no collider within 3.5 cm under it (`OverEdges`). A joint
+  the animation does not write starts from the pose it had before Curl set it (`Restore`), so it does not bend further
+  each frame. Handed back to the game, the hand gets closed for `Success` and `Equipped` (not demo charges), open
+  otherwise. Logs `Hands: <hand> closes | opens`, the finger and thumb bones found, and each flat thumb's angles.
+- On a hold (`VrHands.Grip`) the hand no longer turns with its controller: it is fixed on the thing held as it took
+  hold, flat on large ones with the palm on the surface (the face a ray from the hand meets, `VrClimb.SurfaceNormal`)
+  and the knuckles where the controller pointed, and only the arm moves around it. A flat hand is moved out along the
+  palm's way as deep as the deepest of six points on it went into a collider (`OutOfSurface`). A grip near a fixed
+  control goes onto the control's `HandTarget` as a fist, unless the nearest surface is more than 5 cm nearer
+  (`VrClimb.NearestControl`). Log `Hands: <hand> hand fixed on '<thing>'`.
+- `VrToolHaptics`: the hand with the cutter hums while `CuttingController.IsCutting` (Splitsaw 0.6, Stinger 0.3), the
+  one with the grapple while it holds a part (`GrapplingHook.GrappledRigidbody`, 0.12 to 0.3 by light, medium, heavy),
+  pulses of 80 ms every 50 ms; each tether end fired (`TetherController.SpawnFireFX`) buzzes once.
 
 ## Body follows head
 - The body rotates in `OrientationController.HandleAxisRotation` via `Rigidbody.MoveRotation(rotation * mouseDelta)`.
@@ -446,7 +461,15 @@ the headset. A second effect, the view going dark for a blink at another point o
 load trace under Diagnostics.
 
 ## Settings menu
-The VR rows are clones of real option rows (bool, slider, list) in their own "VR" tab. The game's logic for those
+"VR options" above "Options" in the main and the pause menu (`VrOptionsMenu`, a copy of the game's Options button,
+found by its text's localization ID `LocID:69`; both are Doozy buttons, neither a `MainMenuButton` nor in
+`PauseMenuController.m_PauseMenuButtons`, which the first attempts looked for)
+opens the game's options screen with three VR tabs (Comfort, Gameplay, Graphics, the groups of `VrOptions`) instead of
+the game's tabs. `VrOptionsTab` keeps both sets of the screen's three arrays and gives the screen one of them in its
+`OnEnable` (`VrOptionsMenu.VrMode`, cleared in `OnDisable`), switching the other set's tab buttons off. Reset to
+defaults on a VR tab resets that tab's settings only. Before, all VR rows were in one long "VR" tab next to the game's
+(Raik: hard to search).
+The VR rows are clones of real option rows (bool, slider, list) in their own tabs. The game's logic for those
 clones is intercepted via Harmony and redirected to the BepInEx config. Templates are taken from all tabs of the
 options screen. Earlier the rows were appended to the Video tab (the Gameplay list does not scroll past its own rows);
 that is still the fallback if the tab cannot be built.

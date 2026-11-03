@@ -23,6 +23,9 @@ namespace ShipbreakerVR
         // Turning with the right stick: smoothly, or one fixed step per flick.
         public enum Turning { Fliessend, Snap30, Snap45, Snap90 }
 
+        // What the right stick turns left and right around: the head's up, or the body's (the playspace's).
+        public enum TurnAxis { Kopf, Koerper }
+
         private const float SnapPress = 0.7f;
         private const float SnapRelease = 0.3f;
         // Hand offset for thrust, in centimeters (VrSettings.ThrustDeadzone, VrSettings.ThrustFull): full thrust needs at least
@@ -143,7 +146,8 @@ namespace ShipbreakerVR
             var snap = SnapAngle(VrSettings.TurnMode.Value);
             var yaw = snap > 0f ? SnapTurn(stick.x, snap) : StickRate(stick.x);
             var pitch = -StickRate(stick.y);
-            if (yaw != 0f) turn = Quaternion.AngleAxis(yaw, body * Vector3.up) * turn;
+            var up = VrSettings.TurnAround.Value == TurnAxis.Koerper ? playspace * Vector3.up : body * Vector3.up;
+            if (yaw != 0f) turn = Quaternion.AngleAxis(yaw, up) * turn;
             if (pitch != 0f) turn = Quaternion.AngleAxis(pitch, body * Vector3.right) * turn;
         }
 
