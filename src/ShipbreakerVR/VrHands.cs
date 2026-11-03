@@ -506,7 +506,7 @@ namespace ShipbreakerVR
             var animated = arm.Wrist.rotation;
             var target = Vector3.Lerp(arm.Wrist.position, wrist, weight);
             if (!arm.Measured) Measure(arm, wrist);
-            var shortBy = VrToolModels.Reach(arm.Upper.parent, arm.Upper, arm.Lower, arm.Wrist, target);
+            var shortBy = VrToolModels.Reach(arm.Upper.parent, arm.Upper, arm.Lower, arm.Wrist, target, Elbow(arm));
             Count(arm, weight >= 1f ? shortBy : 0f);
             arm.Wrist.rotation = Quaternion.Slerp(animated, HandRotation(arm, frame, aimed, animated), weight);
         }
@@ -589,6 +589,19 @@ namespace ShipbreakerVR
             forward.Normalize();
             var up = arm == LeftArm ? Vector3.Cross(normal, forward) : Vector3.Cross(forward, normal);
             return Quaternion.LookRotation(forward, up);
+        }
+
+        // Where the elbow points, in the body's axes (VrTorso.Frame): down, a little out to its side and back, as a relaxed
+        // arm's does, whatever the game's animation gives it.
+        private static readonly Vector3 ElbowRight = new Vector3(0.4f, -1f, -0.3f);
+
+        private static Vector3? Elbow(Arm arm)
+        {
+            var camera = VrCamera.Instance != null ? VrCamera.Instance.GameCamera : null;
+            if (camera == null) return null;
+            var local = ElbowRight;
+            if (arm == LeftArm) local.x = -local.x;
+            return VrTorso.Frame(camera.transform.rotation) * local;
         }
 
         // An empty hand stops at what is between the shoulder and the controller instead of going through it. Only the
