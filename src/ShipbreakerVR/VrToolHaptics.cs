@@ -7,9 +7,10 @@ namespace ShipbreakerVR
     // The tools in the controller, as Raik asked, as a warning before the tool overdoes it: the hand holding the cutter
     // hums with the Splitsaw while it cuts, and with the Stinger only once the cutter is half way to overheating, from
     // faint to strong just before it overheats (CuttingToolController.CurrentHeatPercent); the hand holding the grapple
-    // hums with the pull on the part, the further the part lags behind where the rope holds it, the stronger, strongest
-    // just before the rope lets go (VrGrappleHold.Lag against the rope's stretch); and each tether end the grapple fires
-    // gives a short buzz (TetherController.SpawnFireFX).
+    // hums the closer the part comes to where the grapple loses it, strongest just before: the game snaps the rope when
+    // the part stays out of the aim's view a while (GrapplingHook.CheckIfObjectInBounds, mOutOfBoundsTimer) or when it is
+    // too far (MaxDistance), so the hum follows how far off the aim's middle the part is, and from NearFar of the range
+    // how far away; and each tether end the grapple fires gives a short buzz (TetherController.SpawnFireFX).
     internal static class VrToolHaptics
     {
         // Each pulse a little longer than the time to the next, so the hum does not break up.
@@ -20,9 +21,13 @@ namespace ShipbreakerVR
         private const float HeatFrom = 0.5f;
         private const float StingerLeast = 0.08f;
         private const float StingerMost = 0.9f;
-        // The grapple: GrappleLeast holding without pull, up to GrappleMost when the lag reaches the rope's stretch.
+        // The grapple: GrappleLeast with the part in the aim's middle, up to GrappleMost at the edge of its view or the
+        // end of its range, and GrappleMost while the part is out of view.
         private const float GrappleLeast = 0.04f;
         private const float GrappleMost = 0.9f;
+        private const float NearFar = 0.8f;
+
+        private static readonly AccessTools.FieldRef<GrapplingHook, float> OutOfBounds = AccessTools.FieldRefAccess<GrapplingHook, float>("mOutOfBoundsTimer");
         private const float TetherAmplitude = 0.6f;
         private const float TetherLength = 0.06f;
 
@@ -67,24 +72,32 @@ namespace ShipbreakerVR
             var holds = grapple != null && hand != null && !VrTetherMode.On && grapple.GrappledRigidbody != null;
             if (!holds)
             {
-                // The pull at letting go: how far the rope stretches before it lets go, to set GrappleMost by.
-                if (pulling && pullLogs++ < 20) Plugin.Log.LogInfo($"Tool haptics: grapple let go at a lag of {lastLag:0.00} m (rope stretch {lastStretch:0.00} m, most {mostLag:0.00} m)");
+                // Where the part was when the grapple let go, to check where the hum should be strongest.
+                if (pulling && pullLogs++ < 20) Plugin.Log.LogInfo($"Tool haptics: grapple let go, last off the aim's middle {lastOff:0.00}, at {lastFar:0.00} of its range, out of view {lastOut:0.00} s");
                 pulling = false;
-                mostLag = 0f;
                 return;
             }
-            var stretch = VrGrappleHold.StretchLength > 0.01f ? VrGrappleHold.StretchLength : 1f;
-            lastLag = VrGrappleHold.Lag;
-            lastStretch = stretch;
-            mostLag = Mathf.Max(mostLag, lastLag);
+            var camera = VrAim.CameraFor((int)GameTools.Family.Grapple);
+            var part = grapple.GrappledRigidbody.worldCenterOfMass;
+            lastOff = 1f;
+            if (camera != null)
+            {
+                var view = camera.WorldToViewportPoint(part);
+                if (view.z > 0f) lastOff = Mathf.Clamp01(2f * Mathf.Max(Mathf.Abs(view.x - 0.5f), Mathf.Abs(view.y - 0.5f)));
+            }
+            var range = grapple.MaxDistance;
+            lastFar = range > 0f && camera != null ? Vector3.Distance(camera.transform.position, part) / range : 0f;
+            lastOut = OutOfBounds(grapple);
             pulling = true;
-            hand.Input.Buzz(Mathf.Lerp(GrappleLeast, GrappleMost, Mathf.Clamp01(lastLag / stretch)), Length);
+            var pull = Mathf.Max(lastOff * lastOff, Mathf.InverseLerp(NearFar, 1f, lastFar));
+            if (lastOut > 0f) pull = 1f;
+            hand.Input.Buzz(Mathf.Lerp(GrappleLeast, GrappleMost, pull), Length);
         }
 
         private static bool pulling;
-        private static float lastLag;
-        private static float lastStretch;
-        private static float mostLag;
+        private static float lastOff;
+        private static float lastFar;
+        private static float lastOut;
         private static int pullLogs;
         private static int heatLogs;
         private static float nextHeatLog;
