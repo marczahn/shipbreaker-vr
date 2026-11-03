@@ -14,8 +14,7 @@ namespace ShipbreakerVR
         private const string Grip = "RHandTarget";
 
         // In the grapple's zone, from the head along its heading (x right, y up, z forward), in real meters.
-        // Where its grip sits: VrToolBelt draws the grapple only close around it.
-        internal static readonly Vector3 Hip = new Vector3(0.20f, -0.62f, -0.37f);
+        private static readonly Vector3 Hip = new Vector3(0.20f, -0.62f, -0.37f);
 
         private static Transform copy;
         private static Transform model;
