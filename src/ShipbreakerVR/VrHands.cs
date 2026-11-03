@@ -106,6 +106,11 @@ namespace ShipbreakerVR
             public float GripBlend;
             public float Weight;
             public bool Driven;
+            // The arm's own bone lengths, shoulder to elbow and elbow to wrist, from the skin's bind pose (KeepLength);
+            // 0 until found.
+            public float UpperLength;
+            public float LowerLength;
+            public bool LengthLogged;
             // From the controller to where the game's hand sits: to its hold while it holds on (VrClimb), so the hand stays
             // there however far the real one has gone, then back to nothing.
             public Vector3 OffController;
@@ -143,6 +148,66 @@ namespace ShipbreakerVR
 
         // From VrCamera.LateUpdate, after VrToolModels.PoseArm: which arms follow their controllers, blended in and out
         // over Blend, and those posed.
+        // From VrFrame, right after VrToolModels.Unstretch and before anything poses the arms: both arms back to their
+        // own bone lengths. The game's animations move the elbow and the wrist bone out: drawing the cutter stretched
+        // the right arm by 81 % for a moment, folded at the elbow, and an arm left longer stayed bent where the real one
+        // was straight (Raik). The mod's own stretch (VrToolModels.Reach) comes on top afterwards, as before.
+        public static void KeepLength()
+        {
+            if (!Find()) return;
+            KeepLength(LeftArm);
+            KeepLength(RightArm);
+        }
+
+        private static void KeepLength(Arm arm)
+        {
+            if (arm.Upper == null || arm.Lower == null || arm.Wrist == null) return;
+            if (arm.UpperLength < 0f) return;
+            if (arm.UpperLength == 0f && !BindLengths(arm))
+            {
+                // Searched once: without a skin to measure the arm stays as the game has it.
+                arm.UpperLength = -1f;
+                Plugin.Log.LogWarning($"Hands: {arm.Name} arm's own length not found, left as the game has it");
+                return;
+            }
+            var upper = Fit(arm.Lower, arm.Upper, arm.UpperLength);
+            var lower = Fit(arm.Wrist, arm.Lower, arm.LowerLength);
+            if ((upper || lower) && !arm.LengthLogged)
+            {
+                arm.LengthLogged = true;
+                Plugin.Log.LogInfo($"Hands: {arm.Name} arm put back to its own length (upper {arm.UpperLength:0.000} m, lower {arm.LowerLength:0.000} m)");
+            }
+        }
+
+        // The bone moved along its parent's way to it until it lies length (in the world) from it; true if it was off
+        // by more than 1 %.
+        private static bool Fit(Transform bone, Transform parent, float length)
+        {
+            var now = Vector3.Distance(bone.position, parent.position);
+            if (now < 1e-4f || Mathf.Abs(now - length) <= 0.01f * length) return false;
+            bone.localPosition *= length / now;
+            return true;
+        }
+
+        // The arm's bone lengths from the bind pose of the skin that uses its bones (the suit's arms, geo_arms).
+        private static bool BindLengths(Arm arm)
+        {
+            foreach (var skin in grab.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                var bones = skin.bones;
+                var binds = skin.sharedMesh != null ? skin.sharedMesh.bindposes : null;
+                if (bones == null || binds == null) continue;
+                int upper = System.Array.IndexOf(bones, arm.Upper), lower = System.Array.IndexOf(bones, arm.Lower), wrist = System.Array.IndexOf(bones, arm.Wrist);
+                if (upper < 0 || lower < 0 || wrist < 0 || wrist >= binds.Length || upper >= binds.Length || lower >= binds.Length) continue;
+                Vector3 At(int i) => binds[i].inverse.GetColumn(3);
+                arm.UpperLength = Vector3.Distance(At(upper), At(lower)) * arm.Upper.lossyScale.x;
+                arm.LowerLength = Vector3.Distance(At(lower), At(wrist)) * arm.Lower.lossyScale.x;
+                Plugin.Log.LogInfo($"Hands: {arm.Name} arm's own length from '{skin.name}': upper {arm.UpperLength:0.000} m, lower {arm.LowerLength:0.000} m");
+                return arm.UpperLength > 0.05f && arm.LowerLength > 0.05f;
+            }
+            return false;
+        }
+
         public static void LateUpdate()
         {
             if (!Find()) return;
@@ -733,6 +798,8 @@ namespace ShipbreakerVR
             System.Array.Clear(arm.Edge, 0, arm.Edge.Length);
             arm.Weight = 0f;
             arm.Driven = false;
+            arm.UpperLength = arm.LowerLength = 0f;
+            arm.LengthLogged = false;
             arm.Measured = false;
             arm.CountSince = 0f;
             arm.Frames = arm.Short = 0;

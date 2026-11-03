@@ -56,6 +56,7 @@ namespace ShipbreakerVR
         private static readonly (string Name, System.Action Step)[] LateSteps =
         {
             ("arm length", VrToolModels.Unstretch),
+            ("own arm length", VrHands.KeepLength),
             ("torso", VrTorso.LateUpdate),
             ("demo charge arm", VrToolModels.PoseArm),
             ("hands", VrHands.LateUpdate),
