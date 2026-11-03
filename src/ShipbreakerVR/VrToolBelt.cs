@@ -26,7 +26,7 @@ namespace ShipbreakerVR
         private const float GrappleBack = 0.19f;
         // With the grapple shown at the hip (VrBeltGrapple), the hand draws it only this close to its grip, in meters, as
         // Raik asked: the zone around the hip reached far beyond the grapple.
-        private const float GripReach = 0.1f;
+        private const float GripReach = 0.15f;
         private const float HipForward = 0.1f;
         private const float HipBehind = -0.2f;
         // The hip zones are turned this far around the head towards the back, in degrees, so a hand reaching out to the
@@ -43,6 +43,7 @@ namespace ShipbreakerVR
         // The zone each hand last buzzed for (left, right).
         private static readonly Zone[] announced = new Zone[2];
         private static int logs;
+        private static int missLogs;
 
         // The zone the hand is in this frame (None without tracking). Quiet (while its trigger is held) it does not buzz;
         // the buzz comes when the trigger is let go inside the zone.
@@ -50,6 +51,16 @@ namespace ShipbreakerVR
         {
             var zone = Find(hand, out var local);
             var index = hand.IsLeft ? 0 : 1;
+            // A grip pressed near the hip grapple but outside its zone: where the hand was, to fit GripReach.
+            if (zone == Zone.None && !hand.IsLeft && hand.Grip.Pressed && VrSettings.BeltGrapple.Value && missLogs < 30)
+            {
+                var off = local - VrBeltGrapple.Hip;
+                if (off.magnitude < 0.4f)
+                {
+                    missLogs++;
+                    Plugin.Log.LogInfo($"Tool belt: right grip pressed {off.magnitude:0.00} m from the hip grapple's grip (off {off.x:0.00}, {off.y:0.00}, {off.z:0.00}), outside its {GripReach:0.00} m");
+                }
+            }
             if (zone == Zone.None) announced[index] = Zone.None;
             else if (zone != announced[index] && !quiet)
             {
