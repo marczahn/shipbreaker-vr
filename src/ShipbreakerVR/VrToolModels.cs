@@ -405,7 +405,7 @@ namespace ShipbreakerVR
         // Bend, with the collarbone (the shoulder's parent) first turning the shoulder towards a target the arm cannot
         // reach, as one pushes the shoulder forward reaching for something, then the arm getting up to MostStretch
         // longer. Returns how far the wrist still stays short of the target, in meters (0 when it gets there).
-        public static float Reach(Transform collar, Transform root, Transform mid, Transform tip, Vector3 target)
+        public static float Reach(Transform collar, Transform root, Transform mid, Transform tip, Vector3 target, Vector3? pole = null)
         {
             var length = Vector3.Distance(root.position, mid.position) + Vector3.Distance(mid.position, tip.position);
             var over = Vector3.Distance(root.position, target) - length;
@@ -429,7 +429,7 @@ namespace ShipbreakerVR
                 Stretch(tip, factor);
                 length *= factor;
             }
-            Bend(root, mid, tip, target);
+            Bend(root, mid, tip, target, pole);
             return Mathf.Max(0f, distance - length);
         }
 
@@ -453,7 +453,9 @@ namespace ShipbreakerVR
 
         // Two-bone IK: the elbow bends until shoulder to wrist is as long as shoulder to target, then the shoulder turns
         // the arm onto the target. The elbow stays in the plane the animation gave it.
-        public static void Bend(Transform root, Transform mid, Transform tip, Vector3 target)
+        // With a pole, the arm is then turned about shoulder to wrist until the elbow points that way (a direction in the
+        // world), instead of keeping the animation's: drawing the cutter, the game's animation turned the elbow inwards.
+        public static void Bend(Transform root, Transform mid, Transform tip, Vector3 target, Vector3? pole = null)
         {
             var a = root.position;
             var b = mid.position;
@@ -470,6 +472,13 @@ namespace ShipbreakerVR
             var wanted = Mathf.Acos(Mathf.Clamp((upper * upper + lower * lower - reach * reach) / (2f * upper * lower), -1f, 1f)) * Mathf.Rad2Deg;
             mid.rotation = Quaternion.AngleAxis(wanted - current, axis.normalized) * mid.rotation;
             root.rotation = Quaternion.FromToRotation(tip.position - a, target - a) * root.rotation;
+            if (pole == null) return;
+            var line = tip.position - a;
+            if (line.sqrMagnitude < 1e-8f) return;
+            var elbow = Vector3.ProjectOnPlane(mid.position - a, line);
+            var towards = Vector3.ProjectOnPlane(pole.Value, line);
+            if (elbow.sqrMagnitude < 1e-8f || towards.sqrMagnitude < 1e-8f) return;
+            root.rotation = Quaternion.AngleAxis(Vector3.SignedAngle(elbow, towards, line), line.normalized) * root.rotation;
         }
 
         private static Transform armRoot;
