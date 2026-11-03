@@ -13,12 +13,15 @@ using UnityEngine.UI;
 
 namespace ShipbreakerVR
 {
-    // Adds a "VR" tab to the options screen, next to Gameplay, Video and so on. UnifiedOptionsScreen keeps three parallel
-    // arrays (screen controllers, their Doozy UIViews, the tab buttons) and switches tabs by index, so the tab is built by
-    // copying the video tab's view and button and appending them to those arrays:
-    // - The copied view loses the video controller and the video rows; it gets VrOptionsScreen and the VR rows instead.
-    // - The copied button gets its click redirected to ShowTab with the new index.
-    // The game hides the previous tab's view by its own means, which do not know the new view, so after every tab switch
+    // The VR options: a tab for each group of VR settings (Comfort, Gameplay, Graphics, VrOptions.Groups) on the game's
+    // options screen, shown instead of the game's tabs when the options are opened from "VR options" in the main or
+    // pause menu (VrOptionsMenu.VrMode), as Raik asked: one long VR tab next to the game's had become hard to search.
+    // UnifiedOptionsScreen keeps three parallel arrays (screen controllers, their Doozy UIViews, the tab buttons) and
+    // switches tabs by index, so the VR tabs are built by copying the video tab's view and the last tab button, and on
+    // opening the screen gets either the game's arrays or the VR ones, with the other set's buttons switched off:
+    // - A copied view loses the video controller and the video rows; it gets VrOptionsScreen and its group's rows.
+    // - A copied button gets its click redirected to ShowTab with its index among the VR tabs.
+    // The game hides the previous tab's view by its own means, which do not know the new views, so after every tab switch
     // all other views are hidden here.
     internal static class VrOptionsTab
     {
@@ -35,15 +38,23 @@ namespace ShipbreakerVR
 
         private static readonly HashSet<UnifiedOptionsScreen> Done = new HashSet<UnifiedOptionsScreen>();
 
-        // What was added to each options screen, to take it out again when the plugin unloads.
-        private struct Added
+        // A set of tabs for the screen's arrays: the game's, or the VR ones added here.
+        private class TabSet
         {
-            public OptionsScreenController Screen;
-            public UIView View;
-            public GenericTab Tab;
+            public OptionsScreenController[] Screens;
+            public UIView[] Views;
+            public GenericTab[] Tabs;
         }
 
-        private static readonly Dictionary<UnifiedOptionsScreen, Added> added = new Dictionary<UnifiedOptionsScreen, Added>();
+        // Both sets of each options screen, to switch between them and to take the VR one out when the plugin unloads.
+        private class Sets
+        {
+            public TabSet Game;
+            public TabSet Vr;
+            public bool ShowsVr;
+        }
+
+        private static readonly Dictionary<UnifiedOptionsScreen, Sets> added = new Dictionary<UnifiedOptionsScreen, Sets>();
 
         public static void Create(UnifiedOptionsScreen unified)
         {
@@ -58,26 +69,55 @@ namespace ShipbreakerVR
                 return;
             }
 
-            GameObject viewObject = null;
+            var made = new List<GameObject>();
             try
             {
-                viewObject = CreateView(unified, views[index], out var view, out var screen);
-                var tab = CreateTab(unified, tabs[tabs.Length - 1], screens.Length);
-                Screens(unified) = screens.Append(screen).ToArray();
-                Views(unified) = views.Append(view).ToArray();
-                Tabs(unified) = tabs.Append(tab).ToArray();
-                added[unified] = new Added { Screen = screen, View = view, Tab = tab };
+                var groups = VrOptions.Groups();
+                var vr = new TabSet { Screens = new OptionsScreenController[groups.Length], Views = new UIView[groups.Length], Tabs = new GenericTab[groups.Length] };
+                var after = tabs[tabs.Length - 1];
+                for (var g = 0; g < groups.Length; g++)
+                {
+                    made.Add(CreateView(unified, views[index], g, out vr.Views[g], out vr.Screens[g]));
+                    vr.Tabs[g] = CreateTab(unified, after, g, groups[g], tabs[Math.Min(g, tabs.Length - 1)]);
+                    made.Add(vr.Tabs[g].gameObject);
+                    after = vr.Tabs[g];
+                }
+                added[unified] = new Sets { Game = new TabSet { Screens = screens, Views = views, Tabs = tabs }, Vr = vr };
                 // The game's own lists get the scroll and hover fixes too.
                 foreach (var scroll in views.Where(v => v != null).SelectMany(v => v.GetComponentsInChildren<ScrollRect>(true)))
                     if (scroll.content != null && scroll.content.GetComponent<VrOptionsList>() == null) scroll.content.gameObject.AddComponent<VrOptionsList>();
-                Plugin.Log.LogInfo($"Options '{unified.name}': VR tab added as tab {screens.Length + 1} (view '{viewObject.name}', button '{tab.name}')");
+                Plugin.Log.LogInfo($"Options '{unified.name}': VR tabs added: {string.Join(", ", groups)}");
             }
             catch (Exception e)
             {
-                Plugin.Log.LogError($"Options '{unified.name}': VR tab failed, VR rows go into the video tab instead: {e}");
-                if (viewObject != null) UnityEngine.Object.Destroy(viewObject);
+                Plugin.Log.LogError($"Options '{unified.name}': VR tabs failed, VR rows go into the video tab instead: {e}");
+                foreach (var each in made) if (each != null) UnityEngine.Object.Destroy(each);
+                added.Remove(unified);
                 VrOptions.AppendTo(screens[index]);
             }
+        }
+
+        // The game's tabs or the VR ones on that screen, from the first tab when the set changes.
+        public static void Show(UnifiedOptionsScreen unified, bool vr)
+        {
+            if (!added.TryGetValue(unified, out var sets)) return;
+            var set = vr ? sets.Vr : sets.Game;
+            var other = vr ? sets.Game : sets.Vr;
+            Screens(unified) = set.Screens;
+            Views(unified) = set.Views;
+            Tabs(unified) = set.Tabs;
+            if (sets.ShowsVr != vr || Active(unified) >= set.Screens.Length) Active(unified) = 0;
+            sets.ShowsVr = vr;
+            foreach (var tab in other.Tabs) if (tab != null) tab.gameObject.SetActive(false);
+            foreach (var tab in set.Tabs) if (tab != null) tab.gameObject.SetActive(true);
+            HideViews(other);
+            Plugin.Log.LogInfo($"Options '{unified.name}': {(vr ? "VR" : "game")} tabs shown");
+        }
+
+        private static void HideViews(TabSet set)
+        {
+            foreach (var view in set.Views)
+                if (view != null && view.gameObject.activeInHierarchy && (view.IsVisible || view.IsShowing)) view.Hide();
         }
 
         // Unloading (ScriptEngine reload): takes the VR tab out of every options screen again, and removes the VR rows,
@@ -88,14 +128,15 @@ namespace ShipbreakerVR
             foreach (var pair in added)
             {
                 var unified = pair.Key;
-                var tab = pair.Value;
+                var sets = pair.Value;
                 if (unified == null) continue;
-                Screens(unified) = Screens(unified).Where(s => s != tab.Screen).ToArray();
-                Views(unified) = Views(unified).Where(v => v != tab.View).ToArray();
-                Tabs(unified) = Tabs(unified).Where(t => t != tab.Tab).ToArray();
-                if (Active(unified) >= Screens(unified).Length) Active(unified) = 0;
-                if (tab.View != null) UnityEngine.Object.DestroyImmediate(tab.View.gameObject);
-                if (tab.Tab != null) UnityEngine.Object.DestroyImmediate(tab.Tab.gameObject);
+                Screens(unified) = sets.Game.Screens;
+                Views(unified) = sets.Game.Views;
+                Tabs(unified) = sets.Game.Tabs;
+                if (sets.ShowsVr || Active(unified) >= Screens(unified).Length) Active(unified) = 0;
+                foreach (var tab in sets.Game.Tabs) if (tab != null) tab.gameObject.SetActive(true);
+                foreach (var view in sets.Vr.Views) if (view != null) UnityEngine.Object.DestroyImmediate(view.gameObject);
+                foreach (var tab in sets.Vr.Tabs) if (tab != null) UnityEngine.Object.DestroyImmediate(tab.gameObject);
             }
             added.Clear();
             Done.Clear();
@@ -111,16 +152,16 @@ namespace ShipbreakerVR
             Plugin.Log.LogInfo($"Options: VR tab removed, {rows} row(s) and {marks} list helper(s) removed");
         }
 
-        // A copy of the video tab's view with the VR rows instead of the video rows.
-        private static GameObject CreateView(UnifiedOptionsScreen unified, UIView source, out UIView view, out OptionsScreenController screen)
+        // A copy of the video tab's view with one group's VR rows instead of the video rows.
+        private static GameObject CreateView(UnifiedOptionsScreen unified, UIView source, int group, out UIView view, out OptionsScreenController screen)
         {
             // Copy while deactivated, so nothing in the copy wakes up before it is rebuilt.
             var wasActive = source.gameObject.activeSelf;
             source.gameObject.SetActive(false);
             var copy = UnityEngine.Object.Instantiate(source.gameObject, source.transform.parent, false);
             source.gameObject.SetActive(wasActive);
-            copy.name = "ShipbreakerVR Options";
-            copy.transform.SetSiblingIndex(source.transform.GetSiblingIndex() + 1);
+            copy.name = $"ShipbreakerVR Options {group}";
+            copy.transform.SetSiblingIndex(source.transform.GetSiblingIndex() + 1 + group);
             view = copy.GetComponent<UIView>();
             // The video view has not been shown yet when it is copied, so its state still reads the default "visible".
             // UIView.Show returns early for a visible view and never switches its canvas on: the tab could be selected,
@@ -136,7 +177,7 @@ namespace ShipbreakerVR
             foreach (var v in copy.GetComponentsInChildren<UIView>(true))
             {
                 var old = v.ViewName;
-                v.ViewName = v.ViewCategory == category && v.ViewName == name ? "ShipbreakerVR" : "ShipbreakerVR " + v.ViewName;
+                v.ViewName = v.ViewCategory == category && v.ViewName == name ? $"ShipbreakerVR {group}" : $"ShipbreakerVR {group} " + v.ViewName;
                 if (v != view) Plugin.Log.LogInfo($"Options: child view '{v.name}' ({v.ViewCategory}/{old}) renamed to '{v.ViewName}'");
             }
 
@@ -153,7 +194,7 @@ namespace ShipbreakerVR
             // Everything in the list goes, including headings between the rows.
             foreach (Transform child in list.Cast<Transform>().ToList()) UnityEngine.Object.DestroyImmediate(child.gameObject);
 
-            var (_, count) = VrOptions.AddRows(list, source.transform.parent != null ? source.transform.parent : unified.transform, true);
+            var (_, count) = VrOptions.AddRows(list, source.transform.parent != null ? source.transform.parent : unified.transform, true, group);
             if (count == 0) throw new InvalidOperationException("no option row to copy");
             FitContent(list as RectTransform);
             list.gameObject.AddComponent<VrOptionsNavigation>();
@@ -163,6 +204,7 @@ namespace ShipbreakerVR
             if (button != null) view.SelectedButton = button.gameObject;
 
             var vr = host.AddComponent<VrOptionsScreen>();
+            vr.Root = copy.transform;
             Traverse.Create(vr).Field("m_OptionsContainer").SetValue(container);
             vr.Hint = CreateHint(copy.transform, Traverse.Create(first).Field("m_OptionNameText").GetValue<TextMeshProUGUI>());
             screen = vr;
@@ -216,29 +258,23 @@ namespace ShipbreakerVR
             LayoutRebuilder.ForceRebuildLayoutImmediate(content);
         }
 
-        // A copy of the last tab button, placed after it, that opens the VR tab.
-        private static GenericTab CreateTab(UnifiedOptionsScreen unified, GenericTab source, int index)
+        // A copy of a tab button, placed after it, that opens the VR tab at index. Without a layout group it takes the
+        // place of the game's tab at the same index (place), which is switched off while the VR tabs show.
+        private static GenericTab CreateTab(UnifiedOptionsScreen unified, GenericTab source, int index, string label, GenericTab place)
         {
             var copy = UnityEngine.Object.Instantiate(source.gameObject, source.transform.parent, false);
-            copy.name = "ShipbreakerVR Tab";
+            copy.name = $"ShipbreakerVR Tab {index}";
             copy.transform.SetSiblingIndex(source.transform.GetSiblingIndex() + 1);
             var tab = copy.GetComponent<GenericTab>();
             var t = Traverse.Create(tab);
             t.Field("m_TabIndex").SetValue(index);
             t.Field("m_ShouldSelectAtStart").SetValue(false);
-            VrOptions.SetText(t.Field("m_TabText").GetValue<TextMeshProUGUI>(), "VR");
+            VrOptions.SetText(t.Field("m_TabText").GetValue<TextMeshProUGUI>(), label);
             tab.DeselectTab();
-
-            // Without a layout group the copy would sit on top of the source; move it by one tab spacing.
             var parent = source.transform.parent;
-            if (parent != null && parent.GetComponent<LayoutGroup>() == null)
-            {
-                var sourceRect = (RectTransform)source.transform;
-                var before = parent.Cast<Transform>().Select(c => c.GetComponent<GenericTab>()).Where(g => g != null && g != source && g != tab)
-                    .Select(g => (RectTransform)g.transform).OrderBy(r => (r.anchoredPosition - sourceRect.anchoredPosition).sqrMagnitude).FirstOrDefault();
-                var step = before != null ? sourceRect.anchoredPosition - before.anchoredPosition : new Vector2(sourceRect.rect.width, 0f);
-                ((RectTransform)copy.transform).anchoredPosition = sourceRect.anchoredPosition + step;
-            }
+            if (parent != null && parent.GetComponent<LayoutGroup>() == null && place != null)
+                ((RectTransform)copy.transform).anchoredPosition = ((RectTransform)place.transform).anchoredPosition;
+            copy.SetActive(false);
 
             // The copied click still opens the source tab; replace it.
             UnityAction open = () => unified.ShowTab(index);
@@ -270,10 +306,11 @@ namespace ShipbreakerVR
             for (var i = 0; i < e.GetPersistentEventCount(); i++) e.SetPersistentListenerState(i, UnityEventCallState.Off);
         }
 
-        // After a tab switch only the active tab's view may stay visible.
+        // After a tab switch only the active tab's view may stay visible, and none of the set not shown.
         public static void HideInactive(UnifiedOptionsScreen unified)
         {
             if (!Done.Contains(unified)) return;
+            if (added.TryGetValue(unified, out var sets)) HideViews(sets.ShowsVr ? sets.Game : sets.Vr);
             var views = Views(unified);
             var active = Active(unified);
             for (var i = 0; i < views.Length; i++)
@@ -308,6 +345,8 @@ namespace ShipbreakerVR
     internal class VrOptionsScreen : OptionsScreenController
     {
         public TextMeshProUGUI Hint;
+        // The tab's view, which holds its rows.
+        public Transform Root;
         private string shown;
 
         public override bool OptionsAreDirty => false;
@@ -331,7 +370,8 @@ namespace ShipbreakerVR
             RefreshAllOptionData();
         }
 
-        public override void ResetOptionsToDefaults() => VrOptions.ResetToDefaults();
+        // This tab's settings only.
+        public override void ResetOptionsToDefaults() => VrOptions.ResetToDefaults(Root != null ? Root : transform);
 
         public override void CancelAndReloadOptions() { }
 
@@ -341,7 +381,18 @@ namespace ShipbreakerVR
     [HarmonyPatch(typeof(UnifiedOptionsScreen), "OnEnable")]
     internal static class UnifiedOptionsEnablePatch
     {
-        private static void Prefix(UnifiedOptionsScreen __instance) => VrOptionsTab.Create(__instance);
+        private static void Prefix(UnifiedOptionsScreen __instance)
+        {
+            VrOptionsTab.Create(__instance);
+            VrOptionsTab.Show(__instance, VrOptionsMenu.VrMode);
+        }
+    }
+
+    // Closed, the next opening shows the game's tabs, unless it comes from "VR options" again.
+    [HarmonyPatch(typeof(UnifiedOptionsScreen), "OnDisable")]
+    internal static class UnifiedOptionsDisablePatch
+    {
+        private static void Postfix() => VrOptionsMenu.VrMode = false;
     }
 
     [HarmonyPatch]

@@ -461,7 +461,14 @@ the headset. A second effect, the view going dark for a blink at another point o
 load trace under Diagnostics.
 
 ## Settings menu
-The VR rows are clones of real option rows (bool, slider, list) in their own "VR" tab. The game's logic for those
+"VR options" above "Options" in the main and the pause menu (`VrOptionsMenu`, a copy of the game's Options button: in
+the main menu found by its text's localization ID containing "option", in the pause menu by `PauseMenuButton.ButtonType.Options`)
+opens the game's options screen with three VR tabs (Comfort, Gameplay, Graphics, the groups of `VrOptions`) instead of
+the game's tabs. `VrOptionsTab` keeps both sets of the screen's three arrays and gives the screen one of them in its
+`OnEnable` (`VrOptionsMenu.VrMode`, cleared in `OnDisable`), switching the other set's tab buttons off. Reset to
+defaults on a VR tab resets that tab's settings only. Before, all VR rows were in one long "VR" tab next to the game's
+(Raik: hard to search).
+The VR rows are clones of real option rows (bool, slider, list) in their own tabs. The game's logic for those
 clones is intercepted via Harmony and redirected to the BepInEx config. Templates are taken from all tabs of the
 options screen. Earlier the rows were appended to the Video tab (the Gameplay list does not scroll past its own rows);
 that is still the fallback if the tab cannot be built.

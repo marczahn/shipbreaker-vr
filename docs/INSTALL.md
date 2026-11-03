@@ -15,14 +15,14 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
 - Connect the headset and start the game; VR starts right away. **F3** toggles VR.
 - **F4** (or pressing the **left stick** on the controllers) recenters the view on the headset: position, and in menus also view direction and the menu canvas.
   Menus always appear at eye height, also when you look up or down.
-  The row "Center view" at the top of the VR tab does the same.
+  The row "Center view" at the top of the VR options does the same.
 - Own posters: put PNG or JPG files into `BepInExShipbreakerVR-Poster`, the folder appears after the first visit to the station. They join the pictures you can choose for the posters there.
 - **F7** at one of the station's monitors switches its screen look.
 - For bug reports, set `Diagnose = true` under `[Debug]` in `BepInEx\config\de.marczahn.shipbreakervr.cfg`. Then
   **F8** or **B and Y together** writes what is drawn around you into the log, and load screens and frame times are logged too.
 - The keys can be changed under `[Tasten]` in the config file, for example `AnsichtZentrieren = F9` or
   `VrAnAus = F3 + LeftControl`.
-- The station between shifts has its own render resolution, the row "Station resolution" in the VR tab. If the view wobbles
+- The station between shifts has its own render resolution, the row "Station resolution" in the VR options. If the view wobbles
   slightly at the monitors when you move your head, the graphics card misses the headset's frame rate there; lower it
   until that stops.
 - If your view sits too low or off to one side in the suit, move it with the rows "Head height" and "Head sideways" in
@@ -33,7 +33,7 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
 ### Flying with the controllers
 ![Flying controls](images/flying.svg)
 
-Switch it in the options row "Controller flying" in the VR tab. Hold the left trigger, then:
+Switch it in the options row "Controller flying" in the VR options. Hold the left trigger, then:
 - move the controller away from where it was when you pressed it to fly that way,
 - tilt it sideways to roll; the further, the faster.
 
@@ -57,7 +57,7 @@ where you pressed it, its surface full thrust, the small inner globe the deadzon
 
 ![Tool buttons](images/tools.svg)
 
-With the row "Aim with the hand" in the VR tab on (the default), the tools aim where the controller that holds them
+With the row "Aim with the hand" in the VR options on (the default), the tools aim where the controller that holds them
 points, from the tool's muzzle. A thin laser shows where; the crosshair in the middle of the view is hidden meanwhile.
 With an empty hand there is no laser: A uses what is in the middle of your view, marked by the game's dot, as in the
 flat game.
@@ -68,7 +68,7 @@ flat game.
 - Each hand can hold a tool, so two of the cutter, the grapple and the demo charges can be out at once; each hand's
   trigger and buttons work its own tool. Every tool exists only once: reaching for the tool in one hand with the other
   one hands it over. The scanner hides the other hand's tool while you scan; keep that hand's grip squeezed and its tool
-  comes back when you let go of the scanner. The row "Two tools at once" in the VR tab switches this off, so a tool taken
+  comes back when you let go of the scanner. The row "Two tools at once" in the VR options switches this off, so a tool taken
   with one hand replaces the one in the other hand.
 - On the controller that holds the tool: trigger = use the tool (cut, grapple, place or detonate demo charges), A =
   use what you point at (A or X works from either hand, also an empty one), trigger + A = throw, B = switch the tool's
@@ -81,7 +81,7 @@ flat game.
 - The flat game never showed the cutter's right side, which is coarse and plain. The mod copies the detailed left side
   onto it, mirrored (small print there reads backwards). `CutterSpiegeln = false` under `[Bild]` in the config file
   switches this off.
-- If the cutter or the grapple does not sit right in your hand, switch on "Fit tools in the hand" in the VR tab. While
+- If the cutter or the grapple does not sit right in your hand, switch on "Fit tools in the hand" in the VR options. While
   one hand holds the tool, squeeze the grip of the other hand at the tool to grab it, then move and turn it into place;
   letting go stores it, separately for each tool and hand. Switch the row off again when you are done (while it is on,
   the other hand does not take tools from the body). The values are in `BepInEx\config\de.marczahn.shipbreakervr.cfg`
@@ -117,7 +117,7 @@ yourself along it, hand over hand with both hands, or with one hand while the ot
 the masses: the station, fixed hulls and anything too heavy for the game's own grab stay put, light parts come to your
 hand instead. Let go while the hand moves to push off; you keep that speed. While the left hand holds on, controller
 flying pauses. Near an airlock console or a switch the grip holds on too; A or X works it. The row "Hold on and climb"
-in the VR tab switches this off.
+in the VR options switches this off.
 
 ### Free walking in the station
 ![Free walking in the station](images/station.svg)

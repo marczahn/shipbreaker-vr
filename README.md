@@ -88,7 +88,7 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | Open the pause menu | Press the right stick (also in the station). |
 | Put the view back in front of me | Press the left stick (or F4 on the keyboard). |
 | Get upright again | Hold the left stick in for half a second. You turn back to level, keeping your heading. |
-| Stop by letting go | Set **Thrust mode** to Simple in the VR tab: without the left trigger you brake to a stop by yourself. |
+| Stop by letting go | Set **Thrust mode** to Simple in the VR options: without the left trigger you brake to a stop by yourself. |
 | Fly while the grapple holds something big | Fly and brake as usual. If you fly farther away than the grapple reaches, the rope snaps. |
 
 ### Your hands
@@ -104,7 +104,7 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | Hand a tool to the other hand | Reach for it with the other hand and squeeze the grip. |
 | Scan with a tool in the other hand | Take the scanner with your free hand. The other tool disappears while you scan; keep its grip squeezed and it comes back when you let go of the scanner. |
 | Hold on and climb | Squeeze the grip of a hand without a tool close to anything: the hand holds on there. Move the hand to pull yourself along, with both hands hand over hand, or with one while the other works a tool. Light parts come to your hand instead; the station and fixed hulls stay put. Let go while moving the hand to push off. |
-| Push heavy parts | Switch on **Extended physics** in the VR tab. Hold on to something fixed with one hand and move a heavy part with the other, or hold two heavy parts and push them apart. The heavier a part, the slower it gets going. |
+| Push heavy parts | Switch on **Extended physics** in the VR options. Hold on to something fixed with one hand and move a heavy part with the other, or hold two heavy parts and push them apart. The heavier a part, the slower it gets going. |
 | Work an airlock console or a switch | Look at it and press A or X. The grip only holds on, also there: near a switch your hand closes on it as a fist. |
 | Use a tool with the left hand | Take it with the left hand. X and Y then do what A and B do, and flying pauses until you let go. |
 
@@ -168,7 +168,7 @@ back, the triggers switch tabs.
 
 ![Free walking in the station](docs/images/station.svg)
 
-**Walking in the station** is an option in the VR tab, off by default, and replaces the spots. Sitting on the bed, A stands up. The
+**Walking in the station** is an option in the VR options, off by default, and replaces the spots. Sitting on the bed, A stands up. The
 left stick walks, the right stick turns in steps. Near a screen or the exit, A uses it and B leaves it; X opens the exit from
 anywhere. Look at a poster from close by and the triggers change its picture. Walking with a stick can make you feel sick.
 
@@ -178,7 +178,8 @@ anywhere. Look at a poster from close by and the triggers change its picture. Wa
 
 ## Settings
 
-Open the game's options and choose the **VR** tab. Every row explains itself when you select it. The ones you are most
+Choose **VR options** in the main menu or the pause menu, right above **Options**. The settings are in three tabs,
+**Comfort**, **Gameplay** and **Graphics**, and every row explains itself when you select it. The ones you are most
 likely to need:
 
 - **Center view:** puts the view and the menus in front of you again.
@@ -206,19 +207,19 @@ likely to need:
 
 ### The game crashes right after loading into a shift
 The render resolution is probably set too high and the graphics card runs out of memory. Set **Render resolution**
-in the VR tab back to 1.0.
+in the VR options back to 1.0.
 
 ### The game stutters or the picture smears when I move
-Leave **Alternate eyes** and **Share work between eyes** on in the VR tab. In the bay the processor is usually the
+Leave **Alternate eyes** and **Share work between eyes** on in the VR options. In the bay the processor is usually the
 limit, not the graphics card; there a lower refresh rate for the headset in your VR app (72 or 80 Hz instead of 90)
-helps more than a lower resolution. Otherwise lower **Render resolution** in the VR tab, and leave **Ambient
+helps more than a lower resolution. Otherwise lower **Render resolution** in the VR options, and leave **Ambient
 occlusion** on Low or switch it off. In the game's own graphics settings, a lower quality level helps too.
 
 ### The view wobbles at the station's monitors
-The graphics card does not keep up there. Lower **Station resolution** in the VR tab step by step until it stops.
+The graphics card does not keep up there. Lower **Station resolution** in the VR options step by step until it stops.
 
 ### I sit too low or off to one side in the suit
-Use **Head height** and **Head sideways** in the VR tab.
+Use **Head height** and **Head sideways** in the VR options.
 
 ### The menu or the view is behind me or off to the side
 Press **B and Y** together, or **F4**. This puts everything in front of you again.
@@ -240,7 +241,7 @@ The mod does not touch your save games. It is still a test version, though, so a
 Yes, press F3 in the game.
 
 **Can I play with mouse and keyboard or a gamepad?**
-Yes. They keep working while you look around with the headset. Switch off **Controller flying** in the VR tab if you
+Yes. They keep working while you look around with the headset. Switch off **Controller flying** in the VR options if you
 don't use the motion controllers.
 
 **Is this the same as the ShipbreakerVr mod by Raicuparta?**
