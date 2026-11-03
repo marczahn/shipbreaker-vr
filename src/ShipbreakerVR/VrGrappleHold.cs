@@ -31,12 +31,6 @@ namespace ShipbreakerVR
         // The grapple's rope, and the body's pose in the space of the hand that holds the grapple, taken when the rope
         // caught or when that hand started to aim or changed.
         private static LaserRope rope;
-
-        // How far the grapple's part lags behind where the rope holds it, in meters, and how far the rope stretches
-        // (LaserRope.m_RopeStretchLength): the pull the hand feels (VrToolHaptics).
-        public static float Lag { get; private set; }
-        public static float StretchLength => rope != null ? RopeStretch(rope) : 0f;
-        private static readonly AccessTools.FieldRef<LaserRope, float> RopeStretch = AccessTools.FieldRefAccess<LaserRope, float>("m_RopeStretchLength");
         private static Transform hand;
         private static Vector3 offsetPosition;
         private static Quaternion offsetRotation;
@@ -101,7 +95,6 @@ namespace ShipbreakerVR
             var shift = target - game;
             displacement += shift;
             force += MaxSpring(instance) * SpringPercent(instance) * shift;
-            if (instance == rope) Lag = displacement.magnitude;
         }
 
         // LaserRope.GetRotationForceInfo: the attitude the part is turned to, and the spring towards it.
