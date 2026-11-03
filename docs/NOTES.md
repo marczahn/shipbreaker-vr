@@ -461,8 +461,9 @@ the headset. A second effect, the view going dark for a blink at another point o
 load trace under Diagnostics.
 
 ## Settings menu
-"VR options" above "Options" in the main and the pause menu (`VrOptionsMenu`, a copy of the game's Options button: in
-the main menu found by its text's localization ID containing "option", in the pause menu by `PauseMenuButton.ButtonType.Options`)
+"VR options" above "Options" in the main and the pause menu (`VrOptionsMenu`, a copy of the game's Options button,
+found by its text's localization ID `LocID:69`; both are Doozy buttons, neither a `MainMenuButton` nor in
+`PauseMenuController.m_PauseMenuButtons`, which the first attempts looked for)
 opens the game's options screen with three VR tabs (Comfort, Gameplay, Graphics, the groups of `VrOptions`) instead of
 the game's tabs. `VrOptionsTab` keeps both sets of the screen's three arrays and gives the screen one of them in its
 `OnEnable` (`VrOptionsMenu.VrMode`, cleared in `OnDisable`), switching the other set's tab buttons off. Reset to

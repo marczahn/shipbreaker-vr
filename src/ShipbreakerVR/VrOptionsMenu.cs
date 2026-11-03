@@ -12,8 +12,11 @@ namespace ShipbreakerVR
 {
     // "VR options" above "Options" in the main menu and in the pause menu, as Raik asked: it opens the game's options
     // screen with the VR tabs instead of the game's (VrOptionsTab.Show). The entry is a copy of the game's own Options
-    // button, so it looks and selects like it; its click sets VrMode and then does what the Options button does. The
-    // options screen clears VrMode when it closes, so "Options" opens the game's tabs again.
+    // button, so it looks and selects like it; its click sets VrMode and then clicks the original. The options screen
+    // clears VrMode when it closes, so "Options" opens the game's tabs again.
+    // Both Options buttons are Doozy buttons ('Button - OPTIONS' in the main menu, 'Options_Button' in the pause menu),
+    // neither a MainMenuButton nor in PauseMenuController's button list, so they are found by their text's localization
+    // ID, with the label as a fallback.
     internal static class VrOptionsMenu
     {
         public static bool VrMode;
@@ -22,14 +25,6 @@ namespace ShipbreakerVR
         // The localization ID of "Options" on the main and the pause menu's buttons (seen in the game, 2026-11-03).
         private const string OptionsText = "LocID:69";
 
-        private static readonly AccessTools.FieldRef<PauseMenuController, PauseMenuButton[]> PauseButtons =
-            AccessTools.FieldRefAccess<PauseMenuController, PauseMenuButton[]>("m_PauseMenuButtons");
-        private static readonly AccessTools.FieldRef<PauseMenuButton, PauseMenuButton.ButtonType> PauseType =
-            AccessTools.FieldRefAccess<PauseMenuButton, PauseMenuButton.ButtonType>("m_ButtonType");
-        private static readonly System.Reflection.MethodInfo PauseClick =
-            AccessTools.Method(typeof(PauseMenuController), "OnButtonClick", new[] { typeof(PauseMenuButton.ButtonType) });
-        private static readonly AccessTools.FieldRef<MainMenuButton, LocalizedTextMeshProUGUI> MainText =
-            AccessTools.FieldRefAccess<MainMenuButton, LocalizedTextMeshProUGUI>("m_LocButtonText");
         private static readonly AccessTools.FieldRef<LocalizedTextMeshProUGUI, string> LocId =
             AccessTools.FieldRefAccess<LocalizedTextMeshProUGUI, string>("m_LocalizationID");
 
@@ -38,64 +33,35 @@ namespace ShipbreakerVR
 
         private static string Label => VrOptions.L("VR options", "VR-Optionen");
 
-        // From VrFrame, once per frame: the main menu's Options button gets its copy once it is there.
+        // From VrFrame, once per frame: once a second outside a shift's play (menus, the pause menu, the station), each
+        // Options button without its copy gets one.
         public static void Update()
         {
             if (Time.unscaledTime < nextSearch) return;
             nextSearch = Time.unscaledTime + 1f;
-            // Menus only: the pause menu, the main menu and the station's; not every second of a shift.
             if (GameSession.CurrentGameState == GameSession.GameState.Gameplay) return;
-            var buttons = Object.FindObjectsOfType<MainMenuButton>();
-            if (buttons.Length != seen)
-            {
-                seen = buttons.Length;
-                Log($"main menu: {buttons.Length} menu button(s) active");
-            }
-            foreach (var button in buttons)
-            {
-                if (button.name == Name || !IsOptions(button) || HasCopy(button.transform)) continue;
-                AddToMainMenu(button);
-            }
-            if (buttons.Length > 0 && !buttons.Any(IsOptions) && !listed)
-            {
-                listed = true;
-                Log("main menu: no Options button among " + string.Join(", ", buttons.Select(b => $"'{VrUtil.Path(b.transform)}' (id '{(MainText(b) != null ? LocId(MainText(b)) : "-")}', text '{Text(b.gameObject)}')")));
-            }
-            Survey();
-        }
-
-        // Every text that reads "Option..." and the button it belongs to, logged once each; a button labelled just
-        // "Options" (or "Optionen") outside the options screen gets the entry. The menus' Options buttons are no
-        // MainMenuButtons and, in the pause menu, not in the controller's button list (the first tests found neither).
-        private static readonly System.Collections.Generic.HashSet<string> surveyed = new System.Collections.Generic.HashSet<string>();
-
-        private static void Survey()
-        {
             foreach (var text in Object.FindObjectsOfType<TextMeshProUGUI>())
             {
-                if (text.text == null || text.text.IndexOf("option", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
                 var button = (Component)text.GetComponentInParent<UIButton>() ?? text.GetComponentInParent<Button>();
-                var path = VrUtil.Path(text.transform);
-                if (surveyed.Count < 40 && surveyed.Add(path))
-                {
-                    var localized = text.GetComponentInParent<LocalizedTextMeshProUGUI>();
-                    var components = button != null ? string.Join(", ", button.GetComponents<Component>().Select(c => c.GetType().Name)) : "-";
-                    var layout = button != null && button.transform.parent != null && button.transform.parent.GetComponent<LayoutGroup>() != null;
-                    Log($"survey: text '{text.text}' at '{path}', id '{(localized != null ? LocId(localized) : "-")}', button '{(button != null ? VrUtil.Path(button.transform) : "-")}' ({components}), layout group {layout}");
-                }
-                var label = text.text.Trim();
-                if (button == null || button.name == Name || text.GetComponentInParent<UnifiedOptionsScreen>() != null) continue;
-                // Both menus' Options buttons carry the text LocID:69, in every language; the label is the fallback.
-                var id = text.GetComponentInParent<LocalizedTextMeshProUGUI>();
-                if ((id == null || LocId(id) != OptionsText) && !label.Equals("Options", System.StringComparison.OrdinalIgnoreCase)
-                    && !label.Equals("Optionen", System.StringComparison.OrdinalIgnoreCase)) continue;
-                if (HasCopy(button.transform)) continue;
-                AddByLabel(button);
+                if (button == null || button.name == Name || !IsOptions(text) || HasCopy(button.transform)) continue;
+                if (text.GetComponentInParent<UnifiedOptionsScreen>() != null) continue;
+                Add(button);
             }
         }
 
-        // A copy of a button labelled "Options": its click sets VrMode and then clicks the original.
-        private static void AddByLabel(Component source)
+        private static bool IsOptions(TextMeshProUGUI text)
+        {
+            var localized = text.GetComponentInParent<LocalizedTextMeshProUGUI>();
+            if (localized != null && LocId(localized) == OptionsText) return true;
+            var label = text.text != null ? text.text.Trim() : "";
+            return label.Equals("Options", System.StringComparison.OrdinalIgnoreCase) || label.Equals("Optionen", System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool HasCopy(Transform button) =>
+            button.parent != null && button.parent.Cast<Transform>().Any(child => child.name == Name);
+
+        // A copy of an Options button: its click sets VrMode and then clicks the original.
+        private static void Add(Component source)
         {
             var copy = Copy(source.gameObject);
             var doozy = source.GetComponent<UIButton>();
@@ -114,71 +80,13 @@ namespace ShipbreakerVR
                 Silence(action.Event);
                 action.Event.AddListener(open);
             }
-            Redirect(copy, open);
+            foreach (var b in copy.GetComponentsInChildren<Button>(true))
+            {
+                b.onClick.RemoveAllListeners();
+                Silence(b.onClick);
+                b.onClick.AddListener(open);
+            }
             Log($"'{Label}' added above '{VrUtil.Path(source.transform)}' ({(doozy != null ? "Doozy button" : "button")})");
-        }
-
-        private static bool listed;
-        private static int seen = -1;
-
-        private static string Text(GameObject button)
-        {
-            var text = button.GetComponentInChildren<TextMeshProUGUI>(true);
-            return text != null ? text.text : "-";
-        }
-
-        // The main menu's Options button, by its text's localization ID.
-        private static bool IsOptions(MainMenuButton button)
-        {
-            var text = MainText(button);
-            var id = text != null ? LocId(text) : null;
-            return id != null && id.IndexOf("option", System.StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-
-        private static bool HasCopy(Transform button) =>
-            button.parent != null && button.parent.Cast<Transform>().Any(child => child.name == Name);
-
-        private static void AddToMainMenu(MainMenuButton options)
-        {
-            var copy = Copy(options.gameObject);
-            var source = options.GetComponentInChildren<UIButton>(true);
-            UnityAction open = () =>
-            {
-                VrMode = true;
-                if (source != null) source.ExecuteClick();
-            };
-            var uiButtons = copy.GetComponentsInChildren<UIButton>(true);
-            foreach (var b in uiButtons)
-            {
-                var action = b.OnClick.OnTrigger;
-                action.GameEvents.Clear();
-                if (action.Event == null) action.Event = new UnityEvent();
-                Silence(action.Event);
-                action.Event.AddListener(open);
-            }
-            if (uiButtons.Length == 0) Redirect(copy, open);
-            Log($"main menu: '{Label}' added above '{VrUtil.Path(options.transform)}' ({(source != null ? "Doozy button" : "no Doozy button")})");
-        }
-
-        // From PauseMenuController.Start: a copy of its Options button.
-        public static void AddToPauseMenu(PauseMenuController controller)
-        {
-            var buttons = PauseButtons(controller);
-            if (buttons == null || buttons.Length == 0) buttons = controller.GetComponentsInChildren<PauseMenuButton>(true);
-            var options = buttons.FirstOrDefault(b => b != null && PauseType(b) == PauseMenuButton.ButtonType.Options);
-            if (options == null || HasCopy(options.transform))
-            {
-                if (options == null)
-                    Log($"pause menu: no Options button among {buttons.Length}: " + string.Join(", ", buttons.Where(b => b != null).Select(b => $"'{b.name}' {PauseType(b)} '{Text(b.gameObject)}'")));
-                return;
-            }
-            var copy = Copy(options.gameObject);
-            Redirect(copy, () =>
-            {
-                VrMode = true;
-                PauseClick?.Invoke(controller, new object[] { PauseMenuButton.ButtonType.Options });
-            });
-            Log($"pause menu: '{Label}' added above '{VrUtil.Path(options.transform)}'");
         }
 
         // A copy of the button just above it, with our label instead of its localized one. Without a layout group the
@@ -188,8 +96,7 @@ namespace ShipbreakerVR
             var parent = source.transform.parent;
             var copy = Object.Instantiate(source, parent, false);
             copy.name = Name;
-            var index = source.transform.GetSiblingIndex();
-            copy.transform.SetSiblingIndex(index);
+            copy.transform.SetSiblingIndex(source.transform.GetSiblingIndex());
             foreach (var localized in copy.GetComponentsInChildren<LocalizedTextMeshProUGUI>(true)) Object.DestroyImmediate(localized);
             foreach (var text in copy.GetComponentsInChildren<TextMeshProUGUI>(true)) VrOptions.SetText(text, Label);
             if (parent != null && parent.GetComponent<LayoutGroup>() == null)
@@ -205,17 +112,6 @@ namespace ShipbreakerVR
             return copy;
         }
 
-        // The plain buttons of a copy: their clicks (persistent ones off, runtime ones gone) replaced by open.
-        private static void Redirect(GameObject copy, UnityAction open)
-        {
-            foreach (var b in copy.GetComponentsInChildren<Button>(true))
-            {
-                b.onClick.RemoveAllListeners();
-                Silence(b.onClick);
-                b.onClick.AddListener(open);
-            }
-        }
-
         private static void Silence(UnityEventBase e)
         {
             for (var i = 0; i < e.GetPersistentEventCount(); i++) e.SetPersistentListenerState(i, UnityEventCallState.Off);
@@ -223,13 +119,7 @@ namespace ShipbreakerVR
 
         private static void Log(string text)
         {
-            if (logs++ < 60) Plugin.Log.LogInfo($"VR options entry, {text}");
+            if (logs++ < 20) Plugin.Log.LogInfo($"VR options entry, {text}");
         }
-    }
-
-    [HarmonyPatch(typeof(PauseMenuController), "Start")]
-    internal static class PauseMenuOptionsPatch
-    {
-        private static void Postfix(PauseMenuController __instance) => VrOptionsMenu.AddToPauseMenu(__instance);
     }
 }
