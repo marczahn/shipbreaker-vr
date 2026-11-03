@@ -23,14 +23,18 @@ namespace ShipbreakerVR
     // velocity stops the body just short of anything ahead (KeepClear), and what still touches the thing held at low
     // speed is no impact (Soft, ImpactPatch). The colliders stay on, so the body does not go through it.
     // Steuerung/SchwereTeileSchieben: with one hand braced on something fixed, the other works a heavy part with a limited
-    // force (Pushes, BracedPush), less the heavier it is: it gathers speed slowly, keeps it, and is out of reach when the hold tears off. With
-    // both hands on two heavy parts they push each other apart, the body between them, shared by the masses.
+    // force (Pushes, BracedPush), less the heavier it is: it gathers speed slowly, keeps it, and is out of reach when the
+    // hold tears off. With both hands on two heavy parts they push each other apart, the body between them, shared by the
+    // masses.
     internal static class VrClimb
     {
         static VrClimb() => VrSession.OnUnload("climbing", Release);
 
         // How far from the controller a surface may be to hold on, in meters at world scale 1.
         private const float Reach = 0.15f;
+        // A control's HandTarget wins over the nearest surface only up to this much farther away, in meters at world scale
+        // 1: a hand climbing past a switch keeps the wall.
+        private const float ControlPreference = 0.05f;
         // A grip pressed just before the hand arrives still catches, for this many seconds: a moving hand misses less.
         private const float CatchTime = 0.25f;
         // How long the game's hand takes to come to the surface it caught, in seconds.
@@ -247,10 +251,13 @@ namespace ShipbreakerVR
                 bestDistance = distance;
                 surface = closest;
             }
-            // A control within reach (a door switch, a console) comes first, even with the hull nearer: the hand goes onto
-            // the control's HandTarget, where the game puts its own hand, as a fist (HoldsControl). Before, the hand held
-            // the hull under the switch or stayed a few centimeters off it (Raik).
+            // A control within reach (a door switch, a console) comes first, unless the nearest surface is more than
+            // ControlPreference nearer: the hand goes onto the control's HandTarget, where the game puts its own hand, as a
+            // fist (HoldsControl). Before, the hand held the hull under the switch or stayed a few centimeters off it (Raik).
             var control = NearestControl(at, reach, out var controlCollider);
+            if (control != null && best != null
+                && (control.HandTarget.position - at).magnitude > Mathf.Sqrt(bestDistance) + ControlPreference * VrCamera.WorldScale)
+                control = null;
             if (control != null)
             {
                 best = controlCollider;

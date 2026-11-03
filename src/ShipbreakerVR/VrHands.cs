@@ -233,7 +233,11 @@ namespace ShipbreakerVR
             if (closing) arm.Fist = !tool && (hand.State != HandState.Holding || VrClimb.HoldsControl(arm.Input));
             arm.Closed = Mathf.MoveTowards(arm.Closed, closing ? 1f : 0f, Time.unscaledDeltaTime / CurlTime);
             arm.Flat = Mathf.MoveTowards(arm.Flat, flat ? 1f : 0f, Time.unscaledDeltaTime / CurlTime);
-            if (!flat) arm.ThumbLogged = false;
+            if (!flat)
+            {
+                arm.ThumbLogged = false;
+                System.Array.Clear(arm.Edge, 0, arm.Edge.Length);
+            }
             var amount = arm.Closed * arm.Weight;
             var flatness = arm.Flat * arm.Weight;
             if ((amount <= 0f && flatness <= 0f) || !Frame(arm, out _, out var frame))
@@ -260,7 +264,8 @@ namespace ShipbreakerVR
             for (var i = 0; i < arm.Joints.Length; i++)
                 Turn(arm, arm.Joints[i], i, Quaternion.AngleAxis(side * bend[i % 3] * amount, across));
             var thumb = (arm.Fist ? FistThumb : GripThumb) * amount;
-            for (var i = 0; i < arm.Thumb.Length; i++)
+            // The humanoid three only: the rig's further thumb bones keep their pose relative to them.
+            for (var i = 0; i < 3; i++)
                 Turn(arm, arm.Thumb[i], arm.Joints.Length + i, Quaternion.AngleAxis(-side * thumb, along));
             if (arm.Fist) ThumbOnMiddle(arm, frame * Vector3.right * side, amount);
         }
