@@ -26,13 +26,12 @@ namespace ShipbreakerVR
         private const float GrappleLeast = 0.04f;
         private const float GrappleMost = 0.9f;
         private const float NearFar = 0.8f;
-
-        private static readonly AccessTools.FieldRef<GrapplingHook, float> OutOfBounds = AccessTools.FieldRefAccess<GrapplingHook, float>("mOutOfBoundsTimer");
         private const float TetherAmplitude = 0.6f;
         private const float TetherLength = 0.06f;
 
         private static readonly AccessTools.FieldRef<CuttingToolController, CuttingController> CuttingOf =
             AccessTools.FieldRefAccess<CuttingToolController, CuttingController>("m_CuttingController");
+        private static readonly AccessTools.FieldRef<GrapplingHook, float> OutOfBounds = AccessTools.FieldRefAccess<GrapplingHook, float>("mOutOfBoundsTimer");
 
         private static float next;
         private static int logs;
@@ -90,7 +89,8 @@ namespace ShipbreakerVR
             lastOut = OutOfBounds(grapple);
             pulling = true;
             var pull = Mathf.Max(lastOff * lastOff, Mathf.InverseLerp(NearFar, 1f, lastFar));
-            if (lastOut > 0f) pull = 1f;
+            // Out of view with the game counting towards the snap; the timer alone may stay set after the part is back.
+            if (lastOut > 0f && lastOff >= 1f) pull = 1f;
             hand.Input.Buzz(Mathf.Lerp(GrappleLeast, GrappleMost, pull), Length);
         }
 

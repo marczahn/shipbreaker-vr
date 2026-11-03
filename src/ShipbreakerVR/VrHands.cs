@@ -107,7 +107,7 @@ namespace ShipbreakerVR
             public float Weight;
             public bool Driven;
             // The arm's own bone lengths, shoulder to elbow and elbow to wrist, from the skin's bind pose (KeepLength);
-            // 0 until found.
+            // 0 until searched, -1 when not found.
             public float UpperLength;
             public float LowerLength;
             public bool LengthLogged;
@@ -146,8 +146,6 @@ namespace ShipbreakerVR
         private static int thumbLogs;
         private static int logs;
 
-        // From VrCamera.LateUpdate, after VrToolModels.PoseArm: which arms follow their controllers, blended in and out
-        // over Blend, and those posed.
         // From VrFrame, right after VrToolModels.Unstretch and before anything poses the arms: both arms back to their
         // own bone lengths. The game's animations move the elbow and the wrist bone out: drawing the cutter stretched
         // the right arm by 81 % for a moment, folded at the elbow, and an arm left longer stayed bent where the real one
@@ -208,6 +206,8 @@ namespace ShipbreakerVR
             return false;
         }
 
+        // From VrCamera.LateUpdate, after VrToolModels.PoseArm: which arms follow their controllers, blended in and out
+        // over Blend, and those posed.
         public static void LateUpdate()
         {
             if (!Find()) return;
