@@ -19,6 +19,8 @@ namespace ShipbreakerVR
         public static bool VrMode;
 
         private const string Name = "ShipbreakerVR Options Button";
+        // The localization ID of "Options" on the main and the pause menu's buttons (seen in the game, 2026-11-03).
+        private const string OptionsText = "LocID:69";
 
         private static readonly AccessTools.FieldRef<PauseMenuController, PauseMenuButton[]> PauseButtons =
             AccessTools.FieldRefAccess<PauseMenuController, PauseMenuButton[]>("m_PauseMenuButtons");
@@ -83,7 +85,10 @@ namespace ShipbreakerVR
                 }
                 var label = text.text.Trim();
                 if (button == null || button.name == Name || text.GetComponentInParent<UnifiedOptionsScreen>() != null) continue;
-                if (!label.Equals("Options", System.StringComparison.OrdinalIgnoreCase) && !label.Equals("Optionen", System.StringComparison.OrdinalIgnoreCase)) continue;
+                // Both menus' Options buttons carry the text LocID:69, in every language; the label is the fallback.
+                var id = text.GetComponentInParent<LocalizedTextMeshProUGUI>();
+                if ((id == null || LocId(id) != OptionsText) && !label.Equals("Options", System.StringComparison.OrdinalIgnoreCase)
+                    && !label.Equals("Optionen", System.StringComparison.OrdinalIgnoreCase)) continue;
                 if (HasCopy(button.transform)) continue;
                 AddByLabel(button);
             }
