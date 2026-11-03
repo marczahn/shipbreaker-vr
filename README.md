@@ -104,7 +104,8 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | Hand a tool to the other hand | Reach for it with the other hand and squeeze the grip. |
 | Scan with a tool in the other hand | Take the scanner with your free hand. The other tool disappears while you scan; keep its grip squeezed and it comes back when you let go of the scanner. |
 | Hold on and climb | Squeeze the grip of a hand without a tool close to anything: the hand holds on there. Move the hand to pull yourself along, with both hands hand over hand, or with one while the other works a tool. Light parts come to your hand instead; the station and fixed hulls stay put. Let go while moving the hand to push off. |
-| Work an airlock console or a switch | Look at it and press A or X. The grip only holds on, also there. |
+| Push heavy parts | Switch on **Extended physics** in the VR tab. Hold on to something fixed with one hand and move a heavy part with the other, or hold two heavy parts and push them apart. The heavier a part, the slower it gets going. |
+| Work an airlock console or a switch | Look at it and press A or X. The grip only holds on, also there: near a switch your hand closes on it as a fist. |
 | Use a tool with the left hand | Take it with the left hand. X and Y then do what A and B do, and flying pauses until you let go. |
 
 ### Tool buttons
@@ -186,11 +187,15 @@ likely to need:
   smoother on most processors. Switch it off (or press F11) if fast movements flicker too much for you.
 - **Station resolution:** the same for the station between shifts, which is harder on the graphics card.
 - **Turning:** smooth turning, or turning in steps, which is easier on the stomach.
+- **Turn around:** whether the right stick turns you around your head's up (where you look) or your body's, so that
+  looking up or down does not tip the turn.
 - **Head height** and **Head sideways:** move your view if you seem to sit too low or off to one side in the suit.
 - **Controller flying:** switch it off if you fly with mouse and keyboard or a gamepad.
 - **Aim with the hand:** switch it off to aim your tools at the center of your view again, as in the flat game.
 - **Two tools at once:** switch it off if you want a tool from one hand to replace the one in the other hand.
 - **Hold on and climb:** switch it off if the grip of an empty hand should do nothing.
+- **Extended physics:** switch it on to push heavy parts with your hands (see [Your hands](#your-hands)). Off, heavy
+  parts behave as in the game and do not move.
 - **Upright body:** your suit's body stays upright and faces your hands while you look around, and leans with you, so
   your hands reach the controllers the same way wherever you look. Switch it off to let the body turn with every look,
   as before.
