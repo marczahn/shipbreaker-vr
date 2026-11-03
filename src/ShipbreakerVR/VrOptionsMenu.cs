@@ -40,11 +40,31 @@ namespace ShipbreakerVR
         {
             if (Time.unscaledTime < nextSearch) return;
             nextSearch = Time.unscaledTime + 1f;
-            foreach (var button in Object.FindObjectsOfType<MainMenuButton>())
+            var buttons = Object.FindObjectsOfType<MainMenuButton>();
+            if (buttons.Length != seen)
+            {
+                seen = buttons.Length;
+                Log($"main menu: {buttons.Length} menu button(s) active");
+            }
+            foreach (var button in buttons)
             {
                 if (button.name == Name || !IsOptions(button) || HasCopy(button.transform)) continue;
                 AddToMainMenu(button);
             }
+            if (buttons.Length > 0 && !buttons.Any(IsOptions) && !listed)
+            {
+                listed = true;
+                Log("main menu: no Options button among " + string.Join(", ", buttons.Select(b => $"'{VrUtil.Path(b.transform)}' (id '{(MainText(b) != null ? LocId(MainText(b)) : "-")}', text '{Text(b.gameObject)}')")));
+            }
+        }
+
+        private static bool listed;
+        private static int seen = -1;
+
+        private static string Text(GameObject button)
+        {
+            var text = button.GetComponentInChildren<TextMeshProUGUI>(true);
+            return text != null ? text.text : "-";
         }
 
         // The main menu's Options button, by its text's localization ID.
@@ -84,10 +104,12 @@ namespace ShipbreakerVR
         public static void AddToPauseMenu(PauseMenuController controller)
         {
             var buttons = PauseButtons(controller);
-            var options = buttons?.FirstOrDefault(b => b != null && PauseType(b) == PauseMenuButton.ButtonType.Options);
+            if (buttons == null || buttons.Length == 0) buttons = controller.GetComponentsInChildren<PauseMenuButton>(true);
+            var options = buttons.FirstOrDefault(b => b != null && PauseType(b) == PauseMenuButton.ButtonType.Options);
             if (options == null || HasCopy(options.transform))
             {
-                if (options == null) Log("pause menu: no Options button found");
+                if (options == null)
+                    Log($"pause menu: no Options button among {buttons.Length}: " + string.Join(", ", buttons.Where(b => b != null).Select(b => $"'{b.name}' {PauseType(b)} '{Text(b.gameObject)}'")));
                 return;
             }
             var copy = Copy(options.gameObject);
