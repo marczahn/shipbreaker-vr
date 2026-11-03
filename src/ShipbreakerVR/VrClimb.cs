@@ -889,13 +889,14 @@ namespace ShipbreakerVR
         public const float MaxMass = 5000f;
         // Newtons per meter the hand is away from its hold: the full force comes at 10 cm.
         private const float Stiffness = 2500f;
-        // Big parts gather speed slowly, the heavier the slower: at most 0.4 m/s² at 200 kg, down to 0.2 at 1000 kg (Raik,
-        // after pushing a 600 kg hoist truck). Lighter parts get more force on the way down to 30 kg, where MaxForce is.
+        // Big parts gather speed slowly, the heavier the slower: at most 0.35 m/s² at 200 kg, down to 0.17 at 1000 kg, so
+        // the 636 kg hoist truck gets 0.25 (Raik; first 0.4 to 0.2, which gave it 0.29). Lighter parts get more force on
+        // the way down to 30 kg, where MaxForce is.
         private const float LightMass = 30f;
         private const float BigMass = 200f;
         private const float HeavyMass = 1000f;
-        private const float BigAcceleration = 0.4f;
-        private const float HeavyAcceleration = 0.2f;
+        private const float BigAcceleration = 0.35f;
+        private const float HeavyAcceleration = 0.17f;
 
         // The force on the hold, towards the hand.
         public static Vector3 Force(Vector3 toHand, float mass)

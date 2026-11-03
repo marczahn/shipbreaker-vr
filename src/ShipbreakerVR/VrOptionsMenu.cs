@@ -1,5 +1,6 @@
 using System.Linq;
 using BBI.Unity.Game;
+using BBI.Unity.Game.UI.Config.Controllers;
 using Doozy.Engine.UI;
 using HarmonyLib;
 using TMPro;
@@ -40,6 +41,8 @@ namespace ShipbreakerVR
         {
             if (Time.unscaledTime < nextSearch) return;
             nextSearch = Time.unscaledTime + 1f;
+            // Menus only: the pause menu, the main menu and the station's; not every second of a shift.
+            if (GameSession.CurrentGameState == GameSession.GameState.Gameplay) return;
             var buttons = Object.FindObjectsOfType<MainMenuButton>();
             if (buttons.Length != seen)
             {
@@ -59,24 +62,55 @@ namespace ShipbreakerVR
             Survey();
         }
 
-        // Every text that reads "Option..." and the button it belongs to, once each: where the menus' Options buttons
-        // are, for placing the entry (the first test found none, the main menu's buttons are no MainMenuButtons).
+        // Every text that reads "Option..." and the button it belongs to, logged once each; a button labelled just
+        // "Options" (or "Optionen") outside the options screen gets the entry. The menus' Options buttons are no
+        // MainMenuButtons and, in the pause menu, not in the controller's button list (the first tests found neither).
         private static readonly System.Collections.Generic.HashSet<string> surveyed = new System.Collections.Generic.HashSet<string>();
 
         private static void Survey()
         {
-            if (surveyed.Count >= 20) return;
             foreach (var text in Object.FindObjectsOfType<TextMeshProUGUI>())
             {
                 if (text.text == null || text.text.IndexOf("option", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
-                var path = VrUtil.Path(text.transform);
-                if (!surveyed.Add(path)) continue;
-                var localized = text.GetComponentInParent<LocalizedTextMeshProUGUI>();
                 var button = (Component)text.GetComponentInParent<UIButton>() ?? text.GetComponentInParent<Button>();
-                var components = button != null ? string.Join(", ", button.GetComponents<Component>().Select(c => c.GetType().Name)) : "-";
-                var layout = button != null && button.transform.parent != null && button.transform.parent.GetComponent<LayoutGroup>() != null;
-                Log($"survey: text '{text.text}' at '{path}', id '{(localized != null ? LocId(localized) : "-")}', button '{(button != null ? VrUtil.Path(button.transform) : "-")}' ({components}), layout group {layout}");
+                var path = VrUtil.Path(text.transform);
+                if (surveyed.Count < 40 && surveyed.Add(path))
+                {
+                    var localized = text.GetComponentInParent<LocalizedTextMeshProUGUI>();
+                    var components = button != null ? string.Join(", ", button.GetComponents<Component>().Select(c => c.GetType().Name)) : "-";
+                    var layout = button != null && button.transform.parent != null && button.transform.parent.GetComponent<LayoutGroup>() != null;
+                    Log($"survey: text '{text.text}' at '{path}', id '{(localized != null ? LocId(localized) : "-")}', button '{(button != null ? VrUtil.Path(button.transform) : "-")}' ({components}), layout group {layout}");
+                }
+                var label = text.text.Trim();
+                if (button == null || button.name == Name || text.GetComponentInParent<UnifiedOptionsScreen>() != null) continue;
+                if (!label.Equals("Options", System.StringComparison.OrdinalIgnoreCase) && !label.Equals("Optionen", System.StringComparison.OrdinalIgnoreCase)) continue;
+                if (HasCopy(button.transform)) continue;
+                AddByLabel(button);
             }
+        }
+
+        // A copy of a button labelled "Options": its click sets VrMode and then clicks the original.
+        private static void AddByLabel(Component source)
+        {
+            var copy = Copy(source.gameObject);
+            var doozy = source.GetComponent<UIButton>();
+            var plain = source.GetComponent<Button>();
+            UnityAction open = () =>
+            {
+                VrMode = true;
+                if (doozy != null) doozy.ExecuteClick();
+                else if (plain != null) plain.onClick.Invoke();
+            };
+            foreach (var b in copy.GetComponentsInChildren<UIButton>(true))
+            {
+                var action = b.OnClick.OnTrigger;
+                action.GameEvents.Clear();
+                if (action.Event == null) action.Event = new UnityEvent();
+                Silence(action.Event);
+                action.Event.AddListener(open);
+            }
+            Redirect(copy, open);
+            Log($"'{Label}' added above '{VrUtil.Path(source.transform)}' ({(doozy != null ? "Doozy button" : "button")})");
         }
 
         private static bool listed;

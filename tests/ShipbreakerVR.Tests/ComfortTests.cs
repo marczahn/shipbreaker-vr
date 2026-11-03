@@ -35,12 +35,18 @@ namespace ShipbreakerVR.Tests
         }
 
         [Theory]
-        [InlineData(200f, 0.4f)]
-        [InlineData(600f, 0.3f)]
-        [InlineData(1000f, 0.2f)]
+        [InlineData(200f, 0.35f)]
+        [InlineData(600f, 0.26f)]
+        [InlineData(1000f, 0.17f)]
         public void HeavyPartsGatherSpeedSlowly(float mass, float acceleration)
         {
             Assert.Equal(acceleration, BracedPush.Force(new UnityEngine.Vector3(0f, 0.5f, 0f), mass).y / mass, 3);
+        }
+
+        [Fact]
+        public void TheHoistTruckGetsAQuarter()
+        {
+            Assert.Equal(0.25f, BracedPush.Limit(635.6f) / 635.6f, 2);
         }
 
         [Fact]
