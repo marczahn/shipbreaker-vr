@@ -359,9 +359,19 @@ interacting, the grapple and the "entity of interest".
   palm's way as deep as the deepest of six points on it went into a collider (`OutOfSurface`). A grip near a fixed
   control goes onto the control's `HandTarget` as a fist, unless the nearest surface is more than 5 cm nearer
   (`VrClimb.NearestControl`). Log `Hands: <hand> hand fixed on '<thing>'`.
-- `VrToolHaptics`: the hand with the cutter hums while `CuttingController.IsCutting` (Splitsaw 0.6, Stinger 0.3), the
-  one with the grapple while it holds a part (`GrapplingHook.GrappledRigidbody`, 0.12 to 0.3 by light, medium, heavy),
-  pulses of 80 ms every 50 ms; each tether end fired (`TetherController.SpawnFireFX`) buzzes once.
+- `VrToolHaptics`: pulses of 80 ms every 50 ms. The Splitsaw hums at 0.6 while `CuttingController.IsCutting`; the
+  Stinger only from half its heat on (`CuttingToolController.CurrentHeatPercent`, 0 to 1), 0.08 rising to 0.9 at
+  overheating. The grapple hums by how near its part is to being lost: the game snaps the rope when the part stays out
+  of the aim's view a while (`GrapplingHook.CheckIfObjectInBounds`, `mOutOfBoundsTimer`) or beyond `MaxDistance`, so
+  the hum follows the part's distance from the aim camera's middle (squared, viewport) and, from 80 % of the range on,
+  its distance; full while out of view. A first try with the part's lag behind the rope's hold measured up to 114 m
+  while the grapple drew parts in, no pull. Each tether end fired (`TetherController.SpawnFireFX`) buzzes once.
+- Arm length (`VrHands.KeepLength`, right after `VrToolModels.Unstretch`): the game's animations move the elbow and
+  wrist bones out; drawing the cutter stretched the right arm by 81 % for a moment, folded at the elbow, and an arm
+  left longer stayed bent where the real one was straight. Each frame both arms go back to the bone lengths of
+  `geo_arms`'s bind pose (upper 0.325 m, lower 0.222 m), before anything poses them. The posed arm's elbow points
+  down, 0.4 out and 0.3 back in the body's axes (`VrHands.Elbow`, the pole of `VrToolModels.Bend`), not into the
+  animation's plane, which turned it inwards while drawing a tool.
 
 ## Body follows head
 - The body rotates in `OrientationController.HandleAxisRotation` via `Rigidbody.MoveRotation(rotation * mouseDelta)`.
