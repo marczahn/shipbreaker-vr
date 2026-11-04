@@ -65,6 +65,12 @@ namespace ShipbreakerVR
         // A part let go collides with the body again once its bounds are this far from the body, or after that many seconds.
         private const float FirmClear = 0.45f;
         private const float FirmClearTime = 10f;
+        // The body's mass in the pulls and pushes with extended physics (Steuerung/SchwereTeileSchieben), in kg: the game's
+        // player weighs 50 kg, light for a person in a suit; Raik wants 100 kg (modern materials). Only in these impulses:
+        // the rigidbody keeps the game's mass, so thrust, braking and the speed of a push off stay as they were. Without
+        // extended physics the game's mass, as before.
+        private const float ExtendedBodyMass = 100f;
+        private static float BodyMass => VrSettings.BracedPush.Value ? ExtendedBodyMass : player.mass;
         // LynxUnityEngineExtensions.InStaticLayer: the station and other things that never move.
         private const int StaticLayer = 27;
 
@@ -205,7 +211,7 @@ namespace ShipbreakerVR
                 motion = player != null ? player.GetComponent<PlayerMotion>() : null;
                 rigPlaced = false;
                 if (player != null && logs++ < 80)
-                    Plugin.Log.LogInfo($"Climbing: player body '{player.name}', {player.mass:0.#} kg, interpolation {player.interpolation}");
+                    Plugin.Log.LogInfo($"Climbing: player body '{player.name}', {player.mass:0.#} kg ({ExtendedBodyMass:0} kg in the pulls and pushes with extended physics), interpolation {player.interpolation}");
                 if (player != null) LogColliders();
             }
             return player != null && rigPlaced;
@@ -364,10 +370,10 @@ namespace ShipbreakerVR
                 var wanted = Vector3.ClampMagnitude(error / dt, MaxPull * VrCamera.WorldScale);
                 var needed = wanted - (velocity - holdVelocityHere);
                 if (needed.sqrMagnitude < 1e-10f) continue;
-                var inverse = pulling / player.mass;
+                var inverse = pulling / BodyMass;
                 if (hand.Movable) inverse += Sharing(hand) * InverseMass(hand.Body, hold, needed.normalized);
                 var impulse = needed / inverse;
-                change += impulse / player.mass;
+                change += impulse / BodyMass;
                 if (hand.Movable) hand.Body.AddForceAtPosition(-impulse, hold, ForceMode.Impulse);
             }
             holdVelocity = holdsVelocity / pulling;
@@ -662,7 +668,7 @@ namespace ShipbreakerVR
             var hold = Hold(hand);
             var force = BracedPush.Force((HandWorld(hand) - hold) / VrCamera.WorldScale, hand.Body.mass);
             hand.Body.AddForceAtPosition(force, hold, ForceMode.Force);
-            if (!Braced(hand)) player.AddForce(-force, ForceMode.Force);
+            if (!Braced(hand)) player.AddForce(-force / BodyMass, ForceMode.Acceleration);
         }
 
         // True while that controller's hand holds on to something large: a wall, the hull, a console, a heavy part. The hand
