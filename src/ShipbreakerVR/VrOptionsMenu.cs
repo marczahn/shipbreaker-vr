@@ -29,6 +29,10 @@ namespace ShipbreakerVR
             AccessTools.FieldRefAccess<LocalizedTextMeshProUGUI, string>("m_LocalizationID");
 
         private static float nextSearch;
+        // How long after a change of scenes the menus are searched, in seconds.
+        private const float SearchFor = 20f;
+        private static int lastScenes = int.MinValue;
+        private static float searchUntil;
         private static int logs;
 
         private static string Label => VrOptions.L("VR options", "VR-Optionen");
@@ -38,7 +42,15 @@ namespace ShipbreakerVR
         // added only once the menu was open, a moment after it showed (Raik).
         public static void Update()
         {
-            if (Time.unscaledTime < nextSearch) return;
+            // Only for a while after a scene came or went, where new menus appear: looking through every localized text
+            // costs a little, and every two seconds all through a shift it is not worth it.
+            var scenes = UnityEngine.SceneManagement.SceneManager.sceneCount * 31 + UnityEngine.SceneManagement.SceneManager.GetActiveScene().handle;
+            if (scenes != lastScenes)
+            {
+                lastScenes = scenes;
+                searchUntil = Time.unscaledTime + SearchFor;
+            }
+            if (Time.unscaledTime < nextSearch || Time.unscaledTime > searchUntil) return;
             nextSearch = Time.unscaledTime + 2f;
             foreach (var text in Resources.FindObjectsOfTypeAll<LocalizedTextMeshProUGUI>())
             {

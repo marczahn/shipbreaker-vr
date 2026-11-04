@@ -86,19 +86,62 @@ namespace ShipbreakerVR
         {
             if (ranFrame == Time.frameCount) return;
             ranFrame = Time.frameCount;
+            Report();
             RunAll(Steps);
         }
 
         private static void RunAll((string Name, System.Action Step)[] steps)
         {
+            var timed = Timed;
             foreach (var (name, step) in steps)
             {
+                var start = timed ? System.Diagnostics.Stopwatch.GetTimestamp() : 0L;
                 try { step(); }
                 catch (System.Exception e)
                 {
                     if (errors++ < 10) Plugin.Log.LogError($"Frame update, {name}: {e}");
                 }
+                if (!timed) continue;
+                spent.TryGetValue(name, out var before);
+                spent[name] = before + System.Diagnostics.Stopwatch.GetTimestamp() - start;
             }
+        }
+
+        // What the mod's own steps cost, with Debug/Diagnose or Anzeige/Leistungsanzeige on: every ReportEvery seconds the
+        // steps that took the most, in milliseconds per frame, as "Mod steps" (Raik asked what the mod's features cost
+        // against the game in VR without them). The steps run from Harmony patches inside the game's code are not in it.
+        private const float ReportEvery = 10f;
+        private static readonly System.Collections.Generic.Dictionary<string, long> spent = new System.Collections.Generic.Dictionary<string, long>();
+        private static int timedFrames;
+        private static float nextReport;
+
+        private static bool Timed => (VrSettings.Diagnostics != null && VrSettings.Diagnostics.Value)
+            || (VrSettings.PerformanceOverlay != null && VrSettings.PerformanceOverlay.Value);
+
+        private static void Report()
+        {
+            if (!Timed)
+            {
+                spent.Clear();
+                timedFrames = 0;
+                return;
+            }
+            timedFrames++;
+            if (Time.unscaledTime < nextReport) return;
+            nextReport = Time.unscaledTime + ReportEvery;
+            if (timedFrames > 1 && spent.Count > 0)
+            {
+                var perFrame = 1000.0 / System.Diagnostics.Stopwatch.Frequency / timedFrames;
+                var total = 0L;
+                foreach (var each in spent.Values) total += each;
+                var top = new System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<string, long>>(spent);
+                top.Sort((a, b) => b.Value.CompareTo(a.Value));
+                var text = new System.Text.StringBuilder($"Mod steps: {total * perFrame:0.00} ms per frame over {timedFrames} frames;");
+                for (var i = 0; i < top.Count && i < 10; i++) text.Append($" {top[i].Key} {top[i].Value * perFrame:0.000}");
+                Plugin.Log.LogInfo(text.ToString());
+            }
+            spent.Clear();
+            timedFrames = 0;
         }
 
         // From Plugin.Awake.
