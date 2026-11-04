@@ -491,6 +491,12 @@ namespace ShipbreakerVR
             var weight = arm.Weight;
             if (weight <= 0f || arm.Wrist == null || arm.Upper == null || arm.Lower == null) return;
             if (!arm.Input.TryGetPosition(out var gripLocal) || !arm.Input.TryGetAimRotation(out var aimLocal)) return;
+            // A hand holding the cutter or the grapple turns with the tool, not the controller: when the tool is held off by
+            // something (VrToolCollide), the hand stays on its grip and turns with it instead of twisting the wrist, and
+            // comes back with it.
+            var vrHand = arm == LeftArm ? VrHand.Left : VrHand.Right;
+            if (vrHand.HoldsTool && (vrHand.Tool == EquipmentController.Equipment.CuttingTool || vrHand.Tool == EquipmentController.Equipment.GrappleHook))
+                aimLocal = VrToolSteady.Apply(arm.Input, vrHand.Tool, aimLocal);
             if (!VrToolModels.TrackingToWorld(gripLocal + aimLocal * VrInput.WristBehindGrip, aimLocal, out var wrist, out var aim)) return;
             var held = VrClimb.TryGetHold(arm.Input, out var point);
             if (held && VrToolModels.TrackingToWorld(gripLocal, aimLocal, out var grip, out _))

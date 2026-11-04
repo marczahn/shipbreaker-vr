@@ -34,6 +34,16 @@ namespace ShipbreakerVR
         private static Vector3 mount;
         private static Quaternion turn = Quaternion.identity;
         private static Vector3 muzzleOffset;
+
+        // The game tool's model point this frame and where it sits against the grip pose (in the aim's axes), for the
+        // tool's shape (VrToolCollide); false while the model is not in the hand.
+        public static bool TryGetFrame(out Transform model, out Vector3 offset, out Quaternion turned)
+        {
+            model = moved ? point : null;
+            offset = mount;
+            turned = turn;
+            return model != null;
+        }
         private static bool hasMuzzle;
         private static CuttingToolController cutter;
         private static CuttingFXController splitsaw;
