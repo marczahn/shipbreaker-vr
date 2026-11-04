@@ -496,7 +496,11 @@ namespace ShipbreakerVR
             // comes back with it.
             var vrHand = arm == LeftArm ? VrHand.Left : VrHand.Right;
             if (vrHand.HoldsTool && (vrHand.Tool == EquipmentController.Equipment.CuttingTool || vrHand.Tool == EquipmentController.Equipment.GrappleHook))
+            {
                 aimLocal = VrToolSteady.Apply(arm.Input, vrHand.Tool, aimLocal);
+                // With weight the tool lags behind the controller, and the hand on its grip with it (VrToolWeight).
+                gripLocal = VrToolWeight.Grip(arm.Input, vrHand.Tool, gripLocal);
+            }
             if (!VrToolModels.TrackingToWorld(gripLocal + aimLocal * VrInput.WristBehindGrip, aimLocal, out var wrist, out var aim)) return;
             var held = VrClimb.TryGetHold(arm.Input, out var point);
             if (held && VrToolModels.TrackingToWorld(gripLocal, aimLocal, out var grip, out _))

@@ -95,7 +95,7 @@ namespace ShipbreakerVR
             }
             if (state.Running && state.Frame == Time.frameCount) return state.Result;
             state.Frame = Time.frameCount;
-            var pivot = rig.TransformPoint(gripLocal);
+            var pivot = rig.TransformPoint(VrToolWeight.Grip(hand, tool, gripLocal));
             var desired = rig.rotation * wanted;
             var previous = state.Running ? rig.rotation * state.Rotation : desired;
             state.Running = true;

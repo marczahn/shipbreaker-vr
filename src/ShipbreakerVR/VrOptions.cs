@@ -135,6 +135,7 @@ namespace ShipbreakerVR
                 new BoolRow { Label = L("Grapple at the hip", "Grappler am Körper"), Entry = VrSettings.BeltGrapple },
                 new BoolRow { Label = L("Hold on and climb", "Festhalten und Hangeln"), Entry = VrSettings.Climbing },
                 new BoolRow { Label = L("Extended physics", "Erweiterte Physik"), Entry = VrSettings.BracedPush },
+                new SliderRow { Label = L("Tool weight (kg)", "Werkzeuggewicht (kg)"), Entry = VrSettings.ToolWeight, Format = "0", Step = 1f },
                 new BoolRow { Label = L("Walk in the station", "Frei gehen in der Station"), Entry = VrSettings.FreeWalking },
                 EnumRow(L("Controller flying", "Controllersteuerung"), VrSettings.ControlScheme),
                 new SliderRow { Label = L("Thrust deadzone (cm)", "Schub-Totzone (cm)"), Entry = VrSettings.ThrustDeadzone, Format = "0", Step = 1f },

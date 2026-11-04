@@ -38,14 +38,14 @@ namespace ShipbreakerVR
                 filter.Running = true;
                 filter.Rotation = raw;
                 filter.Frame = Time.frameCount;
-                return VrToolCollide.Apply(hand, tool, raw);
+                return VrToolCollide.Apply(hand, tool, VrToolWeight.Turn(hand, tool, raw));
             }
-            if (filter.Frame == Time.frameCount) return VrToolCollide.Apply(hand, tool, filter.Rotation);
+            if (filter.Frame == Time.frameCount) return VrToolCollide.Apply(hand, tool, VrToolWeight.Turn(hand, tool, filter.Rotation));
             filter.Frame = Time.frameCount;
             var share = Share(Quaternion.Angle(filter.Rotation, raw), TremorAngle) * (1f - Mathf.Exp(-Time.unscaledDeltaTime / Lag));
             filter.Rotation = Quaternion.Slerp(filter.Rotation, raw, share);
             // Then kept out of what is in the tool's way (extended physics).
-            return VrToolCollide.Apply(hand, tool, filter.Rotation);
+            return VrToolCollide.Apply(hand, tool, VrToolWeight.Turn(hand, tool, filter.Rotation));
         }
 
         // How much of an angle to the controller counts: little of tremor, all of a real movement.
