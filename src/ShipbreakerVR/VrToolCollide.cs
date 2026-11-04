@@ -26,6 +26,11 @@ namespace ShipbreakerVR
         private const float Smallest = 0.01f;
         private const int MostBoxes = 16;
         private const float Shrink = 0.85f;
+        // A tool pressed against something within this angle of straight on holds there instead of sliding off (degrees),
+        // and pushes the body back at this acceleration (m/s²) up to this speed apart (m/s), at world scale 1.
+        private const float Frontal = 35f;
+        private const float PressAcceleration = 1.2f;
+        private const float PressSpeed = 0.4f;
         // The steps a tool turns in, tested each, in degrees.
         private const float Step = 2f;
         // How far a tool is turned out of what it went into, each step and at most a frame, in degrees.
@@ -105,7 +110,14 @@ namespace ShipbreakerVR
             // Held off, it comes back over CatchUp, not at once, also once the way is free.
             var share = state.Blocked ? 1f - Mathf.Exp(-Time.unscaledDeltaTime / CatchUp) : 1f;
             // The hand's movement may have put the tool into something: turned out of it, a little each frame.
-            if (!Free(pivot, previous, boxes, length, out var contact)) previous = Out(pivot, previous, boxes, length, contact);
+            if (!Free(pivot, previous, boxes, length, out var contact))
+            {
+                var away = Away(contact);
+                // Pressed straight against it, the tip holds (friction) and the press pushes the body back a little;
+                // at a slant it slides out along it.
+                if (Vector3.Angle(previous * Vector3.forward, -away) < Frontal) Press(contact, away);
+                else previous = Out(pivot, previous, boxes, length, contact.At, away);
+            }
             var result = Towards(pivot, previous, desired, share, boxes, length);
             // Held off this far, it gives up the obstacle and comes back to the controller through it, still over CatchUp.
             if (Quaternion.Angle(result, desired) > MostOff) result = Quaternion.Slerp(result, desired, 1f - Mathf.Exp(-Time.unscaledDeltaTime / CatchUp));
@@ -214,15 +226,42 @@ namespace ShipbreakerVR
         private static bool Own(Collider collider, Rigidbody player) =>
             player != null && (collider.attachedRigidbody == player || collider.transform.IsChildOf(player.transform));
 
-        // The tool turned about the grip so that the point of it that went into something moves away from it, step by
-        // step until it is clear.
-        private static Quaternion Out(Vector3 pivot, Quaternion rotation, Box[] boxes, float length, Contact contact)
+        // Out of what the tool went into, from its point that went in (a unit direction; zero without a contact).
+        private static Vector3 Away(Contact contact)
         {
-            if (contact.Thing == null) return rotation;
+            if (contact.Thing == null) return Vector3.zero;
             var away = contact.At - contact.Thing.ClosestPoint(contact.At);
             // Inside a non-convex collider ClosestPoint gives the point itself: away from the thing's middle instead.
             if (away.sqrMagnitude < 1e-8f) away = contact.At - contact.Thing.bounds.center;
-            var axis = Vector3.Cross(contact.At - pivot, away);
+            return away.sqrMagnitude < 1e-10f ? Vector3.zero : away.normalized;
+        }
+
+        // A tool pressed straight against something pushes the body back from it, PressAcceleration up to PressSpeed apart,
+        // as Raik asked; a part that moves gets the same push the other way, shared by the masses. Once a frame.
+        private static void Press(Contact contact, Vector3 away)
+        {
+            if (away == Vector3.zero || pressedFrame == Time.frameCount) return;
+            pressedFrame = Time.frameCount;
+            var player = GameRefs.Grab != null ? PlayerBody(GameRefs.Grab) : null;
+            if (player == null) return;
+            var thing = contact.Thing.attachedRigidbody;
+            var movable = thing != null && !thing.isKinematic;
+            var apart = Vector3.Dot(player.velocity - (thing != null ? thing.GetPointVelocity(contact.At) : Vector3.zero), away);
+            if (apart >= PressSpeed * VrCamera.WorldScale) return;
+            var change = away * PressAcceleration * VrCamera.WorldScale * Time.unscaledDeltaTime;
+            player.AddForce(change, ForceMode.VelocityChange);
+            if (movable) thing.AddForceAtPosition(-change * player.mass, contact.At, ForceMode.Impulse);
+            if (pressLogs++ < 10) Plugin.Log.LogInfo($"Tool collision: pressed against '{contact.Thing.name}', the body pushed back{(movable ? $", '{thing.name}' pushed away" : "")}");
+        }
+
+        private static int pressedFrame;
+        private static int pressLogs;
+
+        // The tool turned about the grip so that the point of it that went into something moves away from it, step by
+        // step until it is clear.
+        private static Quaternion Out(Vector3 pivot, Quaternion rotation, Box[] boxes, float length, Vector3 at, Vector3 away)
+        {
+            var axis = Vector3.Cross(at - pivot, away);
             if (axis.sqrMagnitude < 1e-10f) return rotation;
             // At most OutPerFrame a frame: the tool slides out along what it touches instead of jumping out of it.
             var step = Quaternion.AngleAxis(OutStep, axis.normalized);
