@@ -26,15 +26,8 @@ namespace ShipbreakerVR
         private const float Smallest = 0.01f;
         private const int MostBoxes = 16;
         private const float Shrink = 0.85f;
-        // A tool pressed against something within this angle of straight on holds there instead of sliding off (degrees),
-        // and pushes the body back at this acceleration (m/s²) up to this speed apart (m/s), at world scale 1.
+        // A tool pressed against something within this angle of straight on holds there instead of sliding off, in degrees.
         private const float Frontal = 35f;
-        private const float PressAcceleration = 1.2f;
-        // The push needs the hand pressed on this far past where the tool touched, in meters at world scale 1, and grows to
-        // PressAcceleration over PressFull more: touching alone does nothing.
-        private const float PressFrom = 0.05f;
-        private const float PressFull = 0.1f;
-        private const float PressSpeed = 0.4f;
         // The steps a tool turns in, tested each, in degrees.
         private const float Step = 2f;
         // How far a tool is turned out of what it went into, each step and at most a frame, in degrees.
@@ -76,10 +69,6 @@ namespace ShipbreakerVR
             public Quaternion Result;
             // Off the controller last frame: blocked, or catching up after it.
             public bool Blocked;
-            // Pressed straight against something: where the grip was when the press began, on the thing pressed.
-            public bool Pressing;
-            public Transform PressedOn;
-            public Vector3 PressStart;
         }
 
         private static readonly State Left = new State();
@@ -121,27 +110,10 @@ namespace ShipbreakerVR
             if (!Free(pivot, previous, boxes, length, out var contact))
             {
                 var away = Away(contact);
-                // Pressed straight against it, the tip holds (friction) and the press pushes the body back a little;
-                // at a slant it slides out along it.
-                if (Vector3.Angle(previous * Vector3.forward, -away) < Frontal)
-                {
-                    // How far the hand has pushed on since the tool touched: only a real push moves the body.
-                    var on = contact.Thing.transform;
-                    if (!state.Pressing || state.PressedOn != on)
-                    {
-                        state.Pressing = true;
-                        state.PressedOn = on;
-                        state.PressStart = on.InverseTransformPoint(pivot);
-                    }
-                    Press(contact, away, Vector3.Dot(on.TransformPoint(state.PressStart) - pivot, away));
-                }
-                else
-                {
-                    state.Pressing = false;
-                    previous = Out(pivot, previous, boxes, length, contact.At, away);
-                }
+                // Pressed straight against it, the tip holds there (friction); at a slant it slides out along it. Pushing
+                // the body back off a hard press was tried and left out (Raik: too much for now).
+                if (Vector3.Angle(previous * Vector3.forward, -away) >= Frontal) previous = Out(pivot, previous, boxes, length, contact.At, away);
             }
-            else state.Pressing = false;
             var result = Towards(pivot, previous, desired, share, boxes, length);
             // Held off this far, it gives up the obstacle and comes back to the controller through it, still over CatchUp.
             if (Quaternion.Angle(result, desired) > MostOff) result = Quaternion.Slerp(result, desired, 1f - Mathf.Exp(-Time.unscaledDeltaTime / CatchUp));
@@ -259,30 +231,6 @@ namespace ShipbreakerVR
             if (away.sqrMagnitude < 1e-8f) away = contact.At - contact.Thing.bounds.center;
             return away.sqrMagnitude < 1e-10f ? Vector3.zero : away.normalized;
         }
-
-        // A tool pressed straight against something, the hand pushed on depth past where it touched, pushes the body back
-        // from it once the depth passes PressFrom, harder the deeper, up to PressAcceleration and up to PressSpeed apart, as
-        // Raik asked; a part that moves gets the same push the other way, shared by the masses. Once a frame.
-        private static void Press(Contact contact, Vector3 away, float depth)
-        {
-            var scale = VrCamera.WorldScale;
-            var strength = Mathf.Clamp01((depth - PressFrom * scale) / (PressFull * scale));
-            if (away == Vector3.zero || strength <= 0f || pressedFrame == Time.frameCount) return;
-            pressedFrame = Time.frameCount;
-            var player = GameRefs.Grab != null ? PlayerBody(GameRefs.Grab) : null;
-            if (player == null) return;
-            var thing = contact.Thing.attachedRigidbody;
-            var movable = thing != null && !thing.isKinematic;
-            var apart = Vector3.Dot(player.velocity - (thing != null ? thing.GetPointVelocity(contact.At) : Vector3.zero), away);
-            if (apart >= PressSpeed * scale) return;
-            var change = away * PressAcceleration * strength * scale * Time.unscaledDeltaTime;
-            player.AddForce(change, ForceMode.VelocityChange);
-            if (movable) thing.AddForceAtPosition(-change * player.mass, contact.At, ForceMode.Impulse);
-            if (pressLogs++ < 10) Plugin.Log.LogInfo($"Tool collision: pressed {depth:0.00} m into '{contact.Thing.name}', the body pushed back at {strength:0.00} of the most{(movable ? $", '{thing.name}' pushed away" : "")}");
-        }
-
-        private static int pressedFrame;
-        private static int pressLogs;
 
         // The tool turned about the grip so that the point of it that went into something moves away from it, step by
         // step until it is clear.
