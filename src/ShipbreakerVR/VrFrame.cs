@@ -44,6 +44,7 @@ namespace ShipbreakerVR
             ("load trace", () => VrLoadTrace.EndFrame(VrCamera.Instance)),
             ("diagnostics", () => VrDiagnostics.Update(VrCamera.Instance)),
             ("vr options entry", VrOptionsMenu.Update),
+            ("vr options tab", VrOptionsTab.Update),
         };
 
         private static readonly (string Name, System.Action Step)[] FixedSteps =
