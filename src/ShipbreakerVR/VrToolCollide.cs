@@ -26,10 +26,12 @@ namespace ShipbreakerVR
         private const float Smallest = 0.01f;
         private const int MostBoxes = 16;
         private const float Shrink = 0.85f;
-        // How far a tool is turned out of what it went into, each step and at most, in degrees.
-        private const float OutStep = 4f;
-        private const float MostOut = 80f;
-        // A turn this far off the controller is given up: the tool goes back to the controller.
+        // The steps a tool turns in, tested each, in degrees.
+        private const float Step = 2f;
+        // How far a tool is turned out of what it went into, each step and at most a frame, in degrees.
+        private const float OutStep = 1f;
+        private const float OutPerFrame = 3f;
+        // A turn this far off the controller is given up: the tool goes back to the controller, through the obstacle.
         private const float MostOff = 120f;
         // A tool that was held off comes back to the controller over about this time, in seconds, not in one frame.
         private const float CatchUp = 0.12f;
@@ -41,9 +43,11 @@ namespace ShipbreakerVR
 
         private struct Box
         {
-            // In the aim's axes, from the grip.
+            // In the aim's axes, from the grip, turned as its part is: the part's own bounds, not a box around them
+            // along the aim (which made the grapple's housing 60 cm tall).
             public Vector3 Center;
             public Vector3 Half;
+            public Quaternion Turn;
         }
 
         // The game tool's shape, built once per tool model once it is in the hand.
@@ -96,30 +100,15 @@ namespace ShipbreakerVR
             var boxes = hand == VrHand.GameToolHand.Input ? Shape(tool) : null;
             var length = Length(pivot, desired);
 
-            // Free of the obstacle it was held off by, the tool follows the controller with a short lag, not at once.
-            var most = state.Blocked ? 1f - Mathf.Exp(-Time.unscaledDeltaTime / CatchUp) : 1f;
-            Quaternion result;
-            if (most >= 1f && Free(pivot, desired, boxes, length, out _)) result = desired;
-            else
-            {
-                // The hand's movement may have put the last turn into something: turned out of it first.
-                if (!Free(pivot, previous, boxes, length, out var contact)) previous = Out(pivot, previous, boxes, length, contact);
-                // Then as far towards the controller as it is free, at most the catch-up's share.
-                var from = 0f;
-                var to = most;
-                if (Free(pivot, Quaternion.Slerp(previous, desired, to), boxes, length, out _)) from = to;
-                else
-                {
-                    for (var i = 0; i < 7; i++)
-                    {
-                        var middle = (from + to) * 0.5f;
-                        if (Free(pivot, Quaternion.Slerp(previous, desired, middle), boxes, length, out _)) from = middle;
-                        else to = middle;
-                    }
-                }
-                result = Quaternion.Slerp(previous, desired, from);
-                if (Quaternion.Angle(result, desired) > MostOff) result = desired;
-            }
+            // The tool never jumps: it turns from where it was towards the controller in steps of Step, each one tested, and
+            // stops before the first that goes into something, so it cannot pass through a thin wall between two frames.
+            // Held off, it comes back over CatchUp, not at once, also once the way is free.
+            var share = state.Blocked ? 1f - Mathf.Exp(-Time.unscaledDeltaTime / CatchUp) : 1f;
+            // The hand's movement may have put the tool into something: turned out of it, a little each frame.
+            if (!Free(pivot, previous, boxes, length, out var contact)) previous = Out(pivot, previous, boxes, length, contact);
+            var result = Towards(pivot, previous, desired, share, boxes, length);
+            // Held off this far, it gives up the obstacle and comes back to the controller through it, still over CatchUp.
+            if (Quaternion.Angle(result, desired) > MostOff) result = Quaternion.Slerp(result, desired, 1f - Mathf.Exp(-Time.unscaledDeltaTime / CatchUp));
             var blocked = Quaternion.Angle(result, desired) > 1f;
             if (blocked != state.Blocked && logs++ < 30)
                 Plugin.Log.LogInfo($"Tool collision: {hand.Name} {tool} {(blocked ? $"held off, {Quaternion.Angle(result, desired):0}° from the controller" : "with the controller again")}");
@@ -142,19 +131,12 @@ namespace ShipbreakerVR
                 var filter = renderer.GetComponent<MeshFilter>();
                 if (!renderer.enabled || filter == null || filter.sharedMesh == null) continue;
                 var bounds = filter.sharedMesh.bounds;
-                var min = Vector3.positiveInfinity;
-                var max = Vector3.negativeInfinity;
-                for (var corner = 0; corner < 8; corner++)
-                {
-                    var local = bounds.center + Vector3.Scale(bounds.extents, new Vector3((corner & 1) == 0 ? -1 : 1, (corner & 2) == 0 ? -1 : 1, (corner & 4) == 0 ? -1 : 1));
-                    var inModel = model.InverseTransformPoint(renderer.transform.TransformPoint(local));
-                    var inAim = mount + turn * (inModel * scale);
-                    min = Vector3.Min(min, inAim);
-                    max = Vector3.Max(max, inAim);
-                }
-                var half = (max - min) * 0.5f;
+                var part = renderer.transform;
+                var center = mount + turn * (model.InverseTransformPoint(part.TransformPoint(bounds.center)) * scale);
+                var partTurn = turn * (Quaternion.Inverse(model.rotation) * part.rotation);
+                var half = Vector3.Scale(bounds.extents, part.lossyScale);
                 if (Mathf.Max(half.x, half.y, half.z) < Smallest * VrCamera.WorldScale) continue;
-                boxes.Add(new Box { Center = (min + max) * 0.5f, Half = half * Shrink });
+                boxes.Add(new Box { Center = center, Half = half * Shrink, Turn = partTurn });
             }
             shapeOf = model;
             shapeTool = tool;
@@ -163,6 +145,23 @@ namespace ShipbreakerVR
             if (shapeLogged.Add(tool)) Plugin.Log.LogInfo($"Tool collision: {tool} shaped by {(shape != null ? shape.Length : 0)} box(es) of its model" + (shape != null
                 ? ": " + string.Join(", ", shape.Select(b => $"{b.Half.x * 2f:0.00}x{b.Half.y * 2f:0.00}x{b.Half.z * 2f:0.00} at {b.Center.z:0.00}")) : ", the ball instead"));
             return shape;
+        }
+
+        // From from towards to by share of the way, in tested steps; the last step that was free.
+        private static Quaternion Towards(Vector3 pivot, Quaternion from, Quaternion to, float share, Box[] boxes, float length)
+        {
+            var angle = Quaternion.Angle(from, to);
+            if (angle < 0.01f) return to;
+            var go = angle * share;
+            var steps = Mathf.Max(1, Mathf.CeilToInt(go / Step));
+            var last = from;
+            for (var i = 1; i <= steps; i++)
+            {
+                var next = Quaternion.Slerp(from, to, go * i / steps / angle);
+                if (!Free(pivot, next, boxes, length, out _)) return last;
+                last = next;
+            }
+            return last;
         }
 
         // From a little ahead of the grip to the muzzle along the tool.
@@ -184,7 +183,7 @@ namespace ShipbreakerVR
                 foreach (var box in boxes)
                 {
                     var center = pivot + rotation * box.Center;
-                    var count = Physics.OverlapBoxNonAlloc(center, box.Half, Overlaps, rotation, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                    var count = Physics.OverlapBoxNonAlloc(center, box.Half, Overlaps, rotation * box.Turn, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
                     for (var i = 0; i < count; i++)
                     {
                         if (Own(Overlaps[i], player)) continue;
@@ -225,14 +224,15 @@ namespace ShipbreakerVR
             if (away.sqrMagnitude < 1e-8f) away = contact.At - contact.Thing.bounds.center;
             var axis = Vector3.Cross(contact.At - pivot, away);
             if (axis.sqrMagnitude < 1e-10f) return rotation;
+            // At most OutPerFrame a frame: the tool slides out along what it touches instead of jumping out of it.
             var step = Quaternion.AngleAxis(OutStep, axis.normalized);
             var turned = rotation;
-            for (var angle = OutStep; angle <= MostOut; angle += OutStep)
+            for (var angle = OutStep; angle <= OutPerFrame; angle += OutStep)
             {
                 turned = step * turned;
                 if (Free(pivot, turned, boxes, length, out _)) return turned;
             }
-            return rotation;
+            return turned;
         }
     }
 }
