@@ -57,6 +57,12 @@ Es gilt das Recht der Bundesrepublik Deutschland. Zwingende Verbraucherschutzvor
 du deinen gewöhnlichen Aufenthalt hast, bleiben unberührt. Sollte eine Bestimmung unwirksam sein, bleiben die
 übrigen Bestimmungen wirksam.
 
+### 8. KI-gestützte Entwicklung
+Diese Mod wurde mit Hilfe künstlicher Intelligenz entwickelt: Der Großteil des Quellcodes und der Dokumentation
+wurde von einem KI-Assistenten (Claude von Anthropic) geschrieben, unter Anleitung eines Menschen, der die
+Ergebnisse geprüft und im Headset getestet hat. KI-erzeugter Code kann Fehler enthalten, die bei dieser Prüfung
+nicht aufgefallen sind. Die Abschnitte 1 und 2 gelten auch hierfür.
+
 ---
 
 ## English
@@ -106,3 +112,9 @@ Raicuparta) are subject to their own licenses and the liability terms contained 
 ### 7. Governing law
 The laws of the Federal Republic of Germany apply. Mandatory consumer protection laws of the country of your
 habitual residence remain unaffected. Should any provision be invalid, the remaining provisions remain in effect.
+
+### 8. AI-assisted development
+This mod was developed with the help of artificial intelligence: most of its source code and documentation were
+written by an AI assistant (Claude by Anthropic), directed by a human who reviewed the results and tested them in
+the headset. AI-generated code may contain errors that this review did not catch. Sections 1 and 2 apply to this
+as well.
