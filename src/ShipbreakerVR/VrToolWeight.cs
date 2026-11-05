@@ -3,14 +3,15 @@ using UnityEngine;
 
 namespace ShipbreakerVR
 {
-    // Steuerung/Werkzeuggewicht: cutter and grapple weigh something in the hand, as Raik asked (10 to 15 kg). The tool hangs
+    // Steuerung/Werkzeuggewicht: cutter and grapple weigh something in the hand, as Raik asked (first 12 kg, now 5 kg by default). The tool hangs
     // on the controller by a damped spring, for its position and its turn: moved fast it lags behind and settles, a heavier
     // tool more. The hand stays on the tool's grip and goes with it (VrHands.Pose, VrAim), so it never leaves the tool:
     // tool and hand come after the controller together. In tracking space, so flying does not swing the tool. 0 kg is off.
     internal static class VrToolWeight
     {
         // How stiffly the arm holds a tool: N/m for its place, and its turn as fast relative to that.
-        private const float Stiffness = 600f;
+        // Raised from 600 with the default down to 5 kg (Raik: a little less sluggish).
+        private const float Stiffness = 800f;
         private const float TurnFaster = 1.3f;
         // Of critical damping: a little below, so a fast stop lets the tool settle with a slight swing.
         private const float Damping = 0.85f;
@@ -88,17 +89,21 @@ namespace ShipbreakerVR
             return state.Rotation;
         }
 
-        // Where the hand holding the tool is, in tracking space, for the controller's grip there, raw: the tool's place.
+        // Where the hand holding the tool is, in tracking space, for the controller's grip there, raw: the tool's place,
+        // held back where the tool was thrust into something (VrToolCollide.Back).
         public static Vector3 Grip(VrInput.Hand hand, EquipmentController.Equipment tool, Vector3 raw)
         {
+            if (tool != EquipmentController.Equipment.CuttingTool && tool != EquipmentController.Equipment.GrappleHook) return raw;
+            // The turn moves the place: run it for this frame first (each step keeps its result for the frame).
+            if (hand.TryGetAimRotation(out var aim)) VrToolSteady.Apply(hand, tool, aim);
+            return Spring(hand, tool, raw) + VrToolCollide.Back(hand);
+        }
+
+        // The tool's place on its spring alone, without what holds it back (for VrToolCollide); after Turn this frame.
+        public static Vector3 Spring(VrInput.Hand hand, EquipmentController.Equipment tool, Vector3 raw)
+        {
             var state = hand.IsLeft ? Left : Right;
-            if (!Weighs(tool)) return raw;
-            if (!state.Running || state.Frame != Time.frameCount)
-            {
-                // The turn moves the place: run it for this frame first.
-                if (hand.TryGetAimRotation(out var aim)) VrToolSteady.Apply(hand, tool, aim);
-            }
-            return state.Running ? state.Position : raw;
+            return Weighs(tool) && state.Running ? state.Position : raw;
         }
     }
 }

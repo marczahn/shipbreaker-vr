@@ -227,7 +227,7 @@ namespace ShipbreakerVR
             BracedPush = Bind("Steuerung", "SchwereTeileSchieben", false,
                 ("On: holding on to something fixed, the other hand moves heavy parts up to 5 t with a limited force of 250 N, and with each hand on a heavy part they push each other apart. Off: the game's own physics, where such parts do not move.",
                     "An: Hältst du dich an etwas Festem, bewegt die andere Hand schwere Teile bis 5 t mit begrenzter Kraft von 250 N, und mit je einer Hand an zwei schweren Teilen drückst du sie auseinander. Aus: die Physik des Spiels, in der solche Teile sich nicht bewegen."));
-            ToolWeight = Bind("Steuerung", "Werkzeuggewicht", 12f,
+            ToolWeight = Bind("Steuerung", "Werkzeuggewicht", 5f,
                 ("How heavy the cutter and the grapple are in your hand: moved fast they lag behind the controller and settle, and your hand stays on them. 0 for none.",
                     "Wie schwer Cutter und Grappler in der Hand sind: schnell bewegt hängen sie dem Controller nach und pendeln aus, deine Hand bleibt an ihnen. 0 für keins."),
                 "In kg.", Between(0f, 20f));

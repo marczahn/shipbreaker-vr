@@ -26,13 +26,22 @@ namespace ShipbreakerVR
         private const float Smallest = 0.01f;
         private const int MostBoxes = 16;
         private const float Shrink = 0.85f;
-        // A tool pressed against something within this angle of straight on holds there instead of sliding off, in degrees.
-        private const float Frontal = 35f;
+        // Friction: a tool pressed against something within Hold of straight on stays where it is (Raik: 15°); further off
+        // it slides along it, slowly at first (SlideSlow, degrees per second) and the faster the more slanted, up to
+        // SlideFast from SlideFull on.
+        private const float Hold = 15f;
+        private const float SlideFull = 45f;
+        private const float SlideSlow = 15f;
+        private const float SlideFast = 270f;
+        // A tool thrust in along itself is held back at what it meets, with the hand on it, instead of sinking in: up to
+        // MostBack, found in BackStep steps and then to BackFine, in meters at world scale 1. Further in, it goes through.
+        private const float MostBack = 0.2f;
+        private const float BackStep = 0.02f;
+        private const float BackFine = 0.005f;
         // The steps a tool turns in, tested each, in degrees.
         private const float Step = 2f;
-        // How far a tool is turned out of what it went into, each step and at most a frame, in degrees.
+        // How far a tool is turned out of what it went into, each step, in degrees.
         private const float OutStep = 1f;
-        private const float OutPerFrame = 3f;
         // A turn this far off the controller is given up: the tool goes back to the controller, through the obstacle.
         private const float MostOff = 120f;
         // A tool that was held off comes back to the controller over about this time, in seconds, not in one frame.
@@ -69,6 +78,9 @@ namespace ShipbreakerVR
             public Quaternion Result;
             // Off the controller last frame: blocked, or catching up after it.
             public bool Blocked;
+            // How far the tool and the hand are held back from the controller along the tool, in tracking space.
+            public Vector3 Back;
+            public bool HeldBack;
         }
 
         private static readonly State Left = new State();
@@ -95,7 +107,8 @@ namespace ShipbreakerVR
             }
             if (state.Running && state.Frame == Time.frameCount) return state.Result;
             state.Frame = Time.frameCount;
-            var pivot = rig.TransformPoint(VrToolWeight.Grip(hand, tool, gripLocal));
+            state.Back = Vector3.zero;
+            var pivot = rig.TransformPoint(VrToolWeight.Spring(hand, tool, gripLocal));
             var desired = rig.rotation * wanted;
             var previous = state.Running ? rig.rotation * state.Rotation : desired;
             state.Running = true;
@@ -110,13 +123,20 @@ namespace ShipbreakerVR
             if (!Free(pivot, previous, boxes, length, out var contact))
             {
                 var away = Away(contact);
-                // Pressed straight against it, the tip holds there (friction); at a slant it slides out along it. Pushing
-                // the body back off a hard press was tried and left out (Raik: too much for now).
-                if (Vector3.Angle(previous * Vector3.forward, -away) >= Frontal) previous = Out(pivot, previous, boxes, length, contact.At, away);
+                // Pressed nearly straight against it, the tip holds there (friction); at a slant it slides out along it, the
+                // faster the more slanted. Pushing the body back off a hard press, and pushing heavy parts with the tool,
+                // were tried and left out (Raik: not yet right).
+                var tilt = Vector3.Angle(previous * Vector3.forward, -away);
+                if (tilt > Hold)
+                {
+                    var speed = Mathf.Lerp(SlideSlow, SlideFast, Mathf.InverseLerp(Hold, SlideFull, tilt));
+                    previous = Out(pivot, previous, boxes, length, contact.At, away, speed * Time.unscaledDeltaTime);
+                }
             }
             var result = Towards(pivot, previous, desired, share, boxes, length);
             // Held off this far, it gives up the obstacle and comes back to the controller through it, still over CatchUp.
             if (Quaternion.Angle(result, desired) > MostOff) result = Quaternion.Slerp(result, desired, 1f - Mathf.Exp(-Time.unscaledDeltaTime / CatchUp));
+            HoldBack(state, rig, pivot, result, boxes, length, hand, tool);
             var blocked = Quaternion.Angle(result, desired) > 1f;
             if (blocked != state.Blocked && logs++ < 30)
                 Plugin.Log.LogInfo($"Tool collision: {hand.Name} {tool} {(blocked ? $"held off, {Quaternion.Angle(result, desired):0}° from the controller" : "with the controller again")}");
@@ -124,6 +144,48 @@ namespace ShipbreakerVR
             state.Rotation = Quaternion.Inverse(rig.rotation) * result;
             state.Result = state.Rotation;
             return state.Result;
+        }
+
+        // How far the tool and the hand go back with the tool's own turn this frame, in tracking space; zero when free or
+        // without extended physics. Once a frame, after Apply (VrToolWeight.Grip runs it first).
+        public static Vector3 Back(VrInput.Hand hand)
+        {
+            var state = hand.IsLeft ? Left : Right;
+            return state.Running && state.Frame == Time.frameCount ? state.Back : Vector3.zero;
+        }
+
+        // A tool still in something once turned as far as it may: thrust in along itself. Moved back along itself, with the
+        // hand, to where it is clear, so it stops at the surface instead of sinking in.
+        private static void HoldBack(State state, Transform rig, Vector3 pivot, Quaternion rotation, Box[] boxes, float length,
+            VrInput.Hand hand, EquipmentController.Equipment tool)
+        {
+            if (Free(pivot, rotation, boxes, length, out _))
+            {
+                Report(state, false, hand, tool, 0f);
+                return;
+            }
+            var scale = VrCamera.WorldScale;
+            var back = rotation * Vector3.back;
+            var clear = -1f;
+            for (var d = BackStep; d <= MostBack + 1e-4f; d += BackStep)
+                if (Free(pivot + back * d * scale, rotation, boxes, length, out _)) { clear = d; break; }
+            if (clear < 0f)
+            {
+                // Too deep: let it through rather than drag the hand far off the controller.
+                Report(state, false, hand, tool, 0f);
+                return;
+            }
+            for (var d = clear - BackStep + BackFine; d < clear - 1e-4f; d += BackFine)
+                if (Free(pivot + back * d * scale, rotation, boxes, length, out _)) { clear = d; break; }
+            state.Back = rig.InverseTransformVector(back * clear * scale);
+            Report(state, true, hand, tool, clear);
+        }
+
+        private static void Report(State state, bool held, VrInput.Hand hand, EquipmentController.Equipment tool, float distance)
+        {
+            if (held != state.HeldBack && logs++ < 30)
+                Plugin.Log.LogInfo($"Tool collision: {hand.Name} {tool} {(held ? $"held back {distance * 100f:0} cm at what it was thrust into" : "no longer held back")}");
+            state.HeldBack = held;
         }
 
         // A box around each part of the game tool's model, in the aim's axes from the grip; null without a model.
@@ -185,7 +247,7 @@ namespace ShipbreakerVR
         private static bool Free(Vector3 pivot, Quaternion rotation, Box[] boxes, float length, out Contact contact)
         {
             contact = default;
-            var player = GameRefs.Grab != null ? PlayerBody(GameRefs.Grab) : null;
+            var player = Player();
             if (boxes != null)
             {
                 foreach (var box in boxes)
@@ -219,7 +281,10 @@ namespace ShipbreakerVR
             return nearest == float.MaxValue;
         }
 
-        private static bool Own(Collider collider, Rigidbody player) =>
+        // The player's body, which the tools never bump into.
+        public static Rigidbody Player() => GameRefs.Grab != null ? PlayerBody(GameRefs.Grab) : null;
+
+        public static bool Own(Collider collider, Rigidbody player) =>
             player != null && (collider.attachedRigidbody == player || collider.transform.IsChildOf(player.transform));
 
         // Out of what the tool went into, from its point that went in (a unit direction; zero without a contact).
@@ -234,16 +299,17 @@ namespace ShipbreakerVR
 
         // The tool turned about the grip so that the point of it that went into something moves away from it, step by
         // step until it is clear.
-        private static Quaternion Out(Vector3 pivot, Quaternion rotation, Box[] boxes, float length, Vector3 at, Vector3 away)
+        private static Quaternion Out(Vector3 pivot, Quaternion rotation, Box[] boxes, float length, Vector3 at, Vector3 away, float most)
         {
             var axis = Vector3.Cross(at - pivot, away);
-            if (axis.sqrMagnitude < 1e-10f) return rotation;
-            // At most OutPerFrame a frame: the tool slides out along what it touches instead of jumping out of it.
-            var step = Quaternion.AngleAxis(OutStep, axis.normalized);
+            if (axis.sqrMagnitude < 1e-10f || most <= 0f) return rotation;
+            // At most most this frame: the tool slides out along what it touches instead of jumping out of it.
             var turned = rotation;
-            for (var angle = OutStep; angle <= OutPerFrame; angle += OutStep)
+            for (var angle = 0f; angle < most - 1e-4f;)
             {
-                turned = step * turned;
+                var step = Mathf.Min(OutStep, most - angle);
+                angle += step;
+                turned = Quaternion.AngleAxis(step, axis.normalized) * turned;
                 if (Free(pivot, turned, boxes, length, out _)) return turned;
             }
             return turned;
