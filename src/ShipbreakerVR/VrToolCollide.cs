@@ -26,9 +26,8 @@ namespace ShipbreakerVR
         private const float Smallest = 0.01f;
         private const int MostBoxes = 16;
         private const float Shrink = 0.85f;
-        // A tool pressed against something within this angle of straight on holds there instead of sliding off, in degrees:
-        // the same as where it stops pushing heavy parts (VrToolPush, Raik: 20°).
-        private const float Frontal = VrToolPush.SlipAngle;
+        // A tool pressed against something within this angle of straight on holds there instead of sliding off, in degrees.
+        private const float Frontal = 35f;
         // The steps a tool turns in, tested each, in degrees.
         private const float Step = 2f;
         // How far a tool is turned out of what it went into, each step and at most a frame, in degrees.
@@ -101,7 +100,7 @@ namespace ShipbreakerVR
             var previous = state.Running ? rig.rotation * state.Rotation : desired;
             state.Running = true;
             var boxes = hand == VrHand.GameToolHand.Input ? Shape(tool) : null;
-            var length = ToolLength(pivot, desired);
+            var length = Length(pivot, desired);
 
             // The tool never jumps: it turns from where it was towards the controller in steps of Step, each one tested, and
             // stops before the first that goes into something, so it cannot pass through a thin wall between two frames.
@@ -173,8 +172,8 @@ namespace ShipbreakerVR
             return last;
         }
 
-        // From the grip to the muzzle along the tool (VrToolPush too).
-        public static float ToolLength(Vector3 pivot, Quaternion rotation)
+        // From a little ahead of the grip to the muzzle along the tool.
+        private static float Length(Vector3 pivot, Quaternion rotation)
         {
             if (!VrToolModels.Muzzle(pivot, rotation, out var muzzle, out _)) return Fallback * VrCamera.WorldScale;
             var along = Vector3.Dot(muzzle - pivot, rotation * Vector3.forward);
@@ -186,7 +185,7 @@ namespace ShipbreakerVR
         private static bool Free(Vector3 pivot, Quaternion rotation, Box[] boxes, float length, out Contact contact)
         {
             contact = default;
-            var player = Player();
+            var player = GameRefs.Grab != null ? PlayerBody(GameRefs.Grab) : null;
             if (boxes != null)
             {
                 foreach (var box in boxes)
@@ -220,10 +219,7 @@ namespace ShipbreakerVR
             return nearest == float.MaxValue;
         }
 
-        // The player's body, which the tools never bump into.
-        public static Rigidbody Player() => GameRefs.Grab != null ? PlayerBody(GameRefs.Grab) : null;
-
-        public static bool Own(Collider collider, Rigidbody player) =>
+        private static bool Own(Collider collider, Rigidbody player) =>
             player != null && (collider.attachedRigidbody == player || collider.transform.IsChildOf(player.transform));
 
         // Out of what the tool went into, from its point that went in (a unit direction; zero without a contact).

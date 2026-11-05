@@ -660,14 +660,6 @@ namespace ShipbreakerVR
 
         private static bool Braced(Hand hand) => Fixed(Other(hand));
 
-        // That hand's other one holds on to something that does not move (Fixed), so a tool in it can push (VrToolPush).
-        public static bool BracedFor(VrHand toolHand)
-        {
-            foreach (var hand in Hands)
-                if (hand.Vr != toolHand) return hand.Holding && Fixed(hand);
-            return false;
-        }
-
         private static Hand Other(Hand hand) => hand == LeftHand ? RightHand : LeftHand;
 
         // The hand's force on its part; between two parts the body pushes back.
