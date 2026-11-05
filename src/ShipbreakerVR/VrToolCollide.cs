@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace ShipbreakerVR
 {
-    // Steuerung/SchwereTeileSchieben (extended physics): cutter and grapple bump into things, as Raik asked. The tool stays
+    // Steuerung/ErweiterteWerkzeugphysik (extended tool physics): cutter and grapple bump into things, as Raik asked. The tool stays
     // in the hand and turns about the grip instead of going through what is in its way: swung against a bar it stops
     // there and is turned aside as the hand goes on, and pulled past it, it follows the controller again, catching up
     // over CatchUp. The tool's shape is a box around each part of its model (Shape): the grapple's housing and its arms,
@@ -87,11 +87,44 @@ namespace ShipbreakerVR
         private static readonly State Right = new State();
         private static int logs;
 
-        // What a test found in the tool's way: the thing, and the tool's point that went into it.
+        // What a test found in the tool's way: the thing, and the tool's point that went into it; for a box of the tool's
+        // shape also the way out of it, from the physics engine (Separated).
         private struct Contact
         {
             public Collider Thing;
             public Vector3 At;
+            public bool Separated;
+            public Vector3 Out;
+        }
+
+        // A box collider never in the scene's physics (disabled), only for Physics.ComputePenetration: the way out of what
+        // a box of the tool's shape went into. From the box's middle instead (Away), the grapple's tall housing, whose
+        // middle lies above the tool's line, gave a slanted way out of a wall met head on, and the tool hopped up or down
+        // along it (Raik: the grapple jumps when thrust straight at something).
+        private static BoxCollider probe;
+        private static bool probeLogged;
+
+        private static bool Separate(Collider thing, Vector3 center, Vector3 half, Quaternion turn, out Vector3 way)
+        {
+            way = Vector3.zero;
+            if (probe == null)
+            {
+                var holder = new GameObject("ShipbreakerVR tool probe") { hideFlags = HideFlags.HideAndDontSave };
+                Object.DontDestroyOnLoad(holder);
+                probe = holder.AddComponent<BoxCollider>();
+                probe.enabled = false;
+            }
+            probe.size = half * 2f;
+            probe.center = Vector3.zero;
+            var separated = Physics.ComputePenetration(probe, center, turn, thing, thing.transform.position, thing.transform.rotation, out var direction, out var distance);
+            if (!probeLogged)
+            {
+                probeLogged = true;
+                Plugin.Log.LogInfo($"Tool collision: way out from the physics engine {(separated ? $"works ({distance * 100f:0.0} cm)" : "found none, from the box's middle instead")}");
+            }
+            if (!separated || direction.sqrMagnitude < 1e-8f) return false;
+            way = direction.normalized;
+            return true;
         }
 
         // The tool's turn in tracking space for the turn the controller (filtered) wants, wanted.
@@ -99,7 +132,7 @@ namespace ShipbreakerVR
         {
             var state = hand.IsLeft ? Left : Right;
             var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
-            if (VrSettings.BracedPush == null || !VrSettings.BracedPush.Value || rig == null || !hand.TryGetPosition(out var gripLocal)
+            if (VrSettings.ToolPhysics == null || !VrSettings.ToolPhysics.Value || rig == null || !hand.TryGetPosition(out var gripLocal)
                 || (tool != EquipmentController.Equipment.CuttingTool && tool != EquipmentController.Equipment.GrappleHook))
             {
                 state.Running = false;
@@ -258,6 +291,12 @@ namespace ShipbreakerVR
                     {
                         if (Own(Overlaps[i], player)) continue;
                         contact = new Contact { Thing = Overlaps[i], At = center };
+                        var turn = rotation * box.Turn;
+                        if (Separate(Overlaps[i], center, box.Half, turn, out var way))
+                        {
+                            contact.Separated = true;
+                            contact.Out = way;
+                        }
                         return false;
                     }
                 }
@@ -291,6 +330,7 @@ namespace ShipbreakerVR
         private static Vector3 Away(Contact contact)
         {
             if (contact.Thing == null) return Vector3.zero;
+            if (contact.Separated) return contact.Out;
             var away = contact.At - contact.Thing.ClosestPoint(contact.At);
             // Inside a non-convex collider ClosestPoint gives the point itself: away from the thing's middle instead.
             if (away.sqrMagnitude < 1e-8f) away = contact.At - contact.Thing.bounds.center;

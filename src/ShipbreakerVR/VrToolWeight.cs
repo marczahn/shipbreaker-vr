@@ -35,7 +35,8 @@ namespace ShipbreakerVR
         private static readonly State Right = new State();
         private static int logs;
 
-        private static float Mass => VrSettings.ToolWeight != null ? VrSettings.ToolWeight.Value : 0f;
+        // Only with extended tool physics (VR options, Physik).
+        private static float Mass => VrSettings.ToolWeight != null && VrSettings.ToolPhysics != null && VrSettings.ToolPhysics.Value ? VrSettings.ToolWeight.Value : 0f;
 
         public static bool Weighs(EquipmentController.Equipment tool) =>
             Mass > 0f && (tool == EquipmentController.Equipment.CuttingTool || tool == EquipmentController.Equipment.GrappleHook);

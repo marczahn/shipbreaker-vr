@@ -36,6 +36,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<VrFlightComfort.Thrust> ThrustMode;
         public static ConfigEntry<bool> BeltGrapple;
         public static ConfigEntry<bool> BracedPush;
+        public static ConfigEntry<bool> ToolPhysics;
         public static ConfigEntry<bool> FreeWalking;
         public static ConfigEntry<VrHelmet.Mode> Helmet;
         public static ConfigEntry<VrResolution.AntiAliasing> AntiAliasing;
@@ -224,12 +225,16 @@ namespace ShipbreakerVR
                 ("What happens when you stop thrusting. Simple: thrust only lasts while you hold it, you brake to a stop by yourself at a third of the brake's strength and fuel, not while holding on or with the grapple. Standard: as in the game, its auto brake slows you to 1 m/s after 3 seconds. Realistic: no auto brake, you keep your speed.",
                     "Was passiert, wenn du keinen Schub gibst. Einfach: Schub wirkt nur, solange du ihn hältst, du bremst von selbst bis zum Stillstand, mit einem Drittel der Bremskraft und des Treibstoffs, nicht beim Festhalten oder mit dem Grappler. Standard: wie im Spiel, seine automatische Bremse verlangsamt dich nach 3 Sekunden auf 1 m/s. Realistisch: keine automatische Bremse, du behältst dein Tempo."),
                 (new[] { "Simple", "Standard", "Realistic" }, new[] { "Einfach", "Standard", "Realistisch" }));
+            // Extended world physics (the key's old name kept, so the setting survives the rename).
             BracedPush = Bind("Steuerung", "SchwereTeileSchieben", false,
-                ("On: holding on to something fixed, the other hand moves heavy parts up to 5 t with a limited force of 250 N, and with each hand on a heavy part they push each other apart. Off: the game's own physics, where such parts do not move.",
-                    "An: Hältst du dich an etwas Festem, bewegt die andere Hand schwere Teile bis 5 t mit begrenzter Kraft von 250 N, und mit je einer Hand an zwei schweren Teilen drückst du sie auseinander. Aus: die Physik des Spiels, in der solche Teile sich nicht bewegen."));
+                ("Extended world physics. On: holding on to something fixed, the other hand moves heavy parts up to 5 t with a limited force of 250 N, with each hand on a heavy part they push each other apart, and your body weighs 100 kg in these pulls and pushes. Off: the game's own physics, where such parts do not move.",
+                    "Erweiterte Weltphysik. An: Hältst du dich an etwas Festem, bewegt die andere Hand schwere Teile bis 5 t mit begrenzter Kraft von 250 N, mit je einer Hand an zwei schweren Teilen drückst du sie auseinander, und dein Körper wiegt dabei 100 kg. Aus: die Physik des Spiels, in der solche Teile sich nicht bewegen."));
+            ToolPhysics = Bind("Steuerung", "ErweiterteWerkzeugphysik", false,
+                ("Extended tool physics. On: the cutter and the grapple bump into things instead of going through them and have weight (Tool weight). Off: as in the game.",
+                    "Erweiterte Werkzeugphysik. An: Cutter und Grappler stoßen an, statt durch Dinge hindurchzugehen, und haben Gewicht (Werkzeuggewicht). Aus: wie im Spiel."));
             ToolWeight = Bind("Steuerung", "Werkzeuggewicht", 5f,
-                ("How heavy the cutter and the grapple are in your hand: moved fast they lag behind the controller and settle, and your hand stays on them. 0 for none.",
-                    "Wie schwer Cutter und Grappler in der Hand sind: schnell bewegt hängen sie dem Controller nach und pendeln aus, deine Hand bleibt an ihnen. 0 für keins."),
+                ("With extended tool physics, how heavy the cutter and the grapple are in your hand: moved fast they lag behind the controller and settle, and your hand stays on them. 0 for none.",
+                    "Mit erweiterter Werkzeugphysik: wie schwer Cutter und Grappler in der Hand sind. Schnell bewegt hängen sie dem Controller nach und pendeln aus, deine Hand bleibt an ihnen. 0 für keins."),
                 "In kg.", Between(0f, 20f));
             BeltGrapple = Bind("Steuerung", "GrapplerAmKoerper", true,
                 "Shows the grapple at your right hip, where you draw it from, while it is not in a hand.");
