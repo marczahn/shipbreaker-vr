@@ -24,12 +24,18 @@ namespace ShipbreakerVR
         private const float BuzzLeast = 0.05f;
         private const float BuzzMost = 0.5f;
         private const float BuzzEvery = 0.05f;
+        // A push lost for less than this, in seconds (the hand wavering past SlipAngle, the ray slipping off a seam), goes
+        // on: in the first test every push broke off within 0.4 s, too short to move the 636 kg hoist truck.
+        private const float Grace = 0.25f;
 
         private static readonly RaycastHit[] Hits = new RaycastHit[16];
 
         private class State
         {
             public Rigidbody Pushing;
+            public float LastGood;
+            public float AngleSum;
+            public float AngleMost;
             public float NextBuzz;
             public float Since;
             public float Sum;
@@ -46,8 +52,8 @@ namespace ShipbreakerVR
         {
             if (VrSettings.BracedPush == null || !VrSettings.BracedPush.Value || !VrXr.IsRunning)
             {
-                Stop(VrHand.Left, Left);
-                Stop(VrHand.Right, Right);
+                Stop(VrHand.Left, Left, "extended physics off");
+                Stop(VrHand.Right, Right, "extended physics off");
                 return;
             }
             foreach (var hand in VrHand.Both) Step(hand, hand.IsLeft ? Left : Right);
@@ -61,7 +67,7 @@ namespace ShipbreakerVR
                 || !VrClimb.BracedFor(hand)
                 || !hand.Input.TryGetPosition(out var gripLocal) || !hand.Input.TryGetAimRotation(out var aimLocal))
             {
-                Stop(hand, state);
+                Lost(hand, state, !VrClimb.BracedFor(hand) ? "no hold on something fixed" : "no tool");
                 return;
             }
             // Where the arm puts the tool, the controller's own place and turn: the tool itself is held back at the part.
@@ -73,13 +79,14 @@ namespace ShipbreakerVR
             var reach = VrToolCollide.ToolLength(pivot, rotation) - FromGrip * scale;
             if (reach <= 0f || !Touching(start, forward, reach, out var hit, out var body))
             {
-                Stop(hand, state);
+                Lost(hand, state, "nothing heavy at the tool's end");
                 return;
             }
             // Thrust in straight, within SlipAngle of the surface's normal; at a slant the tool slides off.
-            if (Vector3.Angle(forward, -hit.normal) > SlipAngle)
+            var angle = Vector3.Angle(forward, -hit.normal);
+            if (angle > SlipAngle)
             {
-                Stop(hand, state);
+                Lost(hand, state, $"{angle:0}° off straight on");
                 return;
             }
             // How far the tool's end would be past the surface, along the tool.
@@ -92,10 +99,13 @@ namespace ShipbreakerVR
                 Stop(hand, state);
                 state.Pushing = body;
                 state.Since = Time.time;
-                if (logs++ < 30)
-                    Plugin.Log.LogInfo($"Tool push: {hand.Name} {hand.Tool} on '{body.name}' {body.mass:0} kg, {Vector3.Angle(forward, -hit.normal):0}° off straight on, "
+                if (logs++ < 60)
+                    Plugin.Log.LogInfo($"Tool push: {hand.Name} {hand.Tool} on '{body.name}' {body.mass:0} kg, {angle:0}° off straight on, "
                         + $"{Vector3.Distance(hit.point, body.worldCenterOfMass):0.00} m off its centre of mass");
             }
+            state.LastGood = Time.time;
+            state.AngleSum += angle;
+            state.AngleMost = Mathf.Max(state.AngleMost, angle);
             state.Sum += size;
             state.Most = Mathf.Max(state.Most, size);
             state.Steps++;
@@ -112,7 +122,20 @@ namespace ShipbreakerVR
             found = default;
             body = null;
             var player = VrToolCollide.Player();
-            var count = Physics.SphereCastNonAlloc(start, Radius * VrCamera.WorldScale, forward, Hits, reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            // A plain ray first, for the face's own normal (a ball's normal turns towards an edge it touches); the ball
+            // when the ray passes beside a thin part.
+            if (!Nearest(Physics.RaycastNonAlloc(start, forward, Hits, reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore), player, out found)
+                && !Nearest(Physics.SphereCastNonAlloc(start, Radius * VrCamera.WorldScale, forward, Hits, reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore), player, out found))
+                return false;
+            var part = found.rigidbody;
+            if (part == null || part.isKinematic || part.gameObject.layer == StaticLayer || part.mass < LightestMass || part.mass > BracedPush.MaxMass) return false;
+            body = part;
+            return true;
+        }
+
+        private static bool Nearest(int count, Rigidbody player, out RaycastHit found)
+        {
+            found = default;
             var nearest = float.MaxValue;
             for (var i = 0; i < count; i++)
             {
@@ -122,20 +145,27 @@ namespace ShipbreakerVR
                 nearest = hit.distance;
                 found = hit;
             }
-            if (nearest == float.MaxValue) return false;
-            var part = found.rigidbody;
-            if (part == null || part.isKinematic || part.gameObject.layer == StaticLayer || part.mass < LightestMass || part.mass > BracedPush.MaxMass) return false;
-            body = part;
-            return true;
+            return nearest < float.MaxValue;
         }
 
-        private static void Stop(VrHand hand, State state)
+        // No push this step; the push ends once it has been lost for Grace.
+        private static void Lost(VrHand hand, State state, string why)
         {
-            if (state.Pushing != null && state.Steps > 0 && logs++ < 30)
-                Plugin.Log.LogInfo($"Tool push: {hand.Name} stopped on '{state.Pushing.name}' after {Time.time - state.Since:0.0} s, "
-                    + $"{state.Sum / state.Steps:0} N on average (most {state.Most:0}, limit {BracedPush.Limit(state.Pushing.mass):0})");
+            if (state.Pushing != null && Time.time - state.LastGood < Grace) return;
+            Stop(hand, state, why);
+        }
+
+        private static void Stop(VrHand hand, State state, string why = "another part")
+        {
+            if (state.Pushing != null && state.Steps > 0 && logs++ < 60)
+            {
+                var speed = state.Pushing.velocity.magnitude;
+                Plugin.Log.LogInfo($"Tool push: {hand.Name} stopped on '{state.Pushing.name}' after {Time.time - state.Since:0.0} s ({why}), "
+                    + $"{state.Sum / state.Steps:0} N on average (most {state.Most:0}, limit {BracedPush.Limit(state.Pushing.mass):0}), "
+                    + $"{state.AngleSum / state.Steps:0}° off straight on on average (most {state.AngleMost:0}), the part now at {speed:0.00} m/s");
+            }
             state.Pushing = null;
-            state.Sum = state.Most = 0f;
+            state.Sum = state.Most = state.AngleSum = state.AngleMost = 0f;
             state.Steps = 0;
         }
     }
