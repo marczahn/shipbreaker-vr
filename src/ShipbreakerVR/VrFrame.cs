@@ -51,6 +51,7 @@ namespace ShipbreakerVR
         {
             ("hitbox", VrHitbox.FixedUpdate),
             ("climbing", VrClimb.FixedUpdate),
+            ("tool push", VrToolPush.FixedUpdate),
             ("frame statistics", VrPerformance.FixedStep),
         };
 
