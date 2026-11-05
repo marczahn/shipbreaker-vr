@@ -9,6 +9,10 @@ tools off your suit and aim them with your hands, and use the menus with your mo
 > unofficial fan project, not made or supported by the game's developers. Use it at your own risk, see the
 > [disclaimer](DISCLAIMER.md).
 
+> **Built with AI.** This mod was developed with the help of AI: most of its code and documentation were written by
+> an AI assistant (Claude by Anthropic), directed, reviewed and tested in the headset by a human. See the
+> [disclaimer](DISCLAIMER.md#8-ai-assisted-development).
+
 - [What you get](#what-you-get)
 - [What you need](#what-you-need)
 - [Installing](#installing)
