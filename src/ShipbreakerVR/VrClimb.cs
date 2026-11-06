@@ -621,6 +621,17 @@ namespace ShipbreakerVR
 
         // Above the game's grab mass range (GrabController.RawGrabbedMassRange.AboveRange), through reflection: the range's
         // type lives in BBI.Unity.Core, which the plugin does not reference.
+        // A control on something that floats loose, as a cassette or a cable to collect: light and moving. A ship's controls
+        // are on its body too, which the game also lets move (not kinematic), at tens of tonnes: taken for loose, a door
+        // switch was held as a plain surface above the switch, and used, the hand was bent towards the ship's middle (Raik).
+        private const float LooseMass = 200f;
+
+        public static bool Loose(Component control)
+        {
+            var body = control != null ? control.GetComponentInParent<Rigidbody>() : null;
+            return body != null && !body.isKinematic && body.mass <= LooseMass;
+        }
+
         private static bool TooHeavy(float mass)
         {
             var range = RawGrabbedMassRange?.Invoke(grab, null);
@@ -672,7 +683,7 @@ namespace ShipbreakerVR
             var control = held.GetComponentInParent<InteractableObject>();
             if (control == null || switchLogs >= 40) return;
             switchLogs++;
-            Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds the control '{control.name}'");
+            Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds the control '{control.name}'{(hand.Control ? ", as a fist where it took hold" : ", as a plain surface")}");
         }
 
         // The directions of a cube's faces and corners.
@@ -756,8 +767,7 @@ namespace ShipbreakerVR
                 var control = Found[i].GetComponentInParent<InteractableObject>();
                 if (control == null || control.HandTarget == null || !control.isActiveAndEnabled) continue;
                 // Things that float loose, as cassettes to collect, are held as parts.
-                var loose = control.GetComponentInParent<Rigidbody>();
-                if (loose != null && !loose.isKinematic) continue;
+                if (Loose(control)) continue;
                 var nearest = NearestOn(Found[i], at);
                 var distance = (nearest - at).sqrMagnitude;
                 if (distance >= bestDistance) continue;

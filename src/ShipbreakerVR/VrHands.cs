@@ -248,8 +248,7 @@ namespace ShipbreakerVR
             if (control == null || control.HandTarget == null) return;
             // Things that float loose, as cassettes and cables to collect, sit off their HandTarget in the hand: the hand goes
             // to the thing itself. Controls on the hull keep the place made for the hand.
-            var loose = control.GetComponentInParent<Rigidbody>();
-            var target = loose != null && !loose.isKinematic ? loose.worldCenterOfMass : control.HandTarget.position;
+            var target = VrClimb.Loose(control) ? control.GetComponentInParent<Rigidbody>().worldCenterOfMass : control.HandTarget.position;
             VrToolModels.Bend(arm.Upper, arm.Lower, arm.Wrist, target);
         }
 
