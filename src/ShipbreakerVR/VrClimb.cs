@@ -64,7 +64,8 @@ namespace ShipbreakerVR
         private const float FirmFollowHeavy = 0.08f;
         // A part let go collides with the body again once its bounds are this far from the body, or after that many seconds.
         private const float FirmClear = 0.45f;
-        private const float FirmClearTime = 10f;
+        // At most this long, in seconds: the next touch of a part let go can come soon (Raik; 10 s was too long).
+        private const float FirmClearTime = 3f;
         // The body's mass in the pulls and pushes with extended world physics (Steuerung/SchwereTeileSchieben), in kg: the game's
         // player weighs 50 kg, light for a person in a suit; Raik wants 100 kg (modern materials). Only in these impulses:
         // the rigidbody keeps the game's mass, so thrust, braking and the speed of a push off stay as they were. Without
@@ -381,6 +382,7 @@ namespace ShipbreakerVR
             }
             holdVelocity = holdsVelocity / pulling;
             player.velocity = KeepClear(velocity + change, dt);
+            HoldOff(dt);
             MoveFirm(dt);
             pushOff = Vector3.Lerp(pushOff, player.velocity - holdVelocity, 1f - Mathf.Exp(-dt / PushOffSmoothing));
         }
@@ -427,6 +429,56 @@ namespace ShipbreakerVR
                 velocity = limited;
             }
             return velocity;
+        }
+
+        // A held part that moves does not collide with the body (Separate), so pulled in, it would go into it: once the two
+        // are within Clearance, their closing is stopped, by equal and opposite impulses shared by their masses, as two
+        // bodies meeting without bouncing. Up, down and apart stay free, and there is no push off: the pair keeps its
+        // momentum (Raik: drawing a fuel barrel in, the pull should just stop going closer). KeepClear leaves such parts
+        // out, as stopping the body alone gave a barrel rowed with both arms more speed each stroke.
+        private static readonly Collider[] Touching = new Collider[16];
+        private static int holdOffLogs;
+
+        private static void HoldOff(float dt)
+        {
+            var solid = BodySphere();
+            if (solid == null) return;
+            var center = solid.transform.TransformPoint(solid.center);
+            var radius = solid.radius * solid.transform.lossyScale.x;
+            var clearance = Clearance * VrCamera.WorldScale;
+            foreach (var hand in Hands)
+            {
+                var part = hand.Body;
+                if (!hand.Holding || !hand.Movable || hand.Firm || hand.Follower || part == null || Pushes(hand)) continue;
+                // Both hands on one part: once.
+                if (hand == RightHand && LeftHand.Holding && LeftHand.Body == part) continue;
+                // As far as the two could close within this step, so a quick pull does not pass the check.
+                var reach = radius + 2f * clearance + (player.velocity - part.velocity).magnitude * dt;
+                var count = Physics.OverlapSphereNonAlloc(center, reach, Touching, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                var nearest = float.MaxValue;
+                var point = Vector3.zero;
+                for (var i = 0; i < count; i++)
+                {
+                    if (Touching[i].attachedRigidbody != part) continue;
+                    var on = VrUtil.ClosestPoint(Touching[i], center);
+                    var distance = (on - center).sqrMagnitude;
+                    if (distance >= nearest) continue;
+                    nearest = distance;
+                    point = on;
+                }
+                if (nearest == float.MaxValue || nearest < 1e-8f) continue;
+                var gap = Mathf.Sqrt(nearest);
+                var normal = (center - point) / gap;
+                var room = gap - radius - clearance;
+                var closing = -Vector3.Dot(player.velocity - part.GetPointVelocity(point), normal);
+                var allowed = Mathf.Max(room, 0f) / dt;
+                if (closing <= allowed) continue;
+                var impulse = (closing - allowed) / (1f / BodyMass + InverseMass(part, point, normal));
+                player.velocity += normal * (impulse / BodyMass);
+                part.AddForceAtPosition(-normal * impulse, point, ForceMode.Impulse);
+                if (holdOffLogs++ < 20)
+                    Plugin.Log.LogInfo($"Climbing: '{part.name}' {part.mass:0} kg held off the body {Mathf.Max(room, 0f) * 100f:0} cm short, closing at {closing:0.00} m/s stopped");
+            }
         }
 
         // Whether a collision of the player's body is a touch of the thing held instead of an impact. Ship parts share one
