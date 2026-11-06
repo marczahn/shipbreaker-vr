@@ -82,6 +82,9 @@ namespace ShipbreakerVR
         private static bool braking;
         // The left stick thrusting (Shooter): counts as holding the thrust, as the trigger does with VTOL.
         private static bool stickThrust;
+        // Shooter, for the flight globe: the thrust in tracking space (0..1) and the roll as a hand tilt in degrees.
+        private static Vector3 shooterThrust;
+        private static float shooterRoll;
         // A left trigger still held from working a tool with that hand flies only after it was let go.
         private static bool triggerFromTool;
 
@@ -96,6 +99,8 @@ namespace ShipbreakerVR
             turn = Quaternion.identity;
             braking = false;
             stickThrust = false;
+            shooterThrust = Vector3.zero;
+            shooterRoll = 0f;
 
             if (Active == Scheme.Aus) { held = false; return; }
             // Controller poses are in tracking space, i.e. relative to the rig whose rotation is the playspace.
@@ -121,6 +126,9 @@ namespace ShipbreakerVR
                 var stick = left.Stick;
                 if (rolling)
                 {
+                    // Shown in the globe as the hand tilt that rolls as fast with VTOL.
+                    var share = Ramp(Mathf.Abs(stick.x), StickDeadzone, 1f);
+                    if (share > 0f) shooterRoll = -Mathf.Sign(stick.x) * Mathf.Lerp(TurnDeadzone, RollFull, share);
                     var roll = ShooterRoll(stick.x) * Time.deltaTime;
                     if (roll != 0f) turn = Quaternion.AngleAxis(roll, playspace * VrCamera.Instance.HeadRotation * Vector3.forward) * turn;
                     stick.x = 0f;
@@ -128,6 +136,7 @@ namespace ShipbreakerVR
                 if (!left.TryGetAimRotation(out var pointing)) return;
                 var local = ShooterThrust(stick, pointing);
                 stickThrust = local != Vector3.zero;
+                shooterThrust = local;
                 thrust = playspace * local;
                 return;
             }
@@ -283,9 +292,18 @@ namespace ShipbreakerVR
         public static bool Holding => held || stickThrust;
 
         // While the trigger is held: the hand's offset from the reference in tracking space (meters), and its rotation
-        // relative to the reference, in the controller's own frame (z is the roll the controls read).
+        // relative to the reference, in the controller's own frame (z is the roll the controls read). With Shooter, while
+        // the stick thrusts or rolls, the hand offset and tilt that would do the same with VTOL, so the flight globe shows
+        // which way and how strongly (Raik).
         public static bool TryGetHand(out Vector3 offset, out Quaternion rotation)
         {
+            if (!held && (shooterThrust != Vector3.zero || shooterRoll != 0f))
+            {
+                offset = shooterThrust == Vector3.zero ? Vector3.zero
+                    : shooterThrust.normalized * Mathf.Lerp(DeadzoneShare, 1f, shooterThrust.magnitude) * FullOffset;
+                rotation = Quaternion.AngleAxis(shooterRoll, Vector3.forward);
+                return true;
+            }
             offset = held ? handPosition - heldPosition : Vector3.zero;
             rotation = held ? Quaternion.Inverse(heldRotation) * handRotation : Quaternion.identity;
             return held;

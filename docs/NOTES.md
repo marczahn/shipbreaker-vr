@@ -582,7 +582,8 @@ Config `Steuerung/Controllersteuerung` (Aus/Vtol/Shooter; the earlier "point and
 Shooter: the left stick thrusts along the left controller's aim pose, stick up its forward and right its right, from the
 stick deadzone 0.15 to full at the edge (`VrControls.ShooterThrust`); tilting the controller up or down thrusts up or down.
 With the left trigger held, the stick's left and right roll at up to 100°/s (`ShooterRoll`) and only forward and back thrust; the right stick, Y and the left stick's click work as with VTOL, and the stick counts as holding the thrust
-(`Holding`, for the simple thrust mode). The left stick is free in gameplay (the menus read it only outside it). VTOL:
+(`Holding`, for the simple thrust mode). The flight globe shows the stick's thrust and roll as the hand offset and tilt
+that would give the same with VTOL (`TryGetHand`). The left stick is free in gameplay (the menus read it only outside it). VTOL:
 - Hold the left trigger; moving the controller away from where it was when pressed thrusts that way (deadzone
   `Steuerung/SchubTotzone`, 2 cm, full at `Steuerung/SchubVoll`, 10 cm; full stays at least 5 cm beyond the deadzone,
   changing one pushes the other along; until 0.14.0 fixed at 2 and 15 cm), measured at the point the hand turns about when it tilts (`VrControls.ThrustAnchor`, 1 cm right, 4 cm below and 3 cm behind the grip pose, from the controller's velocity and angular velocity while Raik rolled; the angular velocity comes in the controller's own axes; 8 cm straight behind it before, some 6 cm off the axis): measured at the controller, tilting
