@@ -538,17 +538,10 @@ namespace ShipbreakerVR
                     var start = flat ? FlatFrame(arm, frame, normal) : frame;
                     arm.GripTurn = Quaternion.Inverse(anchor.rotation) * start;
                     var side = arm == LeftArm ? 1f : -1f;
-                    // On a control (a door switch, a console's lever) the wrist goes onto its HandTarget itself, where the game
-                    // puts its own hand when the control is used (AtControl): with the grip there instead, the hand moved some
-                    // 10 cm on using it, and sat off the switch before (Raik, the airlock console).
-                    var control = VrClimb.HoldsControl(arm.Input);
                     arm.GripOffset = flat
                         ? new Vector3(-side * PalmThickness, 0f, -PalmLength) * VrCamera.WorldScale
-                        : control ? Vector3.zero : Quaternion.Inverse(start) * (wrist - point);
-                    if (logs++ < 40) Plugin.Log.LogInfo($"Hands: {arm.Name} hand fixed on '{anchor.name}'{(flat ? ", flat on the surface" : control ? ", the wrist on the control's hand target" : "")}");
-                    if (control && arm.Upper != null && controlLogs++ < 20)
-                        Plugin.Log.LogInfo($"Hands: {arm.Name} hand on a control, its hold {Vector3.Distance(arm.Upper.position, VrClimb.TryGetControlTarget(arm.Input, out var target) ? target : point):0.00} m from the shoulder"
-                            + $" (the arm reaches {arm.UpperLength + arm.LowerLength:0.00} m)");
+                        : Quaternion.Inverse(start) * (wrist - point);
+                    if (logs++ < 40) Plugin.Log.LogInfo($"Hands: {arm.Name} hand fixed on '{anchor.name}'{(flat ? ", flat on the surface" : "")}");
                 }
                 arm.GripPoint = anchor.InverseTransformPoint(point);
                 arm.GripBlend = Mathf.MoveTowards(arm.GripBlend, 1f, Time.unscaledDeltaTime / GripTime);
@@ -596,8 +589,6 @@ namespace ShipbreakerVR
                 }
             return wrist - palm * deepest;
         }
-
-        private static int controlLogs;
 
         // The hand's axes (Frame) lying flat on a surface: the palm on it (to the left of the right hand, to the right of
         // the left one), the knuckles along the surface where the controller points.

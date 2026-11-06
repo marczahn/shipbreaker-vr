@@ -668,11 +668,7 @@ namespace ShipbreakerVR
             var control = held.GetComponentInParent<InteractableObject>();
             if (control == null || switchLogs >= 40) return;
             switchLogs++;
-            var target = control.HandTarget;
-            var at = HandWorld(hand);
-            Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds the control '{control.name}'" + (target != null
-                ? $", its hand target {Vector3.Distance(at, target.position):0.00} m from the hand and {Vector3.Distance(held.ClosestPoint(target.position), target.position):0.00} m off its collider"
-                : ""));
+            Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds the control '{control.name}'");
         }
 
         // The directions of a cube's faces and corners.
@@ -734,19 +730,6 @@ namespace ShipbreakerVR
         }
 
         // True while that controller's hand holds a control (a door switch, a console's button) as a fist.
-        // Where that hand holding a control goes in the end: the control's HandTarget (Surface).
-        public static bool TryGetControlTarget(VrInput.Hand input, out Vector3 target)
-        {
-            target = Vector3.zero;
-            foreach (var hand in Hands)
-            {
-                if (hand.Input != input || !hand.Holding || !hand.Control || hand.Anchor == null) continue;
-                target = hand.Anchor.TransformPoint(hand.Surface);
-                return true;
-            }
-            return false;
-        }
-
         public static bool HoldsControl(VrInput.Hand input)
         {
             foreach (var hand in Hands)
