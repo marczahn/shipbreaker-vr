@@ -138,6 +138,8 @@ namespace ShipbreakerVR
                 state.Running = false;
                 return wanted;
             }
+            // Not run last frame: the tool was put away, it starts afresh at the controller (as VrToolWeight).
+            if (state.Running && state.Frame < Time.frameCount - 1) state.Running = false;
             if (state.Running && state.Frame == Time.frameCount) return state.Result;
             state.Frame = Time.frameCount;
             state.Back = Vector3.zero;

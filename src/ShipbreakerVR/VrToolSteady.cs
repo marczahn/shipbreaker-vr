@@ -33,6 +33,8 @@ namespace ShipbreakerVR
                 filter.Running = false;
                 return raw;
             }
+            // Not run last frame: the tool was put away, the filter starts afresh (as VrToolWeight).
+            if (filter.Running && filter.Frame < Time.frameCount - 1) filter.Running = false;
             if (!filter.Running)
             {
                 filter.Running = true;

@@ -50,6 +50,9 @@ namespace ShipbreakerVR
                 state.Running = false;
                 return wanted;
             }
+            // Not run last frame: the tool was put away (nothing calls this without one), so it starts afresh at the
+            // controller instead of swinging in from where it was (review).
+            if (state.Running && state.Frame < Time.frameCount - 1) state.Running = false;
             if (state.Running && state.Frame == Time.frameCount) return state.Rotation;
             state.Frame = Time.frameCount;
             if (!state.Running)
