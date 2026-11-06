@@ -120,9 +120,9 @@ namespace ShipbreakerVR
                 "Low is half resolution and few steps, as the game uses it in the bay; the station asks for full resolution and 16 steps, which costs a lot of GPU time at VR resolution.");
 
             ControlScheme = Bind("Steuerung", "Controllersteuerung", VrControls.Scheme.Vtol,
-                ("Hold the left trigger: moving the controller thrusts that way, tilting it sideways rolls. Right stick: turn and pitch. Y: brake. Off if you fly with mouse and keyboard or a gamepad.",
-                    "Linken Trigger halten: Controller verschieben gibt Schub in diese Richtung, seitlich Kippen rollt. Rechter Stick: drehen und neigen. Y: Bremse. Aus, wenn du mit Maus und Tastatur oder Gamepad fliegst."),
-                (new[] { "Off", "VTOL (trigger)" }, new[] { "Aus", "VTOL (Trigger)" }),
+                ("VTOL: hold the left trigger, moving the controller thrusts that way, tilting it sideways rolls. Shooter: the left stick thrusts forward, back, left and right, as strongly as you push it; forward is where the left controller points, so tilt it up or down to thrust up or down. Both: right stick turns and pitches, Y brakes. Off if you fly with mouse and keyboard or a gamepad.",
+                    "VTOL: Linken Trigger halten, Controller verschieben gibt Schub in diese Richtung, seitlich Kippen rollt. Shooter: Der linke Stick gibt Schub nach vorne, hinten, links und rechts, so stark du ihn drückst; vorne ist, wohin der linke Controller zeigt, also nach oben oder unten kippen für Schub nach oben oder unten. Beide: Rechter Stick dreht und neigt, Y bremst. Aus, wenn du mit Maus und Tastatur oder Gamepad fliegst."),
+                (new[] { "Off", "VTOL (trigger)", "Shooter (stick)" }, new[] { "Aus", "VTOL (Trigger)", "Shooter (Stick)" }),
                 "While the left hand holds a tool or holds on, it works that instead.");
             TurnMode = Bind("Steuerung", "Drehen", VrControls.Turning.Fliessend,
                 ("How the right stick turns you when flying with the controllers: smoothly, or in steps of 30, 45 or 90 degrees per flick. Steps are easier on the stomach.",

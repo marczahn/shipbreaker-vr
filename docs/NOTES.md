@@ -578,7 +578,11 @@ the eye textures were recreated a second after VR started (1.0, then 0.95); a lo
 and thrusts along its orientation transform (the body, or a steering transform). A postfix on that extension method adds
 the controller thrust, converted into that transform's axes, so fuel, forces and the thrust HUD stay the game's.
 Rotation from the controllers is applied in `VrBody`, to the playspace.
-Config `Steuerung/Controllersteuerung` (Aus/Vtol; the earlier "point and twist" Pavlov scheme was removed for now):
+Config `Steuerung/Controllersteuerung` (Aus/Vtol/Shooter; the earlier "point and twist" Pavlov scheme was removed for now).
+Shooter: the left stick thrusts along the left controller's aim pose, stick up its forward and right its right, from the
+stick deadzone 0.15 to full at the edge (`VrControls.ShooterThrust`); tilting the controller up or down thrusts up or down.
+No roll; the right stick, Y and the left stick's click work as with VTOL, and the stick counts as holding the thrust
+(`Holding`, for the simple thrust mode). The left stick is free in gameplay (the menus read it only outside it). VTOL:
 - Hold the left trigger; moving the controller away from where it was when pressed thrusts that way (deadzone
   `Steuerung/SchubTotzone`, 2 cm, full at `Steuerung/SchubVoll`, 10 cm; full stays at least 5 cm beyond the deadzone,
   changing one pushes the other along; until 0.14.0 fixed at 2 and 15 cm), measured at an estimated wrist point 8 cm behind the grip pose: measured at the controller, tilting

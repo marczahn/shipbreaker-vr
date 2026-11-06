@@ -73,5 +73,39 @@ namespace ShipbreakerVR.Tests
         {
             Assert.Equal(0f, SimpleThrust.Slowed(0.1f, 3f, 0.5f), 3);
         }
+
+        [Fact]
+        public void ShooterThrustNeedsTheStickOutOfItsDeadzone()
+        {
+            Assert.Equal(UnityEngine.Vector3.zero, VrControls.ShooterThrust(new UnityEngine.Vector2(0f, 0.1f), UnityEngine.Quaternion.identity));
+        }
+
+        [Fact]
+        public void ShooterThrustGoesWhereTheControllerPoints()
+        {
+            var forward = VrControls.ShooterThrust(new UnityEngine.Vector2(0f, 1f), UnityEngine.Quaternion.identity);
+            Assert.Equal(1f, forward.z, 3);
+            var right = VrControls.ShooterThrust(new UnityEngine.Vector2(1f, 0f), UnityEngine.Quaternion.identity);
+            Assert.Equal(1f, right.x, 3);
+            var back = VrControls.ShooterThrust(new UnityEngine.Vector2(0f, -1f), UnityEngine.Quaternion.identity);
+            Assert.Equal(-1f, back.z, 3);
+        }
+
+        [Fact]
+        public void ShooterThrustFollowsTheControllersTilt()
+        {
+            // The controller pitched 90 degrees down (about its right axis): the stick's forward thrusts down.
+            var half = (float)System.Math.Sqrt(0.5);
+            var down = VrControls.ShooterThrust(new UnityEngine.Vector2(0f, 1f), new UnityEngine.Quaternion(half, 0f, 0f, half));
+            Assert.Equal(-1f, down.y, 3);
+            Assert.Equal(0f, down.z, 3);
+        }
+
+        [Fact]
+        public void ShooterThrustGrowsWithTheStick()
+        {
+            var half = VrControls.ShooterThrust(new UnityEngine.Vector2(0f, 0.575f), UnityEngine.Quaternion.identity);
+            Assert.Equal(0.5f, half.magnitude, 2);
+        }
     }
 }

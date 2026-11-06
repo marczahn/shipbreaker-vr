@@ -14,11 +14,14 @@ namespace ShipbreakerVR
     // the right stick turns (left/right; smoothly or in snap steps, see Turning) and pitches (up/down), faster the further
     // it is pushed, and Y brakes. The grips stay free for holding on (VrClimb). While the left hand holds a tool its controller works
     // the tool (VrToolInput), so there is no flying and no braking then; the right stick still turns.
+    // Shooter, the other scheme (Steuerung/Controllersteuerung), as in VR shooters (Raik): the left stick thrusts forward,
+    // back, left and right, as strongly as it is pushed, along the left controller: forward is where it points, so tilted
+    // up or down it thrusts up or down. No roll; turning, pitching, braking and the rest as with VTOL.
     // Thrust and brake go through the game's own actions (ThrustController reads them via LynxControls), so fuel, forces and
     // HUD stay the game's. Rotation is applied in VrBody, to the playspace.
     internal static class VrControls
     {
-        public enum Scheme { Aus, Vtol }
+        public enum Scheme { Aus, Vtol, Shooter }
 
         // Turning with the right stick: smoothly, or one fixed step per flick.
         public enum Turning { Fliessend, Snap30, Snap45, Snap90 }
@@ -69,6 +72,8 @@ namespace ShipbreakerVR
 
         private static bool snapped;
         private static bool braking;
+        // The left stick thrusting (Shooter): counts as holding the thrust, as the trigger does with VTOL.
+        private static bool stickThrust;
         // A left trigger still held from working a tool with that hand flies only after it was let go.
         private static bool triggerFromTool;
 
@@ -82,6 +87,7 @@ namespace ShipbreakerVR
             thrust = Vector3.zero;
             turn = Quaternion.identity;
             braking = false;
+            stickThrust = false;
 
             if (Active == Scheme.Aus) { held = false; return; }
             // Controller poses are in tracking space, i.e. relative to the rig whose rotation is the playspace.
@@ -99,6 +105,15 @@ namespace ShipbreakerVR
                 turn = VrFlightComfort.AlignStep(playspace, Time.deltaTime) * turn;
             }
             if (tool) { held = false; triggerFromTool = true; return; }
+            if (Active == Scheme.Shooter)
+            {
+                held = false;
+                if (!left.TryGetAimRotation(out var pointing)) return;
+                var local = ShooterThrust(left.Stick, pointing);
+                stickThrust = local != Vector3.zero;
+                thrust = playspace * local;
+                return;
+            }
             if (!left.TryGetGripPose(out var grip, out var rotation)) { held = false; return; }
             // Thrust follows the wrist, not the controller: tilting the hand swings the controller around the wrist, and
             // measured at the controller that swing alone moved it past the deadzone, adding thrust nobody asked for.
@@ -117,6 +132,16 @@ namespace ShipbreakerVR
             var strength = Ramp(moved, MoveDeadzone, FullOffset);
             if (strength > 0f) thrust = playspace * offset.normalized * strength;
             RollFromReference(rotation, playspace);
+        }
+
+        // Shooter: the thrust in tracking space for the left stick and the left controller's aim, length 0..1: none inside
+        // the stick's deadzone, full at the stick's edge; stick up is the controller's forward, right its right.
+        internal static Vector3 ShooterThrust(Vector2 stick, Quaternion aim)
+        {
+            var strength = Ramp(stick.magnitude, StickDeadzone, 1f);
+            if (strength <= 0f) return Vector3.zero;
+            var way = aim * new Vector3(stick.x, 0f, stick.y);
+            return way.sqrMagnitude < 1e-8f ? Vector3.zero : way.normalized * strength;
         }
 
         // The offset left for thrust after what a tilt of that many degrees moves the hand by itself, in meters.
@@ -230,9 +255,10 @@ namespace ShipbreakerVR
             else deadzone.Value = Mathf.Max(full.Value - MinThrustRange, 0f);
         }
 
-        public static bool Flying => Active == Scheme.Vtol && GameSession.CurrentGameState == GameSession.GameState.Gameplay;
+        public static bool Flying => Active != Scheme.Aus && GameSession.CurrentGameState == GameSession.GameState.Gameplay;
 
-        public static bool Holding => held;
+        // Holding the thrust: the trigger with VTOL, the left stick pushed with Shooter.
+        public static bool Holding => held || stickThrust;
 
         // While the trigger is held: the hand's offset from the reference in tracking space (meters), and its rotation
         // relative to the reference, in the controller's own frame (z is the roll the controls read).
