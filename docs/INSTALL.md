@@ -1,5 +1,9 @@
 # Installing ShipbreakerVR (test build)
 
+> **Built with AI.** This mod was developed with the help of AI: most of its code and documentation were written by
+> an AI assistant (Claude by Anthropic), directed, reviewed and tested in the headset by a human. See the
+> [disclaimer](../DISCLAIMER.md).
+
 ## Requirements
 - Hardspace: Shipbreaker (Steam, version 1.3.x) on Windows
 - A PC VR headset with an active OpenXR runtime (Meta Quest via Virtual Desktop, Quest Link/Air Link, SteamVR, …)

@@ -1,13 +1,18 @@
 # ShipbreakerVR
 
-Play **Hardspace: Shipbreaker** in VR: look around your cutting bay with your own head, fly with one hand, take your
-tools off your suit and aim them with your hands, and use the menus with your motion controllers.
+Play **Hardspace: Shipbreaker** in VR: look around your cutting bay with your own head, fly with your controllers,
+take your tools off your suit and aim them with your hands, hold on and climb along the ship, and use the menus with
+your motion controllers.
 
 **[Download the latest version](https://github.com/marczahn/shipbreaker-vr/releases/latest)**
 
 > **Early test version (alpha).** The mod is playable, but expect rough edges and missing pieces. This is an
 > unofficial fan project, not made or supported by the game's developers. Use it at your own risk, see the
 > [disclaimer](DISCLAIMER.md).
+
+> **Built with AI.** This mod was developed with the help of AI: most of its code and documentation were written by
+> an AI assistant (Claude by Anthropic), directed, reviewed and tested in the headset by a human. See the
+> [disclaimer](DISCLAIMER.md#8-ai-assisted-development).
 
 - [What you get](#what-you-get)
 - [What you need](#what-you-need)
@@ -26,17 +31,24 @@ tools off your suit and aim them with your hands, and use the menus with your mo
 
 - **Real VR from the first second.** The game starts in your headset, intro and loading screens included. Look around
   freely; your body turns with your head.
-- **Fly with your hand.** Hold the trigger on the left controller and move your hand where you want to go. The right
-  stick turns you, Y brakes.
+- **Fly with your controllers.** Move your hand where you want to go, the other controller turns you. How flying
+  feels is up to you: the VR options offer several ways to turn and to slow down, from braking by yourself to keeping
+  every bit of speed as in real space.
 - **Tools in your hands.** Grab the grapple, cutter, demo charges and scanner from your hips, shoulder and helmet with
-  either hand, one in each hand if you like, and aim them where your hand points. A thin laser shows where, with a bright dot where the grapple's or cutter's laser hits. Hold on to
-  anything with an empty hand and climb along it. The grapple has a second mode for placing tethers. The suit's hands
-  follow your controllers, and the cutter's plain right side, never seen in the flat game, gets the detail of its left
-  side.
+  either hand, one in each hand if you like, and aim them where your hand points. A thin laser shows where, with a
+  bright dot where the grapple's or cutter's laser hits. The grapple has a second mode for placing tethers. The cutter's
+  plain right side, never seen in the flat game, gets the detail of its left side.
+- **Hands that touch things.** Hold on to anything with an empty hand and climb along it, pull light parts to you, and
+  with **Extended physics** push heavy ones. The suit's hands follow your controllers, close around tools and parts and
+  lie flat on walls. The controllers vibrate while you cut, while the grapple holds something and when you fire a
+  tether.
 - **Menus with the controllers.** No need to reach for the mouse: your controllers work like a gamepad in all menus.
 - **Your HUD inside the helmet.** The game's display sits in your visor, menus float in the room in front of you, and
   the helmet frame moves with your head.
-- **All VR settings in the game.** A new "VR" tab in the game's options, with a short explanation for every setting.
+- **Walk through the station** between shifts if you like, instead of hopping between its spots, and hang your own
+  pictures on its posters.
+- **All VR settings in the game.** A "VR options" entry in the main and pause menu, with a short explanation for every
+  setting.
 - **Mouse, keyboard and gamepad still work**, if you prefer them for some things.
 
 ## What you need
@@ -74,22 +86,44 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 
 ## Playing
 
-### Flying (left hand flies, right hand steers)
+The controls depend on your settings in the [VR options](#settings). The tables and pictures below show the **default
+settings**; where a setting changes what a button does, it says so. Each setting's explanation in the VR options always
+describes how it works right now, so look there if something here does not match.
+
+The settings that change the controls the most:
+
+- **Controller flying:** fly with the motion controllers (VTOL, the default) or switch it off and fly with mouse and
+  keyboard or a gamepad, as in the flat game.
+- **Thrust mode:** what happens when you stop giving thrust. *Simple*: you slow down to a stop by yourself.
+  *Standard*: the game's own automatic brake slows you down after a few seconds. *Realistic*: no automatic brake, you
+  keep your speed until you brake or thrust the other way.
+- **Turning** and **Turn around:** smooth turning or turning in steps, around your head or your body.
+- **Aim with the hand**, **Two tools at once** and **Hold on and climb:** switch them off and the tools and the grip
+  work closer to the flat game.
+- **Walk in the station:** walk freely between shifts instead of hopping between the station's spots.
+
+### Flying (with Controller flying on)
 
 ![Flying controls](docs/images/flying.svg)
+
+The left hand flies, the right hand steers. While the left hand holds a tool or holds on to something, it works that
+instead, and flying pauses until you let go.
 
 | I want to … | How |
 |---|---|
 | Fly in a direction | Hold the left trigger and move the controller that way. The farther you move it, the faster you go. |
 | Roll | Keep the left trigger held and tilt the controller sideways. |
-| Turn left or right | Push the right stick left or right. |
+| Turn left or right | Push the right stick left or right, smoothly or in steps (setting **Turning**). |
 | Look up or down | Push the right stick up or down. |
-| Brake | Press Y. |
+| Slow down | Depends on **Thrust mode**: in *Simple* you stop by yourself when you let go of the trigger, in *Standard* the game's automatic brake slows you after a few seconds, in *Realistic* nothing slows you. With a free left hand you can also use the game's brake with a button on the left controller; the picture above and the explanation of **Controller flying** in the VR options name it. |
 | Open the pause menu | Press the right stick (also in the station). |
 | Put the view back in front of me | Press the left stick (or F4 on the keyboard). |
 | Get upright again | Hold the left stick in for half a second. You turn back to level, keeping your heading. |
-| Stop by letting go | Set **Thrust mode** to Simple in the VR options: without the left trigger you brake to a stop by yourself. |
+| Find the point where thrust starts | Watch the small **flight globe** in the visor while you hold the trigger: its center is where you pressed it, its surface is full thrust. |
 | Fly while the grapple holds something big | Fly and brake as usual. If you fly farther away than the grapple reaches, the rope snaps. |
+
+With **Controller flying** off, you fly with mouse and keyboard or a gamepad as in the flat game; the hands, tools and
+menus still work with the controllers.
 
 ### Your hands
 
@@ -107,6 +141,7 @@ More details and a list of everything the ZIP contains: [installation guide](doc
 | Push heavy parts | Switch on **Extended physics** in the VR options. Hold on to something fixed with one hand and move a heavy part with the other, or hold two heavy parts and push them apart. The heavier a part, the slower it gets going. |
 | Work an airlock console or a switch | Look at it and press A or X. The grip only holds on, also there: near a switch your hand closes on it as a fist. |
 | Use a tool with the left hand | Take it with the left hand. X and Y then do what A and B do, and flying pauses until you let go. |
+| Feel what I do | The controllers vibrate: the cutter's hand while it cuts, the grapple's hand while it holds a part (stronger the closer the part comes to slipping away), and a short buzz for each tether end. |
 
 ### Tool buttons
 
@@ -168,30 +203,43 @@ back, the triggers switch tabs.
 
 ![Free walking in the station](docs/images/station.svg)
 
-**Walking in the station** is an option in the VR options, off by default, and replaces the spots. Sitting on the bed, A stands up. The
-left stick walks, the right stick turns in steps. Near a screen or the exit, A uses it and B leaves it; X opens the exit from
-anywhere. Look at a poster from close by and the triggers change its picture. Walking with a stick can make you feel sick.
+By default you move between the station's spots with a stick, as in the flat game, and use what you look at.
 
-**Own posters:** put PNG or JPG files into `BepInExShipbreakerVR-Poster` and they join the pictures for the station's posters.
+**Walk in the station** is an option in the VR options, off by default, and replaces the spots. Sitting on the bed, A
+stands up. The left stick walks, the right stick turns in steps. Near a screen or the exit, A uses it and B leaves it;
+X opens the exit from anywhere. Look at a poster from close by and the triggers change its picture. Walking with a
+stick can make you feel sick.
+
+**Own posters:** put PNG or JPG files into `BepInEx\ShipbreakerVR-Poster` in the game folder (the folder appears after
+your first visit to the station) and they join the pictures for the station's posters.
 
 **Keyboard:** F3 turns VR on and off, F4 puts the view back in front of you. Both keys can be changed in the config file (section `[Tasten]`).
 
 ## Settings
 
-Choose **VR options** in the main menu or the pause menu, right above **Options**. The settings are in three tabs,
-**Comfort**, **Gameplay** and **Graphics**, and every row explains itself when you select it. The ones you are most
-likely to need:
+Choose **VR options** in the main menu or the pause menu, right above **Options**. The settings are in three groups,
+**Comfort**, **Gameplay** and **Graphics**, and every row explains itself when you select it. Changes apply right away.
+The ones you are most likely to need:
 
 - **Center view:** puts the view and the menus in front of you again.
 - **Render resolution:** how sharp the picture is. Lower it if the game stutters.
 - **Alternate eyes:** draws only one eye per picture, the left and the right in turn, which makes the bay run much
   smoother on most processors. Switch it off (or press F11) if fast movements flicker too much for you.
 - **Station resolution:** the same for the station between shifts, which is harder on the graphics card.
-- **Turning:** smooth turning, or turning in steps, which is easier on the stomach.
+- **Turning:** smooth turning, or turning in steps of 30, 45 or 90 degrees, which is easier on the stomach.
+- **Thrust mode:** *Simple*, *Standard* or *Realistic*, see [Playing](#playing). *Simple* is the easiest to start
+  with if you get lost in free flight.
 - **Turn around:** whether the right stick turns you around your head's up (where you look) or your body's, so that
   looking up or down does not tip the turn.
 - **Head height** and **Head sideways:** move your view if you seem to sit too low or off to one side in the suit.
+- **Hand tilt:** tips the hands and tools forward or back against the controllers, if aiming feels bent.
+- **Helmet:** the helmet frame follows your head, is hidden, or stays as in the game.
+- **Visor size**, **Visor distance** and **Visor height:** where and how large the display in your visor appears.
 - **Controller flying:** switch it off if you fly with mouse and keyboard or a gamepad.
+- **Thrust deadzone** and **Full thrust at:** how far you move the left controller before thrust starts and for full
+  thrust. Raise the deadzone if you drift without meaning to.
+- **Flight globe:** the small globe in the visor that shows your left hand while flying; always, only while flying,
+  or off.
 - **Aim with the hand:** switch it off to aim your tools at the center of your view again, as in the flat game.
 - **Two tools at once:** switch it off if you want a tool from one hand to replace the one in the other hand.
 - **Hold on and climb:** switch it off if the grip of an empty hand should do nothing.
@@ -200,6 +248,9 @@ likely to need:
 - **Upright body:** your suit's body stays upright and faces your hands while you look around, and leans with you, so
   your hands reach the controllers the same way wherever you look. Switch it off to let the body turn with every look,
   as before.
+- **Walk in the station:** walk freely between shifts instead of hopping between spots (see
+  [Free walking in the station](#free-walking-in-the-station)).
+- **Performance display:** shows the frame rate in the visor, to see what a setting changes.
 - **Fit tools in the hand:** if the cutter or the grapple does not sit right in your hand, switch this on, grab the
   tool with your other hand and move it into place. Letting go stores it. Switch it off again when you are done.
 
@@ -222,7 +273,12 @@ The graphics card does not keep up there. Lower **Station resolution** in the VR
 Use **Head height** and **Head sideways** in the VR options.
 
 ### The menu or the view is behind me or off to the side
-Press **B and Y** together, or **F4**. This puts everything in front of you again.
+Press the **left stick**, press **F4**, or choose **Center view** in the VR options. This puts everything in front of
+you again.
+
+### I keep drifting or cannot stop
+Set **Thrust mode** to *Simple* in the VR options: you then slow down to a stop by yourself when you let go of thrust.
+If you drift without touching anything, raise **Thrust deadzone**.
 
 ### The game starts, but not in the headset
 Make sure the headset is connected and your VR app (Virtual Desktop, the Meta app or SteamVR) is running before you
@@ -241,8 +297,8 @@ The mod does not touch your save games. It is still a test version, though, so a
 Yes, press F3 in the game.
 
 **Can I play with mouse and keyboard or a gamepad?**
-Yes. They keep working while you look around with the headset. Switch off **Controller flying** in the VR options if you
-don't use the motion controllers.
+Yes. They keep working while you look around with the headset. Switch off **Controller flying** in the VR options if
+you don't fly with the motion controllers.
 
 **Is this the same as the ShipbreakerVr mod by Raicuparta?**
 No. Raicuparta's mod was an earlier, simpler VR mode for the same game without motion controls; this mod builds on
@@ -254,8 +310,15 @@ That has not been tested.
 ## What does not work yet
 
 - There is no laser pointer for the menus yet; you move through them with the sticks.
+- Leaning your real head into a wall goes through it, and so does flying in head first.
+- Holding something heavy with the game's own grab stops thrust, as in the flat game.
+- Walking in the station can make you feel sick, and there is no teleport yet. While walking, your head can lean
+  through walls and furniture.
 - During loading screens the view can go dark for a moment.
 - Above 1.0, the render resolution can crash the game after loading (see above).
+
+The [release notes](https://github.com/marczahn/shipbreaker-vr/releases) of each version list the known issues in
+detail.
 
 ## Getting help and reporting bugs
 
