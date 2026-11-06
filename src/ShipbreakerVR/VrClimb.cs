@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using BBI.Unity.Game;
 using HarmonyLib;
 using UnityEngine;
@@ -302,7 +301,7 @@ namespace ShipbreakerVR
             hand.Body = body;
             hand.Movable = body != null && !body.isKinematic && body.gameObject.layer != StaticLayer && body.mass > 0f
                 && !TooHeavy(body.mass);
-            if (hand.Movable) Apart(body, true);
+            if (hand.Movable) Separate(body);
             hand.Anchor = body != null ? body.transform : best.transform;
             hand.Point = hand.Anchor.InverseTransformPoint(at);
             hand.Surface = hand.Anchor.InverseTransformPoint(surface);
@@ -458,9 +457,26 @@ namespace ShipbreakerVR
             hand.InterpolationBefore = body.interpolation;
             body.maxAngularVelocity = FirmSpin;
             body.interpolation = RigidbodyInterpolation.Interpolate;
-            clearing.RemoveAll(each => each.Body == body);
-            Collide(body.GetComponentsInChildren<Collider>(true), false);
+            Separate(body);
         }
+
+        // While a hand holds a part that moves, the body and that part do not collide; let go, they collide again once
+        // apart (ClearParts). A firmly held light part would knock into the body each step. A heavier one, stopped by a
+        // wall, was run into by the body drifting on, and the physics engine threw the two apart: some 900 kg m/s on the
+        // body in a second from that contact while the pulls gave nothing, a strong push off the wall through a 56 kg
+        // crate (Raik). The arm keeps the part off the body instead.
+        private static int separateLogs;
+
+        private static void Separate(Rigidbody body)
+        {
+            var known = clearing.RemoveAll(each => each.Body == body) > 0;
+            Collide(body.GetComponentsInChildren<Collider>(true), false);
+            if (!known && separateLogs++ < 20) Plugin.Log.LogInfo($"Climbing: body and '{body.name}' {body.mass:0} kg do not collide while held");
+        }
+
+        // Let go of a part that moves: it collides with the body again once apart or after FirmClearTime.
+        private static void Release(Rigidbody body) =>
+            clearing.Add(new Clearing { Body = body, Parts = body.GetComponentsInChildren<Collider>(true), Until = Time.time + FirmClearTime });
 
         private static void Unfirm(Hand hand)
         {
@@ -469,7 +485,7 @@ namespace ShipbreakerVR
             if (body == null) return;
             body.maxAngularVelocity = hand.SpinBefore;
             body.interpolation = hand.InterpolationBefore;
-            clearing.Add(new Clearing { Body = body, Parts = body.GetComponentsInChildren<Collider>(true), Until = Time.time + FirmClearTime });
+            Release(body);
         }
 
         private static void Collide(Collider[] parts, bool collide)
@@ -851,6 +867,7 @@ namespace ShipbreakerVR
             // Off a light part that moves the body keeps the speed the pulls gave it, as the part does: set from the
             // hands, the two did not add up. Asked while the hand still holds, as Pushes needs.
             var light = hand.Movable && hand.Body != null && !Pushes(hand);
+            var movable = hand.Movable;
             VrHand.StopHolding(hand.Vr);
             var firm = hand.Firm;
             hand.Follower = false;
@@ -859,7 +876,8 @@ namespace ShipbreakerVR
             hand.Anchor = null;
             hand.Collider = null;
             hand.Body = null;
-            if (body != null && !Held(body)) Apart(body, false);
+            // A firmly held part is released by Unfirm already.
+            if (movable && !firm && body != null && !Held(body)) Release(body);
             foreach (var other in Hands)
                 if (other != hand && other.Holding && other.Movable && other.Body == body && body != null && body.mass <= FirmMass
                     && other.Input.TryGetAimRotation(out var aim)) Firm(other, aim);
@@ -919,30 +937,6 @@ namespace ShipbreakerVR
         {
             foreach (var hand in Hands)
                 if (hand.Holding) LetGo(hand, false, "climbing paused");
-            foreach (var part in new List<Rigidbody>(apart.Keys)) Apart(part, false);
-        }
-
-        // While a hand holds a part that moves, the body and that part do not collide. Stopped by a wall, a held part of
-        // about the body's weight (a 56 kg crate, the 48 kg hydroponics cabinet) was run into by the body drifting on,
-        // and the physics engine threw the two apart: the body got some 900 kg m/s in a second from that contact, while
-        // the pulls themselves gave nothing (Raik: a strong push off the wall through the crate). Now the arm keeps the
-        // part off the body and the body stops on it softly. Light parts are held firmly and never had it.
-        private static readonly Dictionary<Rigidbody, Collider[]> apart = new Dictionary<Rigidbody, Collider[]>();
-        private static int apartLogs;
-
-        private static void Apart(Rigidbody part, bool ignore)
-        {
-            if (part == null || player == null) return;
-            if (ignore == apart.ContainsKey(part)) return;
-            var own = player.GetComponentsInChildren<Collider>(true);
-            var colliders = ignore ? part.GetComponentsInChildren<Collider>(true) : apart[part];
-            foreach (var mine in own)
-                foreach (var theirs in colliders)
-                    if (mine != null && theirs != null && !mine.isTrigger && !theirs.isTrigger) Physics.IgnoreCollision(mine, theirs, ignore);
-            if (ignore) apart[part] = colliders;
-            else apart.Remove(part);
-            if (apartLogs++ < 20)
-                Plugin.Log.LogInfo($"Climbing: body and '{part.name}' {part.mass:0} kg {(ignore ? $"no longer collide while held ({colliders.Length} collider(s))" : "collide again")}");
         }
     }
 
