@@ -45,6 +45,16 @@ namespace ShipbreakerVR
         private const float TearOff = 0.5f;
         // How fast the hold may pull the body, and how fast a push off may fly, in m/s at world scale 1.
         private const float MaxPull = 10f;
+        // A part that moves is pulled more softly than a fixed hold: its gap to the hand closes over PartPullTime, not
+        // within one physics step, and each step's correction goes PartRelax of the way. Closed in one step, each
+        // centimeter of a trembling hand became half a meter per second between body and part, the two hands on one
+        // crate worked against each other through its turning, and a 56 kg crate swung and threw the body around: some
+        // 1800 kg m/s went back and forth between them in a second for 90 of real change (Raik). The suit also calms a
+        // held part's turning (PartSpinCalm, seconds), so a turning crate does not drag the body over it: the suit's
+        // control wins over the momentum, which the pulls still share as before.
+        private const float PartPullTime = 0.15f;
+        private const float PartRelax = 0.5f;
+        private const float PartSpinCalm = 0.3f;
         private const float MaxPushOff = 5f;
         // The speed a push off keeps is the hands' speed, smoothed over about this time in seconds.
         private const float PushOffSmoothing = 0.08f;
@@ -377,18 +387,20 @@ namespace ShipbreakerVR
                 var error = hold - PullPoint(hand);
                 var holdVelocityHere = hand.Body != null ? hand.Body.GetPointVelocity(hold) : Vector3.zero;
                 holdsVelocity += holdVelocityHere;
-                // The player's velocity relative to the hold that closes the gap within this step.
-                var wanted = Vector3.ClampMagnitude(error / dt, MaxPull * VrCamera.WorldScale);
+                // The player's velocity relative to the hold that closes the gap within this step, or softly on a part that
+                // moves.
+                var wanted = Vector3.ClampMagnitude(error / (hand.Movable ? Mathf.Max(dt, PartPullTime) : dt), MaxPull * VrCamera.WorldScale);
                 var needed = wanted - (velocity - holdVelocityHere);
                 if (needed.sqrMagnitude < 1e-10f) continue;
                 var inverse = pulling / BodyMass;
                 if (hand.Movable) inverse += Sharing(hand) * InverseMass(hand.Body, hold, needed.normalized);
-                var impulse = needed / inverse;
+                var impulse = needed / inverse * (hand.Movable ? PartRelax : 1f);
                 change += impulse / BodyMass;
                 if (hand.Movable) hand.Body.AddForceAtPosition(-impulse, hold, ForceMode.Impulse);
             }
             holdVelocity = holdsVelocity / pulling;
             player.velocity = KeepClear(velocity + change, dt);
+            CalmSpin(dt);
             HoldOff(dt);
             MoveFirm(dt);
             pushOff = Vector3.Lerp(pushOff, player.velocity - holdVelocity, 1f - Mathf.Exp(-dt / PushOffSmoothing));
@@ -436,6 +448,19 @@ namespace ShipbreakerVR
                 velocity = limited;
             }
             return velocity;
+        }
+
+        // The turning of each held part that moves dies down over PartSpinCalm: the suit holds it steady.
+        private static void CalmSpin(float dt)
+        {
+            var calm = Mathf.Exp(-dt / PartSpinCalm);
+            foreach (var hand in Hands)
+            {
+                var part = hand.Body;
+                if (!hand.Holding || !hand.Movable || hand.Firm || hand.Follower || part == null || Pushes(hand)) continue;
+                if (hand == RightHand && LeftHand.Holding && LeftHand.Body == part) continue;
+                part.angularVelocity *= calm;
+            }
         }
 
         // A held part that moves does not collide with the body (Separate), so pulled in, it would go into it: once the two
