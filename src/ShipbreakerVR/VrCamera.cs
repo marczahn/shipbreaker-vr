@@ -119,9 +119,10 @@ namespace ShipbreakerVR
                 else gameCamera.enabled = VrCameraSilencer.GameWantsEnabled(gameCamera);
             }
             gameCamera = camera;
-            var wasInHab = FollowsHab;
             FollowsHab = VrHab.IsHabCamera(camera);
-            if (wasInHab && !FollowsHab) VrBody.LevelNext();
+            // Every shift starts level, also one loaded straight from the main menu, not only one reached from the Hab
+            // (Raik: a shift started looking down at a slant). Applied once the shift's gameplay runs (VrBody).
+            if (!FollowsHab) VrBody.LevelNext();
             if (camera == null)
             {
                 HideWorld();
