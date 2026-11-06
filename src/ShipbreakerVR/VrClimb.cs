@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using BBI.Unity.Game;
 using HarmonyLib;
 using UnityEngine;
@@ -301,6 +302,7 @@ namespace ShipbreakerVR
             hand.Body = body;
             hand.Movable = body != null && !body.isKinematic && body.gameObject.layer != StaticLayer && body.mass > 0f
                 && !TooHeavy(body.mass);
+            if (hand.Movable) Apart(body, true);
             hand.Anchor = body != null ? body.transform : best.transform;
             hand.Point = hand.Anchor.InverseTransformPoint(at);
             hand.Surface = hand.Anchor.InverseTransformPoint(surface);
@@ -847,6 +849,7 @@ namespace ShipbreakerVR
             hand.Anchor = null;
             hand.Collider = null;
             hand.Body = null;
+            if (body != null && !Held(body)) Apart(body, false);
             foreach (var other in Hands)
                 if (other != hand && other.Holding && other.Movable && other.Body == body && body != null && body.mass <= FirmMass
                     && other.Input.TryGetAimRotation(out var aim)) Firm(other, aim);
@@ -906,6 +909,30 @@ namespace ShipbreakerVR
         {
             foreach (var hand in Hands)
                 if (hand.Holding) LetGo(hand, false, "climbing paused");
+            foreach (var part in new List<Rigidbody>(apart.Keys)) Apart(part, false);
+        }
+
+        // While a hand holds a part that moves, the body and that part do not collide. Stopped by a wall, a held part of
+        // about the body's weight (a 56 kg crate, the 48 kg hydroponics cabinet) was run into by the body drifting on,
+        // and the physics engine threw the two apart: the body got some 900 kg m/s in a second from that contact, while
+        // the pulls themselves gave nothing (Raik: a strong push off the wall through the crate). Now the arm keeps the
+        // part off the body and the body stops on it softly. Light parts are held firmly and never had it.
+        private static readonly Dictionary<Rigidbody, Collider[]> apart = new Dictionary<Rigidbody, Collider[]>();
+        private static int apartLogs;
+
+        private static void Apart(Rigidbody part, bool ignore)
+        {
+            if (part == null || player == null) return;
+            if (ignore == apart.ContainsKey(part)) return;
+            var own = player.GetComponentsInChildren<Collider>(true);
+            var colliders = ignore ? part.GetComponentsInChildren<Collider>(true) : apart[part];
+            foreach (var mine in own)
+                foreach (var theirs in colliders)
+                    if (mine != null && theirs != null && !mine.isTrigger && !theirs.isTrigger) Physics.IgnoreCollision(mine, theirs, ignore);
+            if (ignore) apart[part] = colliders;
+            else apart.Remove(part);
+            if (apartLogs++ < 20)
+                Plugin.Log.LogInfo($"Climbing: body and '{part.name}' {part.mass:0} kg {(ignore ? $"no longer collide while held ({colliders.Length} collider(s))" : "collide again")}");
         }
     }
 
