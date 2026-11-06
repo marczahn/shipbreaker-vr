@@ -8,6 +8,11 @@ namespace ShipbreakerVR
     internal static class VrUtil
     {
         // A transform's path from the scene root, "root/.../name", for the log.
+        // The point of a collider nearest to point (point itself inside it). Collider.ClosestPoint does not take a mesh
+        // that is not convex, as most of a ship's are (Unity warns on every call): its bounds' nearest point then.
+        public static Vector3 ClosestPoint(Collider collider, Vector3 point) =>
+            collider is MeshCollider mesh && !mesh.convex ? collider.bounds.ClosestPoint(point) : collider.ClosestPoint(point);
+
         public static string Path(Transform t) => t.parent == null ? t.name : Path(t.parent) + "/" + t.name;
 
         // A transform and its parents, "name < parent < ...", at most depth of them: shorter than Path where the

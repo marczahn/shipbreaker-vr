@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace ShipbreakerVR
 {
-    // Steuerung/Werkzeuggewicht: cutter and grapple weigh something in the hand, as Raik asked (first 12 kg, now 5 kg by default). The tool hangs
+    // Steuerung/Werkzeuggewicht: cutter and grapple weigh something in the hand, as Raik asked (5 kg by default, with extended tool physics). The tool hangs
     // on the controller by a damped spring, for its position and its turn: moved fast it lags behind and settles, a heavier
     // tool more. The hand stays on the tool's grip and goes with it (VrHands.Pose, VrAim), so it never leaves the tool:
     // tool and hand come after the controller together. In tracking space, so flying does not swing the tool. 0 kg is off.

@@ -182,7 +182,7 @@ namespace ShipbreakerVR
         }
 
         // How far the tool and the hand go back with the tool's own turn this frame, in tracking space; zero when free or
-        // without extended physics. Once a frame, after Apply (VrToolWeight.Grip runs it first).
+        // without extended tool physics. Once a frame, after Apply (VrToolWeight.Grip runs it first).
         public static Vector3 Back(VrInput.Hand hand)
         {
             var state = hand.IsLeft ? Left : Right;
@@ -269,7 +269,7 @@ namespace ShipbreakerVR
             return last;
         }
 
-        // From a little ahead of the grip to the muzzle along the tool.
+        // From the grip to the muzzle along the tool.
         private static float Length(Vector3 pivot, Quaternion rotation)
         {
             if (!VrToolModels.Muzzle(pivot, rotation, out var muzzle, out _)) return Fallback * VrCamera.WorldScale;
@@ -333,7 +333,7 @@ namespace ShipbreakerVR
         {
             if (contact.Thing == null) return Vector3.zero;
             if (contact.Separated) return contact.Out;
-            var away = contact.At - contact.Thing.ClosestPoint(contact.At);
+            var away = contact.At - VrUtil.ClosestPoint(contact.Thing, contact.At);
             // Inside a non-convex collider ClosestPoint gives the point itself: away from the thing's middle instead.
             if (away.sqrMagnitude < 1e-8f) away = contact.At - contact.Thing.bounds.center;
             return away.sqrMagnitude < 1e-10f ? Vector3.zero : away.normalized;

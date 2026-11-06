@@ -65,10 +65,10 @@ namespace ShipbreakerVR
         // A part let go collides with the body again once its bounds are this far from the body, or after that many seconds.
         private const float FirmClear = 0.45f;
         private const float FirmClearTime = 10f;
-        // The body's mass in the pulls and pushes with extended physics (Steuerung/SchwereTeileSchieben), in kg: the game's
+        // The body's mass in the pulls and pushes with extended world physics (Steuerung/SchwereTeileSchieben), in kg: the game's
         // player weighs 50 kg, light for a person in a suit; Raik wants 100 kg (modern materials). Only in these impulses:
         // the rigidbody keeps the game's mass, so thrust, braking and the speed of a push off stay as they were. Without
-        // extended physics the game's mass, as before.
+        // extended world physics the game's mass, as before.
         private const float ExtendedBodyMass = 100f;
         private static float BodyMass => VrSettings.BracedPush.Value ? ExtendedBodyMass : player.mass;
         // LynxUnityEngineExtensions.InStaticLayer: the station and other things that never move.
@@ -211,7 +211,7 @@ namespace ShipbreakerVR
                 motion = player != null ? player.GetComponent<PlayerMotion>() : null;
                 rigPlaced = false;
                 if (player != null && logs++ < 80)
-                    Plugin.Log.LogInfo($"Climbing: player body '{player.name}', {player.mass:0.#} kg ({ExtendedBodyMass:0} kg in the pulls and pushes with extended physics), interpolation {player.interpolation}");
+                    Plugin.Log.LogInfo($"Climbing: player body '{player.name}', {player.mass:0.#} kg ({ExtendedBodyMass:0} kg in the pulls and pushes with extended world physics), interpolation {player.interpolation}");
                 if (player != null) LogColliders();
             }
             return player != null && rigPlaced;
@@ -281,7 +281,7 @@ namespace ShipbreakerVR
                 {
                     var collider = Found[i];
                     if (!collider.isTrigger || Own(collider) || collider.GetComponentInParent<InteractableObject>() == null) continue;
-                    var distance = (collider.ClosestPoint(at) - at).sqrMagnitude;
+                    var distance = (VrUtil.ClosestPoint(collider, at) - at).sqrMagnitude;
                     if (distance >= bestDistance) continue;
                     best = collider;
                     bestDistance = distance;
@@ -784,7 +784,7 @@ namespace ShipbreakerVR
                 if (control == null || control.HandTarget == null || !control.isActiveAndEnabled) continue;
                 // Things that float loose, as cassettes to collect, are held as parts.
                 if (Loose(control)) continue;
-                var nearest = NearestOn(Found[i], at);
+                var nearest = VrUtil.ClosestPoint(Found[i], at);
                 var distance = (nearest - at).sqrMagnitude;
                 if (distance >= bestDistance) continue;
                 best = control;
@@ -793,14 +793,6 @@ namespace ShipbreakerVR
                 point = nearest;
             }
             return best;
-        }
-
-        // The point of a control's collider nearest to the hand (the hand itself inside it); its bounds' for a mesh that
-        // ClosestPoint cannot take (not convex).
-        private static Vector3 NearestOn(Collider collider, Vector3 at)
-        {
-            if (collider is MeshCollider mesh && !mesh.convex) return collider.bounds.ClosestPoint(at);
-            return collider.ClosestPoint(at);
         }
 
         // Where that controller's hand holds on, if it does, for the game's hand (VrHands.Pose).
