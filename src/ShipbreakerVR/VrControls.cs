@@ -16,7 +16,9 @@ namespace ShipbreakerVR
     // the tool (VrToolInput), so there is no flying and no braking then; the right stick still turns.
     // Shooter, the other scheme (Steuerung/Controllersteuerung), as in VR shooters (Raik): the left stick thrusts forward,
     // back, left and right, as strongly as it is pushed, along the left controller: forward is where it points, so tilted
-    // up or down it thrusts up or down. No roll; turning, pitching, braking and the rest as with VTOL.
+    // up or down it thrusts up or down. With the left trigger held, the stick's left and right roll instead of moving
+    // sideways (Raik: the trigger is free there); forward and back still thrust. Turning, pitching, braking and the rest
+    // as with VTOL.
     // Thrust and brake go through the game's own actions (ThrustController reads them via LynxControls), so fuel, forces and
     // HUD stay the game's. Rotation is applied in VrBody, to the playspace.
     internal static class VrControls
@@ -108,8 +110,17 @@ namespace ShipbreakerVR
             if (Active == Scheme.Shooter)
             {
                 held = false;
+                if (!left.Trigger.Down) triggerFromTool = false;
+                var rolling = left.Trigger.Down && !triggerFromTool;
+                var stick = left.Stick;
+                if (rolling)
+                {
+                    var roll = ShooterRoll(stick.x) * Time.deltaTime;
+                    if (roll != 0f) turn = Quaternion.AngleAxis(roll, playspace * VrCamera.Instance.HeadRotation * Vector3.forward) * turn;
+                    stick.x = 0f;
+                }
                 if (!left.TryGetAimRotation(out var pointing)) return;
-                var local = ShooterThrust(left.Stick, pointing);
+                var local = ShooterThrust(stick, pointing);
                 stickThrust = local != Vector3.zero;
                 thrust = playspace * local;
                 return;
@@ -143,6 +154,10 @@ namespace ShipbreakerVR
             var way = aim * new Vector3(stick.x, 0f, stick.y);
             return way.sqrMagnitude < 1e-8f ? Vector3.zero : way.normalized * strength;
         }
+
+        // Shooter with the left trigger held: degrees per second to roll for the stick's left and right, as fast as VTOL's
+        // roll at full; stick left rolls left, as a hand tilted left does with VTOL.
+        internal static float ShooterRoll(float x) => -Ramp(Mathf.Abs(x), StickDeadzone, 1f) * Mathf.Sign(x) * RollSpeed;
 
         // The offset left for thrust after what a tilt of that many degrees moves the hand by itself, in meters.
         internal static float ThrustOffset(float offset, float tilt) => Mathf.Max(offset - Mathf.Min(tilt * TiltShift, TiltShiftMax), 0f);

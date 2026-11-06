@@ -102,6 +102,15 @@ namespace ShipbreakerVR.Tests
         }
 
         [Fact]
+        public void ShooterRollGoesTheSticksWay()
+        {
+            Assert.Equal(0f, VrControls.ShooterRoll(0.1f), 3);
+            Assert.True(VrControls.ShooterRoll(-1f) > 0f);
+            Assert.True(VrControls.ShooterRoll(1f) < 0f);
+            Assert.Equal(100f, VrControls.ShooterRoll(-1f), 2);
+        }
+
+        [Fact]
         public void ShooterThrustGrowsWithTheStick()
         {
             var half = VrControls.ShooterThrust(new UnityEngine.Vector2(0f, 0.575f), UnityEngine.Quaternion.identity);

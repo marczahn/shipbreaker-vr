@@ -581,7 +581,7 @@ Rotation from the controllers is applied in `VrBody`, to the playspace.
 Config `Steuerung/Controllersteuerung` (Aus/Vtol/Shooter; the earlier "point and twist" Pavlov scheme was removed for now).
 Shooter: the left stick thrusts along the left controller's aim pose, stick up its forward and right its right, from the
 stick deadzone 0.15 to full at the edge (`VrControls.ShooterThrust`); tilting the controller up or down thrusts up or down.
-No roll; the right stick, Y and the left stick's click work as with VTOL, and the stick counts as holding the thrust
+With the left trigger held, the stick's left and right roll at up to 100°/s (`ShooterRoll`) and only forward and back thrust; the right stick, Y and the left stick's click work as with VTOL, and the stick counts as holding the thrust
 (`Holding`, for the simple thrust mode). The left stick is free in gameplay (the menus read it only outside it). VTOL:
 - Hold the left trigger; moving the controller away from where it was when pressed thrusts that way (deadzone
   `Steuerung/SchubTotzone`, 2 cm, full at `Steuerung/SchubVoll`, 10 cm; full stays at least 5 cm beyond the deadzone,
