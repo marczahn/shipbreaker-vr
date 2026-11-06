@@ -97,6 +97,8 @@ namespace ShipbreakerVR
             // The rigidbody of what is held, if it has one; Movable when the hand may move it.
             public Rigidbody Body;
             public bool Movable;
+            // Above what the game lets one grab (TooHeavy): moved by the hands only with extended world physics.
+            public bool Heavy;
             // The hold: a point fixed on Anchor (the body, or the collider's transform without one).
             public Transform Anchor;
             public Vector3 Point;
@@ -300,8 +302,13 @@ namespace ShipbreakerVR
             var body = best.attachedRigidbody;
             hand.Collider = best;
             hand.Body = body;
-            hand.Movable = body != null && !body.isKinematic && body.gameObject.layer != StaticLayer && body.mass > 0f
-                && !TooHeavy(body.mass);
+            // With extended world physics a part above the game's grab range moves too, up to BracedPush.MaxMass: held
+            // without a brace (both hands on a 100 kg fuel barrel), the arms' push or throw goes to it and the body takes
+            // the same back, as two bodies pushing apart (Raik). Before it held like a wall: the body flew off and the
+            // barrel stayed. Braced on something fixed, the other hand still pushes it with a limited force (Pushes).
+            var moving = body != null && !body.isKinematic && body.gameObject.layer != StaticLayer && body.mass > 0f;
+            hand.Heavy = moving && TooHeavy(body.mass);
+            hand.Movable = moving && (!hand.Heavy || (VrSettings.BracedPush.Value && body.mass <= BracedPush.MaxMass));
             if (hand.Movable) Separate(body);
             hand.Anchor = body != null ? body.transform : best.transform;
             hand.Point = hand.Anchor.InverseTransformPoint(at);
@@ -326,7 +333,7 @@ namespace ShipbreakerVR
             if (logs++ < 80)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds '{best.name}' (layer {best.gameObject.layer}, "
                     + (body == null ? "no rigidbody" : $"rigidbody '{body.name}' {body.mass:0.#} kg{(body.isKinematic ? " kinematic" : "")}")
-                    + $", {(hand.Movable ? "moves" : "fixed")}), {Mathf.Sqrt(bestDistance):0.00} m from the surface");
+                    + $", {(hand.Movable ? hand.Heavy ? "moves, above the grab range" : "moves" : "fixed")}), {Mathf.Sqrt(bestDistance):0.00} m from the surface");
         }
 
         // Each holding hand: the impulse between player and hold that brings the hand to its hold in this step. Both hands
@@ -437,6 +444,8 @@ namespace ShipbreakerVR
         // momentum (Raik: drawing a fuel barrel in, the pull should just stop going closer). KeepClear leaves such parts
         // out, as stopping the body alone gave a barrel rowed with both arms more speed each stroke.
         private static readonly Collider[] Touching = new Collider[16];
+        private const float Bounce = 0.15f;
+        private const float BounceFrom = 0.4f;
         private static int holdOffLogs;
 
         private static void HoldOff(float dt)
@@ -473,7 +482,10 @@ namespace ShipbreakerVR
                 var closing = -Vector3.Dot(player.velocity - part.GetPointVelocity(point), normal);
                 var allowed = Mathf.Max(room, 0f) / dt;
                 if (closing <= allowed) continue;
-                var impulse = (closing - allowed) / (1f / BodyMass + InverseMass(part, point, normal));
+                // Met fast (a part stopped by a wall, the body drifting on), the two part again a little (Bounce of the
+                // closing speed): a small knock back, as Raik asked, not the hard throw the physics engine gave.
+                var bounce = closing > BounceFrom * VrCamera.WorldScale && room <= 0f ? Bounce : 0f;
+                var impulse = (closing - allowed + bounce * closing) / (1f / BodyMass + InverseMass(part, point, normal));
                 player.velocity += normal * (impulse / BodyMass);
                 part.AddForceAtPosition(-normal * impulse, point, ForceMode.Impulse);
                 if (holdOffLogs++ < 20)
@@ -776,7 +788,7 @@ namespace ShipbreakerVR
             var other = Other(hand);
             if (!other.Holding || other.Body == hand.Body) return false;
             // Two parts the game lets one grab and move keep sharing the pull as before (Pull).
-            return Fixed(other) || (Pushable(other) && !hand.Movable && !other.Movable);
+            return Fixed(other) || (Pushable(other) && (!hand.Movable || hand.Heavy) && (!other.Movable || other.Heavy));
         }
 
         private static bool Pushable(Hand hand)
