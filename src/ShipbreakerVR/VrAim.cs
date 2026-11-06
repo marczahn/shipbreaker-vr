@@ -209,7 +209,7 @@ namespace ShipbreakerVR
         {
             if (!TryGetPose(out position, out rotation)) return false;
             if (Tool.TryGetPosition(out var local)
-                && VrToolModels.Muzzle(VrCamera.Instance.transform.parent.TransformPoint(local), rotation, out var muzzle, out var barrel))
+                && VrToolModels.Muzzle(VrCamera.Instance.transform.parent.TransformPoint(Weighted(Tool, local)), rotation, out var muzzle, out var barrel))
             {
                 position = muzzle;
                 rotation = barrel;
@@ -224,7 +224,7 @@ namespace ShipbreakerVR
             grip = Vector3.zero;
             if (!TryGetPose(out _, out rotation)) return false;
             if (!Tool.TryGetPosition(out var local)) return false;
-            grip = VrCamera.Instance.transform.parent.TransformPoint(local);
+            grip = VrCamera.Instance.transform.parent.TransformPoint(Weighted(Tool, local));
             return true;
         }
 
@@ -234,7 +234,7 @@ namespace ShipbreakerVR
             grip = Vector3.zero;
             if (!TryGetPose(hand, out _, out rotation)) return false;
             if (!hand.TryGetPosition(out var local)) return false;
-            grip = VrCamera.Instance.transform.parent.TransformPoint(local);
+            grip = VrCamera.Instance.transform.parent.TransformPoint(Weighted(hand, local));
             return true;
         }
 
@@ -267,11 +267,16 @@ namespace ShipbreakerVR
         public static bool TryGetHandLocal(out Vector3 grip, out Quaternion rotation)
         {
             grip = Vector3.zero;
-            return TryGetPoseLocal(out _, out rotation) && Tool.TryGetPosition(out grip);
+            if (!TryGetPoseLocal(out _, out rotation) || !Tool.TryGetPosition(out grip)) return false;
+            grip = Weighted(Tool, grip);
+            return true;
         }
 
         // The controller of the hand that holds the tool (VrHand.GameToolHand), the right one unless the left hand drew it.
         private static VrInput.Hand Tool => VrHand.GameToolHand.Input;
+
+        // The grip of a hand holding a tool with weight, where the tool is rather than the controller (VrToolWeight).
+        private static Vector3 Weighted(VrInput.Hand hand, Vector3 local) => VrToolWeight.Grip(hand, ToolOf(hand), local);
 
         private static EquipmentController.Equipment ToolOf(VrInput.Hand hand) =>
             hand == Tool ? VrToolModels.Equipped : hand.Node == VrDualTools.SecondNode ? VrDualTools.Second : EquipmentController.Equipment.None;

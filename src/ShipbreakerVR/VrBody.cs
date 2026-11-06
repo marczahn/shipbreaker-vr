@@ -43,6 +43,9 @@ namespace ShipbreakerVR
                 return;
             }
 
+            // A level start asked for while the shift was still loading: synced again once its gameplay runs, so it applies.
+            if (levelNext && synced && GameSession.CurrentGameState == GameSession.GameState.Gameplay) synced = false;
+
             var current = body.rotation;
             var mouse = Quaternion.Inverse(current) * gameTarget;
             var head = vr.HeadRotation;

@@ -32,7 +32,7 @@ namespace ShipbreakerVR
 
         // How far from the controller a surface may be to hold on, in meters at world scale 1.
         private const float Reach = 0.15f;
-        // A control's HandTarget wins over the nearest surface only up to this much farther away, in meters at world scale
+        // A control's collider wins over the nearest surface only up to this much farther away, in meters at world scale
         // 1: a hand climbing past a switch keeps the wall.
         private const float ControlPreference = 0.05f;
         // A grip pressed just before the hand arrives still catches, for this many seconds: a moving hand misses less.
@@ -45,6 +45,16 @@ namespace ShipbreakerVR
         private const float TearOff = 0.5f;
         // How fast the hold may pull the body, and how fast a push off may fly, in m/s at world scale 1.
         private const float MaxPull = 10f;
+        // A part that moves is pulled more softly than a fixed hold: its gap to the hand closes over PartPullTime, not
+        // within one physics step, and each step's correction goes PartRelax of the way. Closed in one step, each
+        // centimeter of a trembling hand became half a meter per second between body and part, the two hands on one
+        // crate worked against each other through its turning, and a 56 kg crate swung and threw the body around: some
+        // 1800 kg m/s went back and forth between them in a second for 90 of real change (Raik). The suit also calms a
+        // held part's turning (PartSpinCalm, seconds), so a turning crate does not drag the body over it: the suit's
+        // control wins over the momentum, which the pulls still share as before.
+        private const float PartPullTime = 0.15f;
+        private const float PartRelax = 0.5f;
+        private const float PartSpinCalm = 0.3f;
         private const float MaxPushOff = 5f;
         // The speed a push off keeps is the hands' speed, smoothed over about this time in seconds.
         private const float PushOffSmoothing = 0.08f;
@@ -64,7 +74,14 @@ namespace ShipbreakerVR
         private const float FirmFollowHeavy = 0.08f;
         // A part let go collides with the body again once its bounds are this far from the body, or after that many seconds.
         private const float FirmClear = 0.45f;
-        private const float FirmClearTime = 10f;
+        // At most this long, in seconds: the next touch of a part let go can come soon (Raik; 10 s was too long).
+        private const float FirmClearTime = 3f;
+        // The body's mass in the pulls and pushes with extended world physics (Steuerung/SchwereTeileSchieben), in kg: the game's
+        // player weighs 50 kg, light for a person in a suit; Raik wants 100 kg (modern materials). Only in these impulses:
+        // the rigidbody keeps the game's mass, so thrust, braking and the speed of a push off stay as they were. Without
+        // extended world physics the game's mass, as before.
+        private const float ExtendedBodyMass = 100f;
+        private static float BodyMass => VrSettings.BracedPush.Value ? ExtendedBodyMass : player.mass;
         // LynxUnityEngineExtensions.InStaticLayer: the station and other things that never move.
         private const int StaticLayer = 27;
 
@@ -90,6 +107,8 @@ namespace ShipbreakerVR
             // The rigidbody of what is held, if it has one; Movable when the hand may move it.
             public Rigidbody Body;
             public bool Movable;
+            // Above what the game lets one grab (TooHeavy): moved by the hands only with extended world physics.
+            public bool Heavy;
             // The hold: a point fixed on Anchor (the body, or the collider's transform without one).
             public Transform Anchor;
             public Vector3 Point;
@@ -101,7 +120,7 @@ namespace ShipbreakerVR
             public Vector3 Surface;
             // The surface's outward direction there, on Anchor: a flat hand lies on it (VrHands).
             public Vector3 Normal;
-            // On a control's HandTarget (NearestControl): the hand makes a fist there.
+            // On a control (NearestControl), where the hand took hold of it: the hand makes a fist there.
             public bool Control;
             // A part that turns with the hand: its turn relative to the controller, and its speed limit before.
             public bool Firm;
@@ -205,7 +224,7 @@ namespace ShipbreakerVR
                 motion = player != null ? player.GetComponent<PlayerMotion>() : null;
                 rigPlaced = false;
                 if (player != null && logs++ < 80)
-                    Plugin.Log.LogInfo($"Climbing: player body '{player.name}', {player.mass:0.#} kg, interpolation {player.interpolation}");
+                    Plugin.Log.LogInfo($"Climbing: player body '{player.name}', {player.mass:0.#} kg ({ExtendedBodyMass:0} kg in the pulls and pushes with extended world physics), interpolation {player.interpolation}");
                 if (player != null) LogColliders();
             }
             return player != null && rigPlaced;
@@ -252,16 +271,18 @@ namespace ShipbreakerVR
                 surface = closest;
             }
             // A control within reach (a door switch, a console) comes first, unless the nearest surface is more than
-            // ControlPreference nearer: the hand goes onto the control's HandTarget, where the game puts its own hand, as a
-            // fist (HoldsControl). Before, the hand held the hull under the switch or stayed a few centimeters off it (Raik).
-            var control = NearestControl(at, reach, out var controlCollider);
+            // ControlPreference nearer: the hand holds it as a fist (HoldsControl) where it took hold, on the control's own
+            // collider. Not on its HandTarget, where the game puts its own hand: on the airlock console's lever that lay
+            // 17 cm off the hand, and the hand sat above the lever (Raik). Before that, the hand held the hull under the
+            // switch.
+            var control = NearestControl(at, reach, out var controlCollider, out var controlPoint);
             if (control != null && best != null
-                && (control.HandTarget.position - at).magnitude > Mathf.Sqrt(bestDistance) + ControlPreference * VrCamera.WorldScale)
+                && (controlPoint - at).magnitude > Mathf.Sqrt(bestDistance) + ControlPreference * VrCamera.WorldScale)
                 control = null;
             if (control != null)
             {
                 best = controlCollider;
-                surface = control.HandTarget.position;
+                surface = controlPoint;
                 bestDistance = (surface - at).sqrMagnitude;
             }
             // Some switches have no solid collider, only the trigger the game's interaction uses. It is no surface: the hand
@@ -273,7 +294,7 @@ namespace ShipbreakerVR
                 {
                     var collider = Found[i];
                     if (!collider.isTrigger || Own(collider) || collider.GetComponentInParent<InteractableObject>() == null) continue;
-                    var distance = (collider.ClosestPoint(at) - at).sqrMagnitude;
+                    var distance = (VrUtil.ClosestPoint(collider, at) - at).sqrMagnitude;
                     if (distance >= bestDistance) continue;
                     best = collider;
                     bestDistance = distance;
@@ -291,8 +312,14 @@ namespace ShipbreakerVR
             var body = best.attachedRigidbody;
             hand.Collider = best;
             hand.Body = body;
-            hand.Movable = body != null && !body.isKinematic && body.gameObject.layer != StaticLayer && body.mass > 0f
-                && !TooHeavy(body.mass);
+            // With extended world physics a part above the game's grab range moves too, up to BracedPush.MaxMass: held
+            // without a brace (both hands on a 100 kg fuel barrel), the arms' push or throw goes to it and the body takes
+            // the same back, as two bodies pushing apart (Raik). Before it held like a wall: the body flew off and the
+            // barrel stayed. Braced on something fixed, the other hand still pushes it with a limited force (Pushes).
+            var moving = body != null && !body.isKinematic && body.gameObject.layer != StaticLayer && body.mass > 0f;
+            hand.Heavy = moving && TooHeavy(body.mass);
+            hand.Movable = moving && (!hand.Heavy || (VrSettings.BracedPush.Value && body.mass <= BracedPush.MaxMass));
+            if (hand.Movable) Separate(body);
             hand.Anchor = body != null ? body.transform : best.transform;
             hand.Point = hand.Anchor.InverseTransformPoint(at);
             hand.Surface = hand.Anchor.InverseTransformPoint(surface);
@@ -316,7 +343,7 @@ namespace ShipbreakerVR
             if (logs++ < 80)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds '{best.name}' (layer {best.gameObject.layer}, "
                     + (body == null ? "no rigidbody" : $"rigidbody '{body.name}' {body.mass:0.#} kg{(body.isKinematic ? " kinematic" : "")}")
-                    + $", {(hand.Movable ? "moves" : "fixed")}), {Mathf.Sqrt(bestDistance):0.00} m from the surface");
+                    + $", {(hand.Movable ? hand.Heavy ? "moves, above the grab range" : "moves" : "fixed")}), {Mathf.Sqrt(bestDistance):0.00} m from the surface");
         }
 
         // Each holding hand: the impulse between player and hold that brings the hand to its hold in this step. Both hands
@@ -360,18 +387,21 @@ namespace ShipbreakerVR
                 var error = hold - PullPoint(hand);
                 var holdVelocityHere = hand.Body != null ? hand.Body.GetPointVelocity(hold) : Vector3.zero;
                 holdsVelocity += holdVelocityHere;
-                // The player's velocity relative to the hold that closes the gap within this step.
-                var wanted = Vector3.ClampMagnitude(error / dt, MaxPull * VrCamera.WorldScale);
+                // The player's velocity relative to the hold that closes the gap within this step, or softly on a part that
+                // moves.
+                var wanted = Vector3.ClampMagnitude(error / (hand.Movable ? Mathf.Max(dt, PartPullTime) : dt), MaxPull * VrCamera.WorldScale);
                 var needed = wanted - (velocity - holdVelocityHere);
                 if (needed.sqrMagnitude < 1e-10f) continue;
-                var inverse = pulling / player.mass;
+                var inverse = pulling / BodyMass;
                 if (hand.Movable) inverse += Sharing(hand) * InverseMass(hand.Body, hold, needed.normalized);
-                var impulse = needed / inverse;
-                change += impulse / player.mass;
+                var impulse = needed / inverse * (hand.Movable ? PartRelax : 1f);
+                change += impulse / BodyMass;
                 if (hand.Movable) hand.Body.AddForceAtPosition(-impulse, hold, ForceMode.Impulse);
             }
             holdVelocity = holdsVelocity / pulling;
             player.velocity = KeepClear(velocity + change, dt);
+            CalmSpin(dt);
+            HoldOff(dt);
             MoveFirm(dt);
             pushOff = Vector3.Lerp(pushOff, player.velocity - holdVelocity, 1f - Mathf.Exp(-dt / PushOffSmoothing));
         }
@@ -420,6 +450,74 @@ namespace ShipbreakerVR
             return velocity;
         }
 
+        // The turning of each held part that moves dies down over PartSpinCalm: the suit holds it steady.
+        private static void CalmSpin(float dt)
+        {
+            var calm = Mathf.Exp(-dt / PartSpinCalm);
+            foreach (var hand in Hands)
+            {
+                var part = hand.Body;
+                if (!hand.Holding || !hand.Movable || hand.Firm || hand.Follower || part == null || Pushes(hand)) continue;
+                if (hand == RightHand && LeftHand.Holding && LeftHand.Body == part) continue;
+                part.angularVelocity *= calm;
+            }
+        }
+
+        // A held part that moves does not collide with the body (Separate), so pulled in, it would go into it: once the two
+        // are within Clearance, their closing is stopped, by equal and opposite impulses shared by their masses, as two
+        // bodies meeting without bouncing. Up, down and apart stay free, and there is no push off: the pair keeps its
+        // momentum (Raik: drawing a fuel barrel in, the pull should just stop going closer). KeepClear leaves such parts
+        // out, as stopping the body alone gave a barrel rowed with both arms more speed each stroke.
+        private static readonly Collider[] Touching = new Collider[16];
+        private const float Bounce = 0.15f;
+        private const float BounceFrom = 0.4f;
+        private static int holdOffLogs;
+
+        private static void HoldOff(float dt)
+        {
+            var solid = BodySphere();
+            if (solid == null) return;
+            var center = solid.transform.TransformPoint(solid.center);
+            var radius = solid.radius * solid.transform.lossyScale.x;
+            var clearance = Clearance * VrCamera.WorldScale;
+            foreach (var hand in Hands)
+            {
+                var part = hand.Body;
+                if (!hand.Holding || !hand.Movable || hand.Firm || hand.Follower || part == null || Pushes(hand)) continue;
+                // Both hands on one part: once.
+                if (hand == RightHand && LeftHand.Holding && LeftHand.Body == part) continue;
+                // As far as the two could close within this step, so a quick pull does not pass the check.
+                var reach = radius + 2f * clearance + (player.velocity - part.velocity).magnitude * dt;
+                var count = Physics.OverlapSphereNonAlloc(center, reach, Touching, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                var nearest = float.MaxValue;
+                var point = Vector3.zero;
+                for (var i = 0; i < count; i++)
+                {
+                    if (Touching[i].attachedRigidbody != part) continue;
+                    var on = VrUtil.ClosestPoint(Touching[i], center);
+                    var distance = (on - center).sqrMagnitude;
+                    if (distance >= nearest) continue;
+                    nearest = distance;
+                    point = on;
+                }
+                if (nearest == float.MaxValue || nearest < 1e-8f) continue;
+                var gap = Mathf.Sqrt(nearest);
+                var normal = (center - point) / gap;
+                var room = gap - radius - clearance;
+                var closing = -Vector3.Dot(player.velocity - part.GetPointVelocity(point), normal);
+                var allowed = Mathf.Max(room, 0f) / dt;
+                if (closing <= allowed) continue;
+                // Met fast (a part stopped by a wall, the body drifting on), the two part again a little (Bounce of the
+                // closing speed): a small knock back, as Raik asked, not the hard throw the physics engine gave.
+                var bounce = closing > BounceFrom * VrCamera.WorldScale && room <= 0f ? Bounce : 0f;
+                var impulse = (closing - allowed + bounce * closing) / (1f / BodyMass + InverseMass(part, point, normal));
+                player.velocity += normal * (impulse / BodyMass);
+                part.AddForceAtPosition(-normal * impulse, point, ForceMode.Impulse);
+                if (holdOffLogs++ < 20)
+                    Plugin.Log.LogInfo($"Climbing: '{part.name}' {part.mass:0} kg held off the body {Mathf.Max(room, 0f) * 100f:0} cm short, closing at {closing:0.00} m/s stopped");
+            }
+        }
+
         // Whether a collision of the player's body is a touch of the thing held instead of an impact. Ship parts share one
         // rigidbody, so the whole hull counts as the thing held.
         public static bool Soft(Collision collision)
@@ -448,9 +546,26 @@ namespace ShipbreakerVR
             hand.InterpolationBefore = body.interpolation;
             body.maxAngularVelocity = FirmSpin;
             body.interpolation = RigidbodyInterpolation.Interpolate;
-            clearing.RemoveAll(each => each.Body == body);
-            Collide(body.GetComponentsInChildren<Collider>(true), false);
+            Separate(body);
         }
+
+        // While a hand holds a part that moves, the body and that part do not collide; let go, they collide again once
+        // apart (ClearParts). A firmly held light part would knock into the body each step. A heavier one, stopped by a
+        // wall, was run into by the body drifting on, and the physics engine threw the two apart: some 900 kg m/s on the
+        // body in a second from that contact while the pulls gave nothing, a strong push off the wall through a 56 kg
+        // crate (Raik). The arm keeps the part off the body instead.
+        private static int separateLogs;
+
+        private static void Separate(Rigidbody body)
+        {
+            var known = clearing.RemoveAll(each => each.Body == body) > 0;
+            Collide(body.GetComponentsInChildren<Collider>(true), false);
+            if (!known && separateLogs++ < 20) Plugin.Log.LogInfo($"Climbing: body and '{body.name}' {body.mass:0} kg do not collide while held");
+        }
+
+        // Let go of a part that moves: it collides with the body again once apart or after FirmClearTime.
+        private static void Release(Rigidbody body) =>
+            clearing.Add(new Clearing { Body = body, Parts = body.GetComponentsInChildren<Collider>(true), Until = Time.time + FirmClearTime });
 
         private static void Unfirm(Hand hand)
         {
@@ -459,7 +574,7 @@ namespace ShipbreakerVR
             if (body == null) return;
             body.maxAngularVelocity = hand.SpinBefore;
             body.interpolation = hand.InterpolationBefore;
-            clearing.Add(new Clearing { Body = body, Parts = body.GetComponentsInChildren<Collider>(true), Until = Time.time + FirmClearTime });
+            Release(body);
         }
 
         private static void Collide(Collider[] parts, bool collide)
@@ -518,23 +633,72 @@ namespace ShipbreakerVR
             return false;
         }
 
-        // Outward from the surface at the hold: the face a ray from the hand to its nearest point meets, or, with the hand
-        // on it, the face a ray along the controller meets. The way from the nearest point to the hand alone tipped the
-        // hand at edges and on uneven tops, one grip flat, the next at a slant (Raik, the terminal at the start).
+        // Outward from the surface at the hold: the face a ray from the hand to its nearest point meets. With the hand on
+        // the surface or already in it (grabbed out of a movement), or that face turned well away from the palm, the face
+        // the palm turns to instead: of the faces rays along the palm, the controller's aim and its down meet, the one most
+        // facing the palm. The way from the nearest point to the hand alone tipped the hand at edges and on uneven tops
+        // (Raik, the terminal at the start); a ray along the aim alone, which runs along the surface under a flat hand,
+        // met the side of a step or an edge, and the hand held on edgewise with its fingers curled (Raik, 2026-11-06).
         private static Vector3 SurfaceNormal(Collider collider, Vector3 at, Vector3 surface, Hand hand)
         {
+            var scale = VrCamera.WorldScale;
+            var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+            var turn = Quaternion.identity;
+            var aimed = false;
+            if (rig != null && hand.Input.TryGetAimRotation(out var aim))
+            {
+                aimed = true;
+                turn = rig.rotation * aim;
+            }
+            // Where the palm faces: towards the body's middle, to the controller's right on the left hand.
+            var palm = turn * (hand.Input.IsLeft ? Vector3.right : Vector3.left);
             var away = at - surface;
             var distance = away.magnitude;
-            if (distance > 0.01f * VrCamera.WorldScale)
+            if (distance > 0.01f * scale)
             {
                 var toward = -away / distance;
-                if (collider.Raycast(new Ray(at, toward), out var face, distance + 0.02f * VrCamera.WorldScale)
-                    && Vector3.Dot(face.normal, away) > 0f) return face.normal;
-                return away / distance;
+                var nearest = collider.Raycast(new Ray(at, toward), out var face, distance + 0.02f * scale) && Vector3.Dot(face.normal, away) > 0f
+                    ? face.normal : away / distance;
+                if (!aimed || Vector3.Angle(nearest, -palm) <= PalmTurnedAway) return nearest;
+                if (!FacingPalm(collider, at, turn, palm, out var turned) || Vector3.Angle(turned, -palm) >= Vector3.Angle(nearest, -palm)) return nearest;
+                LogFace(hand, "the nearest face turned away from the palm", Vector3.Angle(nearest, -palm), Vector3.Angle(turned, -palm));
+                return turned;
             }
-            var back = hand.Input.TryGetAimRotation(out var aim) ? VrCamera.Instance.transform.parent.rotation * aim * Vector3.forward : Vector3.down;
-            var ray = new Ray(at - back * Reach * VrCamera.WorldScale, back);
-            return collider.Raycast(ray, out var hit, 2f * Reach * VrCamera.WorldScale) ? hit.normal : -back;
+            if (aimed && FacingPalm(collider, at, turn, palm, out var normal))
+            {
+                LogFace(hand, "on or in the surface", -1f, Vector3.Angle(normal, -palm));
+                return normal;
+            }
+            return -(aimed ? palm : Vector3.down);
+        }
+
+        private static int faceLogs;
+
+        private static void LogFace(Hand hand, string why, float nearest, float palm)
+        {
+            if (faceLogs++ < 30)
+                Plugin.Log.LogInfo($"Climbing: {hand.Name} hand takes the face its palm turns to ({why}{(nearest >= 0f ? $", nearest face {nearest:0}° off the palm" : "")}), {palm:0}° off the palm");
+        }
+
+        // A face the nearest point's own is taken over the palm's only this far off facing the palm, in degrees.
+        private const float PalmTurnedAway = 60f;
+
+        // Of the faces rays from outside the hand along the palm, the aim and the controller's down meet, the one whose
+        // outside faces the palm most; false without one.
+        private static bool FacingPalm(Collider collider, Vector3 at, Quaternion turn, Vector3 palm, out Vector3 normal)
+        {
+            normal = Vector3.zero;
+            var reach = Reach * VrCamera.WorldScale;
+            var best = -2f;
+            foreach (var way in new[] { palm, turn * Vector3.forward, turn * Vector3.down })
+            {
+                if (!collider.Raycast(new Ray(at - way * reach, way), out var hit, 2f * reach)) continue;
+                var facing = Vector3.Dot(hit.normal, -palm);
+                if (facing <= best) continue;
+                best = facing;
+                normal = hit.normal;
+            }
+            return best > -2f;
         }
 
         // A part the game lets one move, held by a hand that pulls it (not one pushing a heavy part, BracedPush).
@@ -562,6 +726,17 @@ namespace ShipbreakerVR
 
         // Above the game's grab mass range (GrabController.RawGrabbedMassRange.AboveRange), through reflection: the range's
         // type lives in BBI.Unity.Core, which the plugin does not reference.
+        // A control on something that floats loose, as a cassette or a cable to collect: light and moving. A ship's controls
+        // are on its body too, which the game also lets move (not kinematic), at tens of tonnes: taken for loose, a door
+        // switch was held as a plain surface above the switch, and used, the hand was bent towards the ship's middle (Raik).
+        private const float LooseMass = 200f;
+
+        public static bool Loose(Component control)
+        {
+            var body = control != null ? control.GetComponentInParent<Rigidbody>() : null;
+            return body != null && !body.isKinematic && body.mass <= LooseMass;
+        }
+
         private static bool TooHeavy(float mass)
         {
             var range = RawGrabbedMassRange?.Invoke(grab, null);
@@ -613,7 +788,7 @@ namespace ShipbreakerVR
             var control = held.GetComponentInParent<InteractableObject>();
             if (control == null || switchLogs >= 40) return;
             switchLogs++;
-            Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds the control '{control.name}'");
+            Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds the control '{control.name}'{(hand.Control ? ", as a fist where it took hold" : ", as a plain surface")}");
         }
 
         // The directions of a cube's faces and corners.
@@ -638,7 +813,7 @@ namespace ShipbreakerVR
             var other = Other(hand);
             if (!other.Holding || other.Body == hand.Body) return false;
             // Two parts the game lets one grab and move keep sharing the pull as before (Pull).
-            return Fixed(other) || (Pushable(other) && !hand.Movable && !other.Movable);
+            return Fixed(other) || (Pushable(other) && (!hand.Movable || hand.Heavy) && (!other.Movable || other.Heavy));
         }
 
         private static bool Pushable(Hand hand)
@@ -662,7 +837,7 @@ namespace ShipbreakerVR
             var hold = Hold(hand);
             var force = BracedPush.Force((HandWorld(hand) - hold) / VrCamera.WorldScale, hand.Body.mass);
             hand.Body.AddForceAtPosition(force, hold, ForceMode.Force);
-            if (!Braced(hand)) player.AddForce(-force, ForceMode.Force);
+            if (!Braced(hand)) player.AddForce(-force / BodyMass, ForceMode.Acceleration);
         }
 
         // True while that controller's hand holds on to something large: a wall, the hull, a console, a heavy part. The hand
@@ -682,10 +857,12 @@ namespace ShipbreakerVR
             return false;
         }
 
-        // The fixed control whose HandTarget is nearest to the hand within reach, with one of its colliders, or null.
-        private static InteractableObject NearestControl(Vector3 at, float reach, out Collider collider)
+        // The fixed control with a collider nearest to the hand within reach, that collider and its point nearest the hand,
+        // or null.
+        private static InteractableObject NearestControl(Vector3 at, float reach, out Collider collider, out Vector3 point)
         {
             collider = null;
+            point = at;
             InteractableObject best = null;
             var bestDistance = reach * reach;
             var count = Physics.OverlapSphereNonAlloc(at, reach, Found, ~0, QueryTriggerInteraction.Collide);
@@ -695,13 +872,14 @@ namespace ShipbreakerVR
                 var control = Found[i].GetComponentInParent<InteractableObject>();
                 if (control == null || control.HandTarget == null || !control.isActiveAndEnabled) continue;
                 // Things that float loose, as cassettes to collect, are held as parts.
-                var loose = control.GetComponentInParent<Rigidbody>();
-                if (loose != null && !loose.isKinematic) continue;
-                var distance = (control.HandTarget.position - at).sqrMagnitude;
+                if (Loose(control)) continue;
+                var nearest = VrUtil.ClosestPoint(Found[i], at);
+                var distance = (nearest - at).sqrMagnitude;
                 if (distance >= bestDistance) continue;
                 best = control;
                 bestDistance = distance;
                 collider = Found[i];
+                point = nearest;
             }
             return best;
         }
@@ -770,6 +948,7 @@ namespace ShipbreakerVR
             // Off a light part that moves the body keeps the speed the pulls gave it, as the part does: set from the
             // hands, the two did not add up. Asked while the hand still holds, as Pushes needs.
             var light = hand.Movable && hand.Body != null && !Pushes(hand);
+            var movable = hand.Movable;
             VrHand.StopHolding(hand.Vr);
             var firm = hand.Firm;
             hand.Follower = false;
@@ -778,6 +957,8 @@ namespace ShipbreakerVR
             hand.Anchor = null;
             hand.Collider = null;
             hand.Body = null;
+            // A firmly held part is released by Unfirm already.
+            if (movable && !firm && body != null && !Held(body)) Release(body);
             foreach (var other in Hands)
                 if (other != hand && other.Holding && other.Movable && other.Body == body && body != null && body.mass <= FirmMass
                     && other.Input.TryGetAimRotation(out var aim)) Firm(other, aim);

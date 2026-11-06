@@ -40,7 +40,11 @@ namespace ShipbreakerVR
         // Rolling: as fast per degree as turning, up to a hand tilted all the way.
         private const float RollFull = 90f;
         private const float RollSpeed = 100f;
-        private const float TurnSpeed = 45f;
+        // Smooth turning with the right stick, in degrees per second at the game's look sensitivity 1 (Steuerung in the
+        // game's own options, LynxControlsUserOptions.SensitivityXAxis / YAxis, 0 to 2): it follows that setting, as Raik
+        // asked; at his 1.9 twice the 45 it was before.
+        private const float TurnSpeed = 47.5f;
+        private const float LeastSensitivity = 0.2f;
         private const float StickDeadzone = 0.15f;
 
         private static bool loggedDevice;
@@ -144,14 +148,15 @@ namespace ShipbreakerVR
         {
             var body = playspace * VrCamera.Instance.HeadRotation;
             var snap = SnapAngle(VrSettings.TurnMode.Value);
-            var yaw = snap > 0f ? SnapTurn(stick.x, snap) : StickRate(stick.x);
-            var pitch = -StickRate(stick.y);
+            var yaw = snap > 0f ? SnapTurn(stick.x, snap) : StickRate(stick.x, LynxControlsUserOptions.SensitivityXAxis);
+            var pitch = -StickRate(stick.y, LynxControlsUserOptions.SensitivityYAxis);
             var up = VrSettings.TurnAround.Value == TurnAxis.Koerper ? playspace * Vector3.up : body * Vector3.up;
             if (yaw != 0f) turn = Quaternion.AngleAxis(yaw, up) * turn;
             if (pitch != 0f) turn = Quaternion.AngleAxis(pitch, body * Vector3.right) * turn;
         }
 
-        private static float StickRate(float value) => Ramp(Mathf.Abs(value), StickDeadzone, 1f) * Mathf.Sign(value) * TurnSpeed * Time.deltaTime;
+        private static float StickRate(float value, float sensitivity) =>
+            Ramp(Mathf.Abs(value), StickDeadzone, 1f) * Mathf.Sign(value) * TurnSpeed * Mathf.Max(sensitivity, LeastSensitivity) * Time.deltaTime;
 
         // Degrees to roll this frame for a hand angle (0..360 from eulerAngles): none inside the deadzone, full speed from
         // RollFull on.

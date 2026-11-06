@@ -325,6 +325,40 @@ namespace ShipbreakerVR
 
         private static int tabLogs;
 
+        // Opened on the VR tabs, the screen shows the first one only the frame after: in its own OnEnable the game shows
+        // the tab it remembers, before the arrays hold the VR tabs, and the VR page stayed empty until a key switched tabs
+        // (Raik). From VrFrame each frame.
+        private static UnifiedOptionsScreen showNext;
+        private static int showAfter;
+
+        public static void ShowLater(UnifiedOptionsScreen unified)
+        {
+            showNext = unified;
+            showAfter = Time.frameCount;
+        }
+
+        public static void Update()
+        {
+            if (showNext == null || Time.frameCount <= showAfter) return;
+            var unified = showNext;
+            showNext = null;
+            if (!unified.isActiveAndEnabled || !added.TryGetValue(unified, out var sets) || !sets.ShowsVr) return;
+            var active = Active(unified);
+            var views = Views(unified);
+            var tabs = Tabs(unified);
+            if (active < 0 || active >= views.Length) return;
+            var view = views[active];
+            if (view != null && !view.IsVisible && !view.IsShowing) view.Show();
+            for (var i = 0; i < tabs.Length; i++)
+                if (tabs[i] != null)
+                {
+                    if (i == active) tabs[i].SelectTab();
+                    else tabs[i].DeselectTab();
+                }
+            HideInactive(unified);
+            Plugin.Log.LogInfo($"Options '{unified.name}': VR tab {active} shown on opening");
+        }
+
         // State of a view for the log: what decides whether it and its list can be seen.
         private static string Describe(UIView view)
         {
@@ -385,6 +419,11 @@ namespace ShipbreakerVR
         {
             VrOptionsTab.Create(__instance);
             VrOptionsTab.Show(__instance, VrOptionsMenu.VrMode);
+        }
+
+        private static void Postfix(UnifiedOptionsScreen __instance)
+        {
+            if (VrOptionsMenu.VrMode) VrOptionsTab.ShowLater(__instance);
         }
     }
 

@@ -16,7 +16,7 @@ namespace ShipbreakerVR
     // clears VrMode when it closes, so "Options" opens the game's tabs again.
     // Both Options buttons are Doozy buttons ('Button - OPTIONS' in the main menu, 'Options_Button' in the pause menu),
     // neither a MainMenuButton nor in PauseMenuController's button list, so they are found by their text's localization
-    // ID, with the label as a fallback.
+    // ID.
     internal static class VrOptionsMenu
     {
         public static bool VrMode;
@@ -29,32 +29,47 @@ namespace ShipbreakerVR
             AccessTools.FieldRefAccess<LocalizedTextMeshProUGUI, string>("m_LocalizationID");
 
         private static float nextSearch;
+        // How long after a change of scenes the menus are searched, in seconds.
+        private const float SearchFor = 20f;
+        private static int lastScenes = int.MinValue;
+        private static float searchUntil;
         private static int logs;
 
         private static string Label => VrOptions.L("VR options", "VR-Optionen");
 
-        // From VrFrame, once per frame: once a second outside a shift's play (menus, the pause menu, the station), each
-        // Options button without its copy gets one.
+        // From VrFrame, once per frame: every two seconds each Options button without its copy gets one, also while its
+        // menu is still hidden (the pause menu during a shift), so the entry is there when the menu opens. Before, it was
+        // added only once the menu was open, a moment after it showed (Raik).
         public static void Update()
         {
-            if (Time.unscaledTime < nextSearch) return;
-            nextSearch = Time.unscaledTime + 1f;
-            if (GameSession.CurrentGameState == GameSession.GameState.Gameplay) return;
-            foreach (var text in Object.FindObjectsOfType<TextMeshProUGUI>())
+            // Only for a while after a scene came or went, where new menus appear: looking through every localized text
+            // costs a little, and every two seconds all through a shift it is not worth it.
+            var scenes = UnityEngine.SceneManagement.SceneManager.sceneCount * 31 + UnityEngine.SceneManagement.SceneManager.GetActiveScene().handle;
+            if (scenes != lastScenes)
             {
-                var button = (Component)text.GetComponentInParent<UIButton>() ?? text.GetComponentInParent<Button>();
-                if (button == null || button.name == Name || !IsOptions(text) || HasCopy(button.transform)) continue;
-                if (text.GetComponentInParent<UnifiedOptionsScreen>() != null) continue;
+                lastScenes = scenes;
+                searchUntil = Time.unscaledTime + SearchFor;
+            }
+            if (Time.unscaledTime < nextSearch || Time.unscaledTime > searchUntil) return;
+            nextSearch = Time.unscaledTime + 2f;
+            foreach (var text in Resources.FindObjectsOfTypeAll<LocalizedTextMeshProUGUI>())
+            {
+                if (!text.gameObject.scene.IsValid() || LocId(text) != OptionsText) continue;
+                var button = Up<UIButton>(text.transform) ?? (Component)Up<Button>(text.transform);
+                if (button == null || button.name == Name || HasCopy(button.transform) || Up<UnifiedOptionsScreen>(text.transform) != null) continue;
                 Add(button);
             }
         }
 
-        private static bool IsOptions(TextMeshProUGUI text)
+        // The nearest component of that type on the transform or a parent, active or not.
+        private static T Up<T>(Transform from) where T : Component
         {
-            var localized = text.GetComponentInParent<LocalizedTextMeshProUGUI>();
-            if (localized != null && LocId(localized) == OptionsText) return true;
-            var label = text.text != null ? text.text.Trim() : "";
-            return label.Equals("Options", System.StringComparison.OrdinalIgnoreCase) || label.Equals("Optionen", System.StringComparison.OrdinalIgnoreCase);
+            for (var t = from; t != null; t = t.parent)
+            {
+                var found = t.GetComponent<T>();
+                if (found != null) return found;
+            }
+            return null;
         }
 
         private static bool HasCopy(Transform button) =>

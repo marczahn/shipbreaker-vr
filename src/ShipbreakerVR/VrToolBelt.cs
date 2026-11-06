@@ -24,6 +24,13 @@ namespace ShipbreakerVR
         private const float GrappleOut = 0.08f;
         // And further back, around where it hangs (VrBeltGrapple).
         private const float GrappleBack = 0.19f;
+        // With the grapple shown at the hip (VrBeltGrapple), the hand draws it only within GripReach of GripAt, in meters,
+        // as Raik asked: the zone around the hip reached far beyond the grapple. GripAt is where Raik's controller was
+        // reaching for the grapple's grip (12 grips, all within 9 cm of it), not the grip itself: the grapple hangs at the
+        // model's hip 37 cm behind the eyes, further back than a real hand reaches there, so the hand on the grip shows
+        // with the controller about 30 cm further forward, 10 cm further out and 10 cm lower.
+        private static readonly Vector3 GripAt = new Vector3(0.30f, -0.72f, -0.08f);
+        private const float GripReach = 0.13f;
         private const float HipForward = 0.1f;
         private const float HipBehind = -0.2f;
         // The hip zones are turned this far around the head towards the back, in degrees, so a hand reaching out to the
@@ -40,6 +47,7 @@ namespace ShipbreakerVR
         // The zone each hand last buzzed for (left, right).
         private static readonly Zone[] announced = new Zone[2];
         private static int logs;
+        private static int missLogs;
 
         // The zone the hand is in this frame (None without tracking). Quiet (while its trigger is held) it does not buzz;
         // the buzz comes when the trigger is let go inside the zone.
@@ -47,6 +55,16 @@ namespace ShipbreakerVR
         {
             var zone = Find(hand, out var local);
             var index = hand.IsLeft ? 0 : 1;
+            // A grip pressed near the hip grapple but outside its zone: where the hand was, to fit GripReach.
+            if (zone == Zone.None && !hand.IsLeft && hand.Grip.Pressed && VrSettings.BeltGrapple.Value && missLogs < 30)
+            {
+                var off = local - GripAt;
+                if (off.magnitude < 0.4f)
+                {
+                    missLogs++;
+                    Plugin.Log.LogInfo($"Tool belt: right grip pressed {off.magnitude:0.00} m from where the hip grapple is drawn (off {off.x:0.00}, {off.y:0.00}, {off.z:0.00}), outside its {GripReach:0.00} m");
+                }
+            }
             if (zone == Zone.None) announced[index] = Zone.None;
             else if (zone != announced[index] && !quiet)
             {
@@ -71,13 +89,15 @@ namespace ShipbreakerVR
             forward.y = 0f;
             if (forward.sqrMagnitude < 0.0001f) return Zone.None;
             local = Quaternion.Inverse(Quaternion.LookRotation(forward, Vector3.up)) * (hand - head.localPosition);
-            var zone = ZoneAt(local);
+            var zone = ZoneAt(local, VrSettings.BeltGrapple.Value);
             return zone == Zone.Flashlight && !controller.IsLeft ? Zone.None : zone;
         }
 
         // The zone at a hand position relative to the head, in meters along the head's heading (x right, y up, z forward).
-        internal static Zone ZoneAt(Vector3 local)
+        // With the grapple at the hip its zone is a ball of GripReach around its grip instead of the hip box.
+        internal static Zone ZoneAt(Vector3 local, bool grappleAtHip = false)
         {
+            if (grappleAtHip && (local - GripAt).magnitude < GripReach) return Zone.Grapple;
             if (local.y < HipBelow && local.y > HipDeepest)
             {
                 // Measured as if the hand were turned forward by HipTurn on its side of the body, mirrored for the left hip.
@@ -86,7 +106,11 @@ namespace ShipbreakerVR
                 var turnedForward = local.z * HipTurnCos + side * HipTurnSin;
                 var outward = local.x > 0f ? GrappleOut : 0f;
                 var behind = local.x > 0f ? HipBehind - GrappleBack : HipBehind;
-                if (turnedForward < HipForward && turnedForward > behind && turnedSide > HipSide + outward && turnedSide < HipOutside + outward) return local.x > 0f ? Zone.Grapple : Zone.DemoCharge;
+                if (turnedForward < HipForward && turnedForward > behind && turnedSide > HipSide + outward && turnedSide < HipOutside + outward)
+                {
+                    if (local.x <= 0f) return Zone.DemoCharge;
+                    if (!grappleAtHip) return Zone.Grapple;
+                }
             }
             if (local.magnitude < HelmetReach && local.x > HelmetSide && local.z > ShoulderBehind) return Zone.Scanner;
             if (local.magnitude < HelmetReach && local.x < -HelmetSide && local.z > ShoulderBehind) return Zone.Flashlight;

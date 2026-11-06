@@ -84,6 +84,15 @@ namespace ShipbreakerVR.Tests
         // The zone as a number: the test method is public, the enum internal.
         public void ZoneAroundTheBody(float x, float y, float z, int zone) =>
             Assert.Equal((Zone)zone, VrToolBelt.ZoneAt(new Vector3(x, y, z)));
+
+        [Theory]
+        [InlineData(0.30f, -0.72f, -0.08f, (int)Zone.Grapple)]
+        [InlineData(0.33f, -0.67f, -0.01f, (int)Zone.Grapple)]
+        [InlineData(0.20f, -0.62f, -0.37f, (int)Zone.None)]
+        [InlineData(0.20f, -0.50f, 0.10f, (int)Zone.None)]
+        [InlineData(-0.25f, -0.6f, -0.1f, (int)Zone.DemoCharge)]
+        public void WithTheGrappleAtTheHipOnlyItsGripDrawsIt(float x, float y, float z, int zone) =>
+            Assert.Equal((Zone)zone, VrToolBelt.ZoneAt(new Vector3(x, y, z), true));
     }
 
     public class ResolutionTests

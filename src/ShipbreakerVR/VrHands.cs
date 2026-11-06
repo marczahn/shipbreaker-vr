@@ -216,9 +216,9 @@ namespace ShipbreakerVR
             var active = VrAim.Active;
             var equipment = grab.RightHand.CurrentEquipmentType;
             var chargeLeft = VrToolModels.ChargeInLeftHand;
-            Drive(LeftArm, active && Idle(grab.LeftHand));
+            Drive(LeftArm, active && (Idle(grab.LeftHand) || UsesHeldControl(LeftArm)));
             var rightBusy = VrToolModels.PosesRightArm;
-            Drive(RightArm, active && !rightBusy && (Idle(grab.RightHand)
+            Drive(RightArm, active && !rightBusy && (Idle(grab.RightHand) || UsesHeldControl(RightArm)
                 || (grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped && (equipment != EquipmentController.Equipment.DemoCharge || chargeLeft))));
             // The demo charge's arm is bent there; another bend on top would fight it.
             if (rightBusy) RightArm.Weight = 0f;
@@ -248,8 +248,7 @@ namespace ShipbreakerVR
             if (control == null || control.HandTarget == null) return;
             // Things that float loose, as cassettes and cables to collect, sit off their HandTarget in the hand: the hand goes
             // to the thing itself. Controls on the hull keep the place made for the hand.
-            var loose = control.GetComponentInParent<Rigidbody>();
-            var target = loose != null && !loose.isKinematic ? loose.worldCenterOfMass : control.HandTarget.position;
+            var target = VrClimb.Loose(control) ? control.GetComponentInParent<Rigidbody>().worldCenterOfMass : control.HandTarget.position;
             VrToolModels.Bend(arm.Upper, arm.Lower, arm.Wrist, target);
         }
 
@@ -469,6 +468,11 @@ namespace ShipbreakerVR
             return true;
         }
 
+        // A hand that holds on to a control and uses it: it stays where it holds, as a fist, instead of going back to the
+        // game, whose animation bent it to the control's HandTarget and the hand flew off the lever (Raik).
+        private static bool UsesHeldControl(Arm arm) =>
+            arm.Hand != null && arm.Hand.CurrentHandState == HandGrab.HandState.Success && VrClimb.HoldsControl(arm.Input);
+
         // Not grabbing, gesturing, hurt or holding a tool.
         private static bool Idle(HandGrab hand)
         {
@@ -491,6 +495,16 @@ namespace ShipbreakerVR
             var weight = arm.Weight;
             if (weight <= 0f || arm.Wrist == null || arm.Upper == null || arm.Lower == null) return;
             if (!arm.Input.TryGetPosition(out var gripLocal) || !arm.Input.TryGetAimRotation(out var aimLocal)) return;
+            // A hand holding the cutter or the grapple turns with the tool, not the controller: when the tool is held off by
+            // something (VrToolCollide), the hand stays on its grip and turns with it instead of twisting the wrist, and
+            // comes back with it.
+            var vrHand = arm == LeftArm ? VrHand.Left : VrHand.Right;
+            if (vrHand.HoldsTool && (vrHand.Tool == EquipmentController.Equipment.CuttingTool || vrHand.Tool == EquipmentController.Equipment.GrappleHook))
+            {
+                aimLocal = VrToolSteady.Apply(arm.Input, vrHand.Tool, aimLocal);
+                // With weight the tool lags behind the controller, and the hand on its grip with it (VrToolWeight).
+                gripLocal = VrToolWeight.Grip(arm.Input, vrHand.Tool, gripLocal);
+            }
             if (!VrToolModels.TrackingToWorld(gripLocal + aimLocal * VrInput.WristBehindGrip, aimLocal, out var wrist, out var aim)) return;
             var held = VrClimb.TryGetHold(arm.Input, out var point);
             if (held && VrToolModels.TrackingToWorld(gripLocal, aimLocal, out var grip, out _))

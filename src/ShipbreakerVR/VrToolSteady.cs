@@ -5,8 +5,9 @@ namespace ShipbreakerVR
 {
     // Cutter and grapple do not turn exactly with the controller: tremor within a small angle is filtered out, as in Raik's
     // VR aiming mod (the filter closes (angle / radius)^2 of the gap), and the tool follows with a short lag, so it feels
-    // like something with weight in the hand. Only the turn, which is what shakes the laser at a distance; the tool stays
-    // at the hand. The aim uses the same turn, so the laser shows where the tool really points.
+    // like something with weight in the hand. Only the turn, which is what shakes the laser at a distance. With extended
+    // tool physics the turn then goes through the tool's weight (VrToolWeight, which also moves its place) and its
+    // collision (VrToolCollide). The aim uses the same turn, so the laser shows where the tool really points.
     internal static class VrToolSteady
     {
         // In degrees: larger turns are movement, not tremor.
@@ -33,18 +34,21 @@ namespace ShipbreakerVR
                 filter.Running = false;
                 return raw;
             }
+            // Not run last frame: the tool was put away, the filter starts afresh (as VrToolWeight).
+            if (filter.Running && filter.Frame < Time.frameCount - 1) filter.Running = false;
             if (!filter.Running)
             {
                 filter.Running = true;
                 filter.Rotation = raw;
                 filter.Frame = Time.frameCount;
-                return raw;
+                return VrToolCollide.Apply(hand, tool, VrToolWeight.Turn(hand, tool, raw));
             }
-            if (filter.Frame == Time.frameCount) return filter.Rotation;
+            if (filter.Frame == Time.frameCount) return VrToolCollide.Apply(hand, tool, VrToolWeight.Turn(hand, tool, filter.Rotation));
             filter.Frame = Time.frameCount;
             var share = Share(Quaternion.Angle(filter.Rotation, raw), TremorAngle) * (1f - Mathf.Exp(-Time.unscaledDeltaTime / Lag));
             filter.Rotation = Quaternion.Slerp(filter.Rotation, raw, share);
-            return filter.Rotation;
+            // Then given weight and kept out of what is in the tool's way (extended tool physics).
+            return VrToolCollide.Apply(hand, tool, VrToolWeight.Turn(hand, tool, filter.Rotation));
         }
 
         // How much of an angle to the controller counts: little of tremor, all of a real movement.
