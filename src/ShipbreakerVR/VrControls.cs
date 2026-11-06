@@ -38,9 +38,15 @@ namespace ShipbreakerVR
         public const float DeadzoneMax = 10f;
         public const float FullMax = 30f;
         public const float MinThrustRange = 5f;
-        // How far a tilted hand moves without meaning to, in meters per degree, and at most.
-        private const float TiltShift = 0.0025f;
-        private const float TiltShiftMax = 0.15f;
+        // Where the hand turns when it tilts to roll, in the grip pose's axes (meters): measured from Raik's controller's
+        // velocity and angular velocity while rolling (a local test log), about 4 cm below and 3 cm behind the grip. Thrust
+        // is measured there, so a tilt alone hardly moves it. The estimate before, 8 cm straight behind the grip, lay some
+        // 6 cm off that axis: a 30 degree roll swung it 3 cm, past the deadzone, and the flight globe showed thrust.
+        private static readonly Vector3 ThrustAnchor = new Vector3(0.01f, -0.04f, -0.03f);
+        // What a tilt still moves the hand by itself (the arm going along, other hands), in meters per degree, and at most;
+        // was 2.5 mm and 15 cm with the old anchor, and swallowed real thrust while tilted.
+        private const float TiltShift = 0.001f;
+        private const float TiltShiftMax = 0.05f;
         private const float TurnDeadzone = 12f;
         // Rolling: as fast per degree as turning, up to a hand tilted all the way.
         private const float RollFull = 90f;
@@ -126,9 +132,10 @@ namespace ShipbreakerVR
                 return;
             }
             if (!left.TryGetGripPose(out var grip, out var rotation)) { held = false; return; }
-            // Thrust follows the wrist, not the controller: tilting the hand swings the controller around the wrist, and
-            // measured at the controller that swing alone moved it past the deadzone, adding thrust nobody asked for.
-            var position = grip + rotation * VrInput.WristBehindGrip;
+            // Thrust follows the point the hand turns about (ThrustAnchor), not the controller: tilting the hand swings the
+            // controller around it, and measured at the controller that swing alone moved it past the deadzone, adding
+            // thrust nobody asked for.
+            var position = grip + rotation * ThrustAnchor;
             left.TryGetAimRotation(out rotation);
             handPosition = position;
             handRotation = rotation;
