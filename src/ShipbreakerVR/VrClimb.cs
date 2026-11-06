@@ -524,23 +524,72 @@ namespace ShipbreakerVR
             return false;
         }
 
-        // Outward from the surface at the hold: the face a ray from the hand to its nearest point meets, or, with the hand
-        // on it, the face a ray along the controller meets. The way from the nearest point to the hand alone tipped the
-        // hand at edges and on uneven tops, one grip flat, the next at a slant (Raik, the terminal at the start).
+        // Outward from the surface at the hold: the face a ray from the hand to its nearest point meets. With the hand on
+        // the surface or already in it (grabbed out of a movement), or that face turned well away from the palm, the face
+        // the palm turns to instead: of the faces rays along the palm, the controller's aim and its down meet, the one most
+        // facing the palm. The way from the nearest point to the hand alone tipped the hand at edges and on uneven tops
+        // (Raik, the terminal at the start); a ray along the aim alone, which runs along the surface under a flat hand,
+        // met the side of a step or an edge, and the hand held on edgewise with its fingers curled (Raik, 2026-11-06).
         private static Vector3 SurfaceNormal(Collider collider, Vector3 at, Vector3 surface, Hand hand)
         {
+            var scale = VrCamera.WorldScale;
+            var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+            var turn = Quaternion.identity;
+            var aimed = false;
+            if (rig != null && hand.Input.TryGetAimRotation(out var aim))
+            {
+                aimed = true;
+                turn = rig.rotation * aim;
+            }
+            // Where the palm faces: towards the body's middle, to the controller's right on the left hand.
+            var palm = turn * (hand.Input.IsLeft ? Vector3.right : Vector3.left);
             var away = at - surface;
             var distance = away.magnitude;
-            if (distance > 0.01f * VrCamera.WorldScale)
+            if (distance > 0.01f * scale)
             {
                 var toward = -away / distance;
-                if (collider.Raycast(new Ray(at, toward), out var face, distance + 0.02f * VrCamera.WorldScale)
-                    && Vector3.Dot(face.normal, away) > 0f) return face.normal;
-                return away / distance;
+                var nearest = collider.Raycast(new Ray(at, toward), out var face, distance + 0.02f * scale) && Vector3.Dot(face.normal, away) > 0f
+                    ? face.normal : away / distance;
+                if (!aimed || Vector3.Angle(nearest, -palm) <= PalmTurnedAway) return nearest;
+                if (!FacingPalm(collider, at, turn, palm, out var turned) || Vector3.Angle(turned, -palm) >= Vector3.Angle(nearest, -palm)) return nearest;
+                LogFace(hand, "the nearest face turned away from the palm", Vector3.Angle(nearest, -palm), Vector3.Angle(turned, -palm));
+                return turned;
             }
-            var back = hand.Input.TryGetAimRotation(out var aim) ? VrCamera.Instance.transform.parent.rotation * aim * Vector3.forward : Vector3.down;
-            var ray = new Ray(at - back * Reach * VrCamera.WorldScale, back);
-            return collider.Raycast(ray, out var hit, 2f * Reach * VrCamera.WorldScale) ? hit.normal : -back;
+            if (aimed && FacingPalm(collider, at, turn, palm, out var normal))
+            {
+                LogFace(hand, "on or in the surface", -1f, Vector3.Angle(normal, -palm));
+                return normal;
+            }
+            return -(aimed ? palm : Vector3.down);
+        }
+
+        private static int faceLogs;
+
+        private static void LogFace(Hand hand, string why, float nearest, float palm)
+        {
+            if (faceLogs++ < 30)
+                Plugin.Log.LogInfo($"Climbing: {hand.Name} hand takes the face its palm turns to ({why}{(nearest >= 0f ? $", nearest face {nearest:0}° off the palm" : "")}), {palm:0}° off the palm");
+        }
+
+        // A face the nearest point's own is taken over the palm's only this far off facing the palm, in degrees.
+        private const float PalmTurnedAway = 60f;
+
+        // Of the faces rays from outside the hand along the palm, the aim and the controller's down meet, the one whose
+        // outside faces the palm most; false without one.
+        private static bool FacingPalm(Collider collider, Vector3 at, Quaternion turn, Vector3 palm, out Vector3 normal)
+        {
+            normal = Vector3.zero;
+            var reach = Reach * VrCamera.WorldScale;
+            var best = -2f;
+            foreach (var way in new[] { palm, turn * Vector3.forward, turn * Vector3.down })
+            {
+                if (!collider.Raycast(new Ray(at - way * reach, way), out var hit, 2f * reach)) continue;
+                var facing = Vector3.Dot(hit.normal, -palm);
+                if (facing <= best) continue;
+                best = facing;
+                normal = hit.normal;
+            }
+            return best > -2f;
         }
 
         // A part the game lets one move, held by a hand that pulls it (not one pushing a heavy part, BracedPush).
