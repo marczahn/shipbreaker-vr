@@ -375,6 +375,7 @@ interacting, the grapple and the "entity of interest".
   down, 0.4 out and 0.3 back in the body's axes (`VrHands.Elbow`, the pole of `VrToolModels.Bend`), not into the
   animation's plane, which turned it inwards while drawing a tool.
 
+- A wrist twisted by what it holds (`VrHands.Strain`): a part that moves turns the hand fixed on it against its controller; from 60° of twist (counted from the turn it took hold with) the controller buzzes, harder up to 100°, where the hand lets go (`VrClimb.LetGoOf`, at the next physics step). Not on fixed holds, and not on light parts held firmly, which turn with the hand.
 - Using things needs a hand on them (`VrInteractHeld`, a postfix on `InteractionController.UpdateClosestInteractable`): while aiming with the hand and with `Steuerung/Festhalten` on, the game's pick of the closest interactable along the view (`mClosestInteractable`) becomes the interactable on what the hand that took hold last holds (`VrClimb.HeldInteractable`), or none; its hit info is cleared for a thing the game did not find itself. So a door switch, a console or a thing to collect shows its prompt only once grabbed (Raik).
 
 ## Body follows head

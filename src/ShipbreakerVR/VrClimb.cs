@@ -129,6 +129,8 @@ namespace ShipbreakerVR
             public bool Control;
             // A part that turns with the hand: its turn relative to the controller, and its speed limit before.
             public bool Firm;
+            // Asked to let go from outside the physics step (LetGoOf), with the reason.
+            public string LetGoBecause;
             // The second hand on a firmly held part: it stays on the part, the first hand moves it.
             public bool Follower;
             public Quaternion FirmTurn;
@@ -203,6 +205,12 @@ namespace ShipbreakerVR
                 return;
             }
             foreach (var hand in Hands) Read(hand);
+            foreach (var hand in Hands)
+            {
+                if (hand.LetGoBecause == null) continue;
+                if (hand.Holding) LetGo(hand, false, hand.LetGoBecause);
+                hand.LetGoBecause = null;
+            }
             foreach (var hand in Hands) Rethink(hand);
             Pull();
         }
@@ -956,6 +964,27 @@ namespace ShipbreakerVR
                 at = hand.HeldAt;
             }
             return found;
+        }
+
+        // True while that controller's hand pulls at a part that moves (not held firmly or following another hand).
+        public static bool HoldsMoving(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input) return hand.Holding && hand.Movable && !hand.Firm && !hand.Follower && hand.Body != null;
+            return false;
+        }
+
+        // That hand lets go at the next physics step (VrHands: a wrist twisted too far by what it holds); true when newly
+        // asked.
+        public static bool LetGoOf(VrInput.Hand input, string why)
+        {
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input || !hand.Holding || hand.LetGoBecause != null) continue;
+                hand.LetGoBecause = why;
+                return true;
+            }
+            return false;
         }
 
         public static bool HoldsControl(VrInput.Hand input)
