@@ -32,7 +32,7 @@ namespace ShipbreakerVR
 
         // How far from the controller a surface may be to hold on, in meters at world scale 1.
         private const float Reach = 0.15f;
-        // A control's HandTarget wins over the nearest surface only up to this much farther away, in meters at world scale
+        // A control's collider wins over the nearest surface only up to this much farther away, in meters at world scale
         // 1: a hand climbing past a switch keeps the wall.
         private const float ControlPreference = 0.05f;
         // A grip pressed just before the hand arrives still catches, for this many seconds: a moving hand misses less.
@@ -107,7 +107,7 @@ namespace ShipbreakerVR
             public Vector3 Surface;
             // The surface's outward direction there, on Anchor: a flat hand lies on it (VrHands).
             public Vector3 Normal;
-            // On a control's HandTarget (NearestControl): the hand makes a fist there.
+            // On a control (NearestControl), where the hand took hold of it: the hand makes a fist there.
             public bool Control;
             // A part that turns with the hand: its turn relative to the controller, and its speed limit before.
             public bool Firm;
@@ -258,16 +258,18 @@ namespace ShipbreakerVR
                 surface = closest;
             }
             // A control within reach (a door switch, a console) comes first, unless the nearest surface is more than
-            // ControlPreference nearer: the hand goes onto the control's HandTarget, where the game puts its own hand, as a
-            // fist (HoldsControl). Before, the hand held the hull under the switch or stayed a few centimeters off it (Raik).
-            var control = NearestControl(at, reach, out var controlCollider);
+            // ControlPreference nearer: the hand holds it as a fist (HoldsControl) where it took hold, on the control's own
+            // collider. Not on its HandTarget, where the game puts its own hand: on the airlock console's lever that lay
+            // 17 cm off the hand, and the hand sat above the lever (Raik). Before that, the hand held the hull under the
+            // switch.
+            var control = NearestControl(at, reach, out var controlCollider, out var controlPoint);
             if (control != null && best != null
-                && (control.HandTarget.position - at).magnitude > Mathf.Sqrt(bestDistance) + ControlPreference * VrCamera.WorldScale)
+                && (controlPoint - at).magnitude > Mathf.Sqrt(bestDistance) + ControlPreference * VrCamera.WorldScale)
                 control = null;
             if (control != null)
             {
                 best = controlCollider;
-                surface = control.HandTarget.position;
+                surface = controlPoint;
                 bestDistance = (surface - at).sqrMagnitude;
             }
             // Some switches have no solid collider, only the trigger the game's interaction uses. It is no surface: the hand
@@ -737,10 +739,12 @@ namespace ShipbreakerVR
             return false;
         }
 
-        // The fixed control whose HandTarget is nearest to the hand within reach, with one of its colliders, or null.
-        private static InteractableObject NearestControl(Vector3 at, float reach, out Collider collider)
+        // The fixed control with a collider nearest to the hand within reach, that collider and its point nearest the hand,
+        // or null.
+        private static InteractableObject NearestControl(Vector3 at, float reach, out Collider collider, out Vector3 point)
         {
             collider = null;
+            point = at;
             InteractableObject best = null;
             var bestDistance = reach * reach;
             var count = Physics.OverlapSphereNonAlloc(at, reach, Found, ~0, QueryTriggerInteraction.Collide);
@@ -752,13 +756,23 @@ namespace ShipbreakerVR
                 // Things that float loose, as cassettes to collect, are held as parts.
                 var loose = control.GetComponentInParent<Rigidbody>();
                 if (loose != null && !loose.isKinematic) continue;
-                var distance = (control.HandTarget.position - at).sqrMagnitude;
+                var nearest = NearestOn(Found[i], at);
+                var distance = (nearest - at).sqrMagnitude;
                 if (distance >= bestDistance) continue;
                 best = control;
                 bestDistance = distance;
                 collider = Found[i];
+                point = nearest;
             }
             return best;
+        }
+
+        // The point of a control's collider nearest to the hand (the hand itself inside it); its bounds' for a mesh that
+        // ClosestPoint cannot take (not convex).
+        private static Vector3 NearestOn(Collider collider, Vector3 at)
+        {
+            if (collider is MeshCollider mesh && !mesh.convex) return collider.bounds.ClosestPoint(at);
+            return collider.ClosestPoint(at);
         }
 
         // Where that controller's hand holds on, if it does, for the game's hand (VrHands.Pose).

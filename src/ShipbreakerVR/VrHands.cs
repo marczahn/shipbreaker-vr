@@ -216,9 +216,9 @@ namespace ShipbreakerVR
             var active = VrAim.Active;
             var equipment = grab.RightHand.CurrentEquipmentType;
             var chargeLeft = VrToolModels.ChargeInLeftHand;
-            Drive(LeftArm, active && Idle(grab.LeftHand));
+            Drive(LeftArm, active && (Idle(grab.LeftHand) || UsesHeldControl(LeftArm)));
             var rightBusy = VrToolModels.PosesRightArm;
-            Drive(RightArm, active && !rightBusy && (Idle(grab.RightHand)
+            Drive(RightArm, active && !rightBusy && (Idle(grab.RightHand) || UsesHeldControl(RightArm)
                 || (grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped && (equipment != EquipmentController.Equipment.DemoCharge || chargeLeft))));
             // The demo charge's arm is bent there; another bend on top would fight it.
             if (rightBusy) RightArm.Weight = 0f;
@@ -468,6 +468,11 @@ namespace ShipbreakerVR
             arm.Set[index] = joint.localRotation;
             return true;
         }
+
+        // A hand that holds on to a control and uses it: it stays where it holds, as a fist, instead of going back to the
+        // game, whose animation bent it to the control's HandTarget and the hand flew off the lever (Raik).
+        private static bool UsesHeldControl(Arm arm) =>
+            arm.Hand != null && arm.Hand.CurrentHandState == HandGrab.HandState.Success && VrClimb.HoldsControl(arm.Input);
 
         // Not grabbing, gesturing, hurt or holding a tool.
         private static bool Idle(HandGrab hand)
