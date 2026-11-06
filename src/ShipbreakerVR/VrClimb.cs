@@ -941,6 +941,23 @@ namespace ShipbreakerVR
         }
 
         // True while that controller's hand holds a control (a door switch, a console's button) as a fist.
+        // What can be used of what the hands hold (VrInteractHeld): the interactable on the thing the hand that took hold
+        // last holds, a switch, a console or a thing to collect; null when no hand holds one.
+        public static InteractableObject HeldInteractable()
+        {
+            InteractableObject found = null;
+            var at = float.MinValue;
+            foreach (var hand in Hands)
+            {
+                if (!hand.Holding || hand.Collider == null || hand.HeldAt < at) continue;
+                var interactable = hand.Collider.GetComponentInParent<InteractableObject>();
+                if (interactable == null || !interactable.isActiveAndEnabled) continue;
+                found = interactable;
+                at = hand.HeldAt;
+            }
+            return found;
+        }
+
         public static bool HoldsControl(VrInput.Hand input)
         {
             foreach (var hand in Hands)

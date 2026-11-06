@@ -375,6 +375,8 @@ interacting, the grapple and the "entity of interest".
   down, 0.4 out and 0.3 back in the body's axes (`VrHands.Elbow`, the pole of `VrToolModels.Bend`), not into the
   animation's plane, which turned it inwards while drawing a tool.
 
+- Using things needs a hand on them (`VrInteractHeld`, a postfix on `InteractionController.UpdateClosestInteractable`): while aiming with the hand and with `Steuerung/Festhalten` on, the game's pick of the closest interactable along the view (`mClosestInteractable`) becomes the interactable on what the hand that took hold last holds (`VrClimb.HeldInteractable`), or none; its hit info is cleared for a thing the game did not find itself. So a door switch, a console or a thing to collect shows its prompt only once grabbed (Raik).
+
 ## Body follows head
 - The body rotates in `OrientationController.HandleAxisRotation` via `Rigidbody.MoveRotation(rotation * mouseDelta)`.
 - A transpiler redirects that call to `VrBody.MoveRotation`: the mouse delta rotates the "playspace" P, and the body
