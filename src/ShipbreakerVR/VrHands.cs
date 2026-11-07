@@ -575,11 +575,14 @@ namespace ShipbreakerVR
 
         // A part held in one place that turns (a 60 kg crate set spinning) turns the hand on it with it, against the
         // controller, until the wrist looks wrenched (Raik). From StrainFrom degrees of twist the controller buzzes, harder
-        // and harder up to LetGoAt, where the hand lets go (VrClimb.LetGoOf). Only parts that move: a wall does not turn
+        // and harder (up to 70 %) up to LetGoAt, where the hand lets go (VrClimb.LetGoOf) with one short full buzz. Only parts that move: a wall does not turn
         // the hand, and a light part held firmly turns with the hand anyway.
         private const float StrainFrom = 60f;
         private const float LetGoAt = 100f;
         private const float StrainBuzzEvery = 0.05f;
+        // The warning grows to at most this strength; letting go gives one full buzz of LetGoBuzz seconds.
+        private const float StrainMost = 0.7f;
+        private const float LetGoBuzz = 0.12f;
         private static int strainLogs;
 
         private static void Strain(Arm arm, float twist)
@@ -587,14 +590,16 @@ namespace ShipbreakerVR
             if (twist < StrainFrom || !VrClimb.HoldsMoving(arm.Input)) return;
             if (twist >= LetGoAt)
             {
-                if (VrClimb.LetGoOf(arm.Input, $"wrist twisted {twist:0}°") && strainLogs++ < 20)
-                    Plugin.Log.LogInfo($"Hands: {arm.Name} wrist twisted {twist:0}° by what it holds, lets go");
+                if (!VrClimb.LetGoOf(arm.Input, $"wrist twisted {twist:0}°")) return;
+                // One short full buzz as the grip goes, against the warning's at most StrainMost (Raik).
+                arm.Input.Buzz(1f, LetGoBuzz);
+                if (strainLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} wrist twisted {twist:0}° by what it holds, lets go");
                 return;
             }
             if (Time.unscaledTime < arm.NextStrainBuzz) return;
             arm.NextStrainBuzz = Time.unscaledTime + StrainBuzzEvery;
             var share = Mathf.InverseLerp(StrainFrom, LetGoAt, twist);
-            arm.Input.Buzz(Mathf.Lerp(0.1f, 1f, share * share), StrainBuzzEvery * 1.6f);
+            arm.Input.Buzz(Mathf.Lerp(0.1f, StrainMost, share * share), StrainBuzzEvery * 1.6f);
         }
 
         // A flat hand placed on its hold, moved out along the palm's way as far as the deepest of its points (HandAlong,
