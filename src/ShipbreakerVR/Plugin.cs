@@ -11,7 +11,7 @@ namespace ShipbreakerVR
     {
         public const string Guid = "de.marczahn.shipbreakervr";
         public const string Name = "ShipbreakerVR";
-        public const string Version = "0.28.2";
+        public const string Version = "0.28.3";
 
         internal static ManualLogSource Log;
 
