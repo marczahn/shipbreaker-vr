@@ -248,6 +248,26 @@ namespace ShipbreakerVR.Tests
         }
 
         [Fact]
+        public void ThrustGlidesNoFasterThanItsLimit()
+        {
+            var velocity = Vector3.zero;
+            for (var i = 0; i < 500; i++)
+                velocity = ClimbContact.ThrustGlide(velocity + new Vector3(0.1f, 0f, 0f), velocity.magnitude, ClimbContact.GlideBrake(velocity.magnitude, 1f), Step, 1f);
+            Assert.Equal(1.5f, velocity.x, 3);
+        }
+
+        [Fact]
+        public void FastGlideBrakesDownToTheThrustLimit()
+        {
+            var velocity = new Vector3(4f, 0f, 0f);
+            var brake = ClimbContact.GlideBrake(4f, 1f);
+            var slower = ClimbContact.ThrustGlide(velocity + new Vector3(0.1f, 0f, 0f), 4f, brake, Step, 1f);
+            Assert.InRange(slower.x, 1.5f, 4f - 0.01f);
+            for (var i = 0; i < 200; i++) slower = ClimbContact.ThrustGlide(slower + new Vector3(0.1f, 0f, 0f), slower.magnitude, brake, Step, 1f);
+            Assert.Equal(1.5f, slower.x, 3);
+        }
+
+        [Fact]
         public void GlideBrakesAlongItsOwnWay()
         {
             var slower = ClimbContact.Brake(new Vector3(0f, 0f, -1f), ClimbContact.GlideBrake(1f, 1f), Step);

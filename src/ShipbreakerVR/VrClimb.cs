@@ -300,7 +300,11 @@ namespace ShipbreakerVR
                 var normal = hand.Anchor.TransformDirection(hand.Normal).normalized;
                 var before = hand.GlideVelocity;
                 var velocity = Vector3.ProjectOnPlane(before + added, normal);
-                if (VrControls.Thrusting) hand.GlideBrake = ClimbContact.GlideBrake(velocity.magnitude, VrCamera.WorldScale);
+                if (VrControls.Thrusting)
+                {
+                    velocity = ClimbContact.ThrustGlide(velocity, before.magnitude, hand.GlideBrake, Time.fixedDeltaTime, VrCamera.WorldScale);
+                    hand.GlideBrake = ClimbContact.GlideBrake(velocity.magnitude, VrCamera.WorldScale);
+                }
                 else velocity = Vector3.Dot(velocity, before) < 0f ? Vector3.zero : ClimbContact.Brake(velocity, hand.GlideBrake, Time.fixedDeltaTime);
                 hand.GlideVelocity = velocity;
                 if (velocity == Vector3.zero) continue;
@@ -1289,6 +1293,19 @@ namespace ShipbreakerVR
         // would stay as long and it never stopped).
         public static float GlideBrake(float speed, float scale) =>
             Mathf.Max(LeastBrake * scale, speed * speed / (2f * GlideMostWay * scale));
+
+        // Thrust along a surface held glides at most this fast, in m/s at world scale 1 (Raik: 3 m/s was too fast);
+        // a faster glide from taking hold brakes down to it. Before is the glide's speed before this step's thrust.
+        private const float ThrustGlideMost = 1.5f;
+
+        public static Vector3 ThrustGlide(Vector3 velocity, float before, float brake, float dt, float scale)
+        {
+            var most = ThrustGlideMost * scale;
+            var speed = velocity.magnitude;
+            if (speed <= most) return velocity;
+            var allowed = Mathf.Max(most, Mathf.Min(speed, before) - brake * dt);
+            return velocity * (allowed / speed);
+        }
 
         // The glide velocity one step later.
         public static Vector3 Brake(Vector3 velocity, float brake, float dt)
