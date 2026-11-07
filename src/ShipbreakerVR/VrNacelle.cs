@@ -100,7 +100,7 @@ namespace ShipbreakerVR
                 Known[control] = known;
                 if (type.Contains("Nacelle") && logs++ < 80)
                     Plugin.Log.LogInfo($"Nacelle: '{control.name}' ({type}) under '{(control.transform.parent != null ? control.transform.parent.name : "none")}': "
-                        + $"handle '{(handle != null ? handle.name : "none")}', switch '{(slider != null ? slider.name : "none")}'{(known ? "" : ", not worked by hand")}");
+                        + $"handle '{(handle != null ? handle.name + " under '" + handle.parent.name + "'" : "none")}', switch '{(slider != null ? slider.name : "none")}'{(known ? "" : ", not worked by hand")}");
             }
             return known;
         }
@@ -325,20 +325,23 @@ namespace ShipbreakerVR
             if (slid <= 0f) return;
             var down = slider.parent.TransformDirection(Vector3.down).normalized * slid;
             slider.position += down;
-            handle.position += down;
+            // A handle on the switch goes with it already.
+            if (!handle.IsChildOf(slider)) handle.position += down;
         }
 
-        // Its handle (under the control) and its switch (beside the control).
+        // Its handle and its switch.
         private static bool Parts(InteractableObject control, out Transform handle, out Transform slider)
         {
             handle = null;
             slider = null;
-            foreach (Transform child in control.transform)
-                if (child.name.EndsWith("_Handle")) handle = child;
+            // Both somewhere under the switch's housing (the survey's list does not show the handle's real parent).
             var parent = control.transform.parent;
-            if (parent != null)
-                foreach (Transform child in parent)
-                    if (child.name.EndsWith("_Switch")) slider = child;
+            if (parent == null) return false;
+            foreach (var child in parent.GetComponentsInChildren<Transform>(true))
+            {
+                if (child.name.EndsWith("_Handle")) handle = child;
+                if (child.name.EndsWith("_Switch")) slider = child;
+            }
             return handle != null && slider != null;
         }
     }
