@@ -100,6 +100,10 @@ namespace ShipbreakerVR
             public bool Gripping;
             public Transform GripAnchor;
             public Quaternion GripTurn;
+            // After the hold slid along its surface (VrClimb.Slide): the turn it had, blended over to the new one.
+            public int GripSlides;
+            public Quaternion GripTurnBefore;
+            public float GripTurnAt = -1f;
             public Vector3 GripPoint;
             public Vector3 GripOffset;
             public bool GripFlat;
@@ -533,8 +537,14 @@ namespace ShipbreakerVR
         {
             if (held && VrClimb.TryGetGrip(arm.Input, out var anchor, out var normal))
             {
-                if (!arm.Gripping || anchor != arm.GripAnchor)
+                var slides = VrClimb.Slides(arm.Input);
+                if (!arm.Gripping || anchor != arm.GripAnchor || slides != arm.GripSlides)
                 {
+                    // Slid on the same hold: the hand turns over to its new place instead of snapping.
+                    var slid = arm.Gripping && anchor == arm.GripAnchor;
+                    arm.GripTurnBefore = arm.GripTurn;
+                    arm.GripTurnAt = slid ? Time.unscaledTime : -1f;
+                    arm.GripSlides = slides;
                     arm.Gripping = true;
                     arm.GripAnchor = anchor;
                     var flat = VrClimb.HoldsFlat(arm.Input);
@@ -560,12 +570,17 @@ namespace ShipbreakerVR
                 if (!arm.Gripping) arm.GripAnchor = null;
                 return;
             }
-            var turn = arm.GripAnchor.rotation * arm.GripTurn;
+            var gripTurn = arm.GripTurnAt < 0f ? arm.GripTurn
+                : Quaternion.Slerp(arm.GripTurnBefore, arm.GripTurn, Mathf.Clamp01((Time.unscaledTime - arm.GripTurnAt) / SlideTurnTime));
+            var turn = arm.GripAnchor.rotation * gripTurn;
             var placed = arm.GripAnchor.TransformPoint(arm.GripPoint) + turn * arm.GripOffset;
             if (arm.GripFlat) placed = OutOfSurface(arm, placed, turn);
             wrist = Vector3.Lerp(wrist, placed, arm.GripBlend);
             frame = Quaternion.Slerp(frame, turn, arm.GripBlend);
         }
+
+        // How long a hand takes to turn over to its hold after sliding along a surface (VrClimb.Slide), in seconds.
+        private const float SlideTurnTime = 0.35f;
 
         // A flat hand placed on its hold, moved out along the palm's way as far as the deepest of its points (HandAlong,
         // HandAcross on the palm's side) went into anything: a ray from outside towards each point finds what is in front

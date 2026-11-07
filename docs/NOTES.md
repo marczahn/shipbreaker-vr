@@ -375,6 +375,7 @@ interacting, the grapple and the "entity of interest".
   down, 0.4 out and 0.3 back in the body's axes (`VrHands.Elbow`, the pole of `VrToolModels.Bend`), not into the
   animation's plane, which turned it inwards while drawing a tool.
 
+- A hand flat on a large fixed surface slides along it when the body turns on with the controls (`VrClimb.Slide`): past 100° from the body's turn at taking hold, the hold moves to under the hand (its position onto the surface's plane, found on the collider by a ray) over 0.35 s, eased, and the hand turns over to its new flat pose over as long (`VrHands`, `GripSlides`). The count starts again from there.
 - Using things needs a hand on them (`VrInteractHeld`, a postfix on `InteractionController.UpdateClosestInteractable`): while aiming with the hand and with `Steuerung/Festhalten` on, the game's pick of the closest interactable along the view (`mClosestInteractable`) becomes the interactable on what the hand that took hold last holds (`VrClimb.HeldInteractable`), or none; its hit info is cleared for a thing the game did not find itself. So a door switch, a console or a thing to collect shows its prompt only once grabbed (Raik).
 
 ## Body follows head

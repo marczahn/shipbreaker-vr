@@ -135,6 +135,13 @@ namespace ShipbreakerVR
             public float SpinBefore;
             public RigidbodyInterpolation InterpolationBefore;
             public float HeldAt;
+            // Sliding along a large surface (Slide): the body's turn the hold counts from, the way from and to, and how
+            // often it slid (VrHands takes the hand's turn anew then).
+            public Quaternion TurnAtHold;
+            public bool Sliding;
+            public float SlideAt;
+            public Vector3 SlideFromPoint, SlideToPoint, SlideFromSurface, SlideToSurface;
+            public int Slides;
 
             public Hand(VrHand vr)
             {
@@ -204,7 +211,60 @@ namespace ShipbreakerVR
             }
             foreach (var hand in Hands) Read(hand);
             foreach (var hand in Hands) Rethink(hand);
+            foreach (var hand in Hands) Slide(hand);
             Pull();
+        }
+
+        // A hand flat on a large fixed surface (a hull) while the body turns on with the controls: past SlideAfter degrees
+        // from where it took hold, the hold slides along the surface to under the hand, over SlideTime, so the hand comes
+        // after the body instead of staying behind with the arm wound round (Raik: holding a wall and turning all the way).
+        private const float SlideAfter = 100f;
+        private const float SlideTime = 0.35f;
+        // Not for less than this, in meters at world scale 1.
+        private const float SlideLeast = 0.05f;
+        private static int slideLogs;
+
+        private static void Slide(Hand hand)
+        {
+            if (!hand.Holding || hand.Movable || hand.Firm || hand.Follower || hand.Control || hand.Anchor == null || hand.Collider == null) return;
+            if (hand.Sliding)
+            {
+                var t = Mathf.Clamp01((Time.time - hand.SlideAt) / SlideTime);
+                var eased = t * t * (3f - 2f * t);
+                hand.Point = Vector3.Lerp(hand.SlideFromPoint, hand.SlideToPoint, eased);
+                hand.Surface = Vector3.Lerp(hand.SlideFromSurface, hand.SlideToSurface, eased);
+                if (t >= 1f) hand.Sliding = false;
+                return;
+            }
+            var playspace = VrCamera.Instance.Playspace;
+            if (Quaternion.Angle(playspace, hand.TurnAtHold) < SlideAfter) return;
+            hand.TurnAtHold = playspace;
+            // Where the hand is now, taken onto the surface's plane and found on the surface there.
+            var surface = hand.Anchor.TransformPoint(hand.Surface);
+            var normal = hand.Anchor.TransformDirection(hand.Normal).normalized;
+            var along = Vector3.ProjectOnPlane(HandWorld(hand) - surface, normal);
+            var scale = VrCamera.WorldScale;
+            if (along.magnitude < SlideLeast * scale) return;
+            var probe = Reach * scale;
+            if (!hand.Collider.Raycast(new Ray(surface + along + normal * probe, -normal), out var hit, 2f * probe)) return;
+            var moved = hand.Anchor.InverseTransformPoint(hit.point) - hand.Surface;
+            hand.SlideFromPoint = hand.Point;
+            hand.SlideFromSurface = hand.Surface;
+            hand.SlideToPoint = hand.Point + moved;
+            hand.SlideToSurface = hand.Surface + moved;
+            hand.Sliding = true;
+            hand.SlideAt = Time.time;
+            hand.Slides++;
+            if (slideLogs++ < 20)
+                Plugin.Log.LogInfo($"Climbing: {hand.Name} hand slides {along.magnitude:0.00} m along '{hand.Collider.name}' after the body turned {SlideAfter:0}°");
+        }
+
+        // How often that hand's hold slid along its surface (VrHands turns the hand anew each time).
+        public static int Slides(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input && hand.Holding) return hand.Slides;
+            return 0;
         }
 
         // Whether a part above the game's grab range moves with the hands: with extended world physics, up to
@@ -348,6 +408,8 @@ namespace ShipbreakerVR
             hand.Control = control != null;
             hand.Normal = hand.Anchor.InverseTransformDirection(SurfaceNormal(best, at, surface, hand));
             hand.HeldAt = Time.time;
+            hand.TurnAtHold = VrCamera.Instance.Playspace;
+            hand.Sliding = false;
             hand.Firm = false;
             hand.Follower = false;
             foreach (var other in Hands)
