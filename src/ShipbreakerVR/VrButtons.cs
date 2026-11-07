@@ -30,7 +30,7 @@ namespace ShipbreakerVR
         private const float LookEvery = 0.15f;
         private const float LookAround = 0.25f;
         // A button is no larger than this.
-        private const float Largest = 0.2f;
+        private const float Largest = 0.3f;
         private const float ClickAmplitude = 0.7f;
         private const float ClickLength = 0.03f;
         // After a press the game's hand would reach for the control: the hands stay with their controllers this long.
@@ -43,7 +43,12 @@ namespace ShipbreakerVR
             public Vector3 Rest;
             // The face's direction in the button's own axes (outwards, away from the middle of its part), its depth and size.
             public Vector3 Out;
+            // Whether Out is known; else it is the side the tip first comes from.
+            public bool OutKnown;
             public float Half;
+            // Parts that sink with it: the light on its face ('Unlock_01'), where they rest.
+            public readonly List<Transform> With = new List<Transform>();
+            public readonly List<Vector3> WithRest = new List<Vector3>();
             public Vector3 Extents;
             public Vector3 Center;
             public float Sunk;
@@ -96,7 +101,15 @@ namespace ShipbreakerVR
                 button.Sunk = Mathf.Clamp(depth, 0f, Travel * VrCamera.WorldScale);
                 var t = button.Filter.transform;
                 t.localPosition = button.Rest;
-                if (button.Sunk > 0f) t.position -= t.TransformDirection(button.Out).normalized * button.Sunk;
+                for (var i = 0; i < button.With.Count; i++)
+                    if (button.With[i] != null) button.With[i].localPosition = button.WithRest[i];
+                if (button.Sunk > 0f)
+                {
+                    var down = t.TransformDirection(button.Out).normalized * button.Sunk;
+                    t.position -= down;
+                    foreach (var with in button.With)
+                        if (with != null) with.position -= down;
+                }
                 else Done.Add(button);
             }
             foreach (var button in Done) Sinking.Remove(button);
@@ -121,6 +134,11 @@ namespace ShipbreakerVR
                 var rest = t.parent != null ? t.parent.TransformPoint(button.Rest) : button.Rest;
                 var local = Quaternion.Inverse(t.rotation) * (at - rest);
                 local = new Vector3(local.x / t.lossyScale.x, local.y / t.lossyScale.y, local.z / t.lossyScale.z) - button.Center;
+                if (!button.OutKnown)
+                {
+                    if (Vector3.Dot(local, button.Out) < 0f) button.Out = -button.Out;
+                    button.OutKnown = true;
+                }
                 var scale = Mathf.Abs(Vector3.Dot(t.lossyScale, Abs(button.Out)));
                 var depth = (button.Half - Vector3.Dot(local, button.Out)) * scale;
                 var across = local - button.Out * Vector3.Dot(local, button.Out);
@@ -175,43 +193,83 @@ namespace ShipbreakerVR
             if (ByPart.TryGetValue(part, out var list)) return list;
             list = new List<Button>();
             ByPart[part] = list;
-            InteractableObject control = null;
-            // The powered one first: the part also has an 'Unpowered Interaction Volume'.
-            foreach (var each in part.GetComponentsInChildren<InteractableObject>(true))
-                if (each.isActiveAndEnabled && (control == null || control.name.Contains("Unpowered"))) control = each;
             foreach (var filter in part.GetComponentsInChildren<MeshFilter>(true))
             {
                 var mesh = filter.sharedMesh;
-                if (logs < 60 && part.name.Contains("AtmosphereRegulator"))
-                    Plugin.Log.LogInfo($"Buttons: '{part.name}' has '{filter.name}' ({(mesh != null ? mesh.name : "no mesh")})");
-                // The air conditioner's button is its part 'Unlock_01'.
-                if (mesh == null || !(mesh.name.Contains("_Button") || filter.name.Contains("_Button") || filter.name.StartsWith("Unlock_"))) continue;
+                // The air conditioner's black button is a part of its own, 'SM_AtmosphereRegulator_Mini_1Bx1xA_Button'
+                // ('Unlock_01' on it is only its light, a flat quad).
+                if (mesh == null || !(mesh.name.Contains("_Button") || filter.name.Contains("_Button"))) continue;
                 var bounds = mesh.bounds;
                 var size = Vector3.Scale(bounds.size, Abs(filter.transform.lossyScale));
-                if (size.x > Largest || size.y > Largest || size.z > Largest) continue;
-                // It is pushed along its thinnest side.
+                var center = filter.transform.TransformPoint(bounds.center);
+                if (size.x > Largest || size.y > Largest || size.z > Largest)
+                {
+                    if (logs++ < 60) Plugin.Log.LogInfo($"Buttons: '{filter.name}' is too large for a button ({size.x * 100f:0} x {size.y * 100f:0} x {size.z * 100f:0} cm)");
+                    continue;
+                }
+                var control = ControlNear(part, center, out var controlPart);
+                // It is pushed along its thinnest side, outwards away from the middle of the part its control is on.
                 var local = bounds.size;
                 var thin = local.x <= local.y && local.x <= local.z ? Vector3.right : local.y <= local.z ? Vector3.up : Vector3.forward;
-                // Outwards: away from the middle of the part it sits on.
-                var body = part.GetComponent<Renderer>();
-                var middle = body != null ? body.bounds.center : part.position;
-                if (Vector3.Dot(filter.transform.TransformDirection(thin), filter.transform.TransformPoint(bounds.center) - middle) < 0f) thin = -thin;
-                list.Add(new Button
+                var body = controlPart != null ? controlPart.GetComponent<Renderer>() : null;
+                if (body == filter.GetComponent<Renderer>()) body = null;
+                if (body != null && Vector3.Dot(filter.transform.TransformDirection(thin), center - body.bounds.center) < 0f) thin = -thin;
+                var button = new Button
                 {
                     Filter = filter,
                     Control = control,
                     Rest = filter.transform.localPosition,
                     Out = thin,
-                    Half = Vector3.Dot(bounds.extents, thin),
+                    OutKnown = body != null,
+                    Half = Mathf.Abs(Vector3.Dot(bounds.extents, thin)),
                     Extents = bounds.extents,
                     Center = bounds.center,
-                });
+                };
+                // Its light sinks with it.
+                var lights = controlPart != null ? controlPart : part;
+                foreach (var light in lights.GetComponentsInChildren<MeshFilter>(true))
+                    if (light.name.StartsWith("Unlock_") && (light.transform.position - center).magnitude < Largest)
+                    {
+                        button.With.Add(light.transform);
+                        button.WithRest.Add(light.transform.localPosition);
+                    }
+                list.Add(button);
                 if (logs++ < 60)
-                    Plugin.Log.LogInfo($"Buttons: '{filter.name}' ({mesh.name}, {size.x * 100f:0.0} x {size.y * 100f:0.0} x {size.z * 100f:0.0} cm) on '{part.name}', "
-                        + (control != null ? $"uses '{control.name}'" : "no control"));
+                    Plugin.Log.LogInfo($"Buttons: '{filter.name}' ({size.x * 100f:0.0} x {size.y * 100f:0.0} x {size.z * 100f:0.0} cm) on '{part.name}', "
+                        + (control != null ? $"uses '{control.name}' on '{(controlPart != null ? controlPart.name : "?")}'" : "no control")
+                        + $", {button.With.Count} light(s) with it, {(button.OutKnown ? "faces away from its part" : "faces where the hand comes from")}");
             }
             return list;
         }
+
+        // The control a button uses: an active one on its own part, else the nearest on the parts around (the air
+        // conditioner's button is a part next to its box, which has the control); never a lever turned by hand.
+        private static InteractableObject ControlNear(Transform part, Vector3 center, out Transform controlPart)
+        {
+            InteractableObject best = null;
+            var bestDistance = float.MaxValue;
+            void Consider(InteractableObject each)
+            {
+                if (each == null || !each.isActiveAndEnabled || VrLever.Turnable(each)) return;
+                var distance = (each.transform.position - center).sqrMagnitude;
+                // The powered one before 'Unpowered Interaction Volume' at the same place.
+                if (each.name.Contains("Unpowered")) distance += 1f;
+                if (distance >= bestDistance) return;
+                best = each;
+                bestDistance = distance;
+            }
+            foreach (var each in part.GetComponentsInChildren<InteractableObject>(true)) Consider(each);
+            if (best == null)
+            {
+                var count = Physics.OverlapSphereNonAlloc(center, ControlAround * VrCamera.WorldScale, Found, ~0, QueryTriggerInteraction.Collide);
+                for (var i = 0; i < count; i++) Consider(Found[i].GetComponentInParent<InteractableObject>());
+            }
+            var owner = best != null ? best.GetComponentInParent<StructurePart>() : null;
+            controlPart = owner != null ? owner.transform : null;
+            return best;
+        }
+
+        private const float ControlAround = 0.6f;
 
         private static Vector3 Abs(Vector3 v) => new Vector3(Mathf.Abs(v.x), Mathf.Abs(v.y), Mathf.Abs(v.z));
     }
