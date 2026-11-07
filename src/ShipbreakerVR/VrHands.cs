@@ -617,7 +617,7 @@ namespace ShipbreakerVR
                     arm.GripOffset = flat
                         ? new Vector3(-side * PalmThickness, 0f, -PalmLength) * VrCamera.WorldScale
                         : Quaternion.Inverse(start) * (wrist - point);
-                    if (!flat) start = AroundBar(arm) * start;
+                    if (!flat) start = AroundBar(arm, true) * start;
                     arm.GripNormal = Quaternion.Inverse(anchor.rotation) * normal;
                     arm.GripTurn = Quaternion.Inverse(anchor.rotation) * start;
                     if (logs++ < 40) Plugin.Log.LogInfo($"Hands: {arm.Name} hand fixed on '{anchor.name}'{(flat ? ", flat on the surface" : "")}");
@@ -652,7 +652,7 @@ namespace ShipbreakerVR
                 }
             }
             // Held free (a nacelle switch, VrClimb.HeldFree), the hand stays on its hold but turns with the controller.
-            var turn = arm.Gripping && VrClimb.HeldFree(arm.Input) ? frame : arm.GripAnchor.rotation * gripTurn;
+            var turn = arm.Gripping && VrClimb.HeldFree(arm.Input) ? AroundBar(arm, false) * frame : arm.GripAnchor.rotation * gripTurn;
             var placed = arm.GripAnchor.TransformPoint(arm.GripPoint) + turn * arm.GripOffset;
             if (arm.GripFlat) placed = OutOfSurface(arm, placed, turn);
             wrist = Vector3.Lerp(wrist, placed, arm.GripBlend);
@@ -662,12 +662,12 @@ namespace ShipbreakerVR
         // On a lever's grip (VrClimb.TryGetBar), the turn that lays the fist around it: the controller's grip axis, which
         // runs through the closed hand, onto the grip's direction, the least turn either way round. Turned about the hold
         // point, as the offset to the wrist turns with the hand.
-        private static Quaternion AroundBar(Arm arm)
+        private static Quaternion AroundBar(Arm arm, bool log)
         {
             if (!VrClimb.TryGetBar(arm.Input, out var bar) || !arm.Input.TryGetGripPose(out _, out var grip)) return Quaternion.identity;
             var through = VrCamera.Instance.transform.parent.rotation * grip * Vector3.forward;
             if (Vector3.Dot(through, bar) < 0f) bar = -bar;
-            if (barLogs++ < 30) Plugin.Log.LogInfo($"Hands: {arm.Name} fist turned {Vector3.Angle(through, bar):0}° around the lever's grip");
+            if (log && barLogs++ < 30) Plugin.Log.LogInfo($"Hands: {arm.Name} fist turned {Vector3.Angle(through, bar):0}° around the lever's grip");
             return Quaternion.FromToRotation(through, bar);
         }
 

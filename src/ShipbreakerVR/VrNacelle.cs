@@ -107,6 +107,23 @@ namespace ShipbreakerVR
             return known;
         }
 
+        // Whether at, where a hand takes hold, is on the switch's handle: then where the hand sits on it and its direction
+        // (VrClimb holds it there; further off the hand holds the hull as anywhere, Raik: the grab was too wide).
+        public static bool OnGrip(InteractableObject control, Vector3 at, out Vector3 onGrip, out Vector3 axis)
+        {
+            onGrip = at;
+            axis = Vector3.zero;
+            if (!Parts(control, out var handle, out _)) return false;
+            var bar = handle.GetComponent<MeshFilter>();
+            if (bar == null || bar.sharedMesh == null) return false;
+            // Out: away from the middle of the housing.
+            var housing = control.transform.parent != null ? control.transform.parent.GetComponent<Renderer>() : null;
+            var middle = housing != null ? housing.bounds.center : control.transform.parent.position;
+            return VrLever.GripLine(bar, bar.transform.TransformPoint(bar.sharedMesh.bounds.center) - middle, at, GripReach, "Nacelle", out onGrip, out axis);
+        }
+
+        private const float GripReach = 0.06f;
+
         public static bool Holds => Hands[0].Control != null || Hands[1].Control != null;
 
         // From VrFrame, in LateUpdate after the Animators and before the hands are placed on their holds.
@@ -138,6 +155,15 @@ namespace ShipbreakerVR
             // The handle where it was left, over what the Animator set this frame.
             Pose(held.Handle, held.Switch, held.HandleRest, held.HandleRestPlace, held.SwitchRest, held.Angle, held.Slid);
             var hand = held.Handle.TransformPoint(held.Reach);
+            // It goes heavily: only with the other hand braced on something fixed (Raik). Without, it stays where it is
+            // and the hand has to come back to it once braced.
+            if (!VrClimb.Braced(held.Input))
+            {
+                if (held.Caught && logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand without the other braced, '{held.Control.name}' does not move");
+                held.Caught = false;
+                Pose(held.Handle, held.Switch, held.HandleRest, held.HandleRestPlace, held.SwitchRest, held.Angle, held.Slid);
+                return;
+            }
             var near = (grip - hand).magnitude <= CatchReach * VrCamera.WorldScale;
             var angleAt = AngleAt(held, grip);
             var down = held.Switch.parent.TransformDirection(Vector3.down).normalized;
@@ -146,6 +172,11 @@ namespace ShipbreakerVR
             {
                 case Step.FoldDown:
                 {
+                    if (!held.Caught)
+                    {
+                        if (!near) break;
+                        Catch(held, grip, "on the handle, braced");
+                    }
                     var angle = Mathf.Clamp(angleAt, 0f, Fold);
                     Hum(held, angle);
                     held.Angle = angle;
@@ -282,6 +313,7 @@ namespace ShipbreakerVR
                 held.PullFrom = grip;
                 held.Reach = handle.InverseTransformPoint(grip);
             }
+            if (VrClimb.TryGetSurface(held.Input, out var onHandle)) held.Reach = handle.InverseTransformPoint(onHandle);
             held.SlideFrom = held.Slid;
             // Taken hold of at the first step, it turns with the hand at once.
             held.Caught = held.Step == Step.FoldDown;

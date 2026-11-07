@@ -454,6 +454,11 @@ namespace ShipbreakerVR
                 }
                 else control = null;
             }
+            else if (control != null && VrNacelle.Is(control))
+            {
+                if (VrNacelle.OnGrip(control, at, out var onHandle, out bar)) controlPoint = onHandle;
+                else control = null;
+            }
             if (control != null && best != null
                 && (controlPoint - at).magnitude > Mathf.Sqrt(bestDistance) + ControlPreference * VrCamera.WorldScale)
                 control = null;
@@ -474,7 +479,7 @@ namespace ShipbreakerVR
                     if (!collider.isTrigger || Own(collider)) continue;
                     // A lever turned by hand is held on its grip only (Raik: not in the air over it, as on a wall).
                     var volume = collider.GetComponentInParent<InteractableObject>();
-                    if (volume == null || VrLever.Turnable(volume)) continue;
+                    if (volume == null || VrLever.Turnable(volume) || VrNacelle.Is(volume)) continue;
                     var distance = (VrUtil.ClosestPoint(collider, at) - at).sqrMagnitude;
                     if (distance >= bestDistance) continue;
                     best = collider;
@@ -1155,6 +1160,27 @@ namespace ShipbreakerVR
         {
             foreach (var hand in Hands)
                 if (hand.Input == input && hand.Holding) hand.Free = free;
+        }
+
+        // Where that controller's hand sits on its hold, in the world.
+        public static bool TryGetSurface(VrInput.Hand input, out Vector3 surface)
+        {
+            surface = Vector3.zero;
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input || !hand.Holding || hand.Anchor == null) continue;
+                surface = hand.Anchor.TransformPoint(hand.Surface);
+                return true;
+            }
+            return false;
+        }
+
+        // Whether the other hand than that controller's holds on to something fixed (a counter hold, VrNacelle).
+        public static bool Braced(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input != input && hand.Holding && !hand.Movable && !hand.Free && hand.Anchor != null) return true;
+            return false;
         }
 
         public static bool HeldFree(VrInput.Hand input)

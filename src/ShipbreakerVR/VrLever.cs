@@ -110,8 +110,18 @@ namespace ShipbreakerVR
         {
             onGrip = at;
             axis = Vector3.zero;
-            var bar = Bar(FindHandle(control));
+            var handle = FindHandle(control);
+            var bar = Bar(handle);
             if (bar == null) return false;
+            // Out: along the lever's turning axis, which stands out of the console.
+            return GripLine(bar, handle.rotation * LocalAxis, at, GripReach, "Lever", out onGrip, out axis);
+        }
+
+        // Whether at is within reach of the middle line of a grip (a bar-like mesh, along its longest side, its ends kept
+        // free): then where the hand sits on it, GripOut further out (outward, made across the grip, towards the head) and
+        // GripUp up (across both, towards the top of the view), so the fingers close around it; and the line's direction.
+        internal static bool GripLine(MeshFilter bar, Vector3 outward, Vector3 at, float reach, string what, out Vector3 onGrip, out Vector3 axis)
+        {
             var bounds = bar.sharedMesh.bounds;
             var size = bounds.size;
             var along = size.x >= size.y && size.x >= size.z ? Vector3.right : size.y >= size.z ? Vector3.up : Vector3.forward;
@@ -123,18 +133,16 @@ namespace ShipbreakerVR
             onGrip = from + line * t;
             axis = line.normalized;
             var off = (at - onGrip).magnitude;
-            var on = off <= GripReach * VrCamera.WorldScale;
-            // Out: along the lever's turning axis, which stands out of the console, towards the head. Up: across the grip
-            // and that axis, the side towards the top of the view.
+            var on = off <= reach * VrCamera.WorldScale;
             var head = VrCamera.Instance.transform;
-            var outward = FindHandle(control).rotation * LocalAxis;
+            outward = Vector3.ProjectOnPlane(outward, axis);
             if (Vector3.Dot(outward, head.position - onGrip) < 0f) outward = -outward;
             var up = Vector3.Cross(axis, outward).normalized;
             if (Vector3.Dot(up, head.up) < 0f) up = -up;
             onGrip += (outward.normalized * GripOut + up * GripUp) * VrCamera.WorldScale;
             if (gripLogs++ < 60)
-                Plugin.Log.LogInfo($"Lever: hand takes hold {off * 100f:0.0} cm from the middle of '{bar.name}' ({line.magnitude * 100f:0} cm of grip), "
-                    + (on ? "on the grip" : $"off it (within {GripReach * 100f:0.0} cm), as a surface"));
+                Plugin.Log.LogInfo($"{what}: hand takes hold {off * 100f:0.0} cm from the middle of '{bar.name}' ({line.magnitude * 100f:0} cm of grip), "
+                    + (on ? "on the grip" : $"off it (within {reach * 100f:0.0} cm), as a surface"));
             return on;
         }
 
