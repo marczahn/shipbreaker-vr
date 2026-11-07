@@ -227,5 +227,32 @@ namespace ShipbreakerVR.Tests
             var limited = ClimbContact.LimitApproach(Vector3.zero, new Vector3(0f, 2f, 0f), Up, 0f, Step);
             Assert.Equal(2f, limited.y, 3);
         }
+
+        [Fact]
+        public void GlideStopsWithinItsWayEvenWhenFast()
+        {
+            foreach (var speed in new[] { 0.5f, 2f, 6f })
+            {
+                var velocity = new Vector3(speed, 0f, 0f);
+                var brake = ClimbContact.GlideBrake(speed, 1f);
+                var way = 0f;
+                var steps = 0;
+                while (velocity != Vector3.zero && steps++ < 1000)
+                {
+                    velocity = ClimbContact.Brake(velocity, brake, Step);
+                    way += velocity.x * Step;
+                }
+                Assert.True(steps < 1000);
+                Assert.InRange(way, 0f, 0.8f);
+            }
+        }
+
+        [Fact]
+        public void GlideBrakesAlongItsOwnWay()
+        {
+            var slower = ClimbContact.Brake(new Vector3(0f, 0f, -1f), ClimbContact.GlideBrake(1f, 1f), Step);
+            Assert.Equal(0f, slower.x, 5);
+            Assert.InRange(slower.z, -1f, -0.9f);
+        }
     }
 }

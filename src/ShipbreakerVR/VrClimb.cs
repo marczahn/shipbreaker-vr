@@ -142,6 +142,10 @@ namespace ShipbreakerVR
             public float SlideAt;
             public Vector3 SlideFromPoint, SlideToPoint, SlideFromSurface, SlideToSurface;
             public int Slides;
+            // Gliding along a fixed surface (Glide): how fast the hold moves along it, in world space, and how hard it
+            // brakes, set when the glide starts or the thrust ends.
+            public Vector3 GlideVelocity;
+            public float GlideBrake;
 
             public Hand(VrHand vr)
             {
@@ -212,7 +216,7 @@ namespace ShipbreakerVR
             foreach (var hand in Hands) Read(hand);
             foreach (var hand in Hands) Rethink(hand);
             foreach (var hand in Hands) Slide(hand);
-            foreach (var hand in Hands) Glide(hand);
+            Glide();
             Pull();
         }
 
@@ -262,28 +266,67 @@ namespace ShipbreakerVR
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand slides {along.magnitude:0.00} m along '{hand.Collider.name}' after the body turned {SlideAfter:0}°");
         }
 
-        // A hand flat on a large fixed surface while thrusting: the hold glides along the surface with the body, so the
-        // thrust along the hull carries the body on and the hand slides with it, while the pull still holds the body at
-        // the hand's distance from the hull, also against thrust pointing away from it (Raik: gliding along a ship's
-        // hull with a hand on it). Each step the hold moves by the part of the hand's way from it that runs along the
-        // surface, found on the surface again by a ray; past an edge it stays.
+        // Holding a fixed surface, the hold glides along it (Raik: gliding along a ship's hull with a hand on it): taking
+        // hold at speed, the body slides on and brakes to a stop within a short way (ClimbContact.Brake); thrust or the
+        // brake along the surface speeds it up or slows it, without friction while thrusting. The pull still holds the body
+        // at the hand's distance from the surface, also against thrust pointing away from it. Each step the hold moves by
+        // the glide and is found on the surface again by a ray; past an edge it stops. Only while every pulling hand can
+        // glide: one on a part that moves, or turning it, holds the body.
         private static int glideLogs;
+        // The body's velocity as Pull left it, valid while pulling: what the physics step added since is the thrust.
+        private static Vector3 afterPull;
+        private static bool pulled;
 
-        private static void Glide(Hand hand)
+        private static bool Glides(Hand hand) =>
+            hand.Holding && !hand.Sliding && !hand.Movable && !hand.Firm && !hand.Follower && !hand.Control && hand.Anchor != null && hand.Collider != null;
+
+        private static void Glide()
         {
-            if (!hand.Holding || hand.Sliding || hand.Movable || hand.Firm || hand.Follower || hand.Control || hand.Anchor == null || hand.Collider == null) return;
-            if (!VrControls.Thrusting) return;
-            var hold = Hold(hand);
-            var surface = hand.Anchor.TransformPoint(hand.Surface);
+            var any = false;
+            var all = true;
+            foreach (var hand in Hands)
+            {
+                if (!hand.Holding || hand.Firm || hand.Follower || Pushes(hand)) continue;
+                if (Glides(hand)) any = true;
+                else all = false;
+            }
+            var steered = VrControls.Thrusting || VrControls.IsBraking();
+            var added = pulled && steered ? player.velocity - afterPull : Vector3.zero;
+            pulled = false;
+            foreach (var hand in Hands)
+            {
+                if (!any || !all || !Glides(hand)) { hand.GlideVelocity = Vector3.zero; continue; }
+                var surface = hand.Anchor.TransformPoint(hand.Surface);
+                var normal = hand.Anchor.TransformDirection(hand.Normal).normalized;
+                var before = hand.GlideVelocity;
+                var velocity = Vector3.ProjectOnPlane(before + added, normal);
+                if (VrControls.Thrusting) hand.GlideBrake = ClimbContact.GlideBrake(velocity.magnitude, VrCamera.WorldScale);
+                else velocity = Vector3.Dot(velocity, before) < 0f ? Vector3.zero : ClimbContact.Brake(velocity, hand.GlideBrake, Time.fixedDeltaTime);
+                hand.GlideVelocity = velocity;
+                if (velocity == Vector3.zero) continue;
+                var along = velocity * Time.fixedDeltaTime;
+                var probe = Reach * VrCamera.WorldScale;
+                if (!hand.Collider.Raycast(new Ray(surface + along + normal * probe, -normal), out var hit, 2f * probe))
+                {
+                    hand.GlideVelocity = Vector3.zero;
+                    continue;
+                }
+                var moved = hand.Anchor.InverseTransformPoint(hit.point) - hand.Surface;
+                hand.Point += moved;
+                hand.Surface += moved;
+                if (glideLogs++ < 10)
+                    Plugin.Log.LogInfo($"Climbing: {hand.Name} hand glides along '{hand.Collider.name}' at {velocity.magnitude:0.00} m/s{(VrControls.Thrusting ? " with the thrust" : "")}");
+            }
+        }
+
+        // Taking hold of a fixed surface at speed: the speed along it to glide on with (Glide), none below GlideLeast.
+        private static Vector3 GlideAtHold(Hand hand)
+        {
+            if (!Glides(hand)) return Vector3.zero;
             var normal = hand.Anchor.TransformDirection(hand.Normal).normalized;
-            var along = Vector3.ProjectOnPlane(PullPoint(hand) - hold, normal);
-            if (along.sqrMagnitude < 1e-6f) return;
-            var probe = Reach * VrCamera.WorldScale;
-            if (!hand.Collider.Raycast(new Ray(surface + along + normal * probe, -normal), out var hit, 2f * probe)) return;
-            var moved = hand.Anchor.InverseTransformPoint(hit.point) - hand.Surface;
-            hand.Point += moved;
-            hand.Surface += moved;
-            if (glideLogs++ < 10) Plugin.Log.LogInfo($"Climbing: {hand.Name} hand glides along '{hand.Collider.name}' with the thrust");
+            var relative = player.velocity - (hand.Body != null ? hand.Body.GetPointVelocity(Hold(hand)) : Vector3.zero);
+            var along = Vector3.ProjectOnPlane(relative, normal);
+            return along.magnitude < ClimbContact.GlideLeast * VrCamera.WorldScale ? Vector3.zero : along;
         }
 
         // How often that hand's hold slid along its surface (VrHands turns the hand anew each time).
@@ -443,6 +486,17 @@ namespace ShipbreakerVR
                 if (other != hand && other.Firm && other.Body == body) hand.Follower = true;
             if (!hand.Follower && hand.Movable && body.mass <= FirmMass && !HeldByOther(hand) && hand.Input.TryGetAimRotation(out var aim))
                 Firm(hand, aim);
+            // The other hand already gliding: this one glides on with the same speed, else with the body's own.
+            hand.GlideVelocity = GlideAtHold(hand);
+            hand.GlideBrake = ClimbContact.GlideBrake(hand.GlideVelocity.magnitude, VrCamera.WorldScale);
+            foreach (var other in Hands)
+                if (other != hand && other.GlideVelocity != Vector3.zero && Glides(hand))
+                {
+                    hand.GlideVelocity = other.GlideVelocity;
+                    hand.GlideBrake = other.GlideBrake;
+                }
+            if (hand.GlideVelocity != Vector3.zero && logs++ < 80)
+                Plugin.Log.LogInfo($"Climbing: {hand.Name} hand takes hold at {hand.GlideVelocity.magnitude:0.00} m/s along the surface and glides to a stop");
             hand.PullOffset = hand.Local - ClimbContact.Closer(hand.Local, VrCamera.Instance.transform.localPosition);
             LogControl(best, hand);
             if (first && !hand.Firm)
@@ -524,6 +578,8 @@ namespace ShipbreakerVR
             // (review: its knock back could carry the body into a wall behind).
             HoldOff(dt);
             player.velocity = KeepClear(player.velocity, dt);
+            afterPull = player.velocity;
+            pulled = true;
             MoveFirm(dt);
             pushOff = Vector3.Lerp(pushOff, player.velocity - holdVelocity, 1f - Mathf.Exp(-dt / PushOffSmoothing));
         }
@@ -1223,6 +1279,25 @@ namespace ShipbreakerVR
     // Outside VrClimb, whose static fields need the game: tests run this without it.
     internal static class ClimbContact
     {
+        // Gliding along a surface held (VrClimb.Glide): from this speed on, in m/s at world scale 1; braking evenly, at
+        // least LeastBrake m/s², harder when faster, so it stops within GlideMostWay meters.
+        public const float GlideLeast = 0.3f;
+        private const float LeastBrake = 3f;
+        private const float GlideMostWay = 0.8f;
+
+        // How hard a glide at that speed brakes, in m/s², kept until it stops (worked out anew each step, the way left
+        // would stay as long and it never stopped).
+        public static float GlideBrake(float speed, float scale) =>
+            Mathf.Max(LeastBrake * scale, speed * speed / (2f * GlideMostWay * scale));
+
+        // The glide velocity one step later.
+        public static Vector3 Brake(Vector3 velocity, float brake, float dt)
+        {
+            var speed = velocity.magnitude;
+            var slower = speed - brake * dt;
+            return slower <= 0f ? Vector3.zero : velocity * (slower / speed);
+        }
+
         // From this far from the head, in real meters, a hand counts as closer than it is, by Gain for each meter nearer.
         private const float CloseFrom = 0.4f;
         private const float Gain = 1.5f;
