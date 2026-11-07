@@ -23,7 +23,7 @@ namespace ShipbreakerVR
         private const float PressDepth = 0.006f;
         private const float Release = 0.002f;
         // How far the button sinks in at most.
-        private const float Travel = 0.008f;
+        private const float Travel = 0.012f;
         // The tip counts on the face within this beyond its edges.
         private const float Beside = 0.01f;
         // Parts near the hand looked through this often, this far around the tip.
