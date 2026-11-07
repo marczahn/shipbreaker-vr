@@ -190,6 +190,8 @@ namespace ShipbreakerVR
             // Interacting reaches the game from either hand: the game's interaction code reads the tool hand's actions.
             foreach (var each in Hands)
                 if (each != tool && each.Now[(int)Action.Interact]) tool.Now[(int)Action.Interact] = true;
+            // A lever held is used by turning it only (VrLever), not by A.
+            if (VrLever.Holds) tool.Now[(int)Action.Interact] = false;
             if (interactOnce)
             {
                 tool.Now[(int)Action.Interact] = true;

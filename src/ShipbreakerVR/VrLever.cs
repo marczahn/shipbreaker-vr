@@ -37,8 +37,8 @@ namespace ShipbreakerVR
         private const float HumLength = 0.07f;
         private const float SnapAmplitude = 1f;
         private const float SnapLength = 0.035f;
-        // Let go, the handle goes back over this long.
-        private const float BackTime = 0.25f;
+        // Let go, the handle stays where it was let go while the control is busy, then goes back over this long.
+        private const float BackTime = 0.6f;
 
         private class Held
         {
@@ -50,9 +50,12 @@ namespace ShipbreakerVR
             public bool Engaged;
             public bool Armed;
             public float Angle;
+            // Where the turn started: a lever taken over on its way back goes on from where it is.
+            public float StartAngle;
             public float HumAt;
             // Going back after letting go: from that pose, since then.
             public Transform Returning;
+            public InteractableObject ReturnControl;
             public Quaternion ReturnFrom;
             public Quaternion ReturnRest;
             public float ReturnAt;
@@ -65,6 +68,9 @@ namespace ShipbreakerVR
         private static readonly FieldInfo Asset = AccessTools.Field(typeof(InteractableObject), "m_Asset");
         private static readonly FieldInfo LastCompletion = AccessTools.Field(typeof(InteractableObject), "mLastCompletionTime");
         private static int logs;
+
+        // Whether a hand holds a lever it turns: then A does not use it (Raik: for now only the turn of the hand does).
+        public static bool Holds => Hands[0].Handle != null || Hands[1].Handle != null;
 
         // From VrFrame, in LateUpdate after the Animators and before the hands are placed on their holds.
         public static void LateUpdate()
@@ -88,7 +94,7 @@ namespace ShipbreakerVR
             var twist = LeverMath.Twist(world * Quaternion.Inverse(held.GripAtHold), axis);
             if (!held.Engaged && Mathf.Abs(twist) < TakeOver) return;
             held.Engaged = true;
-            var angle = Mathf.Clamp(twist, 0f, EndAngle);
+            var angle = Mathf.Clamp(held.StartAngle + twist, 0f, EndAngle);
             var speed = Mathf.Abs(angle - held.Angle) / Mathf.Max(Time.deltaTime, 1e-4f);
             held.Angle = angle;
             held.Handle.localRotation = held.Rest * Quaternion.AngleAxis(angle, LocalAxis);
@@ -116,18 +122,22 @@ namespace ShipbreakerVR
             if (handle == null || !held.Input.TryGetGripPose(out _, out var grip)) return;
             // A lever still going back is this hand's now, from the rest pose it goes back to, not the pose it has on the way.
             var rest = handle.localRotation;
+            var start = 0f;
             foreach (var other in Hands)
                 if (other.Returning == handle)
                 {
                     rest = other.ReturnRest;
+                    start = Mathf.Clamp(LeverMath.Twist(Quaternion.Inverse(rest) * handle.localRotation, LocalAxis), 0f, EndAngle);
                     other.Returning = null;
                 }
             held.Handle = handle;
             held.Rest = rest;
             held.GripAtHold = VrCamera.Instance.transform.parent.rotation * grip;
-            held.Engaged = false;
-            held.Armed = true;
-            held.Angle = 0f;
+            // Taken over off its rest pose, it stays where it is and goes on from there, not from what the Animator shows.
+            held.StartAngle = start;
+            held.Engaged = start > 0f;
+            held.Armed = start < ArmBelow;
+            held.Angle = start;
             VrClimb.Reanchor(held.Input, handle);
             if (logs++ < 40)
             {
@@ -142,6 +152,7 @@ namespace ShipbreakerVR
             if (held.Handle != null && held.Engaged)
             {
                 held.Returning = held.Handle;
+                held.ReturnControl = held.Control;
                 held.ReturnFrom = held.Handle.localRotation;
                 held.ReturnRest = held.Rest;
                 held.ReturnAt = Time.time;
@@ -151,11 +162,19 @@ namespace ShipbreakerVR
             held.Engaged = false;
         }
 
-        // Back to the rest pose it had when taken hold of; from then on the Animator shows it as before.
+        // Where it was let go while its control is busy (Raik: turned all the way and let go, it stays there while the
+        // airlock works, instead of jumping back and playing the game's 60° turn), then back to the rest pose it had when
+        // taken hold of; from then on the Animator shows it as before.
         private static void Return(Held held)
         {
             var handle = held.Returning;
             if (handle == null) return;
+            if (held.ReturnControl != null && !Ready(held.ReturnControl, out _))
+            {
+                handle.localRotation = held.ReturnFrom;
+                held.ReturnAt = Time.time;
+                return;
+            }
             var t = (Time.time - held.ReturnAt) / BackTime;
             if (t >= 1f)
             {
