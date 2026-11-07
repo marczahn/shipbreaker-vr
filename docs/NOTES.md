@@ -375,9 +375,9 @@ interacting, the grapple and the "entity of interest".
   down, 0.4 out and 0.3 back in the body's axes (`VrHands.Elbow`, the pole of `VrToolModels.Bend`), not into the
   animation's plane, which turned it inwards while drawing a tool.
 
-- A hand flat on a large fixed surface slides along it when the body turns on with the controls (`VrClimb.Slide`): past 100° from the body's turn at taking hold, the hold moves to under the hand (its position onto the surface's plane, found on the collider by a ray) over 0.35 s, eased, and the hand turns over to its new flat pose over as long (`VrHands`, `GripSlides`). The count starts again from there.
+- A hand flat on a large fixed surface slides along it when the body turns on with the controls (`VrClimb.Slide`): past 100° of the body's facing since taking hold (a roll about it does not count), the hold moves to under the hand (its position onto the surface's plane, found on the collider by a ray) over 0.35 s, eased, and the hand turns over to its new flat pose over as long (`VrHands`, `GripSlides`). The count starts again from there.
 - A hand flat on a surface while the body rolls turns along on the spot (`VrHands.Grip`, `RollAlong`): past 45° between its turn and the flat pose the controller would give it now, it turns over to that over 0.35 s.
-- The arms' helper bones (`rig_*_lowerarm_twist`, `rig_*_shoulder_twist1`, `rig_*_elbow_stretchtracker`, `rig_*_collar_shoulder_track`: names with twist, stretch or track under the collarbone) go back to their bind-pose places on their parents each frame with the arm's length (`VrHands.KeepLength`, `FindHelpers`): with the main bones right, a helper the cutter's draw animation moved still made the forearm look long (Raik). Logged once per bone with how far it was off.
+- The arms' helper bones (`rig_*_lowerarm_twist`, `rig_*_shoulder_twist1`, `rig_*_elbow_stretchtracker`: names with twist or stretch under the collarbone) go back to their bind-pose places on their parents each frame with the arm's length (`VrHands.KeepLength`, `FindHelpers`): with the main bones right, a helper the cutter's draw animation moved still made the forearm look long (Raik). Logged once per bone with how far it was off.
 - Using things needs a hand on them (`VrInteractHeld`, a postfix on `InteractionController.UpdateClosestInteractable`): while aiming with the hand and with `Steuerung/Festhalten` on, the game's pick of the closest interactable along the view (`mClosestInteractable`) becomes the interactable on what the hand that took hold last holds (`VrClimb.HeldInteractable`), or none; its hit info is cleared for a thing the game did not find itself. So a door switch, a console or a thing to collect shows its prompt only once grabbed (Raik).
 
 ## Body follows head
@@ -587,7 +587,7 @@ and thrusts along its orientation transform (the body, or a steering transform).
 the controller thrust, converted into that transform's axes, so fuel, forces and the thrust HUD stay the game's.
 Rotation from the controllers is applied in `VrBody`, to the playspace.
 Config `Steuerung/Controllersteuerung` (Aus/Vtol/Shooter; the earlier "point and twist" Pavlov scheme was removed for now).
-Shooter: the left stick thrusts along the left controller's aim pose, stick up its forward and right its right, from the
+Shooter, in gameplay only: the left stick thrusts along the left controller's aim pose, stick up its forward and right its right, from the
 stick deadzone 0.15 to full at the edge (`VrControls.ShooterThrust`); tilting the controller up or down thrusts up or down.
 With the left trigger held, the stick's left and right roll at up to 100°/s (`ShooterRoll`) and only forward and back thrust; the right stick, Y and the left stick's click work as with VTOL, and the stick counts as holding the thrust
 (`Holding`, for the simple thrust mode). The flight globe shows the stick's thrust and roll as the hand offset and tilt

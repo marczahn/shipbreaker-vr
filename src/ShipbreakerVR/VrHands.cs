@@ -228,7 +228,8 @@ namespace ShipbreakerVR
                 var bone = bones[i];
                 if (bone == null || bone.parent == null || !bone.IsChildOf(root)) continue;
                 var name = bone.name.ToLowerInvariant();
-                if (!name.Contains("twist") && !name.Contains("stretch") && !name.Contains("track")) continue;
+                // Twist and stretch bones only: a "track" bone (collar_shoulder_track) may follow the collarbone on purpose.
+                if (!name.Contains("twist") && !name.Contains("stretch")) continue;
                 var parent = System.Array.IndexOf(bones, bone.parent);
                 if (parent < 0 || parent >= binds.Length) continue;
                 helpers.Add(bone);
@@ -592,7 +593,8 @@ namespace ShipbreakerVR
                 {
                     // Slid on the same hold: the hand turns over to its new place instead of snapping.
                     var slid = arm.Gripping && anchor == arm.GripAnchor;
-                    arm.GripTurnBefore = arm.GripTurn;
+                    // From the turn shown now, also in the middle of turning along (RollAlong).
+                    arm.GripTurnBefore = ShownGripTurn(arm);
                     arm.GripTurnAt = slid ? Time.unscaledTime : -1f;
                     arm.GripSlides = slides;
                     arm.Gripping = true;
@@ -622,8 +624,7 @@ namespace ShipbreakerVR
                 return;
             }
             var turning = arm.GripTurnAt >= 0f && Time.unscaledTime - arm.GripTurnAt < SlideTurnTime;
-            var gripTurn = arm.GripTurnAt < 0f ? arm.GripTurn
-                : Quaternion.Slerp(arm.GripTurnBefore, arm.GripTurn, Mathf.Clamp01((Time.unscaledTime - arm.GripTurnAt) / SlideTurnTime));
+            var gripTurn = ShownGripTurn(arm);
             // Flat on a surface while the body rolls (VTOL's tilt, the Shooter's trigger roll): the hand stays put and the
             // arm winds round the wrist. Past RollAlong degrees between the hand and where the controller would lay it, it
             // turns on the spot to the controller's way, over SlideTurnTime (Raik: it should slip after now and then).
@@ -649,6 +650,10 @@ namespace ShipbreakerVR
         // it (RollAlong), in seconds.
         private const float SlideTurnTime = 0.35f;
         private const float RollAlong = 45f;
+
+        // The hand's turn on its hold as shown now, on the way over to a new one after sliding or turning along.
+        private static Quaternion ShownGripTurn(Arm arm) => arm.GripTurnAt < 0f ? arm.GripTurn
+            : Quaternion.Slerp(arm.GripTurnBefore, arm.GripTurn, Mathf.Clamp01((Time.unscaledTime - arm.GripTurnAt) / SlideTurnTime));
         private static int rollLogs;
 
         // A flat hand placed on its hold, moved out along the palm's way as far as the deepest of its points (HandAlong,

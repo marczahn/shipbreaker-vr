@@ -237,7 +237,9 @@ namespace ShipbreakerVR
                 return;
             }
             var playspace = VrCamera.Instance.Playspace;
-            if (Quaternion.Angle(playspace, hand.TurnAtHold) < SlideAfter) return;
+            // Turning, not rolling: the way the body faces, which a roll about it keeps (VrHands turns the hand along on
+            // a roll, RollAlong).
+            if (Vector3.Angle(playspace * Vector3.forward, hand.TurnAtHold * Vector3.forward) < SlideAfter) return;
             hand.TurnAtHold = playspace;
             // Where the hand is now, taken onto the surface's plane and found on the surface there.
             var surface = hand.Anchor.TransformPoint(hand.Surface);

@@ -121,6 +121,8 @@ namespace ShipbreakerVR
             if (Active == Scheme.Shooter)
             {
                 held = false;
+                // Only in gameplay: in the Hab the left stick walks (VrHabWalk), in the menus it moves the selection.
+                if (GameSession.CurrentGameState != GameSession.GameState.Gameplay) return;
                 if (!left.Trigger.Down) triggerFromTool = false;
                 var rolling = left.Trigger.Down && !triggerFromTool;
                 var stick = left.Stick;
