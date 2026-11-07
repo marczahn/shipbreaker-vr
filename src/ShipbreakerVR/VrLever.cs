@@ -54,6 +54,10 @@ namespace ShipbreakerVR
         private const float GripReach = 0.045f;
         // The ends of the grip kept free of the hand's middle, as a share of its length.
         private const float GripEnds = 0.15f;
+        // The hand on the grip sits this far further out from the console and up from the grip, in m at world scale 1,
+        // so the fingers close around it instead of sinking into the console (Raik, from a screenshot).
+        private const float GripOut = 0.01f;
+        private const float GripUp = 0.01f;
 
         private class Held
         {
@@ -120,6 +124,14 @@ namespace ShipbreakerVR
             axis = line.normalized;
             var off = (at - onGrip).magnitude;
             var on = off <= GripReach * VrCamera.WorldScale;
+            // Out: along the lever's turning axis, which stands out of the console, towards the head. Up: across the grip
+            // and that axis, the side towards the top of the view.
+            var head = VrCamera.Instance.transform;
+            var outward = FindHandle(control).rotation * LocalAxis;
+            if (Vector3.Dot(outward, head.position - onGrip) < 0f) outward = -outward;
+            var up = Vector3.Cross(axis, outward).normalized;
+            if (Vector3.Dot(up, head.up) < 0f) up = -up;
+            onGrip += (outward.normalized * GripOut + up * GripUp) * VrCamera.WorldScale;
             if (gripLogs++ < 60)
                 Plugin.Log.LogInfo($"Lever: hand takes hold {off * 100f:0.0} cm from the middle of '{bar.name}' ({line.magnitude * 100f:0} cm of grip), "
                     + (on ? "on the grip" : $"off it (within {GripReach * 100f:0.0} cm), as a surface"));
