@@ -100,10 +100,6 @@ namespace ShipbreakerVR
             public bool Gripping;
             public Transform GripAnchor;
             public Quaternion GripTurn;
-            // The hand's turn against its controller when it took hold (flat on a surface it is turned onto it), so the
-            // wrist's twist counts from there (Strain).
-            public Quaternion GripStart;
-            public float NextStrainBuzz;
             public Vector3 GripPoint;
             public Vector3 GripOffset;
             public bool GripFlat;
@@ -545,7 +541,6 @@ namespace ShipbreakerVR
                     arm.GripFlat = flat;
                     var start = flat ? FlatFrame(arm, frame, normal) : frame;
                     arm.GripTurn = Quaternion.Inverse(anchor.rotation) * start;
-                    arm.GripStart = Quaternion.Inverse(frame) * start;
                     var side = arm == LeftArm ? 1f : -1f;
                     arm.GripOffset = flat
                         ? new Vector3(-side * PalmThickness, 0f, -PalmLength) * VrCamera.WorldScale
@@ -566,35 +561,10 @@ namespace ShipbreakerVR
                 return;
             }
             var turn = arm.GripAnchor.rotation * arm.GripTurn;
-            if (arm.Gripping) Strain(arm, Quaternion.Angle(turn, frame * arm.GripStart));
             var placed = arm.GripAnchor.TransformPoint(arm.GripPoint) + turn * arm.GripOffset;
             if (arm.GripFlat) placed = OutOfSurface(arm, placed, turn);
             wrist = Vector3.Lerp(wrist, placed, arm.GripBlend);
             frame = Quaternion.Slerp(frame, turn, arm.GripBlend);
-        }
-
-        // A part held in one place that turns (a 60 kg crate set spinning) turns the hand on it with it, against the
-        // controller, until the wrist looks wrenched (Raik). From StrainFrom degrees of twist the controller buzzes, harder
-        // and harder up to LetGoAt, where the hand lets go (VrClimb.LetGoOf). Only parts that move: a wall does not turn
-        // the hand, and a light part held firmly turns with the hand anyway.
-        private const float StrainFrom = 60f;
-        private const float LetGoAt = 100f;
-        private const float StrainBuzzEvery = 0.05f;
-        private static int strainLogs;
-
-        private static void Strain(Arm arm, float twist)
-        {
-            if (twist < StrainFrom || !VrClimb.HoldsMoving(arm.Input)) return;
-            if (twist >= LetGoAt)
-            {
-                if (VrClimb.LetGoOf(arm.Input, $"wrist twisted {twist:0}°") && strainLogs++ < 20)
-                    Plugin.Log.LogInfo($"Hands: {arm.Name} wrist twisted {twist:0}° by what it holds, lets go");
-                return;
-            }
-            if (Time.unscaledTime < arm.NextStrainBuzz) return;
-            arm.NextStrainBuzz = Time.unscaledTime + StrainBuzzEvery;
-            var share = Mathf.InverseLerp(StrainFrom, LetGoAt, twist);
-            arm.Input.Buzz(Mathf.Lerp(0.1f, 1f, share * share), StrainBuzzEvery * 1.6f);
         }
 
         // A flat hand placed on its hold, moved out along the palm's way as far as the deepest of its points (HandAlong,
