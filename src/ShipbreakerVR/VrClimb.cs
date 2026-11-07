@@ -127,6 +127,10 @@ namespace ShipbreakerVR
             public Vector3 Normal;
             // On a control (NearestControl), where the hand took hold of it: the hand makes a fist there.
             public bool Control;
+            // Pinned (VrLever): the body keeps to this point on PinAnchor, which does not move, while the lever turns the
+            // hand on Anchor (the game turning it back with the hand still on it).
+            public Transform PinAnchor;
+            public Vector3 Pin;
             // A part that turns with the hand: its turn relative to the controller, and its speed limit before.
             public bool Firm;
             // The second hand on a firmly held part: it stays on the part, the first hand moves it.
@@ -486,6 +490,7 @@ namespace ShipbreakerVR
             hand.Sliding = false;
             hand.Firm = false;
             hand.Follower = false;
+            hand.PinAnchor = null;
             foreach (var other in Hands)
                 if (other != hand && other.Firm && other.Body == body) hand.Follower = true;
             if (!hand.Follower && hand.Movable && body.mass <= FirmMass && !HeldByOther(hand) && hand.Input.TryGetAimRotation(out var aim))
@@ -1039,7 +1044,8 @@ namespace ShipbreakerVR
             return directions.ToArray();
         }
 
-        private static Vector3 Hold(Hand hand) => hand.Anchor.TransformPoint(hand.Point);
+        private static Vector3 Hold(Hand hand) =>
+            hand.PinAnchor != null ? hand.PinAnchor.TransformPoint(hand.Pin) : hand.Anchor.TransformPoint(hand.Point);
 
         // That hand works a heavy part while the other is braced on something that does not move.
         // With the other hand on a second part too heavy to grab instead, the two push each other apart through the body
@@ -1114,6 +1120,28 @@ namespace ShipbreakerVR
                 if (hand.Input == input && hand.Holding && hand.Control && hand.Collider != null)
                     return hand.Collider.GetComponentInParent<InteractableObject>();
             return null;
+        }
+
+        // The body of that controller's hand keeps to where its hold is now, on still, which does not move, while the hand
+        // goes with its anchor (a lever the game turns back, VrLever); or, still null, it follows the hold again from where
+        // it is, the hold's point on the anchor moved there, so the body does not move.
+        public static void Pin(VrInput.Hand input, Transform still)
+        {
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input || !hand.Holding || hand.Anchor == null) continue;
+                var point = Hold(hand);
+                if (still != null)
+                {
+                    hand.PinAnchor = still;
+                    hand.Pin = still.InverseTransformPoint(point);
+                }
+                else if (hand.PinAnchor != null)
+                {
+                    hand.PinAnchor = null;
+                    hand.Point = hand.Anchor.InverseTransformPoint(point);
+                }
+            }
         }
 
         // The hold of that controller's hand moves with this transform from now on (a lever's handle it turns, VrLever):

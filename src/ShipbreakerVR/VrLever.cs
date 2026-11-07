@@ -6,23 +6,23 @@ using UnityEngine;
 namespace ShipbreakerVR
 {
     // Levers turned by hand (Raik, 0.29): a hand holding a lever control (the airlock's yellow lever) turns its handle with
-    // the turn of the controller about the handle's axis, any time, also while the airlock is still busy. Turned all the
-    // way (EndAngle) it uses the control, as A does, but only once the control may be used again (its asset's
-    // m_CompletionCooldown since mLastCompletionTime) and only after it was turned back near the start (ArmBelow): a
-    // panicked back and forth during the cooldown does nothing. Turning a lever that will trigger hums lightly, snapping
-    // in at the end gives one short hard knock; one that will not trigger glides without any.
+    // the turn of the controller about the handle's axis. Turned all the way (EndAngle) it uses the control, as A did, once
+    // the control may be used again (its asset's m_CompletionCooldown since mLastCompletionTime). Then it stays at the end
+    // while the control is busy, also with the hand still on it, and turns back on its own once the control is done,
+    // taking a hand still on it along (the body stays where it is, VrClimb.Pin); the controller has to come back to that
+    // hand before it turns the lever again. No turning while it is busy (Raik). Turning a lever that will trigger hums
+    // lightly, snapping in at the end gives one short hard knock. Let go before the end, it goes back at once.
     //
     // Measured on the airlock (VrInteractSurvey, 2026-11-07): the handle 'GRP_AirlockConsole_Handle' turns about its own
     // -X axis by 60° each time it is used, always from the same rest pose, played by the console's Animator. The hand's
     // target (m_HandTarget) sits on the handle, so the handle is found as the target's nearest parent named "...Handle".
-    // The handle's pose is set after the Animator ran (LateUpdate), so the hand's turn wins while it holds it; let go, it
-    // glides back to what the Animator shows.
+    // The handle's pose is set after the Animator ran (LateUpdate), so it wins over the game's own turn.
     internal static class VrLever
     {
         // Further than the game's own 60°: more to feel in the turn (Raik).
         private const float EndAngle = 90f;
         private static readonly Vector3 LocalAxis = new Vector3(-1f, 0f, 0f);
-        // Turned past this, the hand takes over the handle from the Animator (A alone still plays the game's animation).
+        // Turned past this, the hand takes over the handle from the Animator.
         private const float TakeOver = 3f;
         // Turned back below this, the next full turn may trigger again.
         private const float ArmBelow = 15f;
@@ -37,8 +37,17 @@ namespace ShipbreakerVR
         private const float HumLength = 0.07f;
         private const float SnapAmplitude = 1f;
         private const float SnapLength = 0.035f;
-        // Let go, the handle stays where it was let go while the control is busy, then goes back over this long.
+        // Let go before the end, the handle goes back over this long.
         private const float BackTime = 0.6f;
+        // Done with its work, a used lever goes back over this long, slowly as the game's own (Raik).
+        private const float BusyBackTime = 1.2f;
+        // A use the game did not take (no new mLastCompletionTime) lets the lever go back after this long.
+        private const float NotTaken = 1f;
+        // Back with the hand still on it while the controller stayed turned: the controller has to come back within this
+        // of the lever before the lever turns with it again (Raik); a light knock says it caught it.
+        private const float CatchWithin = 5f;
+        private const float CatchAmplitude = 0.3f;
+        private const float CatchLength = 0.04f;
 
         private class Held
         {
@@ -49,13 +58,14 @@ namespace ShipbreakerVR
             public Quaternion GripAtHold;
             public bool Engaged;
             public bool Armed;
+            // Back from its use with the hand on it: waits for the controller to come back to it (Restart).
+            public bool Catching;
             public float Angle;
-            // Where the turn started: a lever taken over on its way back goes on from where it is.
+            // Where the turn started: a lever taken hold of off its rest pose goes on from where it is.
             public float StartAngle;
             public float HumAt;
-            // Going back after letting go: from that pose, since then.
+            // Going back after letting go before the end: from that pose, since then.
             public Transform Returning;
-            public InteractableObject ReturnControl;
             public Quaternion ReturnFrom;
             public Quaternion ReturnRest;
             public float ReturnAt;
@@ -69,6 +79,15 @@ namespace ShipbreakerVR
         private static readonly FieldInfo LastCompletion = AccessTools.Field(typeof(InteractableObject), "mLastCompletionTime");
         private static int logs;
 
+        // The lever used last, while its control is busy and while it goes back after: at its end pose since UsedAt, back
+        // to Rest from BackAt on (negative until then).
+        private static Transform used;
+        private static InteractableObject usedControl;
+        private static Quaternion usedRest;
+        private static Quaternion usedEnd;
+        private static float usedAt;
+        private static float backAt = -1f;
+
         // Whether a hand holds a lever it turns: then A does not use it (Raik: for now only the turn of the hand does).
         public static bool Holds => Hands[0].Handle != null || Hands[1].Handle != null;
 
@@ -76,6 +95,7 @@ namespace ShipbreakerVR
         public static void LateUpdate()
         {
             foreach (var held in Hands) Update(held);
+            Used();
         }
 
         private static void Update(Held held)
@@ -87,11 +107,19 @@ namespace ShipbreakerVR
                 if (control != null) TakeHold(held, control);
             }
             Return(held);
-            if (held.Handle == null) return;
+            // A used lever is the game's until it is back (Used).
+            if (held.Handle == null || held.Handle == used) return;
             if (!held.Input.TryGetGripPose(out _, out var grip)) return;
             var world = VrCamera.Instance.transform.parent.rotation * grip;
             var axis = held.Handle.parent.rotation * held.Rest * LocalAxis;
             var twist = LeverMath.Twist(world * Quaternion.Inverse(held.GripAtHold), axis);
+            if (held.Catching)
+            {
+                if (held.StartAngle + twist > CatchWithin) return;
+                held.Catching = false;
+                held.Input.Buzz(CatchAmplitude, CatchLength);
+                if (logs++ < 200) Plugin.Log.LogInfo($"Lever: {held.Input.Name} controller is back on '{held.Handle.name}', turns it again");
+            }
             if (!held.Engaged && Mathf.Abs(twist) < TakeOver) return;
             held.Engaged = true;
             var angle = Mathf.Clamp(held.StartAngle + twist, 0f, EndAngle);
@@ -100,14 +128,13 @@ namespace ShipbreakerVR
             held.Handle.localRotation = held.Rest * Quaternion.AngleAxis(angle, LocalAxis);
 
             if (angle < ArmBelow) held.Armed = true;
-            var ready = Ready(held.Control, out _);
-            if (!held.Armed || !ready) return;
+            if (!held.Armed || !Ready(held.Control, out _)) return;
             if (angle >= EndAngle - SnapWithin)
             {
                 held.Armed = false;
                 held.Input.Buzz(SnapAmplitude, SnapLength);
                 VrToolInput.PressInteract();
-                if (logs++ < 40) Plugin.Log.LogInfo($"Lever: {held.Input.Name} hand turned '{held.Handle.name}' all the way, uses '{held.Control.name}'");
+                Use(held);
                 return;
             }
             if (speed < HumFrom || Time.unscaledTime < held.HumAt) return;
@@ -115,69 +142,136 @@ namespace ShipbreakerVR
             held.Input.Buzz(Mathf.Lerp(LightLeast, LightMost, Mathf.InverseLerp(HumFrom, HumFull, speed)), HumLength);
         }
 
+        // Turned all the way: it stays at the end while its control works, with the hands on it, whose bodies keep where
+        // they are while it goes back later.
+        private static void Use(Held held)
+        {
+            used = held.Handle;
+            usedControl = held.Control;
+            usedRest = held.Rest;
+            usedEnd = held.Rest * Quaternion.AngleAxis(EndAngle, LocalAxis);
+            usedAt = Time.time;
+            backAt = -1f;
+            used.localRotation = usedEnd;
+            foreach (var each in Hands)
+                if (each.Handle == used) VrClimb.Pin(each.Input, used.parent);
+            if (logs++ < 200) Plugin.Log.LogInfo($"Lever: {held.Input.Name} hand turned '{used.name}' all the way, uses '{usedControl.name}'");
+        }
+
+        // The used lever at its end until its control is done (or the game did not take the use), then back to its rest
+        // pose, a hand still on it along; that hand turns it from there again.
+        private static void Used()
+        {
+            if (used == null) return;
+            if (backAt < 0f)
+            {
+                var last = LastCompletion?.GetValue(usedControl) is float l ? l : 0f;
+                var taken = last >= usedAt - 0.1f;
+                var done = taken ? Time.time >= last + Cooldown(usedControl) : Time.time >= usedAt + NotTaken;
+                if (!done)
+                {
+                    used.localRotation = usedEnd;
+                    return;
+                }
+                backAt = Time.time;
+                if (logs++ < 200) Plugin.Log.LogInfo($"Lever: '{used.name}' goes back, {(taken ? "its control is done" : "the game did not take the use")}");
+            }
+            var t = (Time.time - backAt) / BusyBackTime;
+            if (t < 1f)
+            {
+                used.localRotation = Quaternion.Slerp(usedEnd, usedRest, t * t * (3f - 2f * t));
+                return;
+            }
+            used.localRotation = usedRest;
+            foreach (var each in Hands)
+                if (each.Handle == used) Restart(each);
+            if (logs++ < 200) Plugin.Log.LogInfo($"Lever: '{used.name}' is back at its rest pose");
+            used = null;
+            usedControl = null;
+        }
+
+        // A hand still on a lever that went back: the hand went with it, the controller may not have. The lever turns with
+        // the controller again once the controller is back where it held the lever at rest (Catching), the same reference
+        // as before (GripAtHold, StartAngle), so the lever never jumps to the controller.
+        private static void Restart(Held held)
+        {
+            VrClimb.Pin(held.Input, null);
+            held.Rest = usedRest;
+            held.Angle = 0f;
+            held.Engaged = true;
+            held.Armed = true;
+            held.Catching = true;
+        }
+
         private static void TakeHold(Held held, InteractableObject control)
         {
             held.Control = control;
             var handle = Handle(control);
             if (handle == null || !held.Input.TryGetGripPose(out _, out var grip)) return;
-            // A lever still going back is this hand's now, from the rest pose it goes back to, not the pose it has on the way.
+            // A lever off its rest pose (used, or going back) is taken where it is, from the rest pose it goes back to.
             var rest = handle.localRotation;
-            var start = 0f;
+            if (handle == used) rest = usedRest;
             foreach (var other in Hands)
                 if (other.Returning == handle)
                 {
                     rest = other.ReturnRest;
-                    start = Mathf.Clamp(LeverMath.Twist(Quaternion.Inverse(rest) * handle.localRotation, LocalAxis), 0f, EndAngle);
                     other.Returning = null;
                 }
+            var start = Mathf.Clamp(LeverMath.Twist(Quaternion.Inverse(rest) * handle.localRotation, LocalAxis), 0f, EndAngle);
             held.Handle = handle;
             held.Rest = rest;
             held.GripAtHold = VrCamera.Instance.transform.parent.rotation * grip;
-            // Taken over off its rest pose, it stays where it is and goes on from there, not from what the Animator shows.
             held.StartAngle = start;
+            held.Catching = false;
             held.Engaged = start > 0f;
             held.Armed = start < ArmBelow;
             held.Angle = start;
+            // The hand took hold on the control's volume, which does not turn: on a lever off its rest pose it holds where
+            // it would have held the lever at rest, turned with it to where the lever is now (Raik: not level again).
+            var now = handle.localRotation;
+            handle.localRotation = rest;
             VrClimb.Reanchor(held.Input, handle);
-            if (logs++ < 40)
+            handle.localRotation = now;
+            if (handle == used) VrClimb.Pin(held.Input, handle.parent);
+            if (logs++ < 200)
             {
                 Ready(control, out var wait);
                 Plugin.Log.LogInfo($"Lever: {held.Input.Name} hand holds '{handle.name}' of '{control.name}' ({TypeName(control)}), "
-                    + (wait > 0f ? $"usable again in {wait:0.0} s" : "usable"));
+                    + (wait > 0f ? $"usable again in {wait:0.0} s" : "usable") + (start > 0f ? $", at {start:0}°" : "")
+                    + (handle == used ? ", busy" : ""));
             }
         }
 
         private static void LetGo(Held held)
         {
-            if (held.Handle != null && held.Engaged)
+            if (held.Handle != null)
             {
-                held.Returning = held.Handle;
-                held.ReturnControl = held.Control;
-                held.ReturnFrom = held.Handle.localRotation;
-                held.ReturnRest = held.Rest;
-                held.ReturnAt = Time.time;
+                // A used lever stays at its end and goes back on its own (Used).
+                if (held.Handle != used && held.Engaged)
+                {
+                    held.Returning = held.Handle;
+                    held.ReturnFrom = held.Handle.localRotation;
+                    held.ReturnRest = held.Rest;
+                    held.ReturnAt = Time.time;
+                }
+                if (logs++ < 200)
+                    Plugin.Log.LogInfo($"Lever: {held.Input.Name} hand lets go of '{held.Handle.name}' at {held.Angle:0}°, "
+                        + (held.Handle == used ? "stays there while it is busy" : held.Engaged ? "goes back" : "not turned"));
             }
             held.Control = null;
             held.Handle = null;
             held.Engaged = false;
         }
 
-        // Where it was let go while its control is busy (Raik: turned all the way and let go, it stays there while the
-        // airlock works, instead of jumping back and playing the game's 60° turn), then back to the rest pose it had when
-        // taken hold of; from then on the Animator shows it as before.
+        // Let go before the end: back to the rest pose it had when taken hold of; from then on the Animator shows it.
         private static void Return(Held held)
         {
             var handle = held.Returning;
             if (handle == null) return;
-            if (held.ReturnControl != null && !Ready(held.ReturnControl, out _))
-            {
-                handle.localRotation = held.ReturnFrom;
-                held.ReturnAt = Time.time;
-                return;
-            }
             var t = (Time.time - held.ReturnAt) / BackTime;
             if (t >= 1f)
             {
+                handle.localRotation = held.ReturnRest;
                 held.Returning = null;
                 return;
             }
@@ -202,7 +296,7 @@ namespace ShipbreakerVR
             var target = HandTarget?.GetValue(control) as Transform;
             for (var t = target; t != null && t != control.transform.root; t = t.parent)
                 if (t.name.EndsWith("_Handle")) return t;
-            if (logs++ < 40) Plugin.Log.LogInfo($"Lever: '{control.name}' is a lever without a handle found from its hand target '{(target != null ? target.name : "none")}'");
+            if (logs++ < 200) Plugin.Log.LogInfo($"Lever: '{control.name}' is a lever without a handle found from its hand target '{(target != null ? target.name : "none")}'");
             return null;
         }
 
