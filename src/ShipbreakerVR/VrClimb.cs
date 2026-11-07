@@ -444,6 +444,11 @@ namespace ShipbreakerVR
             if (control != null && VrLever.Turnable(control))
             {
                 if (VrLever.OnGrip(control, at, out var onGrip, out bar)) controlPoint = onGrip;
+                else if (VrLever.OverHandle(control, at))
+                {
+                    if (firstTry && logs++ < 80) Plugin.Log.LogInfo($"Climbing: {hand.Name} hand grips over the lever's turning part, off its grip: holds nothing");
+                    return;
+                }
                 else control = null;
             }
             if (control != null && best != null

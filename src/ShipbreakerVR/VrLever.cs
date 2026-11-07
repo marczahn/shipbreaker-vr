@@ -138,6 +138,27 @@ namespace ShipbreakerVR
             return on;
         }
 
+        // Whether at lies over the lever's turning part (its handle and grip, OverMargin around them): nothing there is held
+        // but the grip itself (Raik: no flat hand on the turning part, around it on the console it is fine).
+        public static bool OverHandle(InteractableObject control, Vector3 at)
+        {
+            var handle = FindHandle(control);
+            if (handle == null) return false;
+            var found = false;
+            var bounds = new Bounds();
+            foreach (var renderer in handle.GetComponentsInChildren<Renderer>())
+            {
+                if (!found) bounds = renderer.bounds;
+                else bounds.Encapsulate(renderer.bounds);
+                found = true;
+            }
+            if (!found) return false;
+            bounds.Expand(2f * OverMargin * VrCamera.WorldScale);
+            return bounds.Contains(at);
+        }
+
+        private const float OverMargin = 0.02f;
+
         // The yellow grip of a handle: its part named like a bar.
         private static MeshFilter Bar(Transform handle)
         {
