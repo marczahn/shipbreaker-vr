@@ -400,7 +400,8 @@ interacting, the grapple and the "entity of interest".
   15 cm in front of the head (within 90 degrees of where it looks), otherwise for the head's heading, turns after it
   beyond 10 degrees and never stays more than 40 degrees from the head (`VrTorso.Follow`; 60 until 0.28.2, which
   after holding on and rolling left one shoulder forward, that arm looking long with its elbow out). The hands do not
-  count while one holds on: pinned to its hold it drew the body round. The body also ignored the
+  count while one holds on: pinned to its hold it drew the body round. Heading for the head, the body also settles
+  onto it all the way at 0.6 of the angle per second (`VrTorso.SettleOnto`), back in front of the eyes within seconds. The body also ignored the
   tracked head's position (the rig follows the game camera, which stays where the game puts it), so leaning and the
   eyes moving forward when looking down left the shoulders behind: the hips also move so that the neck sits below the
   tracked head as it sits below the game camera (at most 60 cm). Bone poses relative to the eye (the charge arm's

@@ -20,6 +20,15 @@ namespace ShipbreakerVR.Tests
         }
 
         [Fact]
+        public void BodySettlesOntoTheHeadWithinSeconds()
+        {
+            var body = 30f;
+            for (var i = 0; i < 300; i++) body = VrTorso.SettleOnto(body, 0f, 1f / 60f);
+            Assert.InRange(body, 0f, 30f * 0.1f);
+            Assert.Equal(-175f, VrTorso.SettleOnto(175f, -175f, 1000f), 2);
+        }
+
+        [Fact]
         public void BodyStaysWithinTheDeadZoneOfTheHead()
         {
             Assert.Equal(90f - VrTorso.DeadZone, VrTorso.Follow(0f, 90f, 0f, 0f), 3);

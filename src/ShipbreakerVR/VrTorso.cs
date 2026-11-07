@@ -26,6 +26,10 @@ namespace ShipbreakerVR
         public const float FollowFrom = 10f;
         // How fast it turns after it: the share of the angle beyond FollowFrom per second (exponential).
         public const float CatchUp = 1.5f;
+        // Heading for the head (not for the hands), the body also settles onto it all the way, slowly: this share of the
+        // angle per second (exponential), so a body left turned (after holding on, a long look aside) is back in front of
+        // the eyes within a few seconds (Raik).
+        public const float Settle = 0.6f;
         // The body heads where the hands are, in front of the head, once their middle is this far from the head
         // (meters, horizontally); otherwise where the head looks.
         private const float HandsFrom = 0.15f;
@@ -70,8 +74,10 @@ namespace ShipbreakerVR
 
             if (HeadingOf(vr.HeadRotation, out var head))
             {
-                var toward = HandsHeading(vr.transform.localPosition, head, out var hands) ? hands : head;
+                var byHands = HandsHeading(vr.transform.localPosition, head, out var hands);
+                var toward = byHands ? hands : head;
                 heading = headingKnown ? Follow(heading, head, toward, Time.unscaledDeltaTime) : head;
+                if (!byHands) heading = SettleOnto(heading, head, Time.unscaledDeltaTime);
                 headingKnown = true;
             }
             if (weight <= 0f || !found || hips == null || neck == null)
@@ -118,6 +124,10 @@ namespace ShipbreakerVR
             else if (fromHead < -DeadZone) body = head - DeadZone;
             return Wrap(body);
         }
+
+        // The body's heading settled a little onto the head's, also within FollowFrom. Plain numbers, for the tests.
+        public static float SettleOnto(float body, float head, float deltaTime) =>
+            Wrap(body + Wrap(head - body) * (1f - (float)System.Math.Exp(-Settle * deltaTime)));
 
         // Where the middle between the hands lies from the head, in tracking space, if both are tracked, far enough
         // from the head and not behind it (reaching over the shoulder for a tool). Not while a hand holds on: it stays on
