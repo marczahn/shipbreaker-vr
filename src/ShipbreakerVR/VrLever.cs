@@ -51,7 +51,7 @@ namespace ShipbreakerVR
         private const float CatchLength = 0.04f;
         // The hand takes hold of the yellow grip only this near its middle line, in m at world scale 1 (the bar is about
         // 3 cm thick), and then sits right on it; further off, the lever is a surface as any other and does not turn (Raik).
-        private const float GripReach = 0.045f;
+        private const float GripReach = 0.085f;
         // The ends of the grip kept free of the hand's middle, as a share of its length.
         private const float GripEnds = 0.15f;
         // The hand on the grip sits this far further out from the console and up from the grip, in m at world scale 1,
