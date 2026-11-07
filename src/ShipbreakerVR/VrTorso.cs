@@ -18,8 +18,10 @@ namespace ShipbreakerVR
 
         // How long the model takes to turn between the game's pose and the upright one.
         private const float Blend = 0.3f;
-        // How far the body's heading may stay away from the head's, in degrees.
-        public const float DeadZone = 60f;
+        // How far the body's heading may stay away from the head's, in degrees. 60 before: after holding on to a wall and
+        // rolling, the body stayed turned that far, one shoulder forward, and that arm looked long with its elbow out
+        // while the other was stretched straight (Raik; the hand snapshot showed the shoulders 45 to 60 degrees off).
+        public const float DeadZone = 40f;
         // Within this angle of where it is heading for, the body stays put.
         public const float FollowFrom = 10f;
         // How fast it turns after it: the share of the angle beyond FollowFrom per second (exponential).
@@ -118,10 +120,12 @@ namespace ShipbreakerVR
         }
 
         // Where the middle between the hands lies from the head, in tracking space, if both are tracked, far enough
-        // from the head and not behind it (reaching over the shoulder for a tool).
+        // from the head and not behind it (reaching over the shoulder for a tool). Not while a hand holds on: it stays on
+        // its hold, off to a side as the body rolls or turns, and drew the body round after it.
         private static bool HandsHeading(Vector3 head, float headHeading, out float angle)
         {
             angle = 0f;
+            if (VrHand.Left.State == HandState.Holding || VrHand.Right.State == HandState.Holding) return false;
             if (!VrInput.Left.TryGetPosition(out var left) || !VrInput.Right.TryGetPosition(out var right)) return false;
             var middle = (left + right) * 0.5f - head;
             middle.y = 0f;

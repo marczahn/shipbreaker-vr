@@ -15,7 +15,7 @@ namespace ShipbreakerVR.Tests
         public void BodyStaysWithTheHandsWhileTheHeadLooksAround()
         {
             var body = 0f;
-            for (var i = 0; i < 300; i++) body = VrTorso.Follow(body, 50f, 0f, 1f / 60f);
+            for (var i = 0; i < 300; i++) body = VrTorso.Follow(body, VrTorso.DeadZone - 5f, 0f, 1f / 60f);
             Assert.Equal(0f, body, 3);
         }
 

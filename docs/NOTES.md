@@ -398,7 +398,9 @@ interacting, the grapple and the "entity of interest".
   animator every frame) turn around the neck bone onto `Playspace * heading`, and the neck turns back, so the head stays
   at the eye. The heading lives in tracking space: it heads for the middle between the hands when that is at least
   15 cm in front of the head (within 90 degrees of where it looks), otherwise for the head's heading, turns after it
-  beyond 10 degrees and never stays more than 60 degrees from the head (`VrTorso.Follow`). The body also ignored the
+  beyond 10 degrees and never stays more than 40 degrees from the head (`VrTorso.Follow`; 60 until 0.28.2, which
+  after holding on and rolling left one shoulder forward, that arm looking long with its elbow out). The hands do not
+  count while one holds on: pinned to its hold it drew the body round. The body also ignored the
   tracked head's position (the rig follows the game camera, which stays where the game puts it), so leaning and the
   eyes moving forward when looking down left the shoulders behind: the hips also move so that the neck sits below the
   tracked head as it sits below the game camera (at most 60 cm). Bone poses relative to the eye (the charge arm's
