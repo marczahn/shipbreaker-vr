@@ -212,6 +212,7 @@ namespace ShipbreakerVR
             foreach (var hand in Hands) Read(hand);
             foreach (var hand in Hands) Rethink(hand);
             foreach (var hand in Hands) Slide(hand);
+            foreach (var hand in Hands) Glide(hand);
             Pull();
         }
 
@@ -259,6 +260,30 @@ namespace ShipbreakerVR
             hand.Slides++;
             if (slideLogs++ < 20)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand slides {along.magnitude:0.00} m along '{hand.Collider.name}' after the body turned {SlideAfter:0}°");
+        }
+
+        // A hand flat on a large fixed surface while thrusting: the hold glides along the surface with the body, so the
+        // thrust along the hull carries the body on and the hand slides with it, while the pull still holds the body at
+        // the hand's distance from the hull, also against thrust pointing away from it (Raik: gliding along a ship's
+        // hull with a hand on it). Each step the hold moves by the part of the hand's way from it that runs along the
+        // surface, found on the surface again by a ray; past an edge it stays.
+        private static int glideLogs;
+
+        private static void Glide(Hand hand)
+        {
+            if (!hand.Holding || hand.Sliding || hand.Movable || hand.Firm || hand.Follower || hand.Control || hand.Anchor == null || hand.Collider == null) return;
+            if (!VrControls.Thrusting) return;
+            var hold = Hold(hand);
+            var surface = hand.Anchor.TransformPoint(hand.Surface);
+            var normal = hand.Anchor.TransformDirection(hand.Normal).normalized;
+            var along = Vector3.ProjectOnPlane(PullPoint(hand) - hold, normal);
+            if (along.sqrMagnitude < 1e-6f) return;
+            var probe = Reach * VrCamera.WorldScale;
+            if (!hand.Collider.Raycast(new Ray(surface + along + normal * probe, -normal), out var hit, 2f * probe)) return;
+            var moved = hand.Anchor.InverseTransformPoint(hit.point) - hand.Surface;
+            hand.Point += moved;
+            hand.Surface += moved;
+            if (glideLogs++ < 10) Plugin.Log.LogInfo($"Climbing: {hand.Name} hand glides along '{hand.Collider.name}' with the thrust");
         }
 
         // How often that hand's hold slid along its surface (VrHands turns the hand anew each time).
