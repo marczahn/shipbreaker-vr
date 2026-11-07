@@ -6,10 +6,10 @@ using UnityEngine;
 namespace ShipbreakerVR
 {
     // The nacelle switch that cuts the fuel lines, worked by hand (Raik, 0.29), in the three steps of the game's own
-    // animation: fold the handle down (turn the hand about the handle's axis, 90°), pull it down (the switch slides 16 cm,
+    // animation: fold the handle down (the hand goes round its hinge with it, 90°), pull it down (the switch slides 16 cm,
     // no faster than PullMost: it goes heavily, and the further the hand runs ahead of it the harder it shakes), fold it
-    // over (another 90°). Then it uses the switch (InteractableObject.Complete, as holding A for 4 s did). A hand that went
-    // past a step has to come back to the handle (CatchTurn, CatchPull) before the next step follows it: a fiddly job on
+    // over (another 90°). Then it uses the switch (InteractableObject.Complete, as holding A for 4 s did). A hand that came
+    // off the handle in a step has to come back to it (CatchReach) before the next step follows it: a fiddly job on
     // purpose. Let go before the end, it goes back to where it started. The body stays where it is (VrClimb.Pin).
     //
     // Measured (VrInteractSurvey, clip 'Switch_Flush_Turn_Off', 4.33 s, 2026-11-08): the handle
@@ -27,8 +27,8 @@ namespace ShipbreakerVR
         // The pull follows the hand at most this fast, in m/s at world scale 1 (the game's pull takes 1.8 s).
         private const float PullMost = 0.12f;
         // The hand back within this of the handle, the next step follows it.
-        private const float CatchTurn = 10f;
-        private const float CatchPull = 0.02f;
+        // The controller back within this of where the hand holds the handle, the next step follows it (m at world scale 1).
+        private const float CatchReach = 0.05f;
         // The shaking: from LagFrom ahead, Least to Most at LagFull, a pulse every Every.
         private const float LagFrom = 0.005f;
         private const float LagFull = 0.06f;
@@ -57,9 +57,9 @@ namespace ShipbreakerVR
             public Vector3 SwitchRest;
             public Step Step;
             public bool Caught;
-            public Quaternion TurnFrom;
-            public float AngleFrom;
             public Vector3 PullFrom;
+            // Where the hand holds the handle, in the handle's own axes.
+            public Vector3 Reach;
             public float SlideFrom;
             public float Angle;
             public float Slid;
@@ -132,16 +132,19 @@ namespace ShipbreakerVR
                 return;
             }
             if (!held.Input.TryGetGripPose(out var gripLocal, out var gripTurn)) return;
-            if (!VrToolModels.TrackingToWorld(gripLocal, gripTurn, out var grip, out var turn)) return;
-            var axis = held.Handle.parent.rotation * held.HandleRest * Axis;
-            var twist = LeverMath.Twist(turn * Quaternion.Inverse(held.TurnFrom), axis);
+            if (!VrToolModels.TrackingToWorld(gripLocal, gripTurn, out var grip, out _)) return;
+            // The handle where it was left, over what the Animator set this frame.
+            Pose(held.Handle, held.Switch, held.HandleRest, held.HandleRestPlace, held.SwitchRest, held.Angle, held.Slid);
+            var hand = held.Handle.TransformPoint(held.Reach);
+            var near = (grip - hand).magnitude <= CatchReach * VrCamera.WorldScale;
+            var angleAt = AngleAt(held, grip);
             var down = held.Switch.parent.TransformDirection(Vector3.down).normalized;
             var travel = held.Switch.parent.TransformVector(Vector3.up * Slide).magnitude;
             switch (held.Step)
             {
                 case Step.FoldDown:
                 {
-                    var angle = Mathf.Clamp(held.AngleFrom + twist, 0f, Fold);
+                    var angle = Mathf.Clamp(angleAt, 0f, Fold);
                     Hum(held, angle);
                     held.Angle = angle;
                     if (angle >= Fold - SnapWithin) Next(held, Step.Pull, "folded down");
@@ -149,10 +152,10 @@ namespace ShipbreakerVR
                 }
                 case Step.Pull:
                 {
-                    // Turned on past the fold, or back: the hand has to come back to the handle first.
+                    // Folding out, the hand comes off the handle: it has to come back to it first.
                     if (!held.Caught)
                     {
-                        if (Mathf.Abs(held.AngleFrom + twist - Fold) > CatchTurn) break;
+                        if (!near) break;
                         Catch(held, grip, "on the folded handle");
                     }
                     var wanted = Mathf.Clamp(held.SlideFrom + Vector3.Dot(grip - held.PullFrom, down), 0f, travel);
@@ -168,13 +171,13 @@ namespace ShipbreakerVR
                 }
                 case Step.FoldOver:
                 {
-                    // Pulled on past the end: the hand has to come back up to the handle first.
+                    // Pulled on past the end: the hand has to come back to the handle first.
                     if (!held.Caught)
                     {
-                        if (held.SlideFrom + Vector3.Dot(grip - held.PullFrom, down) - travel > CatchPull * VrCamera.WorldScale) break;
+                        if (!near) break;
                         Catch(held, grip, "back at the pulled handle");
                     }
-                    var angle = Mathf.Clamp(held.AngleFrom + twist, Fold, 2f * Fold);
+                    var angle = Mathf.Clamp(angleAt < -90f ? angleAt + 360f : angleAt, Fold, 2f * Fold);
                     Hum(held, angle);
                     held.Angle = angle;
                     if (angle >= 2f * Fold - SnapWithin)
@@ -202,11 +205,19 @@ namespace ShipbreakerVR
             held.Caught = true;
             held.PullFrom = grip;
             held.SlideFrom = held.Slid;
-            // The turn goes on from the handle's angle with the controller as it is now.
-            if (held.Input.TryGetGripPose(out var gripLocal, out var gripTurn) && VrToolModels.TrackingToWorld(gripLocal, gripTurn, out _, out var turn))
-                held.TurnFrom = turn;
-            held.AngleFrom = held.Angle;
             if (logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand is {where}, goes on");
+        }
+
+        // How far the controller is round the handle's hinge, from where the hand would be at its rest pose, in degrees:
+        // the handle goes with the hand on its way round (Raik: following the switch's own movement, not turning the
+        // controller).
+        private static float AngleAt(Held held, Vector3 grip)
+        {
+            var frame = held.Handle.parent.rotation * held.HandleRest;
+            var axis = frame * Axis;
+            var rest = frame * held.Reach;
+            var to = grip - held.Handle.position;
+            return Vector3.SignedAngle(Vector3.ProjectOnPlane(rest, axis), Vector3.ProjectOnPlane(to, axis), axis);
         }
 
         private static void Hum(Held held, float angle)
@@ -263,12 +274,12 @@ namespace ShipbreakerVR
             held.Slid = from != null ? from.Slid : 0f;
             held.Step = held.Slid > 0f ? Step.Pull : Step.FoldDown;
             held.Caught = false;
-            if (held.Input.TryGetGripPose(out var gripLocal, out var gripTurn) && VrToolModels.TrackingToWorld(gripLocal, gripTurn, out var grip, out var turn))
+            Pose(handle, slider, held.HandleRest, held.HandleRestPlace, held.SwitchRest, held.Angle, held.Slid);
+            if (held.Input.TryGetGripPose(out var gripLocal, out var gripTurn) && VrToolModels.TrackingToWorld(gripLocal, gripTurn, out var grip, out _))
             {
-                held.TurnFrom = turn;
                 held.PullFrom = grip;
+                held.Reach = handle.InverseTransformPoint(grip);
             }
-            held.AngleFrom = held.Angle;
             held.SlideFrom = held.Slid;
             // Taken hold of at the first step, it turns with the hand at once.
             held.Caught = held.Step == Step.FoldDown;
