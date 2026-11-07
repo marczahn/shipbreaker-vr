@@ -18,12 +18,18 @@ namespace ShipbreakerVR
 
         // How long the model takes to turn between the game's pose and the upright one.
         private const float Blend = 0.3f;
-        // How far the body's heading may stay away from the head's, in degrees.
-        public const float DeadZone = 60f;
+        // How far the body's heading may stay away from the head's, in degrees. 60 before: after holding on to a wall and
+        // rolling, the body stayed turned that far, one shoulder forward, and that arm looked long with its elbow out
+        // while the other was stretched straight (Raik; the hand snapshot showed the shoulders 45 to 60 degrees off).
+        public const float DeadZone = 40f;
         // Within this angle of where it is heading for, the body stays put.
         public const float FollowFrom = 10f;
         // How fast it turns after it: the share of the angle beyond FollowFrom per second (exponential).
         public const float CatchUp = 1.5f;
+        // Heading for the head (not for the hands), the body also settles onto it all the way, slowly: this share of the
+        // angle per second (exponential), so a body left turned (after holding on, a long look aside) is back in front of
+        // the eyes within a few seconds (Raik).
+        public const float Settle = 0.6f;
         // The body heads where the hands are, in front of the head, once their middle is this far from the head
         // (meters, horizontally); otherwise where the head looks.
         private const float HandsFrom = 0.15f;
@@ -68,8 +74,10 @@ namespace ShipbreakerVR
 
             if (HeadingOf(vr.HeadRotation, out var head))
             {
-                var toward = HandsHeading(vr.transform.localPosition, head, out var hands) ? hands : head;
+                var byHands = HandsHeading(vr.transform.localPosition, head, out var hands);
+                var toward = byHands ? hands : head;
                 heading = headingKnown ? Follow(heading, head, toward, Time.unscaledDeltaTime) : head;
+                if (!byHands) heading = SettleOnto(heading, head, Time.unscaledDeltaTime);
                 headingKnown = true;
             }
             if (weight <= 0f || !found || hips == null || neck == null)
@@ -117,11 +125,17 @@ namespace ShipbreakerVR
             return Wrap(body);
         }
 
+        // The body's heading settled a little onto the head's, also within FollowFrom. Plain numbers, for the tests.
+        public static float SettleOnto(float body, float head, float deltaTime) =>
+            Wrap(body + Wrap(head - body) * (1f - (float)System.Math.Exp(-Settle * deltaTime)));
+
         // Where the middle between the hands lies from the head, in tracking space, if both are tracked, far enough
-        // from the head and not behind it (reaching over the shoulder for a tool).
+        // from the head and not behind it (reaching over the shoulder for a tool). Not while a hand holds on: it stays on
+        // its hold, off to a side as the body rolls or turns, and drew the body round after it.
         private static bool HandsHeading(Vector3 head, float headHeading, out float angle)
         {
             angle = 0f;
+            if (VrHand.Left.State == HandState.Holding || VrHand.Right.State == HandState.Holding) return false;
             if (!VrInput.Left.TryGetPosition(out var left) || !VrInput.Right.TryGetPosition(out var right)) return false;
             var middle = (left + right) * 0.5f - head;
             middle.y = 0f;

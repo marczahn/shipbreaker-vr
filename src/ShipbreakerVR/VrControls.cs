@@ -14,11 +14,16 @@ namespace ShipbreakerVR
     // the right stick turns (left/right; smoothly or in snap steps, see Turning) and pitches (up/down), faster the further
     // it is pushed, and Y brakes. The grips stay free for holding on (VrClimb). While the left hand holds a tool its controller works
     // the tool (VrToolInput), so there is no flying and no braking then; the right stick still turns.
+    // Shooter, the other scheme (Steuerung/Controllersteuerung), as in VR shooters (Raik): the left stick thrusts forward,
+    // back, left and right, as strongly as it is pushed, along the left controller: forward is where it points, so tilted
+    // up or down it thrusts up or down. With the left trigger held, the stick's left and right roll instead of moving
+    // sideways (Raik: the trigger is free there); forward and back still thrust. Turning, pitching, braking and the rest
+    // as with VTOL.
     // Thrust and brake go through the game's own actions (ThrustController reads them via LynxControls), so fuel, forces and
     // HUD stay the game's. Rotation is applied in VrBody, to the playspace.
     internal static class VrControls
     {
-        public enum Scheme { Aus, Vtol }
+        public enum Scheme { Aus, Vtol, Shooter }
 
         // Turning with the right stick: smoothly, or one fixed step per flick.
         public enum Turning { Fliessend, Snap30, Snap45, Snap90 }
@@ -33,9 +38,15 @@ namespace ShipbreakerVR
         public const float DeadzoneMax = 10f;
         public const float FullMax = 30f;
         public const float MinThrustRange = 5f;
-        // How far a tilted hand moves without meaning to, in meters per degree, and at most.
-        private const float TiltShift = 0.0025f;
-        private const float TiltShiftMax = 0.15f;
+        // Where the hand turns when it tilts to roll, in the grip pose's axes (meters): measured from Raik's controller's
+        // velocity and angular velocity while rolling (a local test log), about 4 cm below and 3 cm behind the grip. Thrust
+        // is measured there, so a tilt alone hardly moves it. The estimate before, 8 cm straight behind the grip, lay some
+        // 6 cm off that axis: a 30 degree roll swung it 3 cm, past the deadzone, and the flight globe showed thrust.
+        private static readonly Vector3 ThrustAnchor = new Vector3(0.01f, -0.04f, -0.03f);
+        // What a tilt still moves the hand by itself (the arm going along, other hands), in meters per degree, and at most;
+        // was 2.5 mm and 15 cm with the old anchor, and swallowed real thrust while tilted.
+        private const float TiltShift = 0.001f;
+        private const float TiltShiftMax = 0.05f;
         private const float TurnDeadzone = 12f;
         // Rolling: as fast per degree as turning, up to a hand tilted all the way.
         private const float RollFull = 90f;
@@ -69,6 +80,11 @@ namespace ShipbreakerVR
 
         private static bool snapped;
         private static bool braking;
+        // The left stick thrusting (Shooter): counts as holding the thrust, as the trigger does with VTOL.
+        private static bool stickThrust;
+        // Shooter, for the flight globe: the thrust in tracking space (0..1) and the roll as a hand tilt in degrees.
+        private static Vector3 shooterThrust;
+        private static float shooterRoll;
         // A left trigger still held from working a tool with that hand flies only after it was let go.
         private static bool triggerFromTool;
 
@@ -82,6 +98,9 @@ namespace ShipbreakerVR
             thrust = Vector3.zero;
             turn = Quaternion.identity;
             braking = false;
+            stickThrust = false;
+            shooterThrust = Vector3.zero;
+            shooterRoll = 0f;
 
             if (Active == Scheme.Aus) { held = false; return; }
             // Controller poses are in tracking space, i.e. relative to the rig whose rotation is the playspace.
@@ -99,10 +118,35 @@ namespace ShipbreakerVR
                 turn = VrFlightComfort.AlignStep(playspace, Time.deltaTime) * turn;
             }
             if (tool) { held = false; triggerFromTool = true; return; }
+            if (Active == Scheme.Shooter)
+            {
+                held = false;
+                // Only in gameplay: in the Hab the left stick walks (VrHabWalk), in the menus it moves the selection.
+                if (GameSession.CurrentGameState != GameSession.GameState.Gameplay) return;
+                if (!left.Trigger.Down) triggerFromTool = false;
+                var rolling = left.Trigger.Down && !triggerFromTool;
+                var stick = left.Stick;
+                if (rolling)
+                {
+                    // Shown in the globe as the hand tilt that rolls as fast with VTOL.
+                    var share = Ramp(Mathf.Abs(stick.x), StickDeadzone, 1f);
+                    if (share > 0f) shooterRoll = -Mathf.Sign(stick.x) * Mathf.Lerp(TurnDeadzone, RollFull, share);
+                    var roll = ShooterRoll(stick.x) * Time.deltaTime;
+                    if (roll != 0f) turn = Quaternion.AngleAxis(roll, playspace * VrCamera.Instance.HeadRotation * Vector3.forward) * turn;
+                    stick.x = 0f;
+                }
+                if (!left.TryGetAimRotation(out var pointing)) return;
+                var local = ShooterThrust(stick, pointing);
+                stickThrust = local != Vector3.zero;
+                shooterThrust = local;
+                thrust = playspace * local;
+                return;
+            }
             if (!left.TryGetGripPose(out var grip, out var rotation)) { held = false; return; }
-            // Thrust follows the wrist, not the controller: tilting the hand swings the controller around the wrist, and
-            // measured at the controller that swing alone moved it past the deadzone, adding thrust nobody asked for.
-            var position = grip + rotation * VrInput.WristBehindGrip;
+            // Thrust follows the point the hand turns about (ThrustAnchor), not the controller: tilting the hand swings the
+            // controller around it, and measured at the controller that swing alone moved it past the deadzone, adding
+            // thrust nobody asked for.
+            var position = grip + rotation * ThrustAnchor;
             left.TryGetAimRotation(out rotation);
             handPosition = position;
             handRotation = rotation;
@@ -118,6 +162,20 @@ namespace ShipbreakerVR
             if (strength > 0f) thrust = playspace * offset.normalized * strength;
             RollFromReference(rotation, playspace);
         }
+
+        // Shooter: the thrust in tracking space for the left stick and the left controller's aim, length 0..1: none inside
+        // the stick's deadzone, full at the stick's edge; stick up is the controller's forward, right its right.
+        internal static Vector3 ShooterThrust(Vector2 stick, Quaternion aim)
+        {
+            var strength = Ramp(stick.magnitude, StickDeadzone, 1f);
+            if (strength <= 0f) return Vector3.zero;
+            var way = aim * new Vector3(stick.x, 0f, stick.y);
+            return way.sqrMagnitude < 1e-8f ? Vector3.zero : way.normalized * strength;
+        }
+
+        // Shooter with the left trigger held: degrees per second to roll for the stick's left and right, as fast as VTOL's
+        // roll at full; stick left rolls left, as a hand tilted left does with VTOL.
+        internal static float ShooterRoll(float x) => -Ramp(Mathf.Abs(x), StickDeadzone, 1f) * Mathf.Sign(x) * RollSpeed;
 
         // The offset left for thrust after what a tilt of that many degrees moves the hand by itself, in meters.
         internal static float ThrustOffset(float offset, float tilt) => Mathf.Max(offset - Mathf.Min(tilt * TiltShift, TiltShiftMax), 0f);
@@ -230,14 +288,24 @@ namespace ShipbreakerVR
             else deadzone.Value = Mathf.Max(full.Value - MinThrustRange, 0f);
         }
 
-        public static bool Flying => Active == Scheme.Vtol && GameSession.CurrentGameState == GameSession.GameState.Gameplay;
+        public static bool Flying => Active != Scheme.Aus && GameSession.CurrentGameState == GameSession.GameState.Gameplay;
 
-        public static bool Holding => held;
+        // Holding the thrust: the trigger with VTOL, the left stick pushed with Shooter.
+        public static bool Holding => held || stickThrust;
 
         // While the trigger is held: the hand's offset from the reference in tracking space (meters), and its rotation
-        // relative to the reference, in the controller's own frame (z is the roll the controls read).
+        // relative to the reference, in the controller's own frame (z is the roll the controls read). With Shooter, while
+        // the stick thrusts or rolls, the hand offset and tilt that would do the same with VTOL, so the flight globe shows
+        // which way and how strongly (Raik).
         public static bool TryGetHand(out Vector3 offset, out Quaternion rotation)
         {
+            if (!held && (shooterThrust != Vector3.zero || shooterRoll != 0f))
+            {
+                offset = shooterThrust == Vector3.zero ? Vector3.zero
+                    : shooterThrust.normalized * Mathf.Lerp(DeadzoneShare, 1f, shooterThrust.magnitude) * FullOffset;
+                rotation = Quaternion.AngleAxis(shooterRoll, Vector3.forward);
+                return true;
+            }
             offset = held ? handPosition - heldPosition : Vector3.zero;
             rotation = held ? Quaternion.Inverse(heldRotation) * handRotation : Quaternion.identity;
             return held;
