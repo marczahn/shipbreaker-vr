@@ -130,6 +130,9 @@ namespace ShipbreakerVR
             // Pinned (VrLever): the body keeps to this point on PinAnchor, which does not move, while the lever turns the
             // hand on Anchor (the game turning it back with the hand still on it).
             public Transform PinAnchor;
+            // Free (VrNacelle): the hand stays on its hold, which a switch moves, but neither pulls at the body nor is torn
+            // off the hold however far its controller goes; it turns freely on it (VrHands).
+            public bool Free;
             // On a lever's grip (VrLever.OnGrip): the grip's direction on Anchor, the fist closes around it (VrHands).
             public Vector3 Bar;
             public Vector3 Pin;
@@ -509,6 +512,7 @@ namespace ShipbreakerVR
             hand.Firm = false;
             hand.Follower = false;
             hand.PinAnchor = null;
+            hand.Free = false;
             hand.Bar = control != null ? hand.Anchor.InverseTransformDirection(bar) : Vector3.zero;
             foreach (var other in Hands)
                 if (other != hand && other.Firm && other.Body == body) hand.Follower = true;
@@ -547,6 +551,11 @@ namespace ShipbreakerVR
             foreach (var hand in Hands)
             {
                 if (!hand.Holding) continue;
+                if (hand.Free)
+                {
+                    holding++;
+                    continue;
+                }
                 var error = Hold(hand) - (Pushes(hand) ? HandWorld(hand) : PullPoint(hand));
                 // A part that moves follows the hand softly (PartPullTime), so it lags further in a quick swing: torn off
                 // only at twice the distance, as a firmly held one.
@@ -556,7 +565,7 @@ namespace ShipbreakerVR
             // A firmly held part goes with the hand and pulls at nothing.
             var pulling = 0;
             foreach (var hand in Hands)
-                if (hand.Holding && !hand.Firm && !hand.Follower && !Pushes(hand)) pulling++;
+                if (hand.Holding && !hand.Firm && !hand.Follower && !hand.Free && !Pushes(hand)) pulling++;
             if (pulling == 0)
             {
                 foreach (var hand in Hands)
@@ -581,7 +590,7 @@ namespace ShipbreakerVR
                 var change = Vector3.zero;
                 foreach (var hand in Hands)
                 {
-                    if (!hand.Holding || hand.Firm || hand.Follower || Pushes(hand)) continue;
+                    if (!hand.Holding || hand.Firm || hand.Follower || hand.Free || Pushes(hand)) continue;
                     var hold = Hold(hand);
                     var error = hold - PullPoint(hand);
                     var holdVelocityHere = hand.Body != null ? hand.Body.GetPointVelocity(hold) : Vector3.zero;
@@ -1139,6 +1148,20 @@ namespace ShipbreakerVR
                 if (hand.Input == input && hand.Holding && hand.Control && hand.Collider != null)
                     return hand.Collider.GetComponentInParent<InteractableObject>();
             return null;
+        }
+
+        // That controller's hand held free (VrNacelle, Hand.Free), or not.
+        public static void SetFree(VrInput.Hand input, bool free)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input && hand.Holding) hand.Free = free;
+        }
+
+        public static bool HeldFree(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input && hand.Holding) return hand.Free;
+            return false;
         }
 
         // The body of that controller's hand keeps to where its hold is now, on still, which does not move, while the hand

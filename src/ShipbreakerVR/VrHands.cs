@@ -651,7 +651,8 @@ namespace ShipbreakerVR
                     if (rollLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} hand turns along on '{arm.GripAnchor.name}', the arm wound past {RollAlong:0}°");
                 }
             }
-            var turn = arm.GripAnchor.rotation * gripTurn;
+            // Held free (a nacelle switch, VrClimb.HeldFree), the hand stays on its hold but turns with the controller.
+            var turn = arm.Gripping && VrClimb.HeldFree(arm.Input) ? frame : arm.GripAnchor.rotation * gripTurn;
             var placed = arm.GripAnchor.TransformPoint(arm.GripPoint) + turn * arm.GripOffset;
             if (arm.GripFlat) placed = OutOfSurface(arm, placed, turn);
             wrist = Vector3.Lerp(wrist, placed, arm.GripBlend);

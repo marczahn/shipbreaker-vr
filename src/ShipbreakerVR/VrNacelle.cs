@@ -10,7 +10,9 @@ namespace ShipbreakerVR
     // no faster than PullMost: it goes heavily, and the further the hand runs ahead of it the harder it shakes), fold it
     // over (another 90°). Then it uses the switch (InteractableObject.Complete, as holding A for 4 s did). A hand that came
     // off the handle in a step has to come back to it (CatchReach) before the next step follows it: a fiddly job on
-    // purpose. Let go before the end, it goes back to where it started. The body stays where it is (VrClimb.Pin).
+    // purpose. Let go before the end, it goes back to where it started. The hand holds free (VrClimb.SetFree): it pulls
+    // nothing, the body stays where it is, it is not torn off however far the controller goes, and it turns freely on the
+    // handle (Raik: the wrist turns as the switch goes down, without moving it).
     //
     // Measured (VrInteractSurvey, clip 'Switch_Flush_Turn_Off', 4.33 s, 2026-11-08): the handle
     // 'SM_Switch_Flush_AxCxA_Handle' under the control turns about its own +X by 90° (0 to 1.44 s); the switch
@@ -28,7 +30,7 @@ namespace ShipbreakerVR
         private const float PullMost = 0.12f;
         // The hand back within this of the handle, the next step follows it.
         // The controller back within this of where the hand holds the handle, the next step follows it (m at world scale 1).
-        private const float CatchReach = 0.05f;
+        private const float CatchReach = 0.08f;
         // The shaking: from LagFrom ahead, Least to Most at LagFull, a pulse every Every.
         private const float LagFrom = 0.005f;
         private const float LagFull = 0.06f;
@@ -284,7 +286,7 @@ namespace ShipbreakerVR
             // Taken hold of at the first step, it turns with the hand at once.
             held.Caught = held.Step == Step.FoldDown;
             VrClimb.Reanchor(held.Input, handle);
-            VrClimb.Pin(held.Input, control.transform.parent);
+            VrClimb.SetFree(held.Input, true);
             if (logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand holds '{handle.name}' of '{control.name}', step {held.Step}");
         }
 
@@ -292,7 +294,7 @@ namespace ShipbreakerVR
         {
             if (held.Control != null)
             {
-                VrClimb.Pin(held.Input, null);
+                VrClimb.SetFree(held.Input, false);
                 Let.Add(new Loose
                 {
                     Handle = held.Handle,
