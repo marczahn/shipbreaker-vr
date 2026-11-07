@@ -16,8 +16,9 @@ namespace ShipbreakerVR
     // Volume' next to it. Buttons are found as parts with a mesh named like a button on the part near the hand.
     internal static class VrButtons
     {
-        // How far ahead of the controller, along its pointing direction, the hand's tip is, in m at world scale 1.
-        private const float TipAhead = 0.08f;
+        // How far ahead of the controller's grip, along its pointing direction, the tip pushing buttons is, in m at world
+        // scale 1: about the controller's front for now (Raik: pushing with the controller is enough to start with).
+        private const float TipAhead = 0.03f;
         // Pushed this far into the face, the button is used; back out past Release, it may be used again.
         private const float PressDepth = 0.006f;
         private const float Release = 0.002f;
@@ -181,7 +182,10 @@ namespace ShipbreakerVR
             foreach (var filter in part.GetComponentsInChildren<MeshFilter>(true))
             {
                 var mesh = filter.sharedMesh;
-                if (mesh == null || !(mesh.name.Contains("_Button") || filter.name.Contains("_Button"))) continue;
+                if (logs < 60 && part.name.Contains("AtmosphereRegulator"))
+                    Plugin.Log.LogInfo($"Buttons: '{part.name}' has '{filter.name}' ({(mesh != null ? mesh.name : "no mesh")})");
+                // The air conditioner's button is its part 'Unlock_01'.
+                if (mesh == null || !(mesh.name.Contains("_Button") || filter.name.Contains("_Button") || filter.name.StartsWith("Unlock_"))) continue;
                 var bounds = mesh.bounds;
                 var size = Vector3.Scale(bounds.size, Abs(filter.transform.lossyScale));
                 if (size.x > Largest || size.y > Largest || size.z > Largest) continue;
