@@ -468,7 +468,10 @@ namespace ShipbreakerVR
                 for (var i = 0; i < count; i++)
                 {
                     var collider = Found[i];
-                    if (!collider.isTrigger || Own(collider) || collider.GetComponentInParent<InteractableObject>() == null) continue;
+                    if (!collider.isTrigger || Own(collider)) continue;
+                    // A lever turned by hand is held on its grip only (Raik: not in the air over it, as on a wall).
+                    var volume = collider.GetComponentInParent<InteractableObject>();
+                    if (volume == null || VrLever.Turnable(volume)) continue;
                     var distance = (VrUtil.ClosestPoint(collider, at) - at).sqrMagnitude;
                     if (distance >= bestDistance) continue;
                     best = collider;

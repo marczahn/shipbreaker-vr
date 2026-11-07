@@ -535,7 +535,7 @@ namespace ShipbreakerVR
         private static bool UsesHeldControl(Arm arm)
         {
             if (arm.Hand == null || arm.Hand.CurrentHandState != HandGrab.HandState.Success) arm.UsedControl = false;
-            else if (VrClimb.HoldsControl(arm.Input)) arm.UsedControl = true;
+            else if (VrClimb.HoldsControl(arm.Input) || VrButtons.JustPressed) arm.UsedControl = true;
             return arm.UsedControl;
         }
 

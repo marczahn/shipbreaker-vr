@@ -157,7 +157,7 @@ namespace ShipbreakerVR
             return bounds.Contains(at);
         }
 
-        private const float OverMargin = 0.02f;
+        private const float OverMargin = 0.04f;
 
         // The yellow grip of a handle: its part named like a bar.
         private static MeshFilter Bar(Transform handle)
@@ -365,7 +365,7 @@ namespace ShipbreakerVR
         }
 
         // Whether using it now would do something: its cooldown since it was last used is over; how long until then.
-        private static bool Ready(InteractableObject control, out float wait)
+        internal static bool Ready(InteractableObject control, out float wait)
         {
             wait = 0f;
             var last = LastCompletion?.GetValue(control) is float l ? l : 0f;
