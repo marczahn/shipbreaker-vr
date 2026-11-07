@@ -19,7 +19,8 @@ namespace ShipbreakerVR
     // glides back to what the Animator shows.
     internal static class VrLever
     {
-        private const float EndAngle = 60f;
+        // Further than the game's own 60°: more to feel in the turn (Raik).
+        private const float EndAngle = 90f;
         private static readonly Vector3 LocalAxis = new Vector3(-1f, 0f, 0f);
         // Turned past this, the hand takes over the handle from the Animator (A alone still plays the game's animation).
         private const float TakeOver = 3f;

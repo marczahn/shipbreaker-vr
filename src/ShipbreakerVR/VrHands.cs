@@ -91,6 +91,8 @@ namespace ShipbreakerVR
             // How far the fingers are closed (0 open, 1 the full bend), and towards what.
             public float Closed;
             public bool Fist;
+            // The hand held on to the control the game still works (UsesHeldControl).
+            public bool UsedControl;
             // How far the fingers are straightened on a large hold (0 as animated, 1 straight).
             public float Flat;
             // How far each finger joint is curled over an edge (0 to 1), as Joints.
@@ -271,9 +273,12 @@ namespace ShipbreakerVR
             var active = VrAim.Active;
             var equipment = grab.RightHand.CurrentEquipmentType;
             var chargeLeft = VrToolModels.ChargeInLeftHand;
-            Drive(LeftArm, active && (Idle(grab.LeftHand) || UsesHeldControl(LeftArm)));
+            // Every frame for both, so a hand let go of its control forgets it once the game is done with it.
+            var leftControl = UsesHeldControl(LeftArm);
+            var rightControl = UsesHeldControl(RightArm);
+            Drive(LeftArm, active && (Idle(grab.LeftHand) || leftControl));
             var rightBusy = VrToolModels.PosesRightArm;
-            Drive(RightArm, active && !rightBusy && (Idle(grab.RightHand) || UsesHeldControl(RightArm)
+            Drive(RightArm, active && !rightBusy && (Idle(grab.RightHand) || rightControl
                 || (grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped && (equipment != EquipmentController.Equipment.DemoCharge || chargeLeft))));
             // The demo charge's arm is bent there; another bend on top would fight it.
             if (rightBusy) RightArm.Weight = 0f;
@@ -524,9 +529,15 @@ namespace ShipbreakerVR
         }
 
         // A hand that holds on to a control and uses it: it stays where it holds, as a fist, instead of going back to the
-        // game, whose animation bent it to the control's HandTarget and the hand flew off the lever (Raik).
-        private static bool UsesHeldControl(Arm arm) =>
-            arm.Hand != null && arm.Hand.CurrentHandState == HandGrab.HandState.Success && VrClimb.HoldsControl(arm.Input);
+        // game, whose animation bent it to the control's HandTarget and the hand flew off the lever (Raik). Let go while the
+        // game still works the control (the airlock's lever turned by hand, VrLever), it stays with its controller until
+        // the game is done, instead of jumping to the HandTarget to finish the game's animation there (Raik).
+        private static bool UsesHeldControl(Arm arm)
+        {
+            if (arm.Hand == null || arm.Hand.CurrentHandState != HandGrab.HandState.Success) arm.UsedControl = false;
+            else if (VrClimb.HoldsControl(arm.Input)) arm.UsedControl = true;
+            return arm.UsedControl;
+        }
 
         // Not grabbing, gesturing, hurt or holding a tool.
         private static bool Idle(HandGrab hand)
