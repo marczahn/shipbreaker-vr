@@ -274,5 +274,43 @@ namespace ShipbreakerVR.Tests
             Assert.Equal(0f, slower.x, 5);
             Assert.InRange(slower.z, -1f, -0.9f);
         }
+
+        private static Quaternion About(Vector3 axis, float degrees)
+        {
+            var half = degrees * Mathf.Deg2Rad / 2f;
+            var sin = Mathf.Sin(half);
+            return new Quaternion(axis.x * sin, axis.y * sin, axis.z * sin, Mathf.Cos(half));
+        }
+
+        [Fact]
+        public void LeverTurnsAsFarAsTheHandTwistsAboutItsAxis()
+        {
+            var axis = new Vector3(-1f, 0f, 0f);
+            Assert.Equal(40f, LeverMath.Twist(About(axis, 40f), axis), 2);
+            Assert.Equal(-25f, LeverMath.Twist(About(axis, -25f), axis), 2);
+        }
+
+        [Fact]
+        public void LeverIgnoresTheHandSwingingAwayFromItsAxis()
+        {
+            var axis = new Vector3(-1f, 0f, 0f);
+            var swing = About(new Vector3(0f, 1f, 0f), 30f);
+            var twist = About(axis, 50f);
+            var both = new Quaternion(
+                swing.w * twist.x + swing.x * twist.w + swing.y * twist.z - swing.z * twist.y,
+                swing.w * twist.y - swing.x * twist.z + swing.y * twist.w + swing.z * twist.x,
+                swing.w * twist.z + swing.x * twist.y - swing.y * twist.x + swing.z * twist.w,
+                swing.w * twist.w - swing.x * twist.x - swing.y * twist.y - swing.z * twist.z);
+            Assert.Equal(50f, LeverMath.Twist(both, axis), 0);
+        }
+
+        [Fact]
+        public void LeverTwistIsTheSameForBothSignsOfTheTurn()
+        {
+            var axis = new Vector3(0f, 0f, 1f);
+            var turn = About(axis, 70f);
+            var flipped = new Quaternion(-turn.x, -turn.y, -turn.z, -turn.w);
+            Assert.Equal(70f, LeverMath.Twist(flipped, axis), 2);
+        }
     }
 }

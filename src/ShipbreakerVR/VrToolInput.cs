@@ -129,6 +129,11 @@ namespace ShipbreakerVR
         // Pulses of the unequip key before giving up, if the game keeps the tool (it may refuse while a tool is busy).
         private const int MaxHolsterPulses = 10;
 
+        // Interact pressed for one frame, as A would (a lever turned all the way, VrLever).
+        private static bool interactOnce;
+
+        public static void PressInteract() => interactOnce = true;
+
         // From VrFrame, once per frame, after VrInput and before VrAim places the aim camera on the tool hand.
         public static void Update()
         {
@@ -185,6 +190,11 @@ namespace ShipbreakerVR
             // Interacting reaches the game from either hand: the game's interaction code reads the tool hand's actions.
             foreach (var each in Hands)
                 if (each != tool && each.Now[(int)Action.Interact]) tool.Now[(int)Action.Interact] = true;
+            if (interactOnce)
+            {
+                tool.Now[(int)Action.Interact] = true;
+                interactOnce = false;
+            }
             LogChanges();
         }
 

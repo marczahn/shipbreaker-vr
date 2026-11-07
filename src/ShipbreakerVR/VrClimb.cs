@@ -1107,6 +1107,32 @@ namespace ShipbreakerVR
             return found;
         }
 
+        // The control that controller's hand holds (VrLever), or null.
+        public static InteractableObject HeldControl(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input && hand.Holding && hand.Control && hand.Collider != null)
+                    return hand.Collider.GetComponentInParent<InteractableObject>();
+            return null;
+        }
+
+        // The hold of that controller's hand moves with this transform from now on (a lever's handle it turns, VrLever):
+        // the hand stays where it is on it.
+        public static void Reanchor(VrInput.Hand input, Transform anchor)
+        {
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input || !hand.Holding || hand.Anchor == null || hand.Anchor == anchor) continue;
+                var point = hand.Anchor.TransformPoint(hand.Point);
+                var surface = hand.Anchor.TransformPoint(hand.Surface);
+                var normal = hand.Anchor.TransformDirection(hand.Normal);
+                hand.Anchor = anchor;
+                hand.Point = anchor.InverseTransformPoint(point);
+                hand.Surface = anchor.InverseTransformPoint(surface);
+                hand.Normal = anchor.InverseTransformDirection(normal);
+            }
+        }
+
         public static bool HoldsControl(VrInput.Hand input)
         {
             foreach (var hand in Hands)
