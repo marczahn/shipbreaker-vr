@@ -102,6 +102,8 @@ namespace ShipbreakerVR
             public Quaternion GripTurn;
             // After the hold slid along its surface (VrClimb.Slide): the turn it had, blended over to the new one.
             public int GripSlides;
+            // The surface's outward direction on the hold, in the anchor's axes (for turning a flat hand along).
+            public Vector3 GripNormal;
             public Quaternion GripTurnBefore;
             public float GripTurnAt = -1f;
             public Vector3 GripPoint;
@@ -115,6 +117,11 @@ namespace ShipbreakerVR
             public float UpperLength;
             public float LowerLength;
             public bool LengthLogged;
+            // The arm's helper bones (twist, stretch and track bones the skin also hangs on) and their places on their
+            // parents in the bind pose (KeepLength).
+            public Transform[] Helpers = new Transform[0];
+            public Vector3[] HelperPlaces = new Vector3[0];
+            public bool[] HelperLogged = new bool[0];
             // From the controller to where the game's hand sits: to its hold while it holds on (VrClimb), so the hand stays
             // there however far the real one has gone, then back to nothing.
             public Vector3 OffController;
@@ -174,6 +181,21 @@ namespace ShipbreakerVR
             }
             var upper = Fit(arm.Lower, arm.Upper, arm.UpperLength);
             var lower = Fit(arm.Wrist, arm.Lower, arm.LowerLength);
+            // The helper bones too: the main bones at their length, a twist bone the animation moved out still dragged the
+            // forearm's skin long, the elbow out (Raik, after drawing the cutter).
+            for (var i = 0; i < arm.Helpers.Length; i++)
+            {
+                var helper = arm.Helpers[i];
+                if (helper == null) continue;
+                var off = (helper.localPosition - arm.HelperPlaces[i]).magnitude;
+                if (off < HelperSlack) continue;
+                if (!arm.HelperLogged[i] && logs++ < 60)
+                {
+                    arm.HelperLogged[i] = true;
+                    Plugin.Log.LogInfo($"Hands: {arm.Name} arm's '{helper.name}' put back, {off * 100f:0.0} cm off its place");
+                }
+                helper.localPosition = arm.HelperPlaces[i];
+            }
             if ((upper || lower) && !arm.LengthLogged)
             {
                 arm.LengthLogged = true;
@@ -191,6 +213,32 @@ namespace ShipbreakerVR
             return true;
         }
 
+        // Helper bones count from this far off their place, in meters (the animation's own small moves stay).
+        private const float HelperSlack = 0.005f;
+
+        // The skin's twist, stretch and track bones of this arm (from the collarbone down, not the fingers), with their
+        // places on their parents in the bind pose.
+        private static void FindHelpers(Arm arm, Transform[] bones, Matrix4x4[] binds)
+        {
+            var root = arm.Upper.parent != null ? arm.Upper.parent : arm.Upper;
+            var helpers = new System.Collections.Generic.List<Transform>();
+            var places = new System.Collections.Generic.List<Vector3>();
+            for (var i = 0; i < bones.Length && i < binds.Length; i++)
+            {
+                var bone = bones[i];
+                if (bone == null || bone.parent == null || !bone.IsChildOf(root)) continue;
+                var name = bone.name.ToLowerInvariant();
+                if (!name.Contains("twist") && !name.Contains("stretch") && !name.Contains("track")) continue;
+                var parent = System.Array.IndexOf(bones, bone.parent);
+                if (parent < 0 || parent >= binds.Length) continue;
+                helpers.Add(bone);
+                places.Add((binds[parent] * binds[i].inverse).GetColumn(3));
+            }
+            arm.Helpers = helpers.ToArray();
+            arm.HelperPlaces = places.ToArray();
+            arm.HelperLogged = new bool[arm.Helpers.Length];
+        }
+
         // The arm's bone lengths from the bind pose of the skin that uses its bones (the suit's arms, geo_arms).
         private static bool BindLengths(Arm arm)
         {
@@ -204,7 +252,9 @@ namespace ShipbreakerVR
                 Vector3 At(int i) => binds[i].inverse.GetColumn(3);
                 arm.UpperLength = Vector3.Distance(At(upper), At(lower)) * arm.Upper.lossyScale.x;
                 arm.LowerLength = Vector3.Distance(At(lower), At(wrist)) * arm.Lower.lossyScale.x;
-                Plugin.Log.LogInfo($"Hands: {arm.Name} arm's own length from '{skin.name}': upper {arm.UpperLength:0.000} m, lower {arm.LowerLength:0.000} m");
+                FindHelpers(arm, bones, binds);
+                Plugin.Log.LogInfo($"Hands: {arm.Name} arm's own length from '{skin.name}': upper {arm.UpperLength:0.000} m, lower {arm.LowerLength:0.000} m"
+                    + $"; helper bones {(arm.Helpers.Length > 0 ? string.Join(", ", System.Array.ConvertAll(arm.Helpers, h => h.name)) : "none")}");
                 return arm.UpperLength > 0.05f && arm.LowerLength > 0.05f;
             }
             return false;
@@ -550,6 +600,7 @@ namespace ShipbreakerVR
                     var flat = VrClimb.HoldsFlat(arm.Input);
                     arm.GripFlat = flat;
                     var start = flat ? FlatFrame(arm, frame, normal) : frame;
+                    arm.GripNormal = Quaternion.Inverse(anchor.rotation) * normal;
                     arm.GripTurn = Quaternion.Inverse(anchor.rotation) * start;
                     var side = arm == LeftArm ? 1f : -1f;
                     arm.GripOffset = flat
@@ -570,8 +621,23 @@ namespace ShipbreakerVR
                 if (!arm.Gripping) arm.GripAnchor = null;
                 return;
             }
+            var turning = arm.GripTurnAt >= 0f && Time.unscaledTime - arm.GripTurnAt < SlideTurnTime;
             var gripTurn = arm.GripTurnAt < 0f ? arm.GripTurn
                 : Quaternion.Slerp(arm.GripTurnBefore, arm.GripTurn, Mathf.Clamp01((Time.unscaledTime - arm.GripTurnAt) / SlideTurnTime));
+            // Flat on a surface while the body rolls (VTOL's tilt, the Shooter's trigger roll): the hand stays put and the
+            // arm winds round the wrist. Past RollAlong degrees between the hand and where the controller would lay it, it
+            // turns on the spot to the controller's way, over SlideTurnTime (Raik: it should slip after now and then).
+            if (arm.Gripping && arm.GripFlat && !turning)
+            {
+                var along = FlatFrame(arm, frame, arm.GripAnchor.rotation * arm.GripNormal);
+                if (Quaternion.Angle(arm.GripAnchor.rotation * gripTurn, along) > RollAlong)
+                {
+                    arm.GripTurnBefore = gripTurn;
+                    arm.GripTurn = Quaternion.Inverse(arm.GripAnchor.rotation) * along;
+                    arm.GripTurnAt = Time.unscaledTime;
+                    if (rollLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} hand turns along on '{arm.GripAnchor.name}', the arm wound past {RollAlong:0}°");
+                }
+            }
             var turn = arm.GripAnchor.rotation * gripTurn;
             var placed = arm.GripAnchor.TransformPoint(arm.GripPoint) + turn * arm.GripOffset;
             if (arm.GripFlat) placed = OutOfSurface(arm, placed, turn);
@@ -579,8 +645,11 @@ namespace ShipbreakerVR
             frame = Quaternion.Slerp(frame, turn, arm.GripBlend);
         }
 
-        // How long a hand takes to turn over to its hold after sliding along a surface (VrClimb.Slide), in seconds.
+        // How long a hand takes to turn over to its hold after sliding along a surface (VrClimb.Slide), or turning along
+        // it (RollAlong), in seconds.
         private const float SlideTurnTime = 0.35f;
+        private const float RollAlong = 45f;
+        private static int rollLogs;
 
         // A flat hand placed on its hold, moved out along the palm's way as far as the deepest of its points (HandAlong,
         // HandAcross on the palm's side) went into anything: a ray from outside towards each point finds what is in front
