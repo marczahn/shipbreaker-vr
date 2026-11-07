@@ -94,8 +94,13 @@ namespace ShipbreakerVR
             if (control == null) return false;
             if (!Known.TryGetValue(control, out var known))
             {
-                known = VrLever.TypeName(control) == TypeName && Parts(control, out _, out _);
+                var type = VrLever.TypeName(control);
+                var parts = Parts(control, out var handle, out var slider);
+                known = type == TypeName && parts;
                 Known[control] = known;
+                if (type.Contains("Nacelle") && logs++ < 80)
+                    Plugin.Log.LogInfo($"Nacelle: '{control.name}' ({type}) under '{(control.transform.parent != null ? control.transform.parent.name : "none")}': "
+                        + $"handle '{(handle != null ? handle.name : "none")}', switch '{(slider != null ? slider.name : "none")}'{(known ? "" : ", not worked by hand")}");
             }
             return known;
         }
