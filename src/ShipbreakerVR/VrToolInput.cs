@@ -191,7 +191,8 @@ namespace ShipbreakerVR
             foreach (var each in Hands)
                 if (each != tool && each.Now[(int)Action.Interact]) tool.Now[(int)Action.Interact] = true;
             // A lever held is used by turning it only (VrLever), not by A.
-            if (VrLever.Holds || VrLever.Turnable(VrClimb.HeldInteractable())) tool.Now[(int)Action.Interact] = false;
+            var offered = VrClimb.HeldInteractable();
+            if (VrLever.Holds || VrNacelle.Holds || VrLever.Turnable(offered) || VrNacelle.Is(offered)) tool.Now[(int)Action.Interact] = false;
             if (interactOnce)
             {
                 tool.Now[(int)Action.Interact] = true;

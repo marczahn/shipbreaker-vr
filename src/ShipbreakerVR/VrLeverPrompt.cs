@@ -29,7 +29,7 @@ namespace ShipbreakerVR
         {
             if (!VrXr.IsRunning) return;
             var control = Current(__instance);
-            if (!VrLever.Turnable(control)) return;
+            if (!VrLever.Turnable(control) && !VrNacelle.Is(control)) return;
             var group = Group(__instance);
             if (group == null) return;
             gameAlpha = group.alpha;

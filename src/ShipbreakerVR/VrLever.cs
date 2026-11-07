@@ -392,7 +392,7 @@ namespace ShipbreakerVR
             return asset == null ? null : AccessTools.Field(asset.GetType(), "m_Data")?.GetValue(asset);
         }
 
-        private static string TypeName(InteractableObject control)
+        internal static string TypeName(InteractableObject control)
         {
             var data = Data(control);
             var type = data == null ? null : AccessTools.Field(data.GetType(), "m_InteractionType")?.GetValue(data) as Object;
