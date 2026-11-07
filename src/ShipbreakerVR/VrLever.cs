@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Reflection;
 using BBI.Unity.Game;
 using HarmonyLib;
@@ -48,6 +49,11 @@ namespace ShipbreakerVR
         private const float CatchWithin = 5f;
         private const float CatchAmplitude = 0.3f;
         private const float CatchLength = 0.04f;
+        // The hand takes hold of the yellow grip only this near its middle line, in m at world scale 1 (the bar is about
+        // 3 cm thick), and then sits right on it; further off, the lever is a surface as any other and does not turn (Raik).
+        private const float GripReach = 0.045f;
+        // The ends of the grip kept free of the hand's middle, as a share of its length.
+        private const float GripEnds = 0.15f;
 
         private class Held
         {
@@ -78,6 +84,9 @@ namespace ShipbreakerVR
         private static readonly FieldInfo Asset = AccessTools.Field(typeof(InteractableObject), "m_Asset");
         private static readonly FieldInfo LastCompletion = AccessTools.Field(typeof(InteractableObject), "mLastCompletionTime");
         private static int logs;
+        private static int gripLogs;
+        // Each control's handle (null for any other control), found once.
+        private static readonly Dictionary<InteractableObject, Transform> Handles = new Dictionary<InteractableObject, Transform>();
 
         // The lever used last, while its control is busy and while it goes back after: at its end pose since UsedAt, back
         // to Rest from BackAt on (negative until then).
@@ -87,6 +96,54 @@ namespace ShipbreakerVR
         private static Quaternion usedEnd;
         private static float usedAt;
         private static float backAt = -1f;
+
+        // A lever this mod turns by hand: its prompt is hidden (VrLeverPrompt) and A does not use it.
+        public static bool Turnable(InteractableObject control) => control != null && FindHandle(control) != null;
+
+        // Whether at, where a hand takes hold, is on the lever's grip: then where on its middle line the hand sits, and
+        // the line's direction.
+        public static bool OnGrip(InteractableObject control, Vector3 at, out Vector3 onGrip, out Vector3 axis)
+        {
+            onGrip = at;
+            axis = Vector3.zero;
+            var bar = Bar(FindHandle(control));
+            if (bar == null) return false;
+            var bounds = bar.sharedMesh.bounds;
+            var size = bounds.size;
+            var along = size.x >= size.y && size.x >= size.z ? Vector3.right : size.y >= size.z ? Vector3.up : Vector3.forward;
+            var half = Vector3.Dot(bounds.extents, along) * (1f - 2f * GripEnds);
+            var from = bar.transform.TransformPoint(bounds.center - along * half);
+            var to = bar.transform.TransformPoint(bounds.center + along * half);
+            var line = to - from;
+            var t = Mathf.Clamp01(Vector3.Dot(at - from, line) / Mathf.Max(line.sqrMagnitude, 1e-8f));
+            onGrip = from + line * t;
+            axis = line.normalized;
+            var off = (at - onGrip).magnitude;
+            var on = off <= GripReach * VrCamera.WorldScale;
+            if (gripLogs++ < 60)
+                Plugin.Log.LogInfo($"Lever: hand takes hold {off * 100f:0.0} cm from the middle of '{bar.name}' ({line.magnitude * 100f:0} cm of grip), "
+                    + (on ? "on the grip" : $"off it (within {GripReach * 100f:0.0} cm), as a surface"));
+            return on;
+        }
+
+        // The yellow grip of a handle: its part named like a bar.
+        private static MeshFilter Bar(Transform handle)
+        {
+            if (handle == null) return null;
+            foreach (var filter in handle.GetComponentsInChildren<MeshFilter>())
+                if (filter.name.Contains("HandleBar") && filter.sharedMesh != null) return filter;
+            return null;
+        }
+
+        private static Transform FindHandle(InteractableObject control)
+        {
+            if (!Handles.TryGetValue(control, out var handle))
+            {
+                handle = Handle(control);
+                Handles[control] = handle;
+            }
+            return handle;
+        }
 
         // Whether a hand holds a lever it turns: then A does not use it (Raik: for now only the turn of the hand does).
         public static bool Holds => Hands[0].Handle != null || Hands[1].Handle != null;
@@ -206,7 +263,7 @@ namespace ShipbreakerVR
         private static void TakeHold(Held held, InteractableObject control)
         {
             held.Control = control;
-            var handle = Handle(control);
+            var handle = FindHandle(control);
             if (handle == null || !held.Input.TryGetGripPose(out _, out var grip)) return;
             // A lever off its rest pose (used, or going back) is taken where it is, from the rest pose it goes back to.
             var rest = handle.localRotation;
@@ -226,12 +283,8 @@ namespace ShipbreakerVR
             held.Engaged = start > 0f;
             held.Armed = start < ArmBelow;
             held.Angle = start;
-            // The hand took hold on the control's volume, which does not turn: on a lever off its rest pose it holds where
-            // it would have held the lever at rest, turned with it to where the lever is now (Raik: not level again).
-            var now = handle.localRotation;
-            handle.localRotation = rest;
+            // The hand took hold on the grip where it is now (VrClimb, OnGrip) and turns with it from there.
             VrClimb.Reanchor(held.Input, handle);
-            handle.localRotation = now;
             if (handle == used) VrClimb.Pin(held.Input, handle.parent);
             if (logs++ < 200)
             {

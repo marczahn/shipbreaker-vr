@@ -613,12 +613,13 @@ namespace ShipbreakerVR
                     var flat = VrClimb.HoldsFlat(arm.Input);
                     arm.GripFlat = flat;
                     var start = flat ? FlatFrame(arm, frame, normal) : frame;
-                    arm.GripNormal = Quaternion.Inverse(anchor.rotation) * normal;
-                    arm.GripTurn = Quaternion.Inverse(anchor.rotation) * start;
                     var side = arm == LeftArm ? 1f : -1f;
                     arm.GripOffset = flat
                         ? new Vector3(-side * PalmThickness, 0f, -PalmLength) * VrCamera.WorldScale
                         : Quaternion.Inverse(start) * (wrist - point);
+                    if (!flat) start = AroundBar(arm) * start;
+                    arm.GripNormal = Quaternion.Inverse(anchor.rotation) * normal;
+                    arm.GripTurn = Quaternion.Inverse(anchor.rotation) * start;
                     if (logs++ < 40) Plugin.Log.LogInfo($"Hands: {arm.Name} hand fixed on '{anchor.name}'{(flat ? ", flat on the surface" : "")}");
                 }
                 arm.GripPoint = anchor.InverseTransformPoint(point);
@@ -656,6 +657,20 @@ namespace ShipbreakerVR
             wrist = Vector3.Lerp(wrist, placed, arm.GripBlend);
             frame = Quaternion.Slerp(frame, turn, arm.GripBlend);
         }
+
+        // On a lever's grip (VrClimb.TryGetBar), the turn that lays the fist around it: the controller's grip axis, which
+        // runs through the closed hand, onto the grip's direction, the least turn either way round. Turned about the hold
+        // point, as the offset to the wrist turns with the hand.
+        private static Quaternion AroundBar(Arm arm)
+        {
+            if (!VrClimb.TryGetBar(arm.Input, out var bar) || !arm.Input.TryGetGripPose(out _, out var grip)) return Quaternion.identity;
+            var through = VrCamera.Instance.transform.parent.rotation * grip * Vector3.forward;
+            if (Vector3.Dot(through, bar) < 0f) bar = -bar;
+            if (barLogs++ < 30) Plugin.Log.LogInfo($"Hands: {arm.Name} fist turned {Vector3.Angle(through, bar):0}° around the lever's grip");
+            return Quaternion.FromToRotation(through, bar);
+        }
+
+        private static int barLogs;
 
         // How long a hand takes to turn over to its hold after sliding along a surface (VrClimb.Slide), or turning along
         // it (RollAlong), in seconds.

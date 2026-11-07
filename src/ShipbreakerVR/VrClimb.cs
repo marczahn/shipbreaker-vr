@@ -130,6 +130,8 @@ namespace ShipbreakerVR
             // Pinned (VrLever): the body keeps to this point on PinAnchor, which does not move, while the lever turns the
             // hand on Anchor (the game turning it back with the hand still on it).
             public Transform PinAnchor;
+            // On a lever's grip (VrLever.OnGrip): the grip's direction on Anchor, the fist closes around it (VrHands).
+            public Vector3 Bar;
             public Vector3 Pin;
             // A part that turns with the hand: its turn relative to the controller, and its speed limit before.
             public bool Firm;
@@ -436,6 +438,14 @@ namespace ShipbreakerVR
             // 17 cm off the hand, and the hand sat above the lever (Raik). Before that, the hand held the hull under the
             // switch.
             var control = NearestControl(at, reach, out var controlCollider, out var controlPoint);
+            // A lever turned by hand is held on its yellow grip, the hand pulled onto its middle, only right at it; else the
+            // hand holds the surface there as anywhere (Raik: no fist touching the grip with the backs of the fingers).
+            var bar = Vector3.zero;
+            if (control != null && VrLever.Turnable(control))
+            {
+                if (VrLever.OnGrip(control, at, out var onGrip, out bar)) controlPoint = onGrip;
+                else control = null;
+            }
             if (control != null && best != null
                 && (controlPoint - at).magnitude > Mathf.Sqrt(bestDistance) + ControlPreference * VrCamera.WorldScale)
                 control = null;
@@ -491,6 +501,7 @@ namespace ShipbreakerVR
             hand.Firm = false;
             hand.Follower = false;
             hand.PinAnchor = null;
+            hand.Bar = control != null ? hand.Anchor.InverseTransformDirection(bar) : Vector3.zero;
             foreach (var other in Hands)
                 if (other != hand && other.Firm && other.Body == body) hand.Follower = true;
             if (!hand.Follower && hand.Movable && body.mass <= FirmMass && !HeldByOther(hand) && hand.Input.TryGetAimRotation(out var aim))
@@ -1154,10 +1165,12 @@ namespace ShipbreakerVR
                 var point = hand.Anchor.TransformPoint(hand.Point);
                 var surface = hand.Anchor.TransformPoint(hand.Surface);
                 var normal = hand.Anchor.TransformDirection(hand.Normal);
+                var bar = hand.Anchor.TransformDirection(hand.Bar);
                 hand.Anchor = anchor;
                 hand.Point = anchor.InverseTransformPoint(point);
                 hand.Surface = anchor.InverseTransformPoint(surface);
                 hand.Normal = anchor.InverseTransformDirection(normal);
+                hand.Bar = anchor.InverseTransformDirection(bar);
             }
         }
 
@@ -1197,6 +1210,19 @@ namespace ShipbreakerVR
 
         // Where that controller's hand holds on, if it does, for the game's hand (VrHands.Pose).
         // The thing that hand holds on to, and the surface's outward direction there.
+        // The direction of the lever grip that controller's hand holds (VrLever.OnGrip), in the world.
+        public static bool TryGetBar(VrInput.Hand input, out Vector3 axis)
+        {
+            axis = Vector3.zero;
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input || !hand.Holding || hand.Anchor == null || hand.Bar == Vector3.zero) continue;
+                axis = hand.Anchor.TransformDirection(hand.Bar).normalized;
+                return true;
+            }
+            return false;
+        }
+
         public static bool TryGetGrip(VrInput.Hand input, out Transform anchor, out Vector3 normal)
         {
             anchor = null;
