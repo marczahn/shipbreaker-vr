@@ -133,6 +133,8 @@ namespace ShipbreakerVR
             // Free (VrNacelle): the hand stays on its hold, which a switch moves, but neither pulls at the body nor is torn
             // off the hold however far its controller goes; it turns freely on it (VrHands).
             public bool Free;
+            // Held free and turning with the controller on the hold (the nacelle switch), not with the hold (a lever).
+            public bool FreeTurn;
             // On a lever's grip (VrLever.OnGrip): the grip's direction on Anchor, the fist closes around it (VrHands).
             public Vector3 Bar;
             public Vector3 Pin;
@@ -440,14 +442,17 @@ namespace ShipbreakerVR
             // collider. Not on its HandTarget, where the game puts its own hand: on the airlock console's lever that lay
             // 17 cm off the hand, and the hand sat above the lever (Raik). Before that, the hand held the hull under the
             // switch.
-            var control = NearestControl(at, reach, out var controlCollider, out var controlPoint);
+            // Controls are found from just above the palm, not from inside the hand: a hand takes hold of what is in front
+            // of its palm (Raik).
+            var palm = PalmPoint(hand.Input, at);
+            var control = NearestControl(palm, reach, out var controlCollider, out var controlPoint);
             // A lever turned by hand is held on its yellow grip, the hand pulled onto its middle, only right at it; else the
             // hand holds the surface there as anywhere (Raik: no fist touching the grip with the backs of the fingers).
             var bar = Vector3.zero;
             if (control != null && VrLever.Turnable(control))
             {
-                if (VrLever.OnGrip(control, at, out var onGrip, out bar)) controlPoint = onGrip;
-                else if (VrLever.OverHandle(control, at))
+                if (VrLever.OnGrip(control, palm, out var onGrip, out bar)) controlPoint = onGrip;
+                else if (VrLever.OverHandle(control, palm))
                 {
                     if (firstTry && logs++ < 80) Plugin.Log.LogInfo($"Climbing: {hand.Name} hand grips over the lever's turning part, off its grip: holds nothing");
                     return;
@@ -456,7 +461,7 @@ namespace ShipbreakerVR
             }
             else if (control != null && VrNacelle.Is(control))
             {
-                if (VrNacelle.OnGrip(control, at, out var onHandle, out bar)) controlPoint = onHandle;
+                if (VrNacelle.OnGrip(control, palm, out var onHandle, out bar)) controlPoint = onHandle;
                 else control = null;
             }
             if (control != null && best != null
@@ -518,6 +523,7 @@ namespace ShipbreakerVR
             hand.Follower = false;
             hand.PinAnchor = null;
             hand.Free = false;
+            hand.FreeTurn = false;
             hand.Bar = control != null ? hand.Anchor.InverseTransformDirection(bar) : Vector3.zero;
             foreach (var other in Hands)
                 if (other != hand && other.Firm && other.Body == body) hand.Follower = true;
@@ -1156,10 +1162,28 @@ namespace ShipbreakerVR
         }
 
         // That controller's hand held free (VrNacelle, Hand.Free), or not.
-        public static void SetFree(VrInput.Hand input, bool free)
+        public static void SetFree(VrInput.Hand input, bool free, bool turns = true)
         {
             foreach (var hand in Hands)
-                if (hand.Input == input && hand.Holding) hand.Free = free;
+                if (hand.Input == input && hand.Holding)
+                {
+                    hand.Free = free;
+                    hand.FreeTurn = free && turns;
+                }
+        }
+
+        // How far ahead of the controller's grip the palm takes hold, along the palm's outward direction, in m at world
+        // scale 1: just above the palm of the hand (Raik: 1 to 2 cm over the palm, not inside the hand).
+        private const float PalmAhead = 0.035f;
+
+        // The point a hand takes hold of controls from: just above its palm. The palm faces to the right on the left hand
+        // and to the left on the right hand, along the controller's grip pose.
+        public static Vector3 PalmPoint(VrInput.Hand input, Vector3 at)
+        {
+            if (!input.TryGetGripPose(out _, out var grip) || VrCamera.Instance == null) return at;
+            var turn = VrCamera.Instance.transform.parent.rotation * grip;
+            var side = input == VrInput.Left ? Vector3.right : Vector3.left;
+            return at + turn * side * (PalmAhead * VrCamera.WorldScale);
         }
 
         // Where that controller's hand sits on its hold, in the world.
@@ -1186,7 +1210,7 @@ namespace ShipbreakerVR
         public static bool HeldFree(VrInput.Hand input)
         {
             foreach (var hand in Hands)
-                if (hand.Input == input && hand.Holding) return hand.Free;
+                if (hand.Input == input && hand.Holding) return hand.FreeTurn;
             return false;
         }
 

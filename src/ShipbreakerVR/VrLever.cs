@@ -114,7 +114,19 @@ namespace ShipbreakerVR
             var bar = Bar(handle);
             if (bar == null) return false;
             // Out: along the lever's turning axis, which stands out of the console.
-            return GripLine(bar, handle.rotation * LocalAxis, at, GripReach, "Lever", out onGrip, out axis);
+            var outward = handle.rotation * LocalAxis;
+            if (GripLine(bar, outward, at, GripReach, "Lever", out onGrip, out axis)) return true;
+            // Also anywhere over the turning part, as in a cylinder about the turning axis as wide as the grip turns and
+            // OverHeight out from the console (Raik: no need to reach right in).
+            if (Vector3.Dot(outward, VrCamera.Instance.transform.position - handle.position) < 0f) outward = -outward;
+            var from = handle.position;
+            var height = Vector3.Dot(at - from, outward);
+            var across = (Vector3.ProjectOnPlane(at - from, outward)).magnitude;
+            GripSegment(control, out var end, out var other, out _);
+            var radius = Mathf.Max(Vector3.ProjectOnPlane(end - from, outward).magnitude, Vector3.ProjectOnPlane(other - from, outward).magnitude) + OverWide * VrCamera.WorldScale;
+            var over = height >= -OverBelow * VrCamera.WorldScale && height <= OverHeight * VrCamera.WorldScale && across <= radius;
+            if (over && gripLogs++ < 60) Plugin.Log.LogInfo($"Lever: hand over the lever ({height * 100f:0} cm out, {across * 100f:0} cm from its axis), takes the grip");
+            return over;
         }
 
         // Whether at is within reach of the middle line of a grip (a bar-like mesh, along its longest side, its ends kept
@@ -183,6 +195,11 @@ namespace ShipbreakerVR
         }
 
         private const float OverMargin = 0.04f;
+        // The cylinder over the lever that takes its grip: this far out from the handle, below it, and wider than the grip
+        // reaches round.
+        private const float OverHeight = 0.15f;
+        private const float OverBelow = 0.02f;
+        private const float OverWide = 0.03f;
 
         // The yellow grip of a handle: its part named like a bar.
         private static MeshFilter Bar(Transform handle)
@@ -343,6 +360,9 @@ namespace ShipbreakerVR
             held.Angle = start;
             // The hand took hold on the grip where it is now (VrClimb, OnGrip) and turns with it from there.
             VrClimb.Reanchor(held.Input, handle);
+            // The hand goes round with the lever, the body does not: turned from afar, the hold went round the lever and
+            // the body after it, and flew on after letting go (Raik, 0.6 m/s). It turns with the lever, not the controller.
+            VrClimb.SetFree(held.Input, true, false);
             if (handle == used) VrClimb.Pin(held.Input, handle.parent);
             if (logs++ < 200)
             {
