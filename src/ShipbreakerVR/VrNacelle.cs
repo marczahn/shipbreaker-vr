@@ -9,9 +9,9 @@ namespace ShipbreakerVR
     // animation: fold the handle down (the hand goes round its hinge with it, 90°), pull it down (the switch slides 16 cm,
     // no faster than PullMost, and the further the hand runs ahead of it the harder it shakes), fold it over (round on
     // another 90°). Then it uses the switch (InteractableObject.Complete, as holding A for 4 s did) and stays down.
-    // Each step follows the hand directly, from where the controller is when the step begins: after a step the switch
-    // rests for StepPause, and the next one goes on from the controller as it is then, so the hand does not have to find
-    // the handle again (Raik: coming back to the handle was too fiddly). It moves only while the other hand holds on to
+    // Each step follows the controller directly, kept as near it as when taking hold: after a step the switch rests for
+    // StepPause, then catches up with the controller (Raik: coming back to the handle was too fiddly, and the switch
+    // lagged too far behind the hand). It moves only while the other hand holds on to
     // something fixed (Raik: it goes heavily); without, it stays, and goes on from the controller once braced again.
     // Let go before the end, it goes back to where it started. The hand holds free (VrClimb.SetFree): it pulls nothing,
     // the body stays where it is, it is not torn off however far the controller goes, and it turns about the grip.
@@ -35,6 +35,8 @@ namespace ShipbreakerVR
         private const float PullMost = 0.4f;
         // After each step the switch rests this long before the next follows the hand.
         private const float StepPause = 0.5f;
+        // The handle folds at most this fast, in degrees per second, catching up after a rest.
+        private const float FoldMost = 400f;
         // The grip: this long along the hinge through 'HandGrab', taken hold of within GripReach of its middle line.
         private const float GripLength = 0.08f;
         private const float GripReach = 0.1f;
@@ -85,13 +87,14 @@ namespace ShipbreakerVR
             public InteractableObject Control;
             public Pose Pose;
             public Step Step;
-            // The step goes on from the controller as it was here (Rebase), not from where the handle is.
+            // Where the controller was against the handle when taking hold (Rebase, once per hold): every step follows the
+            // controller from there, so the switch stays as near the hand as it was then (Raik: it should follow sooner).
             public bool Based;
             public float PauseUntil;
-            public Vector3 PullFrom;
-            public float SlideFrom;
             public float AngleFrom;
             public float AngleRef;
+            // How far ahead of the hand on the handle the controller was along the pull when taking hold.
+            public float PullOffset;
             // Where the hand holds the handle, in the handle's own axes.
             public Vector3 Reach;
             public float PulseAt;
@@ -203,15 +206,10 @@ namespace ShipbreakerVR
             {
                 if (!held.BraceLogged && logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand without the other braced, '{held.Control.name}' does not move");
                 held.BraceLogged = true;
-                held.Based = false;
                 return;
             }
             held.BraceLogged = false;
-            if (Time.time < held.PauseUntil)
-            {
-                held.Based = false;
-                return;
-            }
+            if (Time.time < held.PauseUntil) return;
             var angleAt = AngleAt(held, grip);
             if (!held.Based) Rebase(held, grip, angleAt);
             var pose = held.Pose;
@@ -219,7 +217,7 @@ namespace ShipbreakerVR
             {
                 case Step.FoldDown:
                 {
-                    var angle = Mathf.Clamp(held.AngleFrom + Mathf.DeltaAngle(held.AngleRef, angleAt), 0f, Fold);
+                    var angle = Mathf.MoveTowards(pose.Angle, Mathf.Clamp(held.AngleFrom + Mathf.DeltaAngle(held.AngleRef, angleAt), 0f, Fold), FoldMost * Time.deltaTime);
                     Hum(held, angle);
                     pose.Angle = angle;
                     if (angle >= Fold - SnapWithin)
@@ -233,7 +231,9 @@ namespace ShipbreakerVR
                 {
                     var down = pose.Switch.parent.TransformDirection(Vector3.down).normalized;
                     var travel = pose.Switch.parent.TransformVector(Vector3.up * Slide).magnitude;
-                    var reach = held.SlideFrom + Vector3.Dot(grip - held.PullFrom, down);
+                    // Where the controller is against where the hand is on the handle now, less how far apart they were when
+                    // taking hold: the switch catches up with the controller, it does not keep the gap it had after a rest.
+                    var reach = pose.Slid + Vector3.Dot(grip - pose.Handle.TransformPoint(held.Reach), down) - held.PullOffset;
                     var before = pose.Slid;
                     pose.Slid = Mathf.MoveTowards(pose.Slid, Mathf.Clamp(reach, 0f, travel), PullMost * VrCamera.WorldScale * Time.deltaTime);
                     Shake(held, reach - pose.Slid, pose.Slid != before);
@@ -246,7 +246,7 @@ namespace ShipbreakerVR
                 }
                 case Step.FoldOver:
                 {
-                    var angle = Mathf.Clamp(held.AngleFrom + Mathf.DeltaAngle(held.AngleRef, angleAt), Fold, 2f * Fold);
+                    var angle = Mathf.MoveTowards(pose.Angle, Mathf.Clamp(held.AngleFrom + Mathf.DeltaAngle(held.AngleRef, angleAt), Fold, 2f * Fold), FoldMost * Time.deltaTime);
                     Hum(held, angle);
                     pose.Angle = angle;
                     if (angle >= 2f * Fold - SnapWithin)
@@ -265,7 +265,6 @@ namespace ShipbreakerVR
         {
             held.Input.Buzz(StepAmplitude, StepLength);
             held.Step = step;
-            held.Based = false;
             held.PauseUntil = Time.time + StepPause;
             if (logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand {what}, '{held.Control.name}' rests {StepPause:0.0} s");
         }
@@ -273,10 +272,10 @@ namespace ShipbreakerVR
         private static void Rebase(Held held, Vector3 grip, float angleAt)
         {
             held.Based = true;
-            held.PullFrom = grip;
-            held.SlideFrom = held.Pose.Slid;
             held.AngleFrom = held.Pose.Angle;
             held.AngleRef = angleAt;
+            var pose = held.Pose;
+            held.PullOffset = Vector3.Dot(grip - pose.Handle.TransformPoint(held.Reach), pose.Switch.parent.TransformDirection(Vector3.down).normalized);
         }
 
         // How far the controller is round the handle's hinge, in degrees from where the hand would be at its rest pose.
