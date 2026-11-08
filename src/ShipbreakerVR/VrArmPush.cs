@@ -4,20 +4,29 @@ using UnityEngine;
 
 namespace ShipbreakerVR
 {
-    // Empty arms knock light things aside (Raik, 2026-11-08): parts up to LightestPushed that the drawn forearm or hand
-    // runs into get the arm's speed into them, as a plain collision would give, not more. The arm itself is not stopped
-    // by them (an empty hand stops at walls, VrHands.OutOfWalls). The forearm is a capsule from the elbow to past the
-    // knuckles, as drawn after the arm is posed (VrHands); its speed is how far each end went since the frame before.
+    // The arms knock light things aside (Raik, 2026-11-08): parts up to LightestPushed that the drawn arm runs into are
+    // pushed softly, as by a light arm in a soft suit with give in its joints. Of the arm's own swing (its speed against
+    // the body) a part gets only Swing; of the body's own flight it gets all, but no more: flying with the arm out, the
+    // part is pushed along ahead, never faster than the body, and keeps that speed when the body brakes (Raik). Before,
+    // the arm's whole speed and a bounce, which threw parts hard at the slightest touch. Always, whatever the hand does: the upper arm
+    // and the forearm push at any speed; the hand only once it moves faster than HandFrom, so a hand reaching slowly for a
+    // part can still take hold of it before knocking it away. What either hand holds is never pushed. The arm itself is
+    // not stopped by them (an empty hand stops at walls, VrHands.OutOfWalls). Each piece is a capsule between its joints
+    // as drawn after the arm is posed (VrHands); its speed is how far each end went since the frame before. All layers
+    // but triggers: the collectable spare parts (circuit boards, cables) were not pushed with the default raycast layers.
     internal static class VrArmPush
     {
         // Heaviest pushed, in kg.
         private const float LightestPushed = 15f;
-        // The forearm's and hand's radius, how far the fingers reach past the knuckles, in meters at world scale 1.
-        private const float Radius = 0.05f;
+        // The arm's and hand's radius, how far the fingers reach past the knuckles, in meters at world scale 1.
+        private const float ArmRadius = 0.05f;
+        private const float HandRadius = 0.05f;
         private const float Fingers = 0.08f;
-        // A part leaves a little faster than the arm met it (0 for none), at most this fast, in m/s.
-        private const float Bounce = 0.2f;
-        private const float Fastest = 4f;
+        // The hand pushes only this fast, in m/s at world scale 1.
+        private const float HandFrom = 0.8f;
+        // The share of the arm's own swing a part gets, and the most it gets from it, in m/s at world scale 1.
+        private const float Swing = 0.3f;
+        private const float MostSwing = 1f;
         // Moves faster than this, in m/s, are a jump of the tracking, not a swing.
         private const float Jump = 15f;
 
@@ -25,15 +34,18 @@ namespace ShipbreakerVR
             AccessTools.FieldRefAccess<GrabController, Rigidbody>("m_PlayerRigidbodyReference");
         private static readonly Collider[] Found = new Collider[32];
         private static readonly Rigidbody[] Pushed = new Rigidbody[32];
+        private static int pushed;
 
-        private class Segment
+        // The joints of an arm last frame: shoulder, elbow, wrist, finger tips.
+        private class Joints
         {
-            public Vector3 From;
-            public Vector3 To;
+            public readonly Vector3[] At = new Vector3[4];
             public bool Known;
         }
 
-        private static readonly Segment[] Arms = { new Segment(), new Segment() };
+        private static readonly Joints[] Arms = { new Joints(), new Joints() };
+        private static readonly Vector3[] Now = new Vector3[4];
+        private static readonly Vector3[] Speed = new Vector3[4];
         private static int logs;
 
         // From VrFrame, after the arms are posed.
@@ -42,33 +54,56 @@ namespace ShipbreakerVR
             var grab = GameRefs.Grab;
             var player = grab != null ? PlayerBody(grab) : null;
             var dt = Time.deltaTime;
+            var scale = VrCamera.WorldScale;
+            var heldLeft = VrClimb.HeldBody(VrInput.Left);
+            var heldRight = VrClimb.HeldBody(VrInput.Right);
+            pushed = 0;
             for (var i = 0; i < 2; i++)
             {
                 var arm = Arms[i];
-                if (player == null || dt <= 0f || !VrXr.IsRunning || !VrHands.TryGetEmptyArm(i == 0, out var elbow, out var wrist, out var knuckles))
+                if (player == null || dt <= 0f || !VrXr.IsRunning
+                    || !VrHands.TryGetArm(i == 0, out var shoulder, out var elbow, out var wrist, out var knuckles))
                 {
                     arm.Known = false;
                     continue;
                 }
                 var along = knuckles - wrist;
-                var tip = knuckles + (along.sqrMagnitude > 1e-6f ? along.normalized : (wrist - elbow).normalized) * (Fingers * VrCamera.WorldScale);
-                if (arm.Known) Push(player, elbow, tip, (elbow - arm.From) / dt, (tip - arm.To) / dt);
-                arm.From = elbow;
-                arm.To = tip;
+                if (along.sqrMagnitude < 1e-6f) along = wrist - elbow;
+                Now[0] = shoulder;
+                Now[1] = elbow;
+                Now[2] = wrist;
+                Now[3] = knuckles + along.normalized * (Fingers * scale);
+                if (arm.Known)
+                {
+                    var jumped = false;
+                    for (var j = 0; j < 4; j++)
+                    {
+                        Speed[j] = (Now[j] - arm.At[j]) / dt;
+                        if (Speed[j].magnitude > Jump * scale) jumped = true;
+                    }
+                    if (!jumped)
+                    {
+                        Push(player, heldLeft, heldRight, 0, ArmRadius * scale);
+                        Push(player, heldLeft, heldRight, 1, ArmRadius * scale);
+                        if ((Speed[3] - player.velocity).magnitude > HandFrom * scale) Push(player, heldLeft, heldRight, 2, HandRadius * scale);
+                    }
+                }
+                System.Array.Copy(Now, arm.At, 4);
                 arm.Known = true;
             }
+            System.Array.Clear(Pushed, 0, pushed);
         }
 
-        private static void Push(Rigidbody player, Vector3 from, Vector3 to, Vector3 fromSpeed, Vector3 toSpeed)
+        // The piece from joint j to joint j + 1.
+        private static void Push(Rigidbody player, Rigidbody heldLeft, Rigidbody heldRight, int j, float radius)
         {
-            if (fromSpeed.magnitude > Jump || toSpeed.magnitude > Jump) return;
-            var radius = Radius * VrCamera.WorldScale;
-            var count = Physics.OverlapCapsuleNonAlloc(from, to, radius, Found, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
-            var pushed = 0;
+            var from = Now[j];
+            var to = Now[j + 1];
+            var count = Physics.OverlapCapsuleNonAlloc(from, to, radius, Found, ~0, QueryTriggerInteraction.Ignore);
             for (var i = 0; i < count; i++)
             {
                 var body = Found[i].attachedRigidbody;
-                if (body == null || body == player || body.isKinematic || body.mass <= 0f || body.mass > LightestPushed) continue;
+                if (body == null || body == player || body == heldLeft || body == heldRight || body.isKinematic || body.mass <= 0f || body.mass > LightestPushed) continue;
                 if (Found[i].transform.IsChildOf(player.transform) || System.Array.IndexOf(Pushed, body, 0, pushed) >= 0) continue;
                 // Where the arm meets it, and how fast the arm goes there.
                 var line = to - from;
@@ -79,15 +114,18 @@ namespace ShipbreakerVR
                 if (outward.sqrMagnitude < 1e-8f) outward = body.worldCenterOfMass - axis;
                 if (outward.sqrMagnitude < 1e-8f) continue;
                 outward.Normalize();
-                var speed = Vector3.Lerp(fromSpeed, toSpeed, t);
-                var into = Vector3.Dot(speed - body.GetPointVelocity(contact), outward);
+                // The speed it is to have along the push: the body's flight, and a share of the arm's own swing.
+                var swing = Vector3.Lerp(Speed[j], Speed[j + 1], t) - player.velocity;
+                var flight = Mathf.Max(Vector3.Dot(player.velocity, outward), 0f);
+                var own = Mathf.Min(Mathf.Max(Vector3.Dot(swing, outward), 0f) * Swing, MostSwing * VrCamera.WorldScale);
+                var into = flight + own - Vector3.Dot(body.GetPointVelocity(contact), outward);
                 if (into <= 0f) continue;
-                var change = outward * Mathf.Min(into * (1f + Bounce), Fastest);
+                var change = outward * into;
                 body.AddForceAtPosition(change * body.mass, contact, ForceMode.Impulse);
                 if (pushed < Pushed.Length) Pushed[pushed++] = body;
-                if (logs++ < 30) Plugin.Log.LogInfo($"Arm push: '{body.name}' {body.mass:0.0} kg knocked at {change.magnitude:0.00} m/s");
+                if (logs++ < 40)
+                    Plugin.Log.LogInfo($"Arm push: {(j == 0 ? "upper arm" : j == 1 ? "forearm" : "hand")} knocked '{Found[i].name}' (layer {Found[i].gameObject.layer}, '{body.name}' {body.mass:0.0} kg), {change.magnitude:0.00} m/s more (flight {flight:0.00}, swing {own:0.00})");
             }
-            System.Array.Clear(Pushed, 0, pushed);
         }
     }
 }

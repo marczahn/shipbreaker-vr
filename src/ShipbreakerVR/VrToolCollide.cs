@@ -104,16 +104,78 @@ namespace ShipbreakerVR
         private static BoxCollider probe;
         private static bool probeLogged;
 
+        private static void Probes()
+        {
+            if (probe != null && armProbe != null) return;
+            var holder = new GameObject("ShipbreakerVR tool probe") { hideFlags = HideFlags.HideAndDontSave };
+            Object.DontDestroyOnLoad(holder);
+            probe = holder.AddComponent<BoxCollider>();
+            probe.enabled = false;
+            armProbe = holder.AddComponent<CapsuleCollider>();
+            armProbe.enabled = false;
+            armProbe.direction = 1;
+        }
+
+        // The other arm, which the tool does not pass through and cannot push aside (Raik, 2026-11-08): its upper arm and
+        // forearm as drawn (VrHands), set for each tool's turn (Apply). Not the hand: it may hold the tool as a second hand.
+        private const float ArmRadius = 0.05f;
+        private static CapsuleCollider armProbe;
+        private static bool armKnown;
+        private static readonly Vector3[] ArmJoints = new Vector3[3];
+
+        private static void OtherArm(VrInput.Hand hand)
+        {
+            armKnown = VrHands.TryGetArm(!hand.IsLeft, out ArmJoints[0], out ArmJoints[1], out ArmJoints[2], out _);
+        }
+
+        // Whether a box of the tool lies in the other arm, and its way out of it.
+        private static bool InArm(Vector3 center, Vector3 half, Quaternion turn, out Vector3 way)
+        {
+            way = Vector3.zero;
+            if (!armKnown) return false;
+            Probes();
+            probe.size = half * 2f;
+            probe.center = Vector3.zero;
+            var radius = ArmRadius * VrCamera.WorldScale;
+            for (var j = 0; j < 2; j++)
+            {
+                var line = ArmJoints[j + 1] - ArmJoints[j];
+                if (line.sqrMagnitude < 1e-6f) continue;
+                armProbe.radius = radius;
+                armProbe.height = line.magnitude + 2f * radius;
+                armProbe.center = Vector3.zero;
+                if (Physics.ComputePenetration(probe, center, turn, armProbe, ArmJoints[j] + line * 0.5f, Quaternion.FromToRotation(Vector3.up, line),
+                    out var direction, out _) && direction.sqrMagnitude > 1e-8f)
+                {
+                    way = direction.normalized;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Whether the tool's line (the ball along it, without a model) comes within reach of the other arm.
+        private static bool LineInArm(Vector3 start, Vector3 end, float reach, out Vector3 at, out Vector3 way)
+        {
+            at = way = Vector3.zero;
+            if (!armKnown) return false;
+            var radius = ArmRadius * VrCamera.WorldScale + reach;
+            for (var j = 0; j < 2; j++)
+            {
+                VrUtil.ClosestOnSegments(start, end, ArmJoints[j], ArmJoints[j + 1], out var onTool, out var onArm);
+                var gap = onTool - onArm;
+                if (gap.magnitude >= radius) continue;
+                at = onTool;
+                way = gap.sqrMagnitude > 1e-8f ? gap.normalized : Vector3.up;
+                return true;
+            }
+            return false;
+        }
+
         private static bool Separate(Collider thing, Vector3 center, Vector3 half, Quaternion turn, out Vector3 way)
         {
             way = Vector3.zero;
-            if (probe == null)
-            {
-                var holder = new GameObject("ShipbreakerVR tool probe") { hideFlags = HideFlags.HideAndDontSave };
-                Object.DontDestroyOnLoad(holder);
-                probe = holder.AddComponent<BoxCollider>();
-                probe.enabled = false;
-            }
+            Probes();
             probe.size = half * 2f;
             probe.center = Vector3.zero;
             var separated = Physics.ComputePenetration(probe, center, turn, thing, thing.transform.position, thing.transform.rotation, out var direction, out var distance);
@@ -143,6 +205,7 @@ namespace ShipbreakerVR
             if (state.Running && state.Frame == Time.frameCount) return state.Result;
             state.Frame = Time.frameCount;
             state.Back = Vector3.zero;
+            OtherArm(hand);
             var pivot = rig.TransformPoint(VrToolWeight.Spring(hand, tool, gripLocal));
             var desired = rig.rotation * wanted;
             var previous = state.Running ? rig.rotation * state.Rotation : desired;
@@ -301,6 +364,11 @@ namespace ShipbreakerVR
                         }
                         return false;
                     }
+                    if (InArm(center, box.Half, rotation * box.Turn, out var outOfArm))
+                    {
+                        contact = new Contact { Thing = armProbe, At = center, Separated = true, Out = outOfArm };
+                        return false;
+                    }
                 }
                 return true;
             }
@@ -318,6 +386,11 @@ namespace ShipbreakerVR
                 if (Own(hit.collider, player) || hit.distance >= nearest) continue;
                 nearest = hit.distance;
                 contact = new Contact { Thing = hit.collider, At = start + forward * Mathf.Max(hit.distance, distance * 0.5f) };
+            }
+            if (nearest == float.MaxValue && LineInArm(start, start + forward * distance, Radius * scale, out var armAt, out var armWay))
+            {
+                contact = new Contact { Thing = armProbe, At = armAt, Separated = true, Out = armWay };
+                return false;
             }
             return nearest == float.MaxValue;
         }

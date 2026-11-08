@@ -1127,6 +1127,14 @@ namespace ShipbreakerVR
 
         // True while that controller's hand holds on to something large: a wall, the hull, a console, a heavy part. The hand
         // lies flat on it there (VrHands.Curl); around a small part that turns with the hand (Firm) it closes.
+        // The rigidbody that hand holds on to, if any (VrArmPush leaves it alone).
+        public static Rigidbody HeldBody(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input && hand.Holding) return hand.Body;
+            return null;
+        }
+
         public static bool HoldsFlat(VrInput.Hand input)
         {
             foreach (var hand in Hands)
