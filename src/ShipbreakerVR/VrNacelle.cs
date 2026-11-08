@@ -119,8 +119,39 @@ namespace ShipbreakerVR
             // Out: away from the middle of the housing.
             var housing = control.transform.parent != null ? control.transform.parent.GetComponent<Renderer>() : null;
             var middle = housing != null ? housing.bounds.center : control.transform.parent.position;
-            return VrLever.GripLine(bar, bar.transform.TransformPoint(bar.sharedMesh.bounds.center) - middle, at, GripReach, "Nacelle", out onGrip, out axis);
+            var shape = handle.GetComponent<Renderer>();
+            var batched = shape != null && shape.isPartOfStaticBatch;
+            if (shapeLogs++ < 40)
+                Plugin.Log.LogInfo($"Nacelle: handle '{handle.name}' mesh '{bar.sharedMesh.name}'{(batched ? " (static batch)" : "")}, mesh middle "
+                    + $"{bar.transform.TransformPoint(bar.sharedMesh.bounds.center) - at} m from the hand, shape middle "
+                    + $"{(shape != null ? (shape.bounds.center - at).ToString() : "none")} size {(shape != null ? shape.bounds.size.ToString() : "none")}, "
+                    + $"hand in the handle's axes {handle.InverseTransformPoint(at)}, scale {handle.lossyScale}");
+            // A static batch's mesh is the whole batch, its bounds lie elsewhere: then only the visible shape counts.
+            if (!batched && VrLever.GripLine(bar, bar.transform.TransformPoint(bar.sharedMesh.bounds.center) - middle, at, GripReach, "Nacelle", out onGrip, out axis))
+                return true;
+            // Off the mesh's middle line, the hand may still be on what is seen of the handle (Raik, 2026-11-08: the hand
+            // right on the model did not take hold): its middle line along the longest side of its bounds in the world.
+            return shape != null && ShapeLine(shape.bounds, at, out onGrip, out axis);
         }
+
+        private static bool ShapeLine(Bounds box, Vector3 at, out Vector3 onGrip, out Vector3 axis)
+        {
+            var size = box.size;
+            var along = size.x >= size.y && size.x >= size.z ? Vector3.right : size.y >= size.z ? Vector3.up : Vector3.forward;
+            var half = Vector3.Dot(box.extents, along) * 0.7f;
+            var from = box.center - along * half;
+            var line = along * (2f * half);
+            var t = Mathf.Clamp01(Vector3.Dot(at - from, line) / Mathf.Max(line.sqrMagnitude, 1e-8f));
+            onGrip = from + line * t;
+            axis = along;
+            var off = (box.ClosestPoint(at) - at).magnitude;
+            var on = off <= GripReach * VrCamera.WorldScale;
+            if (shapeLogs++ < 40)
+                Plugin.Log.LogInfo($"Nacelle: hand {off * 100f:0.0} cm off the handle's visible shape, " + (on ? "on the grip" : "off it, as a surface"));
+            return on;
+        }
+
+        private static int shapeLogs;
 
         private const float GripReach = 0.06f;
 
@@ -375,6 +406,8 @@ namespace ShipbreakerVR
         }
 
         // Its handle and its switch.
+        private static int partLogs;
+
         private static bool Parts(InteractableObject control, out Transform handle, out Transform slider)
         {
             handle = null;
@@ -382,11 +415,18 @@ namespace ShipbreakerVR
             // Both somewhere under the switch's housing (the survey's list does not show the handle's real parent).
             var parent = control.transform.parent;
             if (parent == null) return false;
+            var handles = 0;
             foreach (var child in parent.GetComponentsInChildren<Transform>(true))
             {
-                if (child.name.EndsWith("_Handle")) handle = child;
-                if (child.name.EndsWith("_Switch")) slider = child;
+                // The first handle with a visible mesh (with more than one, the last was taken before).
+                if (child.name.EndsWith("_Handle"))
+                {
+                    handles++;
+                    if (handle == null || (handle.GetComponent<Renderer>() == null && child.GetComponent<Renderer>() != null)) handle = child;
+                }
+                if (child.name.EndsWith("_Switch") && slider == null) slider = child;
             }
+            if (handles > 1 && partLogs++ < 10) Plugin.Log.LogInfo($"Nacelle: {handles} handles under '{parent.name}', taking '{(handle != null ? handle.name : "none")}'");
             return handle != null && slider != null;
         }
     }
