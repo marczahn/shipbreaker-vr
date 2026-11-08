@@ -417,19 +417,30 @@ namespace ShipbreakerVR
             else if (hand.Tracked && hand.Vr.Free && down && (pressed || Time.time - hand.PressedAt < CatchTime)) TryHold(hand, pressed);
         }
 
+        // The small floating debris (nuts and bolts, 'PRF_MeshParticles_...') are loose 1 kg parts on the Ignore Raycast
+        // layer, which the hands never found (Raik, 2026-11-08): of that layer, loose parts are held too, nothing else.
+        private const int IgnoreRaycastLayer = 1 << 2;
+
+        private static bool Holdable(Collider collider)
+        {
+            if (collider.gameObject.layer != 2) return true;
+            var body = collider.attachedRigidbody;
+            return body != null && !body.isKinematic;
+        }
+
         // Holds on to the surface nearest to the hand, if one is within reach, right where the hand is.
         private static void TryHold(Hand hand, bool firstTry)
         {
             var at = HandWorld(hand);
             var reach = Reach * VrCamera.WorldScale;
-            var count = Physics.OverlapSphereNonAlloc(at, reach, Found, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            var count = Physics.OverlapSphereNonAlloc(at, reach, Found, Physics.DefaultRaycastLayers | IgnoreRaycastLayer, QueryTriggerInteraction.Ignore);
             Collider best = null;
             var bestDistance = float.MaxValue;
             var surface = at;
             for (var i = 0; i < count; i++)
             {
                 var collider = Found[i];
-                if (Own(collider)) continue;
+                if (Own(collider) || !Holdable(collider)) continue;
                 var closest = Closest(collider, at, reach);
                 var distance = (closest - at).sqrMagnitude;
                 if (distance >= bestDistance) continue;
