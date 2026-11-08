@@ -169,6 +169,7 @@ namespace ShipbreakerVR
         private static void Press(Tip tip, Button button, float depth)
         {
             tip.Input.Buzz(ClickAmplitude, ClickLength);
+            VrClick.Play();
             var control = button.Control;
             var ready = control != null && control.isActiveAndEnabled && VrLever.Ready(control, out _);
             if (ready)
