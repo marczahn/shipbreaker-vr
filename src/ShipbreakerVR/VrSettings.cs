@@ -48,6 +48,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<VrControls.Scheme> ControlScheme;
         public static ConfigEntry<VrControls.Turning> TurnMode;
         public static ConfigEntry<VrControls.TurnAxis> TurnAround;
+        public static ConfigEntry<bool> WallTurn;
         public static ConfigEntry<float> ThrustDeadzone;
         public static ConfigEntry<float> ThrustFull;
         public static ConfigEntry<float> HandTilt;
@@ -131,6 +132,9 @@ namespace ShipbreakerVR
                 ("What the right stick turns you left and right around when flying: your head's up, so you turn where you look, or your body's, so looking up or down does not tip the turn.",
                     "Worum der rechte Stick dich beim Fliegen nach links und rechts dreht: um die Hochachse des Kopfes, also dorthin, wohin du schaust, oder um die des Körpers, sodass Hoch- oder Runterschauen die Drehung nicht kippt."),
                 (new[] { "Head", "Body" }, new[] { "Kopf", "Körper" }));
+            WallTurn = Bind("Steuerung", "ZurWandDrehen", true,
+                ("Experiment: when the hull comes up under your body, you turn towards it, your legs swinging back and your view tipping forward, so your body does not sink into the hull. Turning by itself can make you feel sick.",
+                    "Experiment: Kommt die Hülle unter deinen Körper, drehst du dich zu ihr hin, die Beine schwingen nach hinten und der Blick kippt nach vorne, damit dein Körper nicht in die Hülle sinkt. Drehen von selbst kann Übelkeit machen."));
             ThrustDeadzone = Bind("Steuerung", "SchubTotzone", 2f,
                 ("How far you move the left controller from where you pressed the trigger before thrust starts. Raise it if you drift without meaning to.",
                     "Wie weit du den linken Controller von dort, wo du den Trigger gedrückt hast, bewegen musst, bevor Schub einsetzt. Erhöhen, wenn du ungewollt driftest."),

@@ -116,6 +116,7 @@ namespace ShipbreakerVR
                 if (!tool) braking = left.Secondary.Down;
                 if (VrInput.Right.Valid) TurnFromStick(VrInput.Right.Stick, playspace);
                 turn = VrFlightComfort.AlignStep(playspace, Time.deltaTime) * turn;
+                turn = VrWallTurn.Step(playspace, Time.deltaTime) * turn;
             }
             if (tool) { held = false; triggerFromTool = true; return; }
             if (Active == Scheme.Shooter)
