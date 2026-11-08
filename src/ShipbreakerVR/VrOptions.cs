@@ -114,7 +114,6 @@ namespace ShipbreakerVR
                 },
                 EnumRow(L("Turning", "Drehen"), VrSettings.TurnMode),
                 EnumRow(L("Turn around", "Drehen um"), VrSettings.TurnAround),
-                new BoolRow { Label = L("Turn to the wall (experiment)", "Zur Wand drehen (Experiment)"), Entry = VrSettings.WallTurn },
                 new BoolRow { Label = L("Upright body", "Oberkörper aufrecht"), Entry = VrSettings.UprightBody },
                 EnumRow(L("Thrust mode", "Schubmodus"), VrSettings.ThrustMode),
                 new SliderRow { Label = L("Hand tilt (°)", "Handneigung (°)"), Entry = VrSettings.HandTilt, Format = "0", Step = 1f },
