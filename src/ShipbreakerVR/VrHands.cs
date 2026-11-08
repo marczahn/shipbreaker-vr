@@ -91,6 +91,8 @@ namespace ShipbreakerVR
             // How far the fingers are closed (0 open, 1 the full bend), and towards what.
             public float Closed;
             public bool Fist;
+            // The hand held on to the control the game still works (UsesHeldControl).
+            public bool UsedControl;
             // How far the fingers are straightened on a large hold (0 as animated, 1 straight).
             public float Flat;
             // How far each finger joint is curled over an edge (0 to 1), as Joints.
@@ -271,9 +273,12 @@ namespace ShipbreakerVR
             var active = VrAim.Active;
             var equipment = grab.RightHand.CurrentEquipmentType;
             var chargeLeft = VrToolModels.ChargeInLeftHand;
-            Drive(LeftArm, active && (Idle(grab.LeftHand) || UsesHeldControl(LeftArm)));
+            // Every frame for both, so a hand let go of its control forgets it once the game is done with it.
+            var leftControl = UsesHeldControl(LeftArm);
+            var rightControl = UsesHeldControl(RightArm);
+            Drive(LeftArm, active && (Idle(grab.LeftHand) || leftControl));
             var rightBusy = VrToolModels.PosesRightArm;
-            Drive(RightArm, active && !rightBusy && (Idle(grab.RightHand) || UsesHeldControl(RightArm)
+            Drive(RightArm, active && !rightBusy && (Idle(grab.RightHand) || rightControl
                 || (grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped && (equipment != EquipmentController.Equipment.DemoCharge || chargeLeft))));
             // The demo charge's arm is bent there; another bend on top would fight it.
             if (rightBusy) RightArm.Weight = 0f;
@@ -524,9 +529,15 @@ namespace ShipbreakerVR
         }
 
         // A hand that holds on to a control and uses it: it stays where it holds, as a fist, instead of going back to the
-        // game, whose animation bent it to the control's HandTarget and the hand flew off the lever (Raik).
-        private static bool UsesHeldControl(Arm arm) =>
-            arm.Hand != null && arm.Hand.CurrentHandState == HandGrab.HandState.Success && VrClimb.HoldsControl(arm.Input);
+        // game, whose animation bent it to the control's HandTarget and the hand flew off the lever (Raik). Let go while the
+        // game still works the control (the airlock's lever turned by hand, VrLever), it stays with its controller until
+        // the game is done, instead of jumping to the HandTarget to finish the game's animation there (Raik).
+        private static bool UsesHeldControl(Arm arm)
+        {
+            if (arm.Hand == null || arm.Hand.CurrentHandState != HandGrab.HandState.Success) arm.UsedControl = false;
+            else if (VrClimb.HoldsControl(arm.Input) || VrButtons.JustPressed) arm.UsedControl = true;
+            return arm.UsedControl;
+        }
 
         // Not grabbing, gesturing, hurt or holding a tool.
         private static bool Idle(HandGrab hand)
@@ -602,12 +613,13 @@ namespace ShipbreakerVR
                     var flat = VrClimb.HoldsFlat(arm.Input);
                     arm.GripFlat = flat;
                     var start = flat ? FlatFrame(arm, frame, normal) : frame;
-                    arm.GripNormal = Quaternion.Inverse(anchor.rotation) * normal;
-                    arm.GripTurn = Quaternion.Inverse(anchor.rotation) * start;
                     var side = arm == LeftArm ? 1f : -1f;
                     arm.GripOffset = flat
                         ? new Vector3(-side * PalmThickness, 0f, -PalmLength) * VrCamera.WorldScale
                         : Quaternion.Inverse(start) * (wrist - point);
+                    if (!flat) start = AroundBar(arm, true) * start;
+                    arm.GripNormal = Quaternion.Inverse(anchor.rotation) * normal;
+                    arm.GripTurn = Quaternion.Inverse(anchor.rotation) * start;
                     if (logs++ < 40) Plugin.Log.LogInfo($"Hands: {arm.Name} hand fixed on '{anchor.name}'{(flat ? ", flat on the surface" : "")}");
                 }
                 arm.GripPoint = anchor.InverseTransformPoint(point);
@@ -639,12 +651,27 @@ namespace ShipbreakerVR
                     if (rollLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} hand turns along on '{arm.GripAnchor.name}', the arm wound past {RollAlong:0}°");
                 }
             }
-            var turn = arm.GripAnchor.rotation * gripTurn;
+            // Held free (a nacelle switch, VrClimb.HeldFree), the hand stays on its hold but turns with the controller.
+            var turn = arm.Gripping && VrClimb.HeldFree(arm.Input) ? AroundBar(arm, false) * frame : arm.GripAnchor.rotation * gripTurn;
             var placed = arm.GripAnchor.TransformPoint(arm.GripPoint) + turn * arm.GripOffset;
             if (arm.GripFlat) placed = OutOfSurface(arm, placed, turn);
             wrist = Vector3.Lerp(wrist, placed, arm.GripBlend);
             frame = Quaternion.Slerp(frame, turn, arm.GripBlend);
         }
+
+        // On a lever's grip (VrClimb.TryGetBar), the turn that lays the fist around it: the controller's grip axis, which
+        // runs through the closed hand, onto the grip's direction, the least turn either way round. Turned about the hold
+        // point, as the offset to the wrist turns with the hand.
+        private static Quaternion AroundBar(Arm arm, bool log)
+        {
+            if (!VrClimb.TryGetBar(arm.Input, out var bar) || !arm.Input.TryGetGripPose(out _, out var grip)) return Quaternion.identity;
+            var through = VrCamera.Instance.transform.parent.rotation * grip * Vector3.forward;
+            if (Vector3.Dot(through, bar) < 0f) bar = -bar;
+            if (log && barLogs++ < 30) Plugin.Log.LogInfo($"Hands: {arm.Name} fist turned {Vector3.Angle(through, bar):0}° around the lever's grip");
+            return Quaternion.FromToRotation(through, bar);
+        }
+
+        private static int barLogs;
 
         // How long a hand takes to turn over to its hold after sliding along a surface (VrClimb.Slide), or turning along
         // it (RollAlong), in seconds.

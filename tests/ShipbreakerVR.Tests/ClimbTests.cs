@@ -227,5 +227,90 @@ namespace ShipbreakerVR.Tests
             var limited = ClimbContact.LimitApproach(Vector3.zero, new Vector3(0f, 2f, 0f), Up, 0f, Step);
             Assert.Equal(2f, limited.y, 3);
         }
+
+        [Fact]
+        public void GlideStopsWithinItsWayEvenWhenFast()
+        {
+            foreach (var speed in new[] { 0.5f, 2f, 6f })
+            {
+                var velocity = new Vector3(speed, 0f, 0f);
+                var brake = ClimbContact.GlideBrake(speed, 1f);
+                var way = 0f;
+                var steps = 0;
+                while (velocity != Vector3.zero && steps++ < 1000)
+                {
+                    velocity = ClimbContact.Brake(velocity, brake, Step);
+                    way += velocity.x * Step;
+                }
+                Assert.True(steps < 1000);
+                Assert.InRange(way, 0f, 0.8f);
+            }
+        }
+
+        [Fact]
+        public void ThrustGlidesNoFasterThanItsLimit()
+        {
+            var velocity = Vector3.zero;
+            for (var i = 0; i < 500; i++)
+                velocity = ClimbContact.ThrustGlide(velocity + new Vector3(0.1f, 0f, 0f), velocity.magnitude, ClimbContact.GlideBrake(velocity.magnitude, 1f), Step, 1f);
+            Assert.Equal(1.5f, velocity.x, 3);
+        }
+
+        [Fact]
+        public void FastGlideBrakesDownToTheThrustLimit()
+        {
+            var velocity = new Vector3(4f, 0f, 0f);
+            var brake = ClimbContact.GlideBrake(4f, 1f);
+            var slower = ClimbContact.ThrustGlide(velocity + new Vector3(0.1f, 0f, 0f), 4f, brake, Step, 1f);
+            Assert.InRange(slower.x, 1.5f, 4f - 0.01f);
+            for (var i = 0; i < 200; i++) slower = ClimbContact.ThrustGlide(slower + new Vector3(0.1f, 0f, 0f), slower.magnitude, brake, Step, 1f);
+            Assert.Equal(1.5f, slower.x, 3);
+        }
+
+        [Fact]
+        public void GlideBrakesAlongItsOwnWay()
+        {
+            var slower = ClimbContact.Brake(new Vector3(0f, 0f, -1f), ClimbContact.GlideBrake(1f, 1f), Step);
+            Assert.Equal(0f, slower.x, 5);
+            Assert.InRange(slower.z, -1f, -0.9f);
+        }
+
+        private static Quaternion About(Vector3 axis, float degrees)
+        {
+            var half = degrees * Mathf.Deg2Rad / 2f;
+            var sin = Mathf.Sin(half);
+            return new Quaternion(axis.x * sin, axis.y * sin, axis.z * sin, Mathf.Cos(half));
+        }
+
+        [Fact]
+        public void LeverTurnsAsFarAsTheHandTwistsAboutItsAxis()
+        {
+            var axis = new Vector3(-1f, 0f, 0f);
+            Assert.Equal(40f, LeverMath.Twist(About(axis, 40f), axis), 2);
+            Assert.Equal(-25f, LeverMath.Twist(About(axis, -25f), axis), 2);
+        }
+
+        [Fact]
+        public void LeverIgnoresTheHandSwingingAwayFromItsAxis()
+        {
+            var axis = new Vector3(-1f, 0f, 0f);
+            var swing = About(new Vector3(0f, 1f, 0f), 30f);
+            var twist = About(axis, 50f);
+            var both = new Quaternion(
+                swing.w * twist.x + swing.x * twist.w + swing.y * twist.z - swing.z * twist.y,
+                swing.w * twist.y - swing.x * twist.z + swing.y * twist.w + swing.z * twist.x,
+                swing.w * twist.z + swing.x * twist.y - swing.y * twist.x + swing.z * twist.w,
+                swing.w * twist.w - swing.x * twist.x - swing.y * twist.y - swing.z * twist.z);
+            Assert.Equal(50f, LeverMath.Twist(both, axis), 0);
+        }
+
+        [Fact]
+        public void LeverTwistIsTheSameForBothSignsOfTheTurn()
+        {
+            var axis = new Vector3(0f, 0f, 1f);
+            var turn = About(axis, 70f);
+            var flipped = new Quaternion(-turn.x, -turn.y, -turn.z, -turn.w);
+            Assert.Equal(70f, LeverMath.Twist(flipped, axis), 2);
+        }
     }
 }

@@ -316,6 +316,9 @@ namespace ShipbreakerVR
         public static bool IsBraking() => braking;
 
         // Thrust along the game's thrust axes: x = right, y = up, z = forward of the thrust frame.
+        // True while the controllers give thrust this frame (VTOL or Shooter).
+        public static bool Thrusting => thrust != Vector3.zero;
+
         public static bool TryGetThrust(out Vector3 local)
         {
             local = Vector3.zero;

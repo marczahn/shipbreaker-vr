@@ -127,6 +127,17 @@ namespace ShipbreakerVR
             public Vector3 Normal;
             // On a control (NearestControl), where the hand took hold of it: the hand makes a fist there.
             public bool Control;
+            // Pinned (VrLever): the body keeps to this point on PinAnchor, which does not move, while the lever turns the
+            // hand on Anchor (the game turning it back with the hand still on it).
+            public Transform PinAnchor;
+            public Vector3 Pin;
+            // Free (VrNacelle): the hand stays on its hold, which a switch moves, but neither pulls at the body nor is torn
+            // off the hold however far its controller goes; it turns freely on it (VrHands).
+            public bool Free;
+            // Held free and turning with the controller on the hold (the nacelle switch), not with the hold (a lever).
+            public bool FreeTurn;
+            // On a lever's grip (VrLever.OnGrip): the grip's direction on Anchor, the fist closes around it (VrHands).
+            public Vector3 Bar;
             // A part that turns with the hand: its turn relative to the controller, and its speed limit before.
             public bool Firm;
             // The second hand on a firmly held part: it stays on the part, the first hand moves it.
@@ -142,6 +153,10 @@ namespace ShipbreakerVR
             public float SlideAt;
             public Vector3 SlideFromPoint, SlideToPoint, SlideFromSurface, SlideToSurface;
             public int Slides;
+            // Gliding along a fixed surface (Glide): how fast the hold moves along it, in world space, and how hard it
+            // brakes, set when the glide starts or the thrust ends.
+            public Vector3 GlideVelocity;
+            public float GlideBrake;
 
             public Hand(VrHand vr)
             {
@@ -212,6 +227,7 @@ namespace ShipbreakerVR
             foreach (var hand in Hands) Read(hand);
             foreach (var hand in Hands) Rethink(hand);
             foreach (var hand in Hands) Slide(hand);
+            Glide();
             Pull();
         }
 
@@ -259,6 +275,73 @@ namespace ShipbreakerVR
             hand.Slides++;
             if (slideLogs++ < 20)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand slides {along.magnitude:0.00} m along '{hand.Collider.name}' after the body turned {SlideAfter:0}°");
+        }
+
+        // Holding a fixed surface, the hold glides along it (Raik: gliding along a ship's hull with a hand on it): taking
+        // hold at speed, the body slides on and brakes to a stop within a short way (ClimbContact.Brake); thrust or the
+        // brake along the surface speeds it up or slows it, without friction while thrusting. The pull still holds the body
+        // at the hand's distance from the surface, also against thrust pointing away from it. Each step the hold moves by
+        // the glide and is found on the surface again by a ray; past an edge it stops. Only while every pulling hand can
+        // glide: one on a part that moves, or turning it, holds the body.
+        private static int glideLogs;
+        // The body's velocity as Pull left it, valid while pulling: what the physics step added since is the thrust.
+        private static Vector3 afterPull;
+        private static bool pulled;
+
+        private static bool Glides(Hand hand) =>
+            hand.Holding && !hand.Sliding && !hand.Movable && !hand.Firm && !hand.Follower && !hand.Control && hand.Anchor != null && hand.Collider != null;
+
+        private static void Glide()
+        {
+            var any = false;
+            var all = true;
+            foreach (var hand in Hands)
+            {
+                if (!hand.Holding || hand.Firm || hand.Follower || Pushes(hand)) continue;
+                if (Glides(hand)) any = true;
+                else all = false;
+            }
+            var steered = VrControls.Thrusting || VrControls.IsBraking();
+            var added = pulled && steered ? player.velocity - afterPull : Vector3.zero;
+            pulled = false;
+            foreach (var hand in Hands)
+            {
+                if (!any || !all || !Glides(hand)) { hand.GlideVelocity = Vector3.zero; continue; }
+                var surface = hand.Anchor.TransformPoint(hand.Surface);
+                var normal = hand.Anchor.TransformDirection(hand.Normal).normalized;
+                var before = hand.GlideVelocity;
+                var velocity = Vector3.ProjectOnPlane(before + added, normal);
+                if (VrControls.Thrusting)
+                {
+                    velocity = ClimbContact.ThrustGlide(velocity, before.magnitude, hand.GlideBrake, Time.fixedDeltaTime, VrCamera.WorldScale);
+                    hand.GlideBrake = ClimbContact.GlideBrake(velocity.magnitude, VrCamera.WorldScale);
+                }
+                else velocity = Vector3.Dot(velocity, before) < 0f ? Vector3.zero : ClimbContact.Brake(velocity, hand.GlideBrake, Time.fixedDeltaTime);
+                hand.GlideVelocity = velocity;
+                if (velocity == Vector3.zero) continue;
+                var along = velocity * Time.fixedDeltaTime;
+                var probe = Reach * VrCamera.WorldScale;
+                if (!hand.Collider.Raycast(new Ray(surface + along + normal * probe, -normal), out var hit, 2f * probe))
+                {
+                    hand.GlideVelocity = Vector3.zero;
+                    continue;
+                }
+                var moved = hand.Anchor.InverseTransformPoint(hit.point) - hand.Surface;
+                hand.Point += moved;
+                hand.Surface += moved;
+                if (glideLogs++ < 10)
+                    Plugin.Log.LogInfo($"Climbing: {hand.Name} hand glides along '{hand.Collider.name}' at {velocity.magnitude:0.00} m/s{(VrControls.Thrusting ? " with the thrust" : "")}");
+            }
+        }
+
+        // Taking hold of a fixed surface at speed: the speed along it to glide on with (Glide), none below GlideLeast.
+        private static Vector3 GlideAtHold(Hand hand)
+        {
+            if (!Glides(hand)) return Vector3.zero;
+            var normal = hand.Anchor.TransformDirection(hand.Normal).normalized;
+            var relative = player.velocity - (hand.Body != null ? hand.Body.GetPointVelocity(Hold(hand)) : Vector3.zero);
+            var along = Vector3.ProjectOnPlane(relative, normal);
+            return along.magnitude < ClimbContact.GlideLeast * VrCamera.WorldScale ? Vector3.zero : along;
         }
 
         // How often that hand's hold slid along its surface (VrHands turns the hand anew each time).
@@ -359,7 +442,28 @@ namespace ShipbreakerVR
             // collider. Not on its HandTarget, where the game puts its own hand: on the airlock console's lever that lay
             // 17 cm off the hand, and the hand sat above the lever (Raik). Before that, the hand held the hull under the
             // switch.
-            var control = NearestControl(at, reach, out var controlCollider, out var controlPoint);
+            // Controls are found from just above the palm, not from inside the hand: a hand takes hold of what is in front
+            // of its palm (Raik).
+            var palm = PalmPoint(hand.Input, at);
+            var control = NearestControl(palm, reach, out var controlCollider, out var controlPoint);
+            // A lever turned by hand is held on its yellow grip, the hand pulled onto its middle, only right at it; else the
+            // hand holds the surface there as anywhere (Raik: no fist touching the grip with the backs of the fingers).
+            var bar = Vector3.zero;
+            if (control != null && VrLever.Turnable(control))
+            {
+                if (VrLever.OnGrip(control, palm, out var onGrip, out bar)) controlPoint = onGrip;
+                else if (VrLever.OverHandle(control, palm))
+                {
+                    if (firstTry && logs++ < 80) Plugin.Log.LogInfo($"Climbing: {hand.Name} hand grips over the lever's turning part, off its grip: holds nothing");
+                    return;
+                }
+                else control = null;
+            }
+            else if (control != null && VrNacelle.Is(control))
+            {
+                if (VrNacelle.OnGrip(control, palm, out var onHandle, out bar)) controlPoint = onHandle;
+                else control = null;
+            }
             if (control != null && best != null
                 && (controlPoint - at).magnitude > Mathf.Sqrt(bestDistance) + ControlPreference * VrCamera.WorldScale)
                 control = null;
@@ -377,7 +481,10 @@ namespace ShipbreakerVR
                 for (var i = 0; i < count; i++)
                 {
                     var collider = Found[i];
-                    if (!collider.isTrigger || Own(collider) || collider.GetComponentInParent<InteractableObject>() == null) continue;
+                    if (!collider.isTrigger || Own(collider)) continue;
+                    // A lever turned by hand is held on its grip only (Raik: not in the air over it, as on a wall).
+                    var volume = collider.GetComponentInParent<InteractableObject>();
+                    if (volume == null || VrLever.Turnable(volume) || VrNacelle.Is(volume)) continue;
                     var distance = (VrUtil.ClosestPoint(collider, at) - at).sqrMagnitude;
                     if (distance >= bestDistance) continue;
                     best = collider;
@@ -414,10 +521,25 @@ namespace ShipbreakerVR
             hand.Sliding = false;
             hand.Firm = false;
             hand.Follower = false;
+            hand.PinAnchor = null;
+            hand.Free = false;
+            hand.FreeTurn = false;
+            hand.Bar = control != null ? hand.Anchor.InverseTransformDirection(bar) : Vector3.zero;
             foreach (var other in Hands)
                 if (other != hand && other.Firm && other.Body == body) hand.Follower = true;
             if (!hand.Follower && hand.Movable && body.mass <= FirmMass && !HeldByOther(hand) && hand.Input.TryGetAimRotation(out var aim))
                 Firm(hand, aim);
+            // The other hand already gliding: this one glides on with the same speed, else with the body's own.
+            hand.GlideVelocity = GlideAtHold(hand);
+            hand.GlideBrake = ClimbContact.GlideBrake(hand.GlideVelocity.magnitude, VrCamera.WorldScale);
+            foreach (var other in Hands)
+                if (other != hand && other.GlideVelocity != Vector3.zero && Glides(hand))
+                {
+                    hand.GlideVelocity = other.GlideVelocity;
+                    hand.GlideBrake = other.GlideBrake;
+                }
+            if (hand.GlideVelocity != Vector3.zero && logs++ < 80)
+                Plugin.Log.LogInfo($"Climbing: {hand.Name} hand takes hold at {hand.GlideVelocity.magnitude:0.00} m/s along the surface and glides to a stop");
             hand.PullOffset = hand.Local - ClimbContact.Closer(hand.Local, VrCamera.Instance.transform.localPosition);
             LogControl(best, hand);
             if (first && !hand.Firm)
@@ -440,6 +562,11 @@ namespace ShipbreakerVR
             foreach (var hand in Hands)
             {
                 if (!hand.Holding) continue;
+                if (hand.Free)
+                {
+                    holding++;
+                    continue;
+                }
                 var error = Hold(hand) - (Pushes(hand) ? HandWorld(hand) : PullPoint(hand));
                 // A part that moves follows the hand softly (PartPullTime), so it lags further in a quick swing: torn off
                 // only at twice the distance, as a firmly held one.
@@ -449,7 +576,7 @@ namespace ShipbreakerVR
             // A firmly held part goes with the hand and pulls at nothing.
             var pulling = 0;
             foreach (var hand in Hands)
-                if (hand.Holding && !hand.Firm && !hand.Follower && !Pushes(hand)) pulling++;
+                if (hand.Holding && !hand.Firm && !hand.Follower && !hand.Free && !Pushes(hand)) pulling++;
             if (pulling == 0)
             {
                 foreach (var hand in Hands)
@@ -474,7 +601,7 @@ namespace ShipbreakerVR
                 var change = Vector3.zero;
                 foreach (var hand in Hands)
                 {
-                    if (!hand.Holding || hand.Firm || hand.Follower || Pushes(hand)) continue;
+                    if (!hand.Holding || hand.Firm || hand.Follower || hand.Free || Pushes(hand)) continue;
                     var hold = Hold(hand);
                     var error = hold - PullPoint(hand);
                     var holdVelocityHere = hand.Body != null ? hand.Body.GetPointVelocity(hold) : Vector3.zero;
@@ -499,6 +626,8 @@ namespace ShipbreakerVR
             // (review: its knock back could carry the body into a wall behind).
             HoldOff(dt);
             player.velocity = KeepClear(player.velocity, dt);
+            afterPull = player.velocity;
+            pulled = true;
             MoveFirm(dt);
             pushOff = Vector3.Lerp(pushOff, player.velocity - holdVelocity, 1f - Mathf.Exp(-dt / PushOffSmoothing));
         }
@@ -954,7 +1083,8 @@ namespace ShipbreakerVR
             return directions.ToArray();
         }
 
-        private static Vector3 Hold(Hand hand) => hand.Anchor.TransformPoint(hand.Point);
+        private static Vector3 Hold(Hand hand) =>
+            hand.PinAnchor != null ? hand.PinAnchor.TransformPoint(hand.Pin) : hand.Anchor.TransformPoint(hand.Point);
 
         // That hand works a heavy part while the other is braced on something that does not move.
         // With the other hand on a second part too heavy to grab instead, the two push each other apart through the body
@@ -1022,6 +1152,109 @@ namespace ShipbreakerVR
             return found;
         }
 
+        // The control that controller's hand holds (VrLever), or null.
+        public static InteractableObject HeldControl(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input && hand.Holding && hand.Control && hand.Collider != null)
+                    return hand.Collider.GetComponentInParent<InteractableObject>();
+            return null;
+        }
+
+        // That controller's hand held free (VrNacelle, Hand.Free), or not.
+        public static void SetFree(VrInput.Hand input, bool free, bool turns = true)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input && hand.Holding)
+                {
+                    hand.Free = free;
+                    hand.FreeTurn = free && turns;
+                }
+        }
+
+        // How far ahead of the controller's grip the palm takes hold, along the palm's outward direction, in m at world
+        // scale 1: just above the palm of the hand (Raik: 1 to 2 cm over the palm, not inside the hand).
+        private const float PalmAhead = 0.035f;
+
+        // The point a hand takes hold of controls from: just above its palm. The palm faces to the right on the left hand
+        // and to the left on the right hand, along the controller's grip pose.
+        public static Vector3 PalmPoint(VrInput.Hand input, Vector3 at)
+        {
+            if (!input.TryGetGripPose(out _, out var grip) || VrCamera.Instance == null) return at;
+            var turn = VrCamera.Instance.transform.parent.rotation * grip;
+            var side = input == VrInput.Left ? Vector3.right : Vector3.left;
+            return at + turn * side * (PalmAhead * VrCamera.WorldScale);
+        }
+
+        // Where that controller's hand sits on its hold, in the world.
+        public static bool TryGetSurface(VrInput.Hand input, out Vector3 surface)
+        {
+            surface = Vector3.zero;
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input || !hand.Holding || hand.Anchor == null) continue;
+                surface = hand.Anchor.TransformPoint(hand.Surface);
+                return true;
+            }
+            return false;
+        }
+
+        // Whether the other hand than that controller's holds on to something fixed (a counter hold, VrNacelle).
+        public static bool Braced(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input != input && hand.Holding && !hand.Movable && !hand.Free && hand.Anchor != null) return true;
+            return false;
+        }
+
+        public static bool HeldFree(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input && hand.Holding) return hand.FreeTurn;
+            return false;
+        }
+
+        // The body of that controller's hand keeps to where its hold is now, on still, which does not move, while the hand
+        // goes with its anchor (a lever the game turns back, VrLever); or, still null, it follows the hold again from where
+        // it is, the hold's point on the anchor moved there, so the body does not move.
+        public static void Pin(VrInput.Hand input, Transform still)
+        {
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input || !hand.Holding || hand.Anchor == null) continue;
+                var point = Hold(hand);
+                if (still != null)
+                {
+                    hand.PinAnchor = still;
+                    hand.Pin = still.InverseTransformPoint(point);
+                }
+                else if (hand.PinAnchor != null)
+                {
+                    hand.PinAnchor = null;
+                    hand.Point = hand.Anchor.InverseTransformPoint(point);
+                }
+            }
+        }
+
+        // The hold of that controller's hand moves with this transform from now on (a lever's handle it turns, VrLever):
+        // the hand stays where it is on it.
+        public static void Reanchor(VrInput.Hand input, Transform anchor)
+        {
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input || !hand.Holding || hand.Anchor == null || hand.Anchor == anchor) continue;
+                var point = hand.Anchor.TransformPoint(hand.Point);
+                var surface = hand.Anchor.TransformPoint(hand.Surface);
+                var normal = hand.Anchor.TransformDirection(hand.Normal);
+                var bar = hand.Anchor.TransformDirection(hand.Bar);
+                hand.Anchor = anchor;
+                hand.Point = anchor.InverseTransformPoint(point);
+                hand.Surface = anchor.InverseTransformPoint(surface);
+                hand.Normal = anchor.InverseTransformDirection(normal);
+                hand.Bar = anchor.InverseTransformDirection(bar);
+            }
+        }
+
         public static bool HoldsControl(VrInput.Hand input)
         {
             foreach (var hand in Hands)
@@ -1058,6 +1291,19 @@ namespace ShipbreakerVR
 
         // Where that controller's hand holds on, if it does, for the game's hand (VrHands.Pose).
         // The thing that hand holds on to, and the surface's outward direction there.
+        // The direction of the lever grip that controller's hand holds (VrLever.OnGrip), in the world.
+        public static bool TryGetBar(VrInput.Hand input, out Vector3 axis)
+        {
+            axis = Vector3.zero;
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input || !hand.Holding || hand.Anchor == null || hand.Bar == Vector3.zero) continue;
+                axis = hand.Anchor.TransformDirection(hand.Bar).normalized;
+                return true;
+            }
+            return false;
+        }
+
         public static bool TryGetGrip(VrInput.Hand input, out Transform anchor, out Vector3 normal)
         {
             anchor = null;
@@ -1198,6 +1444,38 @@ namespace ShipbreakerVR
     // Outside VrClimb, whose static fields need the game: tests run this without it.
     internal static class ClimbContact
     {
+        // Gliding along a surface held (VrClimb.Glide): from this speed on, in m/s at world scale 1; braking evenly, at
+        // least LeastBrake m/s², harder when faster, so it stops within GlideMostWay meters.
+        public const float GlideLeast = 0.3f;
+        private const float LeastBrake = 3f;
+        private const float GlideMostWay = 0.8f;
+
+        // How hard a glide at that speed brakes, in m/s², kept until it stops (worked out anew each step, the way left
+        // would stay as long and it never stopped).
+        public static float GlideBrake(float speed, float scale) =>
+            Mathf.Max(LeastBrake * scale, speed * speed / (2f * GlideMostWay * scale));
+
+        // Thrust along a surface held glides at most this fast, in m/s at world scale 1 (Raik: 3 m/s was too fast);
+        // a faster glide from taking hold brakes down to it. Before is the glide's speed before this step's thrust.
+        private const float ThrustGlideMost = 1.5f;
+
+        public static Vector3 ThrustGlide(Vector3 velocity, float before, float brake, float dt, float scale)
+        {
+            var most = ThrustGlideMost * scale;
+            var speed = velocity.magnitude;
+            if (speed <= most) return velocity;
+            var allowed = Mathf.Max(most, Mathf.Min(speed, before) - brake * dt);
+            return velocity * (allowed / speed);
+        }
+
+        // The glide velocity one step later.
+        public static Vector3 Brake(Vector3 velocity, float brake, float dt)
+        {
+            var speed = velocity.magnitude;
+            var slower = speed - brake * dt;
+            return slower <= 0f ? Vector3.zero : velocity * (slower / speed);
+        }
+
         // From this far from the head, in real meters, a hand counts as closer than it is, by Gain for each meter nearer.
         private const float CloseFrom = 0.4f;
         private const float Gain = 1.5f;

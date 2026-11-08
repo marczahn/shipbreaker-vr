@@ -60,6 +60,9 @@ namespace ShipbreakerVR
             ("own arm length", VrHands.KeepLength),
             ("torso", VrTorso.LateUpdate),
             ("demo charge arm", VrToolModels.PoseArm),
+            ("buttons", VrButtons.LateUpdate),
+            ("levers", VrLever.LateUpdate),
+            ("nacelle switches", VrNacelle.LateUpdate),
             ("hands", VrHands.LateUpdate),
             ("crosshair", VrCrosshair.LateUpdate),
         };
