@@ -87,6 +87,9 @@ namespace ShipbreakerVR
             public Vector3 Back;
             public bool HeldBack;
             public bool ArmPushed;
+            public bool ArmTurned;
+            // The grip last frame, in tracking space.
+            public Vector3 Pivot;
         }
 
         private static readonly State Left = new State();
@@ -151,6 +154,10 @@ namespace ShipbreakerVR
         private static bool armKnown;
         private static int armPieces;
         private static readonly Vector3[] ArmJoints = new Vector3[4];
+        // How fast each joint moves, from where it was the frame before (per arm, as the tool may change hands).
+        private static readonly Vector3[] JointSpeed = new Vector3[4];
+        private static readonly Vector3[][] JointsBefore = { new Vector3[4], new Vector3[4] };
+        private static readonly int[] JointsFrame = { -10, -10 };
 
         private static void OtherArm(VrInput.Hand hand)
         {
@@ -158,20 +165,43 @@ namespace ShipbreakerVR
             var other = hand.IsLeft ? VrInput.Right : VrInput.Left;
             var along = knuckles - ArmJoints[2];
             armPieces = 2;
-            if (armKnown && along.sqrMagnitude > 1e-6f && !VrToolSupport.Supports(other))
+            ArmJoints[3] = knuckles;
+            if (armKnown && along.sqrMagnitude > 1e-6f)
             {
                 ArmJoints[3] = knuckles + along.normalized * (Fingers * VrCamera.WorldScale);
-                armPieces = 3;
+                if (!VrToolSupport.Supports(other)) armPieces = 3;
             }
+            var side = hand.IsLeft ? 1 : 0;
+            var before = JointsBefore[side];
+            var dt = Time.unscaledDeltaTime;
+            var known = armKnown && JointsFrame[side] == Time.frameCount - 1 && dt > 1e-4f;
+            for (var j = 0; j < 4; j++)
+            {
+                JointSpeed[j] = known ? (ArmJoints[j] - before[j]) / dt : Vector3.zero;
+                before[j] = ArmJoints[j];
+            }
+            JointsFrame[side] = armKnown ? Time.frameCount : -10;
+        }
+
+        // The point on a to b nearest to p, and how far along it lies (0 to 1).
+        private static Vector3 OnSegment(Vector3 a, Vector3 b, Vector3 p, out float t)
+        {
+            var line = b - a;
+            t = Mathf.Clamp01(Vector3.Dot(p - a, line) / Mathf.Max(line.sqrMagnitude, 1e-8f));
+            return a + line * t;
         }
 
         private static float PieceRadius(int j) => (j == 2 ? HandRadius : ArmRadius) * VrCamera.WorldScale;
 
         // Whether a box of the tool lies in the other arm, and its way out of it.
-        private static bool InArm(Vector3 center, Vector3 half, Quaternion turn, out Vector3 way, out float depth)
+        private static bool InArm(Vector3 center, Vector3 half, Quaternion turn, out Vector3 way, out float depth) =>
+            InArm(center, half, turn, out way, out depth, out _);
+
+        private static bool InArm(Vector3 center, Vector3 half, Quaternion turn, out Vector3 way, out float depth, out int piece)
         {
             way = Vector3.zero;
             depth = 0f;
+            piece = 0;
             if (!armKnown) return false;
             Probes();
             probe.size = half * 2f;
@@ -189,6 +219,7 @@ namespace ShipbreakerVR
                 {
                     way = direction.normalized;
                     depth = distance;
+                    piece = j;
                     return true;
                 }
             }
@@ -196,10 +227,15 @@ namespace ShipbreakerVR
         }
 
         // Whether the tool's line (the ball along it, without a model) comes within reach of the other arm.
-        private static bool LineInArm(Vector3 start, Vector3 end, float reach, out Vector3 at, out Vector3 way, out float depth)
+        private static bool LineInArm(Vector3 start, Vector3 end, float reach, out Vector3 at, out Vector3 way, out float depth) =>
+            LineInArm(start, end, reach, out at, out way, out depth, out _, out _);
+
+        private static bool LineInArm(Vector3 start, Vector3 end, float reach, out Vector3 at, out Vector3 way, out float depth, out int piece, out float along)
         {
             at = way = Vector3.zero;
             depth = 0f;
+            piece = 0;
+            along = 0f;
             if (!armKnown) return false;
             for (var j = 0; j < armPieces; j++)
             {
@@ -210,6 +246,8 @@ namespace ShipbreakerVR
                 at = onTool;
                 way = gap.sqrMagnitude > 1e-8f ? gap.normalized : Vector3.up;
                 depth = radius - gap.magnitude;
+                piece = j;
+                OnSegment(ArmJoints[j], ArmJoints[j + 1], onArm, out along);
                 return true;
             }
             return false;
@@ -252,6 +290,8 @@ namespace ShipbreakerVR
             var pivot = rig.TransformPoint(VrToolWeight.Spring(hand, tool, gripLocal));
             var desired = rig.rotation * wanted;
             var previous = state.Running ? rig.rotation * state.Rotation : desired;
+            var lastTurn = previous;
+            var lastPivot = state.Running ? rig.TransformPoint(state.Pivot) : pivot;
             state.Running = true;
             var boxes = hand == VrHand.GameToolHand.Input ? Shape(tool) : null;
             var length = Length(pivot, desired);
@@ -261,9 +301,8 @@ namespace ShipbreakerVR
             // Held off, it comes back over CatchUp, not at once, also once the way is free.
             var share = state.Blocked ? 1f - Mathf.Exp(-Time.unscaledDeltaTime / CatchUp) : 1f;
             // The hand's movement may have put the tool into something: turned out of it, a little each frame.
-            // Not at the other arm: there the grip is high, the tool never slides along it but is pushed aside with the
-            // hand (HoldBack). Sliding off, it tipped fast onto a hand pressing from below (Raik, 2026-11-08).
-            if (!Free(pivot, previous, boxes, length, out var contact) && contact.Thing != armProbe)
+            // The other arm is not an obstacle here but pushes the tool about the wrist (ByArm, after the turn).
+            if (!Free(pivot, previous, boxes, length, out var contact, false))
             {
                 var away = Away(contact);
                 // Pressed nearly straight against it, the tip holds there (friction); at a slant it slides out along it, the
@@ -279,14 +318,94 @@ namespace ShipbreakerVR
             var result = Towards(pivot, previous, desired, share, boxes, length);
             // Held off this far, it gives up the obstacle and comes back to the controller through it, still over CatchUp.
             if (Quaternion.Angle(result, desired) > MostOff) result = Quaternion.Slerp(result, desired, 1f - Mathf.Exp(-Time.unscaledDeltaTime / CatchUp));
-            HoldBack(state, rig, pivot, result, boxes, length, hand, tool);
+            // Held off by the world only: the other arm pushes it aside each frame anew, and it turns freely meanwhile.
             var blocked = Quaternion.Angle(result, desired) > 1f;
+            result = ByArm(state, pivot, result, lastPivot, lastTurn, boxes, length, hand, tool);
+            HoldBack(state, rig, pivot, result, boxes, length, hand, tool);
+            state.Pivot = rig.InverseTransformPoint(pivot);
             if (blocked != state.Blocked && logs++ < 30)
                 Plugin.Log.LogInfo($"Tool collision: {hand.Name} {tool} {(blocked ? $"held off, {Quaternion.Angle(result, desired):0}° from the controller" : "with the controller again")}");
             state.Blocked = blocked;
             state.Rotation = Quaternion.Inverse(rig.rotation) * result;
             state.Result = state.Rotation;
             return state.Result;
+        }
+
+        // The other arm pushes the tool about the wrist (Raik, 2026-11-08): the tool keeps turning with the controller, and
+        // where the arm is in its way the arm turns it aside, the way the arm moves against the tool (or the tool against
+        // the arm), not the shortest way out, which tipped the grapple up onto a hand pressing its lower front corner.
+        // Without a move between them, the shortest way out, across the lever only. Near the grip, where turning does
+        // little, HoldBack pushes tool and hand aside instead.
+        private const float LeastPush = 0.05f;
+        private const float ShortestLever = 0.08f;
+        private const float MostArmTurn = 60f;
+        private const int ArmTurnSteps = 8;
+
+        private static Quaternion ByArm(State state, Vector3 pivot, Quaternion rotation, Vector3 lastPivot, Quaternion lastTurn,
+            Box[] boxes, float length, VrInput.Hand hand, EquipmentController.Equipment tool)
+        {
+            var scale = VrCamera.WorldScale;
+            if (!ArmContact(pivot, rotation, boxes, length, out var armAt, out var piece, out var along, out var way, out var depth))
+            {
+                ReportTurn(state, false, hand, tool, 0f);
+                return rotation;
+            }
+            var lever = armAt - pivot;
+            if (lever.magnitude < ShortestLever * scale) return rotation;
+            var dt = Mathf.Max(Time.unscaledDeltaTime, 1e-4f);
+            var armSpeed = Vector3.Lerp(JointSpeed[piece], JointSpeed[piece + 1], along);
+            // Where the tool's point at the arm was last frame, carried by the tool's last pose.
+            var before = lastPivot + lastTurn * (Quaternion.Inverse(rotation) * lever);
+            var toolSpeed = (armAt - before) / dt;
+            var push = Vector3.ProjectOnPlane(armSpeed - toolSpeed, lever);
+            if (push.magnitude < LeastPush * scale) push = Vector3.ProjectOnPlane(way, lever);
+            if (push.sqrMagnitude < 1e-8f) return rotation;
+            var axis = Vector3.Cross(lever, push).normalized;
+            var turned = 0f;
+            for (var i = 0; i < ArmTurnSteps && turned < MostArmTurn; i++)
+            {
+                var step = Mathf.Clamp(Mathf.Atan2(depth + ArmGap * scale, lever.magnitude) * Mathf.Rad2Deg, 0.5f, MostArmTurn - turned);
+                rotation = Quaternion.AngleAxis(step, axis) * rotation;
+                turned += step;
+                if (!ArmContact(pivot, rotation, boxes, length, out _, out _, out _, out _, out depth)) break;
+            }
+            ReportTurn(state, true, hand, tool, turned);
+            return rotation;
+        }
+
+        // Where the tool lies in the other arm: the point on the arm's line, which piece and how far along it, the tool's
+        // shortest way out and how deep.
+        private static bool ArmContact(Vector3 pivot, Quaternion rotation, Box[] boxes, float length, out Vector3 armAt, out int piece,
+            out float along, out Vector3 way, out float depth)
+        {
+            armAt = way = Vector3.zero;
+            piece = 0;
+            along = depth = 0f;
+            if (!armKnown) return false;
+            if (boxes != null)
+            {
+                foreach (var box in boxes)
+                {
+                    var center = pivot + rotation * box.Center;
+                    if (!InArm(center, box.Half, rotation * box.Turn, out way, out depth, out piece)) continue;
+                    armAt = OnSegment(ArmJoints[piece], ArmJoints[piece + 1], center, out along);
+                    return true;
+                }
+                return false;
+            }
+            var scale = VrCamera.WorldScale;
+            var forward = rotation * Vector3.forward;
+            var start = pivot + forward * FromGrip * scale;
+            var distance = length - FromGrip * scale;
+            if (distance <= 0f) return false;
+            return LineInArm(start, start + forward * distance, Radius * scale, out armAt, out way, out depth, out piece, out along);
+        }
+
+        private static void ReportTurn(State state, bool turned, VrInput.Hand hand, EquipmentController.Equipment tool, float angle)
+        {
+            if (turned != state.ArmTurned && logs++ < 40)
+                Plugin.Log.LogInfo($"Tool collision: {hand.Name} {tool} {(turned ? $"turned {angle:0}° aside by the other arm" : "free of the other arm")}");
+            state.ArmTurned = turned;
         }
 
         // How far the tool and the hand go back with the tool's own turn this frame, in tracking space; zero when free or
@@ -398,7 +517,7 @@ namespace ShipbreakerVR
             for (var i = 1; i <= steps; i++)
             {
                 var next = Quaternion.Slerp(from, to, go * i / steps / angle);
-                if (!Free(pivot, next, boxes, length, out _)) return last;
+                if (!Free(pivot, next, boxes, length, out _, false)) return last;
                 last = next;
             }
             return last;
@@ -414,7 +533,7 @@ namespace ShipbreakerVR
 
         // Whether the tool turned so is clear of everything but the player's own body (and the tool, which hangs under
         // it); what it went into if not.
-        private static bool Free(Vector3 pivot, Quaternion rotation, Box[] boxes, float length, out Contact contact)
+        private static bool Free(Vector3 pivot, Quaternion rotation, Box[] boxes, float length, out Contact contact, bool arm = true)
         {
             contact = default;
             var player = Player();
@@ -436,7 +555,7 @@ namespace ShipbreakerVR
                         }
                         return false;
                     }
-                    if (InArm(center, box.Half, rotation * box.Turn, out var outOfArm, out var armDepth))
+                    if (arm && InArm(center, box.Half, rotation * box.Turn, out var outOfArm, out var armDepth))
                     {
                         contact = new Contact { Thing = armProbe, At = center, Separated = true, Out = outOfArm, Depth = armDepth };
                         return false;
@@ -459,7 +578,7 @@ namespace ShipbreakerVR
                 nearest = hit.distance;
                 contact = new Contact { Thing = hit.collider, At = start + forward * Mathf.Max(hit.distance, distance * 0.5f) };
             }
-            if (nearest == float.MaxValue && LineInArm(start, start + forward * distance, Radius * scale, out var armAt, out var armWay, out var lineDepth))
+            if (arm && nearest == float.MaxValue && LineInArm(start, start + forward * distance, Radius * scale, out var armAt, out var armWay, out var lineDepth))
             {
                 contact = new Contact { Thing = armProbe, At = armAt, Separated = true, Out = armWay, Depth = lineDepth };
                 return false;
@@ -497,7 +616,7 @@ namespace ShipbreakerVR
                 var step = Mathf.Min(OutStep, most - angle);
                 angle += step;
                 turned = Quaternion.AngleAxis(step, axis.normalized) * turned;
-                if (Free(pivot, turned, boxes, length, out _)) return turned;
+                if (Free(pivot, turned, boxes, length, out _, false)) return turned;
             }
             return turned;
         }
