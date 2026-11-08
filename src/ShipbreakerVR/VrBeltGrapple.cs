@@ -24,8 +24,8 @@ namespace ShipbreakerVR
         // how far its muzzle points forward from straight down, in degrees: where Raik held it, as he would like it to
         // hang (hand snapshot 2026-11-08 13:31:16, looking down about 58°). Hung by its grip at the middle of the zone
         // (VrToolBelt.GripAt) its body lay 23 cm lower and 26 cm further forward, too far away (Raik). Then 10 cm further
-        // out to the right (Raik).
-        private static readonly Vector3 BodyAt = new Vector3(0.37f, -0.72f, -0.19f);
+        // out to the right, and 3 cm further right, forward and up (Raik).
+        private static readonly Vector3 BodyAt = new Vector3(0.40f, -0.69f, -0.16f);
         private const float MuzzleForward = 25f;
         // Where the cutter's grip hangs on the back, in the same axes, within the zone over the right shoulder it is drawn
         // from (VrToolBelt: above -0.12 m, behind -0.05 m), and how far its muzzle points towards the left, in degrees.

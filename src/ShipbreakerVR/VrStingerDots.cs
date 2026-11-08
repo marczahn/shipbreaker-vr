@@ -5,8 +5,10 @@ using UnityEngine;
 
 namespace ShipbreakerVR
 {
-    // Three dots circling where the Stinger's beam ends, while a part is within its reach: its reach is far shorter than
-    // the laser's, so the laser alone does not tell whether a shot would land.
+    // Three dots circling where the Stinger's beam ends, while it aims at something it can cut within its reach: its reach
+    // is far shorter than the laser's, so the laser alone does not tell whether a shot would land. The game's own check
+    // (ScalpelController.UpdateTargeting: a ray as long as its range, IsValid when the part is cuttable by the Stinger and
+    // its power rating suffices); before, the dots showed on any part in reach (Raik, 2026-11-08).
     internal static class VrStingerDots
     {
         private const float Radius = 0.035f;
@@ -22,7 +24,7 @@ namespace ShipbreakerVR
             if (tool == null || tool.CurrentMode != CuttingToolController.CutterMode.Scalpel) return;
             var stinger = StingerOf(tool);
             var target = stinger != null ? stinger.Target : null;
-            if (target == null || target.Part == null) return;
+            if (target == null || target.Part == null || !target.IsValid) return;
             var way = (target.Position - from).normalized;
             var across = Vector3.Cross(way, Mathf.Abs(way.y) < 0.9f ? Vector3.up : Vector3.right).normalized;
             var radius = Radius * VrCamera.WorldScale;
