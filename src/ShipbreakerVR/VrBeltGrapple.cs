@@ -11,7 +11,7 @@ namespace ShipbreakerVR
     // m_GrapplingGunShadowRestPoint) and lets it glide there (HandleGunPosition). Those points sit below the flat game's
     // view, so in VR the grapple and the cutter lay at one's feet, with a copy of the grapple at the hip besides (Raik,
     // 2026-11-08). Now the grapple's rest points are moved to the hip each frame: it is the one grapple, put away it glides
-    // to the hip, and drawn it leaves from there. The cutter, not yet hung anywhere, is not drawn while it rests.
+    // to the hip, and drawn it leaves from there. The cutter's rest points go onto the back the same way.
     internal static class VrBeltGrapple
     {
         static VrBeltGrapple() => VrSession.OnUnload("belt grapple", Release);
@@ -23,9 +23,14 @@ namespace ShipbreakerVR
         // Where the grapple's body hangs, from the head along its heading (x right, y up, z forward), in real meters, and
         // how far its muzzle points forward from straight down, in degrees: where Raik held it, as he would like it to
         // hang (hand snapshot 2026-11-08 13:31:16, looking down about 58°). Hung by its grip at the middle of the zone
-        // (VrToolBelt.GripAt) its body lay 23 cm lower and 26 cm further forward, too far away (Raik).
-        private static readonly Vector3 BodyAt = new Vector3(0.27f, -0.72f, -0.19f);
+        // (VrToolBelt.GripAt) its body lay 23 cm lower and 26 cm further forward, too far away (Raik). Then 10 cm further
+        // out to the right (Raik).
+        private static readonly Vector3 BodyAt = new Vector3(0.37f, -0.72f, -0.19f);
         private const float MuzzleForward = 25f;
+        // Where the cutter's grip hangs on the back, in the same axes, within the zone over the right shoulder it is drawn
+        // from (VrToolBelt: above -0.12 m, behind -0.05 m), and how far its muzzle points towards the left, in degrees.
+        private static readonly Vector3 CutterGripAt = new Vector3(0.15f, -0.08f, -0.22f);
+        private const float CutterSlant = 20f;
 
         // How fast the grapple glides onto its rest point, per second, as the game's spring may only run while it is held.
         private const float Glide = 10f;
@@ -65,8 +70,6 @@ namespace ShipbreakerVR
         }
 
         private static readonly List<Moved> moved = new List<Moved>();
-        private static readonly List<Renderer> hidden = new List<Renderer>();
-        private static readonly List<Renderer> found = new List<Renderer>();
 
         public static void Update()
         {
@@ -76,34 +79,47 @@ namespace ShipbreakerVR
                 Hide();
                 return;
             }
-            HideResting();
             var forward = vr.transform.localRotation * Vector3.forward;
             forward.y = 0f;
             if (forward.sqrMagnitude < 1e-4f) return;
             var heading = Quaternion.LookRotation(forward, Vector3.up);
-            // Muzzle down along the leg and a little forward, the grip to the back.
-            var hanging = heading * Quaternion.Euler(-MuzzleForward, 0f, 0f) * Quaternion.LookRotation(Vector3.down, Vector3.forward);
-            if (!VrToolModels.TrackingToWorld(vr.transform.localPosition + heading * BodyAt, hanging, out var at, out var rotation))
-                return;
+            var head = vr.transform.localPosition;
 
+            // The grapple: muzzle down along the leg and a little forward, the grip to the back, hung by its body.
             var gunModel = Gun(gun);
             var rest = GunRest(gun);
-            if (gunModel == null || rest == null) return;
-            // The rest point turned so the model hangs as wanted once the grapple lies on it, and placed so its body is here.
-            var modelInGun = Quaternion.Inverse(gunModel.rotation) * model.rotation;
-            var bodyInGun = gunModel.InverseTransformPoint(body.TransformPoint(bodyCenter));
+            var hanging = heading * Quaternion.Euler(-MuzzleForward, 0f, 0f) * Quaternion.LookRotation(Vector3.down, Vector3.forward);
+            if (gunModel != null && rest != null && VrToolModels.TrackingToWorld(head + heading * BodyAt, hanging, out var at, out var rotation))
+            {
+                var modelInGun = Quaternion.Inverse(gunModel.rotation) * model.rotation;
+                Hang(gunModel, rest, Shadow(gun), ShadowRest(gun), at, rotation * Quaternion.Inverse(modelInGun),
+                    gunModel.InverseTransformPoint(body.TransformPoint(bodyCenter)));
+                if (logs++ % 2000 == 0 && gunModel.parent == rest) LogGrip(vr.transform, heading);
+            }
+
+            // The cutter on the back, like a sword: its grip by the right shoulder, where it is drawn from (VrToolBelt), the
+            // muzzle down towards the left hip, its top away from the back. Hung by its pivot, where the hand holds it.
+            var cutterModel = cutter != null ? Cutter(cutter) : null;
+            var cutterRest = cutter != null ? CutterRest(cutter) : null;
+            var onBack = heading * Quaternion.Euler(0f, 0f, -CutterSlant) * Quaternion.LookRotation(Vector3.down, Vector3.back);
+            if (cutterModel != null && cutterRest != null && VrToolModels.TrackingToWorld(head + heading * CutterGripAt, onBack, out var cutterAt, out var cutterRotation))
+                Hang(cutterModel, cutterRest, CutterShadow(cutter), CutterShadowRest(cutter), cutterAt, cutterRotation, Vector3.zero);
+        }
+
+        // Moves a tool's rest points so that the tool, once it lies on them, has its anchor (in its own axes) at the point
+        // and its rest point turned so.
+        private static void Hang(Transform tool, Transform rest, Transform shadow, Transform shadowRest, Vector3 at, Quaternion rotation, Vector3 anchor)
+        {
             Remember(rest);
-            rest.rotation = rotation * Quaternion.Inverse(modelInGun);
-            rest.position = at - rest.rotation * Vector3.Scale(Vector3.Scale(rest.lossyScale, gunModel.localScale), bodyInGun);
-            var shadowRest = ShadowRest(gun);
+            rest.rotation = rotation;
+            rest.position = at - rotation * Vector3.Scale(Vector3.Scale(rest.lossyScale, tool.localScale), anchor);
             if (shadowRest != null)
             {
                 Remember(shadowRest);
                 shadowRest.SetPositionAndRotation(rest.position, rest.rotation);
             }
-            Settle(gunModel, rest);
-            Settle(Shadow(gun), shadowRest);
-            if (logs++ % 2000 == 0 && gunModel.parent == rest) LogGrip(vr.transform, heading);
+            Settle(tool, rest);
+            Settle(shadow, shadowRest);
         }
 
         // Where the grip hangs against the zone it is drawn from, in the head's heading as VrToolBelt measures.
@@ -122,36 +138,6 @@ namespace ShipbreakerVR
             var t = 1f - Mathf.Exp(-Glide * Time.unscaledDeltaTime);
             tool.localPosition = Vector3.Lerp(tool.localPosition, Vector3.zero, t);
             tool.localRotation = Quaternion.Slerp(tool.localRotation, Quaternion.identity, t);
-        }
-
-        // The cutter is not drawn while it lies on its rest point (at the feet); its renderers are left as the game set them.
-        private static void HideResting()
-        {
-            var rest = cutter != null ? CutterRest(cutter) : null;
-            var tool = cutter != null ? Cutter(cutter) : null;
-            if (tool == null || rest == null || !tool.IsChildOf(rest))
-            {
-                ShowCutter();
-                return;
-            }
-            if (hidden.Count > 0) return;
-            tool.GetComponentsInChildren(true, found);
-            hidden.AddRange(found);
-            var shadow = CutterShadow(cutter);
-            var shadowRest = CutterShadowRest(cutter);
-            if (shadow != null && shadowRest != null && shadow.IsChildOf(shadowRest))
-            {
-                shadow.GetComponentsInChildren(true, found);
-                hidden.AddRange(found);
-            }
-            foreach (var renderer in hidden) renderer.forceRenderingOff = true;
-        }
-
-        private static void ShowCutter()
-        {
-            foreach (var renderer in hidden)
-                if (renderer != null) renderer.forceRenderingOff = false;
-            hidden.Clear();
         }
 
         private static void Remember(Transform point)
@@ -197,7 +183,6 @@ namespace ShipbreakerVR
                     m.Point.localRotation = m.Rotation;
                 }
             moved.Clear();
-            ShowCutter();
         }
 
         private static void Release()
