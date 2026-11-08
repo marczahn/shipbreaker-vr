@@ -1192,8 +1192,9 @@ namespace ShipbreakerVR
         }
 
         // How far ahead of the controller's grip the palm takes hold, along the palm's outward direction, in m at world
-        // scale 1: just above the palm of the hand (Raik: 1 to 2 cm over the palm, not inside the hand).
-        private const float PalmAhead = 0.035f;
+        // scale 1: just above the palm of the hand (Raik: 1 to 2 cm over the palm, not inside the hand), then 2 cm further
+        // out, so a closed hand has it between fingers and palm and an open one just above the palm (Raik, 2026-11-08).
+        private const float PalmAhead = 0.055f;
 
         // The point a hand takes hold of controls from: just above its palm. The palm faces to the right on the left hand
         // and to the left on the right hand, along the controller's grip pose.

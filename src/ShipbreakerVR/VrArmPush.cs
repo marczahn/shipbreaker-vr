@@ -5,10 +5,11 @@ using UnityEngine;
 namespace ShipbreakerVR
 {
     // The arms knock light things aside (Raik, 2026-11-08): parts up to LightestPushed that the drawn arm runs into are
-    // pushed softly, as by a light arm in a soft suit with give in its joints. Of the arm's own swing (its speed against
-    // the body) a part gets only Swing; of the body's own flight it gets all, but no more: flying with the arm out, the
-    // part is pushed along ahead, never faster than the body, and keeps that speed when the body brakes (Raik). Before,
-    // the arm's whole speed and a bounce, which threw parts hard at the slightest touch. Always, whatever the hand does: the upper arm
+    // pushed softly, as by a light arm in a soft suit with give in its joints: a part gets only Share of the arm's speed
+    // into it, its own swing (against the body, at most MostSwing) and the body's flight alike, and never more than the
+    // body flies: flown into, it drifts off ahead slower than the body and keeps its speed when the body brakes (Raik).
+    // Before, the arm's whole speed and a bounce, which threw parts hard at the slightest touch; then the flight's whole
+    // speed, still too much when flying into parts. Always, whatever the hand does: the upper arm
     // and the forearm push at any speed; the hand only once it moves faster than HandFrom, so a hand reaching slowly for a
     // part can still take hold of it before knocking it away. What either hand holds is never pushed. The arm itself is
     // not stopped by them (an empty hand stops at walls, VrHands.OutOfWalls). Each piece is a capsule between its joints
@@ -24,8 +25,8 @@ namespace ShipbreakerVR
         private const float Fingers = 0.08f;
         // The hand pushes only this fast, in m/s at world scale 1.
         private const float HandFrom = 0.8f;
-        // The share of the arm's own swing a part gets, and the most it gets from it, in m/s at world scale 1.
-        private const float Swing = 0.3f;
+        // The share of the arm's speed a part gets, and the most it gets from the arm's own swing, in m/s at world scale 1.
+        private const float Share = 0.33f;
         private const float MostSwing = 1f;
         // Moves faster than this, in m/s, are a jump of the tracking, not a swing.
         private const float Jump = 15f;
@@ -116,9 +117,11 @@ namespace ShipbreakerVR
                 outward.Normalize();
                 // The speed it is to have along the push: the body's flight, and a share of the arm's own swing.
                 var swing = Vector3.Lerp(Speed[j], Speed[j + 1], t) - player.velocity;
-                var flight = Mathf.Max(Vector3.Dot(player.velocity, outward), 0f);
-                var own = Mathf.Min(Mathf.Max(Vector3.Dot(swing, outward), 0f) * Swing, MostSwing * VrCamera.WorldScale);
-                var into = flight + own - Vector3.Dot(body.GetPointVelocity(contact), outward);
+                var flying = Mathf.Max(Vector3.Dot(player.velocity, outward), 0f);
+                var flight = flying * Share;
+                var own = Mathf.Min(Mathf.Max(Vector3.Dot(swing, outward), 0f) * Share, MostSwing * VrCamera.WorldScale);
+                var wanted = flying > 0f ? Mathf.Min(flight + own, flying) : own;
+                var into = wanted - Vector3.Dot(body.GetPointVelocity(contact), outward);
                 if (into <= 0f) continue;
                 var change = outward * into;
                 body.AddForceAtPosition(change * body.mass, contact, ForceMode.Impulse);
