@@ -216,7 +216,7 @@ namespace ShipbreakerVR
                     if (logs++ < 60) Plugin.Log.LogInfo($"Buttons: '{filter.name}' is too large for a button ({size.x * 100f:0} x {size.y * 100f:0} x {size.z * 100f:0} cm)");
                     continue;
                 }
-                var control = ControlNear(part, center, out var controlPart);
+                var control = ControlNear(part, center, Device(mesh.name), out var controlPart);
                 // It is pushed along its thinnest side, outwards away from the middle of the part its control is on.
                 var local = bounds.size;
                 var thin = local.x <= local.y && local.x <= local.z ? Vector3.right : local.y <= local.z ? Vector3.up : Vector3.forward;
@@ -252,14 +252,22 @@ namespace ShipbreakerVR
         }
 
         // The control a button uses: an active one on its own part, else the nearest on the parts around (the air
-        // conditioner's button is a part next to its box, which has the control); never a lever turned by hand.
-        private static InteractableObject ControlNear(Transform part, Vector3 center, out Transform controlPart)
+        // conditioner's button is a part next to its box, which has the control); never a lever turned by hand. Around, only
+        // a control on a part of the same device (its name starts as the button's does): a broken air conditioner has none,
+        // and its button used the wall terminal next to it, whose use moved the player in front of it (Raik, 2026-11-08).
+        private static InteractableObject ControlNear(Transform part, Vector3 center, string device, out Transform controlPart)
         {
             InteractableObject best = null;
             var bestDistance = float.MaxValue;
+            var around = false;
             void Consider(InteractableObject each)
             {
                 if (each == null || !each.isActiveAndEnabled || VrLever.Turnable(each)) return;
+                if (around)
+                {
+                    var eachPart = each.GetComponentInParent<StructurePart>();
+                    if (eachPart == null || !eachPart.name.StartsWith(device)) return;
+                }
                 var distance = (each.transform.position - center).sqrMagnitude;
                 // The powered one before 'Unpowered Interaction Volume' at the same place.
                 if (each.name.Contains("Unpowered")) distance += 1f;
@@ -270,6 +278,7 @@ namespace ShipbreakerVR
             foreach (var each in part.GetComponentsInChildren<InteractableObject>(true)) Consider(each);
             if (best == null)
             {
+                around = true;
                 var count = Physics.OverlapSphereNonAlloc(center, ControlAround * VrCamera.WorldScale, Found, ~0, QueryTriggerInteraction.Collide);
                 for (var i = 0; i < count; i++) Consider(Found[i].GetComponentInParent<InteractableObject>());
             }
@@ -279,6 +288,15 @@ namespace ShipbreakerVR
         }
 
         private const float ControlAround = 0.6f;
+
+        // The device a button's mesh belongs to: its first two words, 'SM_AtmosphereRegulator' for the air conditioner's
+        // 'SM_AtmosphereRegulator_Mini_1Bx1xA_Button' (its box is 'SM_AtmosphereRegulator_Mini_1Bx1xA1_Box').
+        public static string Device(string mesh)
+        {
+            var first = mesh.IndexOf('_');
+            var second = first >= 0 ? mesh.IndexOf('_', first + 1) : -1;
+            return second > 0 ? mesh.Substring(0, second) : mesh;
+        }
 
         private static Vector3 Abs(Vector3 v) => new Vector3(Mathf.Abs(v.x), Mathf.Abs(v.y), Mathf.Abs(v.z));
     }
