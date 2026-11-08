@@ -36,7 +36,7 @@ namespace ShipbreakerVR
         private const float StepPause = 0.5f;
         // The grip: this long along the hinge through 'HandGrab', taken hold of within GripReach of its middle line.
         private const float GripLength = 0.08f;
-        private const float GripReach = 0.06f;
+        private const float GripReach = 0.1f;
         // The shaking: from LagFrom ahead, Least to Most at LagFull, a pulse every Every.
         private const float LagFrom = 0.005f;
         private const float LagFull = 0.06f;
