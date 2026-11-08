@@ -38,6 +38,8 @@ namespace ShipbreakerVR
         private const float HumLength = 0.07f;
         private const float SnapAmplitude = 1f;
         private const float SnapLength = 0.035f;
+        // Turned out of its rest, the handle holds this long, in seconds, before it follows the hand.
+        private const float Unlatch = 0.05f;
         // Let go before the end, the handle goes back over this long.
         private const float BackTime = 0.6f;
         // Done with its work, a used lever goes back over this long, slowly as the game's own (Raik).
@@ -74,6 +76,7 @@ namespace ShipbreakerVR
             // Where the turn started: a lever taken hold of off its rest pose goes on from where it is.
             public float StartAngle;
             public float HumAt;
+            public float UnlatchedAt = -1f;
             // Going back after letting go before the end: from that pose, since then.
             public Transform Returning;
             public Quaternion ReturnFrom;
@@ -253,7 +256,15 @@ namespace ShipbreakerVR
                 if (logs++ < 200) Plugin.Log.LogInfo($"Lever: {held.Input.Name} controller is back on '{held.Handle.name}', turns it again");
             }
             if (!held.Engaged && Mathf.Abs(twist) < TakeOver) return;
-            held.Engaged = true;
+            if (!held.Engaged)
+            {
+                // Coming out of its rest it unlatches, as out of a bayonet lock: a short hard knock, and it holds for
+                // Unlatch before it follows the hand (Raik).
+                held.Engaged = true;
+                held.UnlatchedAt = Time.time;
+                held.Input.Buzz(SnapAmplitude, SnapLength);
+            }
+            if (Time.time - held.UnlatchedAt < Unlatch) return;
             var angle = Mathf.Clamp(held.StartAngle + twist, 0f, EndAngle);
             var speed = Mathf.Abs(angle - held.Angle) / Mathf.Max(Time.deltaTime, 1e-4f);
             held.Angle = angle;
