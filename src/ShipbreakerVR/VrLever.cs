@@ -39,7 +39,9 @@ namespace ShipbreakerVR
         private const float SnapAmplitude = 1f;
         private const float SnapLength = 0.035f;
         // Turned out of its rest, the handle holds this long, in seconds, before it follows the hand.
-        private const float Unlatch = 0.05f;
+        private const float Unlatch = 0.12f;
+        // The knock it unlatches with, as long as it holds (Raik).
+        private const float UnlatchKnock = 0.12f;
         // Let go before the end, the handle goes back over this long.
         private const float BackTime = 0.6f;
         // Done with its work, a used lever goes back over this long, slowly as the game's own (Raik).
@@ -262,7 +264,7 @@ namespace ShipbreakerVR
                 // Unlatch before it follows the hand (Raik).
                 held.Engaged = true;
                 held.UnlatchedAt = Time.time;
-                held.Input.Buzz(SnapAmplitude, SnapLength);
+                held.Input.Buzz(SnapAmplitude, UnlatchKnock);
             }
             if (Time.time - held.UnlatchedAt < Unlatch) return;
             var angle = Mathf.Clamp(held.StartAngle + twist, 0f, EndAngle);
