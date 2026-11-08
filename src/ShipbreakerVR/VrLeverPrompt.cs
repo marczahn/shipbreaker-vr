@@ -19,9 +19,9 @@ namespace ShipbreakerVR
         private static float gameAlpha;
         private static int logs;
 
-        // Every lever and button is worked by hand now (Raik): their prompts go. Things to collect and breakers to remove
-        // keep theirs.
-        private static bool WorkedByHand(InteractableObject control)
+        // Every lever and button is worked by hand now (Raik): their prompts go, and the game's own grab is left out for
+        // them (VrInteractGrab). Things to collect and breakers to remove keep both.
+        public static bool WorkedByHand(InteractableObject control)
         {
             if (control == null) return false;
             if (VrLever.Turnable(control) || VrNacelle.Is(control)) return true;

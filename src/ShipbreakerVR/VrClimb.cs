@@ -130,6 +130,7 @@ namespace ShipbreakerVR
             // Pinned (VrLever): the body keeps to this point on PinAnchor, which does not move, while the lever turns the
             // hand on Anchor (the game turning it back with the hand still on it).
             public Transform PinAnchor;
+            public Vector3 Pin;
             // Free (VrNacelle): the hand stays on its hold, which a switch moves, but neither pulls at the body nor is torn
             // off the hold however far its controller goes; it turns freely on it (VrHands).
             public bool Free;
@@ -137,7 +138,6 @@ namespace ShipbreakerVR
             public bool FreeTurn;
             // On a lever's grip (VrLever.OnGrip): the grip's direction on Anchor, the fist closes around it (VrHands).
             public Vector3 Bar;
-            public Vector3 Pin;
             // A part that turns with the hand: its turn relative to the controller, and its speed limit before.
             public bool Firm;
             // The second hand on a firmly held part: it stays on the part, the first hand moves it.

@@ -25,8 +25,10 @@ namespace ShipbreakerVR
         private static void Postfix(InteractionController __instance)
         {
             if (!VrXr.IsRunning || !VrAim.Active || VrSettings.Climbing == null || !VrSettings.Climbing.Value) return;
-            // A button pushed in by hand offers its control for a moment (VrButtons).
-            var held = VrButtons.Offered ?? VrClimb.HeldInteractable();
+            // A button pushed in by hand offers its control for a moment (VrButtons), unless a hand works a lever or switch:
+            // that one is what a press is for (review). Unity's null check, for a control destroyed meanwhile.
+            var button = VrButtons.Offered;
+            var held = button != null && !VrLever.Holds && !VrNacelle.Holds ? button : VrClimb.HeldInteractable();
             var closest = Closest(__instance);
             if (held == closest) return;
             // The game's own hit stays only for the thing it found itself; a held thing it did not see has none.
