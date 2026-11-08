@@ -213,6 +213,64 @@ namespace ShipbreakerVR
             if (player == null) return;
             bodyAtRig = player.transform.position;
             rigPlaced = true;
+            foreach (var hand in Hands) Track(hand);
+        }
+
+        // Throwing (Raik, 2026-11-08): a part let go flew off with the speed of the last physics step, so a wrist that
+        // tips at the moment of letting go sent it anywhere. The controller's path over the last ThrowWindow seconds
+        // gives its speed and way instead, an average over a few frames; tiny debris gets more of it (ClimbContact.ThrowGain).
+        private const float ThrowWindow = 0.06f;
+        private const int Tracked = 16;
+
+        private class Path
+        {
+            public readonly Vector3[] At = new Vector3[Tracked];
+            public readonly float[] Time = new float[Tracked];
+            public int Count, Next;
+        }
+
+        private static readonly System.Collections.Generic.Dictionary<VrInput.Hand, Path> Paths = new System.Collections.Generic.Dictionary<VrInput.Hand, Path>();
+
+        private static void Track(Hand hand)
+        {
+            if (!Paths.TryGetValue(hand.Input, out var path)) Paths[hand.Input] = path = new Path();
+            if (!hand.Input.TryGetPosition(out var local)) { path.Count = 0; return; }
+            path.At[path.Next] = local;
+            path.Time[path.Next] = Time.unscaledTime;
+            path.Next = (path.Next + 1) % Tracked;
+            path.Count = Mathf.Min(path.Count + 1, Tracked);
+        }
+
+        // The controller's average speed over the window, in world space relative to the body; false with too few frames.
+        private static bool HandSpeed(Hand hand, out Vector3 speed)
+        {
+            speed = Vector3.zero;
+            if (!Paths.TryGetValue(hand.Input, out var path) || path.Count < 2) return false;
+            var newest = (path.Next + Tracked - 1) % Tracked;
+            var oldest = newest;
+            for (var i = 1; i < path.Count; i++)
+            {
+                var each = (newest + Tracked - i) % Tracked;
+                oldest = each;
+                if (path.Time[newest] - path.Time[each] >= ThrowWindow) break;
+            }
+            var span = path.Time[newest] - path.Time[oldest];
+            if (span <= 1e-4f) return false;
+            speed = VrCamera.Instance.transform.parent.TransformVector((path.At[newest] - path.At[oldest]) / span);
+            return true;
+        }
+
+        // A firmly held part let go by its last hand flies off with the hand's averaged speed (as the body flies).
+        private static void Throw(Hand hand, Rigidbody body)
+        {
+            if (body == null || player == null || body.isKinematic || !HandSpeed(hand, out var speed)) return;
+            var gain = ClimbContact.ThrowGain(body.mass);
+            var before = body.velocity - player.velocity;
+            body.velocity = player.velocity + speed * gain;
+            if (logs++ < 80)
+                Plugin.Log.LogInfo($"Climbing: {hand.Name} hand throws '{body.name}' ({body.mass:0.0} kg) at {speed.magnitude * gain:0.00} m/s "
+                    + $"(hand {speed.magnitude:0.00} m/s over {ThrowWindow * 1000f:0} ms, x{gain:0.00}; the last step had {before.magnitude:0.00} m/s, "
+                    + $"{Vector3.Angle(before, speed):0}° off)");
         }
 
         // From VrCamera.FixedUpdate, before the physics step.
@@ -1404,6 +1462,7 @@ namespace ShipbreakerVR
             hand.Follower = false;
             var body = hand.Body;
             if (firm) Unfirm(hand);
+            if (firm && push && body != null && !Held(body)) Throw(hand, body);
             hand.Anchor = null;
             hand.Collider = null;
             hand.Body = null;
@@ -1474,6 +1533,14 @@ namespace ShipbreakerVR
     // Outside VrClimb, whose static fields need the game: tests run this without it.
     internal static class ClimbContact
     {
+        // Thrown parts get the hand's speed; tiny debris up to TinyMass more of it (Raik: nuts and bolts flew too slowly),
+        // less and less up to NormalMass, from which they get just the hand's speed.
+        private const float TinyMass = 2f;
+        private const float NormalMass = 5f;
+        private const float TinyGain = 1.5f;
+
+        public static float ThrowGain(float mass) => Mathf.Lerp(TinyGain, 1f, Mathf.InverseLerp(TinyMass, NormalMass, mass));
+
         // Gliding along a surface held (VrClimb.Glide): from this speed on, in m/s at world scale 1; braking evenly, at
         // least LeastBrake m/s², harder when faster, so it stops within GlideMostWay meters.
         public const float GlideLeast = 0.3f;
