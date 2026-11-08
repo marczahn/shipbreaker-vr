@@ -22,6 +22,8 @@ namespace ShipbreakerVR
         // Pushed this far into the face, the button is used; back out past Release, it may be used again.
         private const float PressDepth = 0.006f;
         private const float Release = 0.002f;
+        // This near in front of the face, its control is offered to the game (Touch).
+        private const float Approach = 0.05f;
         // How far the button sinks in at most.
         private const float Travel = 0.012f;
         // The tip counts on the face within this beyond its edges.
@@ -144,6 +146,13 @@ namespace ShipbreakerVR
                 var across = local - button.Out * Vector3.Dot(local, button.Out);
                 var side = Vector3.Scale(button.Extents, Vector3.one - Abs(button.Out)) + Vector3.one * (Beside * VrCamera.WorldScale / Mathf.Max(scale, 1e-4f));
                 var onFace = Mathf.Abs(across.x) <= side.x && Mathf.Abs(across.y) <= side.y && Mathf.Abs(across.z) <= side.z;
+                // Coming up to the button, its control is offered to the game already: the game takes a press only for what
+                // it was offered before (with the other hand off the air conditioner, the press did nothing, Raik).
+                if (onFace && depth > -Approach * VrCamera.WorldScale && button.Control != null && button.Control.isActiveAndEnabled)
+                {
+                    offered = button.Control;
+                    offeredUntil = Mathf.Max(offeredUntil, Time.time + 0.3f);
+                }
                 if (!onFace || depth < -Release * VrCamera.WorldScale)
                 {
                     tip.In.Remove(button);

@@ -19,6 +19,16 @@ namespace ShipbreakerVR
         private static float gameAlpha;
         private static int logs;
 
+        // Every lever and button is worked by hand now (Raik): their prompts go. Things to collect and breakers to remove
+        // keep theirs.
+        private static bool WorkedByHand(InteractableObject control)
+        {
+            if (control == null) return false;
+            if (VrLever.Turnable(control) || VrNacelle.Is(control)) return true;
+            var type = VrLever.TypeName(control);
+            return type.StartsWith("Lever") || type.StartsWith("PushButton");
+        }
+
         private static void Prefix()
         {
             if (hidden != null) hidden.alpha = gameAlpha;
@@ -29,13 +39,13 @@ namespace ShipbreakerVR
         {
             if (!VrXr.IsRunning) return;
             var control = Current(__instance);
-            if (!VrLever.Turnable(control) && !VrNacelle.Is(control)) return;
+            if (!WorkedByHand(control)) return;
             var group = Group(__instance);
             if (group == null) return;
             gameAlpha = group.alpha;
             group.alpha = 0f;
             hidden = group;
-            if (logs++ < 5) Plugin.Log.LogInfo($"Lever: no prompt for '{control.name}', it is turned by hand");
+            if (logs++ < 5) Plugin.Log.LogInfo($"Lever: no prompt for '{control.name}' ({VrLever.TypeName(control)}), it is worked by hand");
         }
     }
 }
