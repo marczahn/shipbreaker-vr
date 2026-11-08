@@ -1,11 +1,17 @@
+using System.Collections.Generic;
 using BBI.Unity.Game;
+using HarmonyLib;
 using UnityEngine;
 
 namespace ShipbreakerVR
 {
-    // Steuerung/GrapplerAmKoerper: while it is not in a hand, the grapple hangs at the right hip with its grip in the zone it
-    // is drawn from (VrToolBelt), so one can look down and reach for it. It is a copy of the visible parts of the game's
-    // model at runtime, built from the same meshes and materials; the game's model stays where it is, hidden.
+    // Steuerung/GrapplerAmKoerper: while it is not in a hand, the game's own grapple hangs at the right hip with its grip
+    // where it is drawn from (VrToolBelt), so one can look down and reach for it. The game puts a tool away by hanging its
+    // model on a rest point of the player (GunController.UnequipGun: m_GrapplingGunRestPoint, its shadow model on
+    // m_GrapplingGunShadowRestPoint) and lets it glide there (HandleGunPosition). Those points sit below the flat game's
+    // view, so in VR the grapple and the cutter lay at one's feet, with a copy of the grapple at the hip besides (Raik,
+    // 2026-11-08). Now the grapple's rest points are moved to the hip each frame: it is the one grapple, put away it glides
+    // to the hip, and drawn it leaves from there. The cutter, not yet hung anywhere, is not drawn while it rests.
     internal static class VrBeltGrapple
     {
         static VrBeltGrapple() => VrSession.OnUnload("belt grapple", Release);
@@ -13,110 +19,168 @@ namespace ShipbreakerVR
         private const string ModelPrefix = "PRFB_GrappleGun";
         private const string Grip = "RHandTarget";
 
-        // In the grapple's zone, from the head along its heading (x right, y up, z forward), in real meters.
-        private static readonly Vector3 Hip = new Vector3(0.20f, -0.62f, -0.37f);
+        // How fast the grapple glides onto its rest point, per second, as the game's spring may only run while it is held.
+        private const float Glide = 10f;
 
-        private static Transform copy;
+        private static readonly AccessTools.FieldRef<GunController, Transform> Gun =
+            AccessTools.FieldRefAccess<GunController, Transform>("m_GrapplingGun");
+        private static readonly AccessTools.FieldRef<GunController, Transform> GunRest =
+            AccessTools.FieldRefAccess<GunController, Transform>("m_GrapplingGunRestPoint");
+        private static readonly AccessTools.FieldRef<GunController, Transform> Shadow =
+            AccessTools.FieldRefAccess<GunController, Transform>("m_GrapplingGunShadow");
+        private static readonly AccessTools.FieldRef<GunController, Transform> ShadowRest =
+            AccessTools.FieldRefAccess<GunController, Transform>("m_GrapplingGunShadowRestPoint");
+        private static readonly AccessTools.FieldRef<CuttingToolController, Transform> Cutter =
+            AccessTools.FieldRefAccess<CuttingToolController, Transform>("m_CuttingTool");
+        private static readonly AccessTools.FieldRef<CuttingToolController, Transform> CutterRest =
+            AccessTools.FieldRefAccess<CuttingToolController, Transform>("m_ToolRestPoint");
+        private static readonly AccessTools.FieldRef<CuttingToolController, Transform> CutterShadow =
+            AccessTools.FieldRefAccess<CuttingToolController, Transform>("m_CuttingToolShadow");
+        private static readonly AccessTools.FieldRef<CuttingToolController, Transform> CutterShadowRest =
+            AccessTools.FieldRefAccess<CuttingToolController, Transform>("m_CuttingToolShadowRestPoint");
+
+        private static GunController gun;
+        private static CuttingToolController cutter;
         private static Transform model;
-        private static Vector3 grip;
-        private static float nextBuild;
+        private static Transform grip;
+        private static float nextFind;
+        private static int logs;
+
+        // A rest point moved here, with its own pose to put back.
+        private struct Moved
+        {
+            public Transform Point;
+            public Vector3 Position;
+            public Quaternion Rotation;
+        }
+
+        private static readonly List<Moved> moved = new List<Moved>();
+        private static readonly List<Renderer> hidden = new List<Renderer>();
+        private static readonly List<Renderer> found = new List<Renderer>();
 
         public static void Update()
         {
             var vr = VrCamera.Instance;
-            var free = VrToolModels.Equipped != EquipmentController.Equipment.GrappleHook
-                && VrDualTools.Second != EquipmentController.Equipment.GrappleHook;
-            if (!VrSettings.BeltGrapple.Value || !VrAim.Active || vr == null || vr.FollowsHab || !free)
+            if (!VrSettings.BeltGrapple.Value || !VrAim.Active || vr == null || vr.FollowsHab || !Find())
             {
                 Hide();
                 return;
             }
-            if ((copy == null || model == null) && !Build())
-            {
-                Hide();
-                return;
-            }
+            HideResting();
             var forward = vr.transform.localRotation * Vector3.forward;
             forward.y = 0f;
-            if (forward.sqrMagnitude < 1e-4f)
-            {
-                Hide();
-                return;
-            }
+            if (forward.sqrMagnitude < 1e-4f) return;
             var heading = Quaternion.LookRotation(forward, Vector3.up);
             // Muzzle down along the leg, the grip to the back.
             var hanging = heading * Quaternion.LookRotation(Vector3.down, Vector3.forward);
-            if (!VrToolModels.TrackingToWorld(vr.transform.localPosition + heading * Hip, hanging, out var position, out var rotation))
-            {
-                Hide();
+            if (!VrToolModels.TrackingToWorld(vr.transform.localPosition + heading * VrToolBelt.GripAt, hanging, out var at, out var rotation))
                 return;
+
+            var gunModel = Gun(gun);
+            var rest = GunRest(gun);
+            if (gunModel == null || rest == null) return;
+            // The rest point turned so the model hangs as wanted once the grapple lies on it, and placed so its grip is here.
+            var modelInGun = Quaternion.Inverse(gunModel.rotation) * model.rotation;
+            var gripInGun = gunModel.InverseTransformPoint(grip.position);
+            Remember(rest);
+            rest.rotation = rotation * Quaternion.Inverse(modelInGun);
+            rest.position = at - rest.rotation * Vector3.Scale(Vector3.Scale(rest.lossyScale, gunModel.localScale), gripInGun);
+            var shadowRest = ShadowRest(gun);
+            if (shadowRest != null)
+            {
+                Remember(shadowRest);
+                shadowRest.SetPositionAndRotation(rest.position, rest.rotation);
             }
-            copy.localScale = model.lossyScale;
-            copy.SetPositionAndRotation(position - rotation * Vector3.Scale(grip, copy.localScale), rotation);
-            copy.gameObject.SetActive(true);
+            Settle(gunModel, rest);
+            Settle(Shadow(gun), shadowRest);
+            if (logs++ == 0) Plugin.Log.LogInfo($"Belt grapple: the game's grapple rests at the hip, grip at {gripInGun} of it");
         }
 
-        private static bool Build()
+        // The grapple glides onto its rest point once it lies on it.
+        private static void Settle(Transform tool, Transform rest)
         {
-            if (Time.unscaledTime < nextBuild) return false;
-            nextBuild = Time.unscaledTime + 1f;
+            if (tool == null || rest == null || tool.parent != rest) return;
+            var t = 1f - Mathf.Exp(-Glide * Time.unscaledDeltaTime);
+            tool.localPosition = Vector3.Lerp(tool.localPosition, Vector3.zero, t);
+            tool.localRotation = Quaternion.Slerp(tool.localRotation, Quaternion.identity, t);
+        }
+
+        // The cutter is not drawn while it lies on its rest point (at the feet); its renderers are left as the game set them.
+        private static void HideResting()
+        {
+            var rest = cutter != null ? CutterRest(cutter) : null;
+            var tool = cutter != null ? Cutter(cutter) : null;
+            if (tool == null || rest == null || !tool.IsChildOf(rest))
+            {
+                ShowCutter();
+                return;
+            }
+            if (hidden.Count > 0) return;
+            tool.GetComponentsInChildren(true, found);
+            hidden.AddRange(found);
+            var shadow = CutterShadow(cutter);
+            var shadowRest = CutterShadowRest(cutter);
+            if (shadow != null && shadowRest != null && shadow.IsChildOf(shadowRest))
+            {
+                shadow.GetComponentsInChildren(true, found);
+                hidden.AddRange(found);
+            }
+            foreach (var renderer in hidden) renderer.forceRenderingOff = true;
+        }
+
+        private static void ShowCutter()
+        {
+            foreach (var renderer in hidden)
+                if (renderer != null) renderer.forceRenderingOff = false;
+            hidden.Clear();
+        }
+
+        private static void Remember(Transform point)
+        {
+            foreach (var m in moved)
+                if (m.Point == point) return;
+            moved.Add(new Moved { Point = point, Position = point.localPosition, Rotation = point.localRotation });
+        }
+
+        private static bool Find()
+        {
+            if (gun != null && model != null && grip != null) return true;
+            if (Time.unscaledTime < nextFind) return false;
+            nextFind = Time.unscaledTime + 1f;
             Release();
+            gun = GameRefs.Gun;
+            cutter = GameRefs.Cutter;
             var hook = GameRefs.Grapple;
             var part = hook != null ? VrToolModels.GrappleBarrelOf(hook) : null;
             while (part != null && !part.name.StartsWith(ModelPrefix)) part = part.parent;
-            if (part == null) return false;
             model = part;
-            var root = new GameObject("ShipbreakerVR Belt grapple").transform;
-            root.SetPositionAndRotation(model.position, model.rotation);
-            root.localScale = model.lossyScale;
-            var pieces = 0;
-            foreach (var renderer in model.GetComponentsInChildren<MeshRenderer>(true))
-            {
-                var filter = renderer.GetComponent<MeshFilter>();
-                if (filter == null || filter.sharedMesh == null || !renderer.enabled || !Shown(renderer.transform)) continue;
-                var piece = new GameObject(renderer.name);
-                piece.layer = renderer.gameObject.layer;
-                piece.transform.SetPositionAndRotation(renderer.transform.position, renderer.transform.rotation);
-                piece.transform.localScale = renderer.transform.lossyScale;
-                piece.transform.SetParent(root, true);
-                piece.AddComponent<MeshFilter>().sharedMesh = filter.sharedMesh;
-                var shown = piece.AddComponent<MeshRenderer>();
-                shown.sharedMaterials = renderer.sharedMaterials;
-                shown.shadowCastingMode = renderer.shadowCastingMode;
-                pieces++;
-            }
-            foreach (var target in model.GetComponentsInChildren<Transform>(true))
-                if (target.name == Grip) grip = root.InverseTransformPoint(target.position);
-            if (pieces == 0)
-            {
-                Object.Destroy(root.gameObject);
-                return false;
-            }
-            copy = root;
-            root.gameObject.SetActive(false);
-            Plugin.Log.LogInfo($"Belt grapple: {pieces} part(s), grip at {grip} of the model");
-            return true;
+            if (model != null)
+                foreach (var target in model.GetComponentsInChildren<Transform>(true))
+                    if (target.name == Grip) grip = target;
+            return gun != null && model != null && grip != null;
         }
 
-        // Parts the model switches off stay off the copy.
-        private static bool Shown(Transform part)
-        {
-            for (; part != null && part != model; part = part.parent)
-                if (!part.gameObject.activeSelf) return false;
-            return true;
-        }
-
-        // Also when VR stops, as Update then no longer runs.
+        // The rest points back where the game had them, and the cutter shown; also when VR stops, as Update then no
+        // longer runs.
         public static void Hide()
         {
-            if (copy != null) copy.gameObject.SetActive(false);
+            foreach (var m in moved)
+                if (m.Point != null)
+                {
+                    m.Point.localPosition = m.Position;
+                    m.Point.localRotation = m.Rotation;
+                }
+            moved.Clear();
+            ShowCutter();
         }
 
         private static void Release()
         {
-            if (copy != null) Object.Destroy(copy.gameObject);
-            copy = null;
+            Hide();
+            gun = null;
+            cutter = null;
             model = null;
+            grip = null;
         }
     }
 }

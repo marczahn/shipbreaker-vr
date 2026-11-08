@@ -24,12 +24,11 @@ namespace ShipbreakerVR
         private const float GrappleOut = 0.08f;
         // And further back, around where it hangs (VrBeltGrapple).
         private const float GrappleBack = 0.19f;
-        // With the grapple shown at the hip (VrBeltGrapple), the hand draws it only within GripReach of GripAt, in meters,
-        // as Raik asked: the zone around the hip reached far beyond the grapple. GripAt is where Raik's controller was
-        // reaching for the grapple's grip (12 grips, all within 9 cm of it), not the grip itself: the grapple hangs at the
-        // model's hip 37 cm behind the eyes, further back than a real hand reaches there, so the hand on the grip shows
-        // with the controller about 30 cm further forward, 10 cm further out and 10 cm lower.
-        private static readonly Vector3 GripAt = new Vector3(0.30f, -0.72f, -0.08f);
+        // With the grapple at the hip (VrBeltGrapple), the hand draws it only within GripReach of its grip, as Raik asked:
+        // the zone around the hip reached far beyond the grapple. The grip hangs at GripAt, where Raik's hand reached for
+        // it (12 grips, all within 9 cm); before, a copy hung at the body model's hip, 30 cm further back, and the hand took
+        // it from here.
+        public static readonly Vector3 GripAt = new Vector3(0.30f, -0.72f, -0.08f);
         private const float GripReach = 0.13f;
         private const float HipForward = 0.1f;
         private const float HipBehind = -0.2f;
