@@ -34,7 +34,7 @@ namespace ShipbreakerVR
         // 0.2 m/s, once the switch kept near the controller).
         private const float PullMost = 0.2f;
         // After each step the switch rests this long before the next follows the hand.
-        private const float StepPause = 0.5f;
+        private const float StepPause = 0.15f;
         // The handle folds at most this fast, in degrees per second, catching up after a rest.
         private const float FoldMost = 400f;
         // The grip: this long along the hinge through 'HandGrab', taken hold of within GripReach of its middle line.
