@@ -265,6 +265,19 @@ namespace ShipbreakerVR
 
         // From VrCamera.LateUpdate, after VrToolModels.PoseArm: which arms follow their controllers, blended in and out
         // over Blend, and those posed.
+        // The forearm and hand of an empty arm that follows its controller, as drawn last: elbow, wrist and the middle
+        // finger's base (VrArmPush). False for an arm holding on or holding a tool.
+        public static bool TryGetEmptyArm(bool left, out Vector3 elbow, out Vector3 wrist, out Vector3 knuckles)
+        {
+            var arm = left ? LeftArm : RightArm;
+            elbow = wrist = knuckles = Vector3.zero;
+            if (!arm.Driven || arm.Lower == null || arm.Wrist == null || (left ? VrHand.Left : VrHand.Right).State != HandState.Empty) return false;
+            elbow = arm.Lower.position;
+            wrist = arm.Wrist.position;
+            knuckles = arm.Middle != null ? arm.Middle.position : wrist;
+            return true;
+        }
+
         public static void LateUpdate()
         {
             if (!Find()) return;

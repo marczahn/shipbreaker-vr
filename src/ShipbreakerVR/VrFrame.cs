@@ -64,6 +64,7 @@ namespace ShipbreakerVR
             ("levers", VrLever.LateUpdate),
             ("nacelle switches", VrNacelle.LateUpdate),
             ("hands", VrHands.LateUpdate),
+            ("arm push", VrArmPush.LateUpdate),
             ("crosshair", VrCrosshair.LateUpdate),
         };
 
