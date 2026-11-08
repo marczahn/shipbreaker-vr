@@ -152,6 +152,18 @@ namespace ShipbreakerVR
             return on;
         }
 
+        // The grip as a line, and how near a hand has to be to take hold of it (the grip view, VrEdgeView).
+        public static bool GripSegment(InteractableObject control, out Vector3 from, out Vector3 to, out float reach)
+        {
+            from = to = Vector3.zero;
+            reach = GripReach * VrCamera.WorldScale;
+            if (!Is(control) || !Parts(control, out var handle, out _, out var grab)) return false;
+            var half = handle.TransformDirection(Axis).normalized * (GripLength * 0.5f * VrCamera.WorldScale);
+            from = grab.position - half;
+            to = grab.position + half;
+            return true;
+        }
+
         // From VrFrame, in LateUpdate after the Animators and before the hands are placed on their holds.
         public static void LateUpdate()
         {

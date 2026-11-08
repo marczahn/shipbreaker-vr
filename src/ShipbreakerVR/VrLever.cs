@@ -146,6 +146,23 @@ namespace ShipbreakerVR
             return on;
         }
 
+        // The grip as a line, and how near a hand has to be to take hold of it (the grip view, VrEdgeView).
+        public static bool GripSegment(InteractableObject control, out Vector3 from, out Vector3 to, out float reach)
+        {
+            from = to = Vector3.zero;
+            reach = GripReach * VrCamera.WorldScale;
+            if (control == null || !Turnable(control)) return false;
+            var bar = Bar(FindHandle(control));
+            if (bar == null) return false;
+            var bounds = bar.sharedMesh.bounds;
+            var size = bounds.size;
+            var along = size.x >= size.y && size.x >= size.z ? Vector3.right : size.y >= size.z ? Vector3.up : Vector3.forward;
+            var half = Vector3.Dot(bounds.extents, along) * (1f - 2f * GripEnds);
+            from = bar.transform.TransformPoint(bounds.center - along * half);
+            to = bar.transform.TransformPoint(bounds.center + along * half);
+            return true;
+        }
+
         // Whether at lies over the lever's turning part (its handle and grip, OverMargin around them): nothing there is held
         // but the grip itself (Raik: no flat hand on the turning part, around it on the console it is fine).
         public static bool OverHandle(InteractableObject control, Vector3 at)
