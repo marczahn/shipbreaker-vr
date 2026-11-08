@@ -30,8 +30,9 @@ namespace ShipbreakerVR
         private const float Slide = 0.16039f;
         private const float SnapWithin = 2f;
         private const float SlideSnap = 0.004f;
-        // The pull follows the hand at most this fast, in m/s at world scale 1 (the game's pull takes 1.8 s).
-        private const float PullMost = 0.2f;
+        // The pull follows the hand at most this fast, in m/s at world scale 1 (the game's pull takes 1.8 s; Raik: the
+        // controller ran too far ahead at 0.2 m/s, at most half as far).
+        private const float PullMost = 0.4f;
         // After each step the switch rests this long before the next follows the hand.
         private const float StepPause = 0.5f;
         // The grip: this long along the hinge through 'HandGrab', taken hold of within GripReach of its middle line.
@@ -40,8 +41,8 @@ namespace ShipbreakerVR
         // The shaking: from LagFrom ahead, Least to Most at LagFull, a pulse every Every.
         private const float LagFrom = 0.005f;
         private const float LagFull = 0.06f;
-        private const float Least = 0.1f;
-        private const float Most = 0.6f;
+        private const float Least = 0.3f;
+        private const float Most = 0.7f;
         private const float Every = 0.05f;
         private const float PulseLength = 0.07f;
         private const float HumLeast = 0.06f;
@@ -233,8 +234,9 @@ namespace ShipbreakerVR
                     var down = pose.Switch.parent.TransformDirection(Vector3.down).normalized;
                     var travel = pose.Switch.parent.TransformVector(Vector3.up * Slide).magnitude;
                     var reach = held.SlideFrom + Vector3.Dot(grip - held.PullFrom, down);
+                    var before = pose.Slid;
                     pose.Slid = Mathf.MoveTowards(pose.Slid, Mathf.Clamp(reach, 0f, travel), PullMost * VrCamera.WorldScale * Time.deltaTime);
-                    Shake(held, reach - pose.Slid);
+                    Shake(held, reach - pose.Slid, pose.Slid != before);
                     if (pose.Slid >= travel - SlideSnap * VrCamera.WorldScale)
                     {
                         pose.Slid = travel;
@@ -297,10 +299,11 @@ namespace ShipbreakerVR
         }
 
         // The hand ahead of the switch: the further, the harder it shakes.
-        private static void Shake(Held held, float ahead)
+        // Moving at all, it shakes at least Least (Raik: more from the start of the pull).
+        private static void Shake(Held held, float ahead, bool moving)
         {
             ahead /= VrCamera.WorldScale;
-            if (ahead < LagFrom || Time.unscaledTime < held.PulseAt) return;
+            if ((!moving && ahead < LagFrom) || Time.unscaledTime < held.PulseAt) return;
             held.PulseAt = Time.unscaledTime + Every;
             held.Input.Buzz(Mathf.Lerp(Least, Most, Mathf.InverseLerp(LagFrom, LagFull, ahead)), PulseLength);
         }
