@@ -7,17 +7,21 @@ namespace ShipbreakerVR
 {
     // The nacelle switch that cuts the fuel lines, worked by hand (Raik, 0.29), in the three steps of the game's own
     // animation: fold the handle down (the hand goes round its hinge with it, 90°), pull it down (the switch slides 16 cm,
-    // no faster than PullMost: it goes heavily, and the further the hand runs ahead of it the harder it shakes), fold it
-    // over (another 90°). Then it uses the switch (InteractableObject.Complete, as holding A for 4 s did). A hand that came
-    // off the handle in a step has to come back to it (CatchReach) before the next step follows it: a fiddly job on
-    // purpose. Let go before the end, it goes back to where it started. The hand holds free (VrClimb.SetFree): it pulls
-    // nothing, the body stays where it is, it is not torn off however far the controller goes, and it turns freely on the
-    // handle (Raik: the wrist turns as the switch goes down, without moving it).
+    // no faster than PullMost, and the further the hand runs ahead of it the harder it shakes), fold it over (round on
+    // another 90°). Then it uses the switch (InteractableObject.Complete, as holding A for 4 s did) and stays down.
+    // Each step follows the hand directly, from where the controller is when the step begins: after a step the switch
+    // rests for StepPause, and the next one goes on from the controller as it is then, so the hand does not have to find
+    // the handle again (Raik: coming back to the handle was too fiddly). It moves only while the other hand holds on to
+    // something fixed (Raik: it goes heavily); without, it stays, and goes on from the controller once braced again.
+    // Let go before the end, it goes back to where it started. The hand holds free (VrClimb.SetFree): it pulls nothing,
+    // the body stays where it is, it is not torn off however far the controller goes, and it turns about the grip.
     //
     // Measured (VrInteractSurvey, clip 'Switch_Flush_Turn_Off', 4.33 s, 2026-11-08): the handle
-    // 'SM_Switch_Flush_AxCxA_Handle' under the control turns about its own +X by 90° (0 to 1.44 s); the switch
-    // 'SM_Switch_Flush_AxCxA_Switch' beside the control slides 16 cm down its parent's -Y (1.44 to 3.25 s); the handle
-    // turns on to 180° (3.25 to 4.33 s). Poses are set after the Animator ran (LateUpdate).
+    // 'SM_Switch_Flush_AxCxA_Handle' turns about its own +X by 90° (0 to 1.44 s); the switch
+    // 'SM_Switch_Flush_AxCxA_Switch' slides 16 cm down its parent's -Y (1.44 to 3.25 s); the handle turns on to 180°
+    // (3.25 to 4.33 s). The game's hand goes to 'HandGrab' on the handle, 13.9 cm out along its +Y: the grip, which
+    // runs along the hinge. The handle is L-shaped, so the middle of its mesh lies 10 to 20 cm off the grip (2026-11-08
+    // log). Poses are set after the Animator ran (LateUpdate).
     internal static class VrNacelle
     {
         private const string TypeName = "Lever_Nacelle_InteractionTypeAsset";
@@ -27,10 +31,12 @@ namespace ShipbreakerVR
         private const float SnapWithin = 2f;
         private const float SlideSnap = 0.004f;
         // The pull follows the hand at most this fast, in m/s at world scale 1 (the game's pull takes 1.8 s).
-        private const float PullMost = 0.12f;
-        // The hand back within this of the handle, the next step follows it.
-        // The controller back within this of where the hand holds the handle, the next step follows it (m at world scale 1).
-        private const float CatchReach = 0.08f;
+        private const float PullMost = 0.2f;
+        // After each step the switch rests this long before the next follows the hand.
+        private const float StepPause = 0.5f;
+        // The grip: this long along the hinge through 'HandGrab', taken hold of within GripReach of its middle line.
+        private const float GripLength = 0.08f;
+        private const float GripReach = 0.06f;
         // The shaking: from LagFrom ahead, Least to Most at LagFull, a pulse every Every.
         private const float LagFrom = 0.005f;
         private const float LagFull = 0.06f;
@@ -43,52 +49,71 @@ namespace ShipbreakerVR
         private const float StepAmplitude = 0.8f;
         private const float StepLength = 0.035f;
         private const float BackTime = 0.6f;
-        // Used, its pose is kept until the game's own animation has played to its end pose.
-        private const float UsedHold = 5f;
 
         private enum Step { FoldDown, Pull, FoldOver, Done }
+
+        private class Pose
+        {
+            public Transform Handle;
+            public Transform Switch;
+            public Quaternion HandleRest;
+            public Vector3 HandleRestPlace;
+            public Vector3 SwitchRest;
+            public float Angle;
+            public float Slid;
+
+            public void Show(float angle, float slid)
+            {
+                if (Handle == null || Switch == null) return;
+                Switch.localPosition = SwitchRest;
+                Handle.localPosition = HandleRestPlace;
+                Handle.localRotation = HandleRest * Quaternion.AngleAxis(angle, Axis);
+                if (slid <= 0f) return;
+                var down = Switch.parent.TransformDirection(Vector3.down).normalized * slid;
+                Switch.position += down;
+                // A handle on the switch goes with it already.
+                if (!Handle.IsChildOf(Switch)) Handle.position += down;
+            }
+
+            public void Show() => Show(Angle, Slid);
+        }
 
         private class Held
         {
             public readonly VrInput.Hand Input;
             public InteractableObject Control;
-            public Transform Handle;
-            public Transform Switch;
-            public Quaternion HandleRest;
-            public Vector3 HandleRestPlace;
-            public Vector3 SwitchRest;
+            public Pose Pose;
             public Step Step;
-            public bool Caught;
+            // The step goes on from the controller as it was here (Rebase), not from where the handle is.
+            public bool Based;
+            public float PauseUntil;
             public Vector3 PullFrom;
+            public float SlideFrom;
+            public float AngleFrom;
+            public float AngleRef;
             // Where the hand holds the handle, in the handle's own axes.
             public Vector3 Reach;
-            public float SlideFrom;
-            public float Angle;
-            public float Slid;
             public float PulseAt;
+            public bool BraceLogged;
 
             public Held(VrInput.Hand input) => Input = input;
         }
 
-        // A switch let go of: going back from its pose, or kept at its used pose.
+        // A switch let go of before the end, going back.
         private class Loose
         {
-            public Transform Handle;
-            public Transform Switch;
-            public Quaternion HandleRest;
-            public Vector3 HandleRestPlace;
-            public Vector3 SwitchRest;
-            public float Angle;
-            public float Slid;
+            public Pose Pose;
             public float At;
-            public bool Used;
         }
 
         private static readonly Held[] Hands = { new Held(VrInput.Left), new Held(VrInput.Right) };
         private static readonly List<Loose> Let = new List<Loose>();
+        // Used switches stay down (Raik): their end pose over whatever the Animator shows, as long as they exist.
+        private static readonly Dictionary<InteractableObject, Pose> Used = new Dictionary<InteractableObject, Pose>();
         private static readonly Dictionary<InteractableObject, bool> Known = new Dictionary<InteractableObject, bool>();
         private static readonly System.Reflection.MethodInfo CompleteMethod = AccessTools.Method(typeof(InteractableObject), "Complete");
         private static int logs;
+        private static int gripLogs;
 
         // A nacelle switch: its prompt is hidden and A does not use it.
         public static bool Is(InteractableObject control)
@@ -97,65 +122,35 @@ namespace ShipbreakerVR
             if (!Known.TryGetValue(control, out var known))
             {
                 var type = VrLever.TypeName(control);
-                var parts = Parts(control, out var handle, out var slider);
+                var parts = Parts(control, out var handle, out var slider, out var grab);
                 known = type == TypeName && parts;
                 Known[control] = known;
                 if (type.Contains("Nacelle") && logs++ < 80)
-                    Plugin.Log.LogInfo($"Nacelle: '{control.name}' ({type}) under '{(control.transform.parent != null ? control.transform.parent.name : "none")}': "
-                        + $"handle '{(handle != null ? handle.name + " under '" + handle.parent.name + "'" : "none")}', switch '{(slider != null ? slider.name : "none")}'{(known ? "" : ", not worked by hand")}");
+                    Plugin.Log.LogInfo($"Nacelle: '{control.name}' ({type}): handle '{(handle != null ? handle.name : "none")}', switch '{(slider != null ? slider.name : "none")}', "
+                        + $"grip '{(grab != null ? grab.name : "none")}'{(known ? "" : ", not worked by hand")}");
             }
             return known;
         }
 
-        // Whether at, where a hand takes hold, is on the switch's handle: then where the hand sits on it and its direction
-        // (VrClimb holds it there; further off the hand holds the hull as anywhere, Raik: the grab was too wide).
+        public static bool Holds => Hands[0].Control != null || Hands[1].Control != null;
+
+        // Whether at, where a hand takes hold, is on the switch's grip: then where the hand sits on it and its direction
+        // (VrClimb holds it there; further off the hand holds the hull as anywhere).
         public static bool OnGrip(InteractableObject control, Vector3 at, out Vector3 onGrip, out Vector3 axis)
         {
             onGrip = at;
             axis = Vector3.zero;
-            if (!Parts(control, out var handle, out _)) return false;
-            var bar = handle.GetComponent<MeshFilter>();
-            if (bar == null || bar.sharedMesh == null) return false;
-            // Out: away from the middle of the housing.
-            var housing = control.transform.parent != null ? control.transform.parent.GetComponent<Renderer>() : null;
-            var middle = housing != null ? housing.bounds.center : control.transform.parent.position;
-            var shape = handle.GetComponent<Renderer>();
-            var batched = shape != null && shape.isPartOfStaticBatch;
-            if (shapeLogs++ < 40)
-                Plugin.Log.LogInfo($"Nacelle: handle '{handle.name}' mesh '{bar.sharedMesh.name}'{(batched ? " (static batch)" : "")}, mesh middle "
-                    + $"{bar.transform.TransformPoint(bar.sharedMesh.bounds.center) - at} m from the hand, shape middle "
-                    + $"{(shape != null ? (shape.bounds.center - at).ToString() : "none")} size {(shape != null ? shape.bounds.size.ToString() : "none")}, "
-                    + $"hand in the handle's axes {handle.InverseTransformPoint(at)}, scale {handle.lossyScale}");
-            // A static batch's mesh is the whole batch, its bounds lie elsewhere: then only the visible shape counts.
-            if (!batched && VrLever.GripLine(bar, bar.transform.TransformPoint(bar.sharedMesh.bounds.center) - middle, at, GripReach, "Nacelle", out onGrip, out axis))
-                return true;
-            // Off the mesh's middle line, the hand may still be on what is seen of the handle (Raik, 2026-11-08: the hand
-            // right on the model did not take hold): its middle line along the longest side of its bounds in the world.
-            return shape != null && ShapeLine(shape.bounds, at, out onGrip, out axis);
-        }
-
-        private static bool ShapeLine(Bounds box, Vector3 at, out Vector3 onGrip, out Vector3 axis)
-        {
-            var size = box.size;
-            var along = size.x >= size.y && size.x >= size.z ? Vector3.right : size.y >= size.z ? Vector3.up : Vector3.forward;
-            var half = Vector3.Dot(box.extents, along) * 0.7f;
-            var from = box.center - along * half;
-            var line = along * (2f * half);
-            var t = Mathf.Clamp01(Vector3.Dot(at - from, line) / Mathf.Max(line.sqrMagnitude, 1e-8f));
-            onGrip = from + line * t;
-            axis = along;
-            var off = (box.ClosestPoint(at) - at).magnitude;
+            if (!Parts(control, out var handle, out _, out var grab)) return false;
+            axis = handle.TransformDirection(Axis).normalized;
+            var half = GripLength * 0.5f * VrCamera.WorldScale;
+            var t = Mathf.Clamp(Vector3.Dot(at - grab.position, axis), -half, half);
+            onGrip = grab.position + axis * t;
+            var off = (at - onGrip).magnitude;
             var on = off <= GripReach * VrCamera.WorldScale;
-            if (shapeLogs++ < 40)
-                Plugin.Log.LogInfo($"Nacelle: hand {off * 100f:0.0} cm off the handle's visible shape, " + (on ? "on the grip" : "off it, as a surface"));
+            if (gripLogs++ < 60)
+                Plugin.Log.LogInfo($"Nacelle: hand takes hold {off * 100f:0.0} cm from the grip at '{grab.name}', " + (on ? "on the grip" : $"off it (within {GripReach * 100f:0.0} cm), as a surface"));
             return on;
         }
-
-        private static int shapeLogs;
-
-        private const float GripReach = 0.06f;
-
-        public static bool Holds => Hands[0].Control != null || Hands[1].Control != null;
 
         // From VrFrame, in LateUpdate after the Animators and before the hands are placed on their holds.
         public static void LateUpdate()
@@ -163,130 +158,127 @@ namespace ShipbreakerVR
             foreach (var held in Hands) Update(held);
             for (var i = Let.Count - 1; i >= 0; i--)
                 if (!Settle(Let[i])) Let.RemoveAt(i);
+            List<InteractableObject> gone = null;
+            foreach (var used in Used)
+            {
+                if (used.Key == null || used.Value.Handle == null)
+                {
+                    (gone ??= new List<InteractableObject>()).Add(used.Key);
+                    continue;
+                }
+                used.Value.Show();
+            }
+            if (gone != null) foreach (var key in gone) Used.Remove(key);
         }
 
         private static void Update(Held held)
         {
             var control = VrXr.IsRunning ? VrClimb.HeldControl(held.Input) : null;
-            if (control != null && !Is(control)) control = null;
+            if (control != null && (!Is(control) || Used.ContainsKey(control))) control = null;
             if (control != held.Control)
             {
                 LetGo(held);
                 if (control != null) TakeHold(held, control);
             }
-            if (held.Control == null) return;
-            // Used: kept at its end pose while the game's animation plays to it.
-            if (held.Step == Step.Done)
-            {
-                Pose(held.Handle, held.Switch, held.HandleRest, held.HandleRestPlace, held.SwitchRest, held.Angle, held.Slid);
-                return;
-            }
+            if (held.Control == null || held.Step == Step.Done) return;
+            // The handle where it was left, over what the Animator set this frame.
+            held.Pose.Show();
             if (!held.Input.TryGetGripPose(out var gripLocal, out var gripTurn)) return;
             if (!VrToolModels.TrackingToWorld(gripLocal, gripTurn, out var grip, out _)) return;
-            // The handle where it was left, over what the Animator set this frame.
-            Pose(held.Handle, held.Switch, held.HandleRest, held.HandleRestPlace, held.SwitchRest, held.Angle, held.Slid);
-            var hand = held.Handle.TransformPoint(held.Reach);
-            // It goes heavily: only with the other hand braced on something fixed (Raik). Without, it stays where it is
-            // and the hand has to come back to it once braced.
+            // It goes heavily: only with the other hand braced on something fixed (Raik).
             if (!VrClimb.Braced(held.Input))
             {
-                if (held.Caught && logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand without the other braced, '{held.Control.name}' does not move");
-                held.Caught = false;
-                Pose(held.Handle, held.Switch, held.HandleRest, held.HandleRestPlace, held.SwitchRest, held.Angle, held.Slid);
+                if (!held.BraceLogged && logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand without the other braced, '{held.Control.name}' does not move");
+                held.BraceLogged = true;
+                held.Based = false;
                 return;
             }
-            var near = (grip - hand).magnitude <= CatchReach * VrCamera.WorldScale;
+            held.BraceLogged = false;
+            if (Time.time < held.PauseUntil)
+            {
+                held.Based = false;
+                return;
+            }
             var angleAt = AngleAt(held, grip);
-            var down = held.Switch.parent.TransformDirection(Vector3.down).normalized;
-            var travel = held.Switch.parent.TransformVector(Vector3.up * Slide).magnitude;
+            if (!held.Based) Rebase(held, grip, angleAt);
+            var pose = held.Pose;
             switch (held.Step)
             {
                 case Step.FoldDown:
                 {
-                    if (!held.Caught)
-                    {
-                        if (!near) break;
-                        Catch(held, grip, "on the handle, braced");
-                    }
-                    var angle = Mathf.Clamp(angleAt, 0f, Fold);
+                    var angle = Mathf.Clamp(held.AngleFrom + Mathf.DeltaAngle(held.AngleRef, angleAt), 0f, Fold);
                     Hum(held, angle);
-                    held.Angle = angle;
-                    if (angle >= Fold - SnapWithin) Next(held, Step.Pull, "folded down");
+                    pose.Angle = angle;
+                    if (angle >= Fold - SnapWithin)
+                    {
+                        pose.Angle = Fold;
+                        Next(held, Step.Pull, "folded down");
+                    }
                     break;
                 }
                 case Step.Pull:
                 {
-                    // Folding out, the hand comes off the handle: it has to come back to it first.
-                    if (!held.Caught)
+                    var down = pose.Switch.parent.TransformDirection(Vector3.down).normalized;
+                    var travel = pose.Switch.parent.TransformVector(Vector3.up * Slide).magnitude;
+                    var reach = held.SlideFrom + Vector3.Dot(grip - held.PullFrom, down);
+                    pose.Slid = Mathf.MoveTowards(pose.Slid, Mathf.Clamp(reach, 0f, travel), PullMost * VrCamera.WorldScale * Time.deltaTime);
+                    Shake(held, reach - pose.Slid);
+                    if (pose.Slid >= travel - SlideSnap * VrCamera.WorldScale)
                     {
-                        if (!near) break;
-                        Catch(held, grip, "on the folded handle");
-                    }
-                    var wanted = Mathf.Clamp(held.SlideFrom + Vector3.Dot(grip - held.PullFrom, down), 0f, travel);
-                    var most = PullMost * VrCamera.WorldScale * Time.deltaTime;
-                    held.Slid = Mathf.MoveTowards(held.Slid, wanted, most);
-                    Shake(held, held.SlideFrom + Vector3.Dot(grip - held.PullFrom, down) - held.Slid);
-                    if (held.Slid >= travel - SlideSnap * VrCamera.WorldScale)
-                    {
-                        held.Slid = travel;
+                        pose.Slid = travel;
                         Next(held, Step.FoldOver, "pulled down");
                     }
                     break;
                 }
                 case Step.FoldOver:
                 {
-                    // Pulled on past the end: the hand has to come back to the handle first.
-                    if (!held.Caught)
-                    {
-                        if (!near) break;
-                        Catch(held, grip, "back at the pulled handle");
-                    }
-                    var angle = Mathf.Clamp(angleAt < -90f ? angleAt + 360f : angleAt, Fold, 2f * Fold);
+                    var angle = Mathf.Clamp(held.AngleFrom + Mathf.DeltaAngle(held.AngleRef, angleAt), Fold, 2f * Fold);
                     Hum(held, angle);
-                    held.Angle = angle;
+                    pose.Angle = angle;
                     if (angle >= 2f * Fold - SnapWithin)
                     {
-                        held.Angle = 2f * Fold;
+                        pose.Angle = 2f * Fold;
                         Use(held);
                     }
                     break;
                 }
             }
-            Pose(held.Handle, held.Switch, held.HandleRest, held.HandleRestPlace, held.SwitchRest, held.Angle, held.Slid);
+            pose.Show();
         }
 
-        // Each step goes on from where the last one left the controller, once it is back at the handle (Catch).
+        // A step done: a knock, a rest, then the next step from the controller as it is then.
         private static void Next(Held held, Step step, string what)
         {
             held.Input.Buzz(StepAmplitude, StepLength);
             held.Step = step;
-            held.Caught = false;
-            if (logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand {what}, '{held.Control.name}' waits for the hand");
+            held.Based = false;
+            held.PauseUntil = Time.time + StepPause;
+            if (logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand {what}, '{held.Control.name}' rests {StepPause:0.0} s");
         }
 
-        private static void Catch(Held held, Vector3 grip, string where)
+        private static void Rebase(Held held, Vector3 grip, float angleAt)
         {
-            held.Caught = true;
+            held.Based = true;
             held.PullFrom = grip;
-            held.SlideFrom = held.Slid;
-            if (logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand is {where}, goes on");
+            held.SlideFrom = held.Pose.Slid;
+            held.AngleFrom = held.Pose.Angle;
+            held.AngleRef = angleAt;
         }
 
-        // How far the controller is round the handle's hinge, from where the hand would be at its rest pose, in degrees:
-        // the handle goes with the hand on its way round (Raik: following the switch's own movement, not turning the
-        // controller).
+        // How far the controller is round the handle's hinge, in degrees from where the hand would be at its rest pose.
         private static float AngleAt(Held held, Vector3 grip)
         {
-            var frame = held.Handle.parent.rotation * held.HandleRest;
+            var pose = held.Pose;
+            var frame = pose.Handle.parent.rotation * pose.HandleRest;
             var axis = frame * Axis;
             var rest = frame * held.Reach;
-            var to = grip - held.Handle.position;
+            var to = grip - pose.Handle.position;
             return Vector3.SignedAngle(Vector3.ProjectOnPlane(rest, axis), Vector3.ProjectOnPlane(to, axis), axis);
         }
 
         private static void Hum(Held held, float angle)
         {
-            var speed = Mathf.Abs(angle - held.Angle) / Mathf.Max(Time.deltaTime, 1e-4f);
+            var speed = Mathf.Abs(angle - held.Pose.Angle) / Mathf.Max(Time.deltaTime, 1e-4f);
             if (speed < 15f || Time.unscaledTime < held.PulseAt) return;
             held.PulseAt = Time.unscaledTime + Every;
             held.Input.Buzz(Mathf.Lerp(HumLeast, HumMost, Mathf.InverseLerp(15f, 180f, speed)), PulseLength);
@@ -305,10 +297,11 @@ namespace ShipbreakerVR
         {
             held.Input.Buzz(1f, 0.05f);
             held.Step = Step.Done;
+            Used[held.Control] = held.Pose;
             try
             {
                 CompleteMethod?.Invoke(held.Control, null);
-                if (logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand folded '{held.Control.name}' over, uses it");
+                if (logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand folded '{held.Control.name}' over, uses it; it stays down");
             }
             catch (System.Exception e)
             {
@@ -318,7 +311,7 @@ namespace ShipbreakerVR
 
         private static void TakeHold(Held held, InteractableObject control)
         {
-            if (!control.IsInteractable || !Parts(control, out var handle, out var slider))
+            if (!control.IsInteractable || !Parts(control, out var handle, out var slider, out _))
             {
                 if (logs++ < 80) Plugin.Log.LogInfo($"Nacelle: '{control.name}' held, but cannot be used now");
                 return;
@@ -326,28 +319,24 @@ namespace ShipbreakerVR
             // A switch still going back is this hand's again, from where it is.
             Loose from = null;
             foreach (var loose in Let)
-                if (loose.Handle == handle && !loose.Used) from = loose;
+                if (loose.Pose.Handle == handle) from = loose;
             if (from != null) Let.Remove(from);
-            held.Control = control;
-            held.Handle = handle;
-            held.Switch = slider;
-            held.HandleRest = from != null ? from.HandleRest : handle.localRotation;
-            held.HandleRestPlace = from != null ? from.HandleRestPlace : handle.localPosition;
-            held.SwitchRest = from != null ? from.SwitchRest : slider.localPosition;
-            held.Angle = from != null ? from.Angle : 0f;
-            held.Slid = from != null ? from.Slid : 0f;
-            held.Step = held.Slid > 0f ? Step.Pull : Step.FoldDown;
-            held.Caught = false;
-            Pose(handle, slider, held.HandleRest, held.HandleRestPlace, held.SwitchRest, held.Angle, held.Slid);
-            if (held.Input.TryGetGripPose(out var gripLocal, out var gripTurn) && VrToolModels.TrackingToWorld(gripLocal, gripTurn, out var grip, out _))
+            var pose = from != null ? from.Pose : new Pose
             {
-                held.PullFrom = grip;
-                held.Reach = handle.InverseTransformPoint(grip);
-            }
+                Handle = handle,
+                Switch = slider,
+                HandleRest = handle.localRotation,
+                HandleRestPlace = handle.localPosition,
+                SwitchRest = slider.localPosition,
+            };
+            held.Control = control;
+            held.Pose = pose;
+            held.Step = pose.Slid > 0f ? (pose.Angle > Fold ? Step.FoldOver : Step.Pull) : Step.FoldDown;
+            held.Based = false;
+            held.PauseUntil = 0f;
+            held.BraceLogged = false;
+            pose.Show();
             if (VrClimb.TryGetSurface(held.Input, out var onHandle)) held.Reach = handle.InverseTransformPoint(onHandle);
-            held.SlideFrom = held.Slid;
-            // Taken hold of at the first step, it turns with the hand at once.
-            held.Caught = held.Step == Step.FoldDown;
             VrClimb.Reanchor(held.Input, handle);
             VrClimb.SetFree(held.Input, true);
             if (logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand holds '{handle.name}' of '{control.name}', step {held.Step}");
@@ -358,76 +347,47 @@ namespace ShipbreakerVR
             if (held.Control != null)
             {
                 VrClimb.SetFree(held.Input, false);
-                Let.Add(new Loose
-                {
-                    Handle = held.Handle,
-                    Switch = held.Switch,
-                    HandleRest = held.HandleRest,
-                    HandleRestPlace = held.HandleRestPlace,
-                    SwitchRest = held.SwitchRest,
-                    Angle = held.Angle,
-                    Slid = held.Slid,
-                    At = Time.time,
-                    Used = held.Step == Step.Done,
-                });
-                if (logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand lets go of '{held.Control.name}' at step {held.Step}, {held.Angle:0}°, {held.Slid * 100f:0.0} cm");
+                if (held.Step != Step.Done) Let.Add(new Loose { Pose = held.Pose, At = Time.time });
+                if (logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand lets go of '{held.Control.name}' at step {held.Step}, {held.Pose.Angle:0}°, {held.Pose.Slid * 100f:0.0} cm");
             }
             held.Control = null;
-            held.Handle = null;
-            held.Switch = null;
+            held.Pose = null;
         }
 
-        // Let go: a used switch kept at its pose until the game's animation is there too; any other back to its start.
+        // Let go before the end: back to its start, then the Animator shows it again.
         private static bool Settle(Loose loose)
         {
-            if (loose.Handle == null || loose.Switch == null) return false;
-            var t = (Time.time - loose.At) / (loose.Used ? UsedHold : BackTime);
+            var pose = loose.Pose;
+            if (pose.Handle == null || pose.Switch == null) return false;
+            var t = (Time.time - loose.At) / BackTime;
             if (t >= 1f)
             {
-                if (!loose.Used) Pose(loose.Handle, loose.Switch, loose.HandleRest, loose.HandleRestPlace, loose.SwitchRest, 0f, 0f);
+                pose.Angle = 0f;
+                pose.Slid = 0f;
+                pose.Show();
                 return false;
             }
-            var back = loose.Used ? 1f : 1f - t * t * (3f - 2f * t);
-            Pose(loose.Handle, loose.Switch, loose.HandleRest, loose.HandleRestPlace, loose.SwitchRest, loose.Angle * back, loose.Slid * back);
+            var back = 1f - t * t * (3f - 2f * t);
+            pose.Show(pose.Angle * back, pose.Slid * back);
             return true;
         }
 
-        // The handle folded by angle and, with the switch, slid down by slid (world length).
-        private static void Pose(Transform handle, Transform slider, Quaternion handleRest, Vector3 handleRestPlace, Vector3 switchRest, float angle, float slid)
-        {
-            slider.localPosition = switchRest;
-            handle.localPosition = handleRestPlace;
-            handle.localRotation = handleRest * Quaternion.AngleAxis(angle, Axis);
-            if (slid <= 0f) return;
-            var down = slider.parent.TransformDirection(Vector3.down).normalized * slid;
-            slider.position += down;
-            // A handle on the switch goes with it already.
-            if (!handle.IsChildOf(slider)) handle.position += down;
-        }
-
-        // Its handle and its switch.
-        private static int partLogs;
-
-        private static bool Parts(InteractableObject control, out Transform handle, out Transform slider)
+        // Its handle, its switch and the grip on the handle ('HandGrab', where the game's hand goes).
+        private static bool Parts(InteractableObject control, out Transform handle, out Transform slider, out Transform grab)
         {
             handle = null;
             slider = null;
-            // Both somewhere under the switch's housing (the survey's list does not show the handle's real parent).
+            grab = null;
             var parent = control.transform.parent;
             if (parent == null) return false;
-            var handles = 0;
             foreach (var child in parent.GetComponentsInChildren<Transform>(true))
             {
-                // The first handle with a visible mesh (with more than one, the last was taken before).
-                if (child.name.EndsWith("_Handle"))
-                {
-                    handles++;
-                    if (handle == null || (handle.GetComponent<Renderer>() == null && child.GetComponent<Renderer>() != null)) handle = child;
-                }
+                // The first handle with a visible mesh.
+                if (child.name.EndsWith("_Handle") && (handle == null || (handle.GetComponent<Renderer>() == null && child.GetComponent<Renderer>() != null))) handle = child;
                 if (child.name.EndsWith("_Switch") && slider == null) slider = child;
             }
-            if (handles > 1 && partLogs++ < 10) Plugin.Log.LogInfo($"Nacelle: {handles} handles under '{parent.name}', taking '{(handle != null ? handle.name : "none")}'");
-            return handle != null && slider != null;
+            grab = control.HandTarget;
+            return handle != null && slider != null && grab != null;
         }
     }
 }
