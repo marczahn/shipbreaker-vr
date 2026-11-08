@@ -45,6 +45,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<float> HeadHeight;
         public static ConfigEntry<float> HeadSideways;
         public static ConfigEntry<VrPerformance.Occlusion> AmbientOcclusion;
+        public static ConfigEntry<bool> DebrisRange;
         public static ConfigEntry<VrControls.Scheme> ControlScheme;
         public static ConfigEntry<VrControls.Turning> TurnMode;
         public static ConfigEntry<VrControls.TurnAxis> TurnAround;
@@ -112,6 +113,9 @@ namespace ShipbreakerVR
             NoVrUnfitEffects = Bind("Bild", "VrUnpassendeEffekteAus", true,
                 "Switch off effects that are wrong in a headset: motion blur, depth of field, lens distortion, chromatic aberration and Panini projection.");
 
+            DebrisRange = Bind("Bild", "TruemmerWeiterSehen", false,
+                ("Shows the small floating debris (nuts and bolts) out to 5 m instead of about 2 m. Costs a little performance where there is much of it.",
+                    "Zeigt die kleinen schwebenden Trümmer (Muttern und Schrauben) bis 5 m statt etwa 2 m. Kostet etwas Leistung, wo viele davon sind."));
             AmbientOcclusion = Bind("Bild", "Umgebungsverdeckung", VrPerformance.Occlusion.Niedrig,
                 ("Shading in corners and creases. Low looks nearly the same and saves a lot of performance; the game default can stutter on the station. Off for the most performance.",
                     "Schattierung in Ecken und Fugen. Niedrig sieht fast gleich aus und spart viel Leistung; der Spielstandard kann auf der Station ruckeln. Aus für die meiste Leistung."),
