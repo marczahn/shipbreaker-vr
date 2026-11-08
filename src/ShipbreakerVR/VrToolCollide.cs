@@ -261,7 +261,9 @@ namespace ShipbreakerVR
             // Held off, it comes back over CatchUp, not at once, also once the way is free.
             var share = state.Blocked ? 1f - Mathf.Exp(-Time.unscaledDeltaTime / CatchUp) : 1f;
             // The hand's movement may have put the tool into something: turned out of it, a little each frame.
-            if (!Free(pivot, previous, boxes, length, out var contact))
+            // Not at the other arm: there the grip is high, the tool never slides along it but is pushed aside with the
+            // hand (HoldBack). Sliding off, it tipped fast onto a hand pressing from below (Raik, 2026-11-08).
+            if (!Free(pivot, previous, boxes, length, out var contact) && contact.Thing != armProbe)
             {
                 var away = Away(contact);
                 // Pressed nearly straight against it, the tip holds there (friction); at a slant it slides out along it, the
