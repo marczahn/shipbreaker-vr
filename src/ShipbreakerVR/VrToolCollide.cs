@@ -193,39 +193,6 @@ namespace ShipbreakerVR
 
         private static float PieceRadius(int j) => (j == 2 ? HandRadius : ArmRadius) * VrCamera.WorldScale;
 
-        // Whether a box of the tool lies in the other arm, and its way out of it.
-        private static bool InArm(Vector3 center, Vector3 half, Quaternion turn, out Vector3 way, out float depth) =>
-            InArm(center, half, turn, out way, out depth, out _);
-
-        private static bool InArm(Vector3 center, Vector3 half, Quaternion turn, out Vector3 way, out float depth, out int piece)
-        {
-            way = Vector3.zero;
-            depth = 0f;
-            piece = 0;
-            if (!armKnown) return false;
-            Probes();
-            probe.size = half * 2f;
-            probe.center = Vector3.zero;
-            for (var j = 0; j < armPieces; j++)
-            {
-                var line = ArmJoints[j + 1] - ArmJoints[j];
-                if (line.sqrMagnitude < 1e-6f) continue;
-                var radius = PieceRadius(j);
-                armProbe.radius = radius;
-                armProbe.height = line.magnitude + 2f * radius;
-                armProbe.center = Vector3.zero;
-                if (Penetration(probe, center, turn, armProbe, ArmJoints[j] + line * 0.5f, Quaternion.FromToRotation(Vector3.up, line),
-                    out var direction, out var distance) && direction.sqrMagnitude > 1e-8f)
-                {
-                    way = direction.normalized;
-                    depth = distance;
-                    piece = j;
-                    return true;
-                }
-            }
-            return false;
-        }
-
         // Whether the tool's line (the ball along it, without a model) comes within reach of the other arm.
         private static bool LineInArm(Vector3 start, Vector3 end, float reach, out Vector3 at, out Vector3 way, out float depth) =>
             LineInArm(start, end, reach, out at, out way, out depth, out _, out _);
@@ -382,17 +349,8 @@ namespace ShipbreakerVR
             piece = 0;
             along = depth = 0f;
             if (!armKnown) return false;
-            if (boxes != null)
-            {
-                foreach (var box in boxes)
-                {
-                    var center = pivot + rotation * box.Center;
-                    if (!InArm(center, box.Half, rotation * box.Turn, out way, out depth, out piece)) continue;
-                    armAt = OnSegment(ArmJoints[piece], ArmJoints[piece + 1], center, out along);
-                    return true;
-                }
-                return false;
-            }
+            // Against the arm every tool is the ball along it, the grapple too (Raik: the cutter's way felt right, the
+            // grapple's boxes, its tall housing above all, caught on their corners and made it wonky).
             var scale = VrCamera.WorldScale;
             var forward = rotation * Vector3.forward;
             var start = pivot + forward * FromGrip * scale;
@@ -555,11 +513,11 @@ namespace ShipbreakerVR
                         }
                         return false;
                     }
-                    if (arm && InArm(center, box.Half, rotation * box.Turn, out var outOfArm, out var armDepth))
-                    {
-                        contact = new Contact { Thing = armProbe, At = center, Separated = true, Out = outOfArm, Depth = armDepth };
-                        return false;
-                    }
+                }
+                if (arm && ArmContact(pivot, rotation, boxes, length, out var boxArmAt, out _, out _, out var boxArmWay, out var boxArmDepth))
+                {
+                    contact = new Contact { Thing = armProbe, At = boxArmAt, Separated = true, Out = boxArmWay, Depth = boxArmDepth };
+                    return false;
                 }
                 return true;
             }
