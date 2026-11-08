@@ -35,8 +35,8 @@ namespace ShipbreakerVR
         private const float PullMost = 0.2f;
         // After each step the switch rests this long before the next follows the hand.
         private const float StepPause = 0.15f;
-        // The handle folds at most this fast, in degrees per second, catching up after a rest.
-        private const float FoldMost = 400f;
+        // The grip folds round at most this fast, in m/s at world scale 1 (Raik: 0.4, the pull 0.2).
+        private const float FoldMost = 0.4f;
         // The grip: this long along the hinge through 'HandGrab', taken hold of within GripReach of its middle line.
         private const float GripLength = 0.08f;
         private const float GripReach = 0.1f;
@@ -217,7 +217,7 @@ namespace ShipbreakerVR
             {
                 case Step.FoldDown:
                 {
-                    var angle = Mathf.MoveTowards(pose.Angle, Mathf.Clamp(held.AngleFrom + Mathf.DeltaAngle(held.AngleRef, angleAt), 0f, Fold), FoldMost * Time.deltaTime);
+                    var angle = Mathf.MoveTowards(pose.Angle, Mathf.Clamp(held.AngleFrom + Mathf.DeltaAngle(held.AngleRef, angleAt), 0f, Fold), FoldSpeed(held) * Time.deltaTime);
                     Hum(held, angle);
                     pose.Angle = angle;
                     if (angle >= Fold - SnapWithin)
@@ -246,7 +246,7 @@ namespace ShipbreakerVR
                 }
                 case Step.FoldOver:
                 {
-                    var angle = Mathf.MoveTowards(pose.Angle, Mathf.Clamp(held.AngleFrom + Mathf.DeltaAngle(held.AngleRef, angleAt), Fold, 2f * Fold), FoldMost * Time.deltaTime);
+                    var angle = Mathf.MoveTowards(pose.Angle, Mathf.Clamp(held.AngleFrom + Mathf.DeltaAngle(held.AngleRef, angleAt), Fold, 2f * Fold), FoldSpeed(held) * Time.deltaTime);
                     Hum(held, angle);
                     pose.Angle = angle;
                     if (angle >= 2f * Fold - SnapWithin)
@@ -287,6 +287,13 @@ namespace ShipbreakerVR
             var rest = frame * held.Reach;
             var to = grip - pose.Handle.position;
             return Vector3.SignedAngle(Vector3.ProjectOnPlane(rest, axis), Vector3.ProjectOnPlane(to, axis), axis);
+        }
+
+        // FoldMost as degrees per second at the hand's distance from the hinge.
+        private static float FoldSpeed(Held held)
+        {
+            var radius = new Vector2(held.Reach.y, held.Reach.z).magnitude * held.Pose.Handle.lossyScale.y;
+            return FoldMost * VrCamera.WorldScale / Mathf.Max(radius, 0.03f) * Mathf.Rad2Deg;
         }
 
         private static void Hum(Held held, float angle)
