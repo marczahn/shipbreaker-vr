@@ -1195,6 +1195,8 @@ namespace ShipbreakerVR
         // scale 1: just above the palm of the hand (Raik: 1 to 2 cm over the palm, not inside the hand), then 2 cm further
         // out, so a closed hand has it between fingers and palm and an open one just above the palm (Raik, 2026-11-08).
         private const float PalmAhead = 0.055f;
+        // And this far towards the finger tips, in m at world scale 1 (Raik, 2026-11-08: 1 to 1.5 cm).
+        private const float PalmToFingers = 0.015f;
 
         // The point a hand takes hold of controls from: just above its palm. The palm faces to the right on the left hand
         // and to the left on the right hand, along the controller's grip pose.
@@ -1203,7 +1205,15 @@ namespace ShipbreakerVR
             if (!input.TryGetGripPose(out _, out var grip) || VrCamera.Instance == null) return at;
             var turn = VrCamera.Instance.transform.parent.rotation * grip;
             var side = input == VrInput.Left ? Vector3.right : Vector3.left;
-            return at + turn * side * (PalmAhead * VrCamera.WorldScale);
+            var palm = turn * side;
+            var point = at + palm * (PalmAhead * VrCamera.WorldScale);
+            // Towards the finger tips, along the drawn hand from the wrist to the knuckles, at the same height over the palm.
+            if (VrHands.TryGetArm(input == VrInput.Left, out _, out _, out var wrist, out var knuckles))
+            {
+                var fingers = Vector3.ProjectOnPlane(knuckles - wrist, palm);
+                if (fingers.sqrMagnitude > 1e-6f) point += fingers.normalized * (PalmToFingers * VrCamera.WorldScale);
+            }
+            return point;
         }
 
         // Where that controller's hand sits on its hold, in the world.
