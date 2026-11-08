@@ -29,6 +29,9 @@ namespace ShipbreakerVR
             // that one is what a press is for (review). Unity's null check, for a control destroyed meanwhile.
             var button = VrButtons.Offered;
             var held = button != null && !VrLever.Holds && !VrNacelle.Holds ? button : VrClimb.HeldInteractable();
+            // A nacelle switch being completed stays offered, also once the hand let go of it (VrNacelle.Finish).
+            var finishing = VrNacelle.Completing;
+            if (finishing != null) held = finishing;
             var closest = Closest(__instance);
             if (held == closest) return;
             // The game's own hit stays only for the thing it found itself; a held thing it did not see has none.

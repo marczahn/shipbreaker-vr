@@ -134,6 +134,9 @@ namespace ShipbreakerVR
 
         public static void PressInteract() => interactOnce = true;
 
+        // Interact held down while set (a nacelle switch completed the game's way, VrNacelle.Finish).
+        public static bool HoldInteract;
+
         // From VrFrame, once per frame, after VrInput and before VrAim places the aim camera on the tool hand.
         public static void Update()
         {
@@ -193,6 +196,7 @@ namespace ShipbreakerVR
             // A lever held is used by turning it only (VrLever), not by A.
             var offered = VrClimb.HeldInteractable();
             if (VrLever.Holds || VrNacelle.Holds || VrLever.Turnable(offered) || VrNacelle.Is(offered)) tool.Now[(int)Action.Interact] = false;
+            if (HoldInteract) tool.Now[(int)Action.Interact] = true;
             if (interactOnce)
             {
                 tool.Now[(int)Action.Interact] = true;

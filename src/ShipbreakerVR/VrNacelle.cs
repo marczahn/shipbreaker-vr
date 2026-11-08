@@ -8,7 +8,7 @@ namespace ShipbreakerVR
     // The nacelle switch that cuts the fuel lines, worked by hand (Raik, 0.29), in the three steps of the game's own
     // animation: fold the handle down (the hand goes round its hinge with it, 90°), pull it down (the switch slides 16 cm,
     // no faster than PullMost, and the further the hand runs ahead of it the harder it shakes), fold it over (round on
-    // another 90°). Then it uses the switch (InteractableObject.Complete, as holding A for 4 s did) and stays down.
+    // another 90°). Then it uses the switch the game's own way (Finish: A held, the game's 4 s count run on to its end) and stays down.
     // Each step follows the controller directly, kept as near it as when taking hold: after a step the switch rests for
     // StepPause, then catches up with the controller (Raik: coming back to the handle was too fiddly, and the switch
     // lagged too far behind the hand). It moves only while the other hand holds on to
@@ -115,7 +115,18 @@ namespace ShipbreakerVR
         // Used switches stay down (Raik): their end pose over whatever the Animator shows, as long as they exist.
         private static readonly Dictionary<InteractableObject, Pose> Used = new Dictionary<InteractableObject, Pose>();
         private static readonly Dictionary<InteractableObject, bool> Known = new Dictionary<InteractableObject, bool>();
-        private static readonly System.Reflection.MethodInfo CompleteMethod = AccessTools.Method(typeof(InteractableObject), "Complete");
+        private static readonly System.Reflection.FieldInfo Elapsed = AccessTools.Field(typeof(InteractableObject), "mCurrentInteractionTime");
+        private static readonly System.Reflection.FieldInfo Started = AccessTools.Field(typeof(InteractableObject), "HasStartedProgress");
+        private static readonly System.Reflection.FieldInfo LastCompletion = AccessTools.Field(typeof(InteractableObject), "mLastCompletionTime");
+        private static readonly System.Reflection.FieldInfo Asset = AccessTools.Field(typeof(InteractableObject), "m_Asset");
+        // A used switch being completed the game's own way (Finish): A held for it, its progress run on to the end.
+        private static InteractableObject completing;
+        private static float completingSince;
+        private static bool hurried;
+        // Given up if the game has not completed it within this long.
+        private const float FinishWithin = 2f;
+        // The progress set to this long before its end, so the game completes it in its next steps.
+        private const float FinishLeft = 0.05f;
         private static int logs;
         private static int gripLogs;
 
@@ -169,9 +180,13 @@ namespace ShipbreakerVR
         }
 
         // From VrFrame, in LateUpdate after the Animators and before the hands are placed on their holds.
+        // The switch being completed, offered to the game while A is held for it (VrInteractHeld, VrToolInput).
+        public static InteractableObject Completing => completing != null ? completing : null;
+
         public static void LateUpdate()
         {
             foreach (var held in Hands) Update(held);
+            Finish();
             for (var i = Let.Count - 1; i >= 0; i--)
                 if (!Settle(Let[i])) Let.RemoveAt(i);
             List<InteractableObject> gone = null;
@@ -319,15 +334,56 @@ namespace ShipbreakerVR
             held.Input.Buzz(1f, 0.05f);
             held.Step = Step.Done;
             Used[held.Control] = held.Pose;
-            try
+            // Used the game's own way: InteractableObject.Complete alone did not cut the fuel lines (Raik, 2026-11-08); the
+            // progress event the switch's triggers wait for comes only from the game counting the held interaction up to
+            // its InteractionTime (InteractableObject.Update). So A is held for it, and once the game counts, its count is
+            // set to just before the end.
+            completing = held.Control;
+            completingSince = Time.time;
+            hurried = false;
+            VrToolInput.HoldInteract = true;
+            if (logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand folded '{held.Control.name}' over, uses it; it stays down");
+        }
+
+        private static void Finish()
+        {
+            if (completing == null)
             {
-                CompleteMethod?.Invoke(held.Control, null);
-                if (logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand folded '{held.Control.name}' over, uses it; it stays down");
+                if (VrToolInput.HoldInteract && completingSince > 0f) Stop();
+                return;
             }
-            catch (System.Exception e)
+            var last = LastCompletion?.GetValue(completing) is float l ? l : 0f;
+            if (last >= completingSince)
             {
-                Plugin.Log.LogWarning($"Nacelle: using '{held.Control.name}' failed: {e.InnerException?.Message ?? e.Message}");
+                if (logs++ < 80) Plugin.Log.LogInfo($"Nacelle: the game completed '{completing.name}' after {Time.time - completingSince:0.00} s");
+                Stop();
+                return;
             }
+            if (Time.time - completingSince > FinishWithin)
+            {
+                Plugin.Log.LogWarning($"Nacelle: the game did not complete '{completing.name}' within {FinishWithin:0} s (started {(Started?.GetValue(completing) is bool s && s)})");
+                Stop();
+                return;
+            }
+            if (hurried || !(Started?.GetValue(completing) is bool started) || !started) return;
+            var time = InteractionTime(completing);
+            if (time <= FinishLeft) return;
+            Elapsed?.SetValue(completing, time - FinishLeft);
+            hurried = true;
+        }
+
+        private static void Stop()
+        {
+            completing = null;
+            completingSince = 0f;
+            VrToolInput.HoldInteract = false;
+        }
+
+        private static float InteractionTime(InteractableObject control)
+        {
+            var asset = Asset?.GetValue(control);
+            var data = asset == null ? null : AccessTools.Field(asset.GetType(), "m_Data")?.GetValue(asset);
+            return data != null && AccessTools.Field(data.GetType(), "m_InteractionTime")?.GetValue(data) is float f ? f : 0f;
         }
 
         private static void TakeHold(Held held, InteractableObject control)
