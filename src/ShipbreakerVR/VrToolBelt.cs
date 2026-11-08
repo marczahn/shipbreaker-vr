@@ -20,10 +20,6 @@ namespace ShipbreakerVR
         private const float HipDeepest = -0.85f;
         private const float HipSide = 0.1f;
         private const float HipOutside = 0.35f;
-        // The grapple's zone lies further out: from HipSide the hand would reach into the body for it.
-        private const float GrappleOut = 0.08f;
-        // And further back, around where it hangs (VrBeltGrapple).
-        private const float GrappleBack = 0.19f;
         // With the grapple at the hip (VrBeltGrapple), the hand draws it only within GripReach of its grip, as Raik asked:
         // the zone around the hip reached far beyond the grapple. The grip hangs at GripAt, where Raik's hand reached for
         // it (12 grips, all within 9 cm); before, a copy hung at the body model's hip, 30 cm further back, and the hand took
@@ -55,7 +51,7 @@ namespace ShipbreakerVR
             var zone = Find(hand, out var local);
             var index = hand.IsLeft ? 0 : 1;
             // A grip pressed near the hip grapple but outside its zone: where the hand was, to fit GripReach.
-            if (zone == Zone.None && !hand.IsLeft && hand.Grip.Pressed && VrSettings.BeltGrapple.Value && missLogs < 30)
+            if (zone == Zone.None && !hand.IsLeft && hand.Grip.Pressed && missLogs < 30)
             {
                 var off = local - GripAt;
                 if (off.magnitude < 0.4f)
@@ -88,28 +84,23 @@ namespace ShipbreakerVR
             forward.y = 0f;
             if (forward.sqrMagnitude < 0.0001f) return Zone.None;
             local = Quaternion.Inverse(Quaternion.LookRotation(forward, Vector3.up)) * (hand - head.localPosition);
-            var zone = ZoneAt(local, VrSettings.BeltGrapple.Value);
+            var zone = ZoneAt(local);
             return zone == Zone.Flashlight && !controller.IsLeft ? Zone.None : zone;
         }
 
         // The zone at a hand position relative to the head, in meters along the head's heading (x right, y up, z forward).
-        // With the grapple at the hip its zone is a ball of GripReach around its grip instead of the hip box.
-        internal static Zone ZoneAt(Vector3 local, bool grappleAtHip = false)
+        // The grapple's zone is a ball of GripReach around its grip at the right hip, the demo charges' the box at the left.
+        internal static Zone ZoneAt(Vector3 local)
         {
-            if (grappleAtHip && (local - GripAt).magnitude < GripReach) return Zone.Grapple;
+            if ((local - GripAt).magnitude < GripReach) return Zone.Grapple;
             if (local.y < HipBelow && local.y > HipDeepest)
             {
                 // Measured as if the hand were turned forward by HipTurn on its side of the body, mirrored for the left hip.
                 var side = Mathf.Abs(local.x);
                 var turnedSide = side * HipTurnCos - local.z * HipTurnSin;
                 var turnedForward = local.z * HipTurnCos + side * HipTurnSin;
-                var outward = local.x > 0f ? GrappleOut : 0f;
-                var behind = local.x > 0f ? HipBehind - GrappleBack : HipBehind;
-                if (turnedForward < HipForward && turnedForward > behind && turnedSide > HipSide + outward && turnedSide < HipOutside + outward)
-                {
-                    if (local.x <= 0f) return Zone.DemoCharge;
-                    if (!grappleAtHip) return Zone.Grapple;
-                }
+                if (local.x <= 0f && turnedForward < HipForward && turnedForward > HipBehind && turnedSide > HipSide && turnedSide < HipOutside)
+                    return Zone.DemoCharge;
             }
             if (local.magnitude < HelmetReach && local.x > HelmetSide && local.z > ShoulderBehind) return Zone.Scanner;
             if (local.magnitude < HelmetReach && local.x < -HelmetSide && local.z > ShoulderBehind) return Zone.Flashlight;

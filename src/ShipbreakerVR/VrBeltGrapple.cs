@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace ShipbreakerVR
 {
-    // Steuerung/GrapplerAmKoerper: while it is not in a hand, the game's own grapple hangs at the right hip, by where it
+    // While it is not in a hand (always, Raik 2026-11-08: no option), the game's own grapple hangs at the right hip, by where it
     // is drawn from (VrToolBelt), so one can look down and reach for it. The game puts a tool away by hanging its
     // model on a rest point of the player (GunController.UnequipGun: m_GrapplingGunRestPoint, its shadow model on
     // m_GrapplingGunShadowRestPoint) and lets it glide there (HandleGunPosition). Those points sit below the flat game's
@@ -74,7 +74,7 @@ namespace ShipbreakerVR
         public static void Update()
         {
             var vr = VrCamera.Instance;
-            if (!VrSettings.BeltGrapple.Value || !VrAim.Active || vr == null || vr.FollowsHab || !Find())
+            if (!VrAim.Active || vr == null || vr.FollowsHab || !Find())
             {
                 Hide();
                 return;

@@ -34,7 +34,6 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> FlipUi;
         public static ConfigEntry<bool> MonitorLook;
         public static ConfigEntry<VrFlightComfort.Thrust> ThrustMode;
-        public static ConfigEntry<bool> BeltGrapple;
         public static ConfigEntry<bool> BracedPush;
         public static ConfigEntry<bool> ToolPhysics;
         public static ConfigEntry<bool> FreeWalking;
@@ -236,8 +235,6 @@ namespace ShipbreakerVR
                 ("With extended tool physics, how heavy the cutter and the grapple are in your hand: moved fast they lag behind the controller and settle, and your hand stays on them. 0 for none.",
                     "Mit erweiterter Werkzeugphysik: wie schwer Cutter und Grappler in der Hand sind. Schnell bewegt hängen sie dem Controller nach und pendeln aus, deine Hand bleibt an ihnen. 0 für keins."),
                 "In kg.", Between(0f, 20f));
-            BeltGrapple = Bind("Steuerung", "GrapplerAmKoerper", true,
-                "Hangs the grapple at your right hip and the cutter on your back, where you draw them from, while they are not in a hand.");
             FreeWalking = Bind("Station", "FreiGehen", false,
                 "Walk through the station instead of hopping between its spots. Replaces the spots: sitting on the bed A stands up, the left stick walks, the right stick turns in steps, the triggers change the poster you look at, and A uses the screen or door you stand at. Walking with a stick can make you feel sick.");
             MonitorLook = Bind("Anzeige", "MonitorEffekt", true,
