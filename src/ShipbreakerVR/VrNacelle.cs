@@ -30,9 +30,9 @@ namespace ShipbreakerVR
         private const float Slide = 0.16039f;
         private const float SnapWithin = 2f;
         private const float SlideSnap = 0.004f;
-        // The pull follows the hand at most this fast, in m/s at world scale 1 (the game's pull takes 1.8 s; Raik: the
-        // controller ran too far ahead at 0.2 m/s, at most half as far).
-        private const float PullMost = 0.4f;
+        // The pull follows the hand at most this fast, in m/s at world scale 1 (the game's pull takes 1.8 s; Raik:
+        // 0.2 m/s, once the switch kept near the controller).
+        private const float PullMost = 0.2f;
         // After each step the switch rests this long before the next follows the hand.
         private const float StepPause = 0.5f;
         // The handle folds at most this fast, in degrees per second, catching up after a rest.
