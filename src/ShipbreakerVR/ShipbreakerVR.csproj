@@ -37,7 +37,6 @@
     <Reference Include="Cinemachine" HintPath="$(ManagedDir)\Cinemachine.dll" Private="false" />
     <Reference Include="Unity.RenderPipelines.Core.Runtime" HintPath="$(ManagedDir)\Unity.RenderPipelines.Core.Runtime.dll" Private="false" />
     <Reference Include="UnityEngine.UIModule" HintPath="$(ManagedDir)\UnityEngine.UIModule.dll" Private="false" />
-    <Reference Include="UnityEngine.AudioModule" HintPath="$(ManagedDir)\UnityEngine.AudioModule.dll" Private="false" />
     <Reference Include="UnityEngine.UI" HintPath="$(ManagedDir)\UnityEngine.UI.dll" Private="false" />
     <Reference Include="Unity.TextMeshPro" HintPath="$(ManagedDir)\Unity.TextMeshPro.dll" Private="false" />
     <Reference Include="Doozy.Engine" HintPath="$(ManagedDir)\Doozy.Engine.dll" Private="false" />
