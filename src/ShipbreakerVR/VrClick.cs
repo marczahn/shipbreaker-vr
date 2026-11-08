@@ -47,24 +47,46 @@ namespace ShipbreakerVR
             return true;
         }
 
-        // About 45 ms: a 3.2 kHz knock dying away in 4 ms with a little noise, and 12 ms later a 1.4 kHz one, softer.
+        // A mechanical clack of about 80 ms (Raik: the first, electronic click was too high): two knocks of a hard plastic
+        // part, the button going down and then seating 22 ms later, each a burst of noise rung through a body resonance
+        // (band pass, 750 Hz and 520 Hz) over a short low thump (170 Hz), dying away in a few milliseconds.
         private static AudioClip Make()
         {
-            var length = (int)(Rate * 0.045f);
+            var length = (int)(Rate * 0.08f);
             var samples = new float[length];
-            var noise = new System.Random(7);
-            for (var i = 0; i < length; i++)
-            {
-                var t = i / (float)Rate;
-                var first = Mathf.Sin(2f * Mathf.PI * 3200f * t) * Mathf.Exp(-t / 0.004f);
-                var crack = ((float)noise.NextDouble() * 2f - 1f) * Mathf.Exp(-t / 0.0015f) * 0.6f;
-                var late = t - 0.012f;
-                var second = late > 0f ? Mathf.Sin(2f * Mathf.PI * 1400f * late) * Mathf.Exp(-late / 0.006f) * 0.5f : 0f;
-                samples[i] = Mathf.Clamp((first + crack + second) * 0.8f, -1f, 1f);
-            }
-            var made = AudioClip.Create("ShipbreakerVR click", length, 1, Rate, false);
+            Knock(samples, 0f, 750f, 0.007f, 1f, 1);
+            Knock(samples, 0.022f, 520f, 0.009f, 0.75f, 2);
+            var most = 0f;
+            foreach (var sample in samples) most = Mathf.Max(most, Mathf.Abs(sample));
+            if (most > 0f)
+                for (var i = 0; i < length; i++) samples[i] = samples[i] / most * 0.9f;
+            var made = AudioClip.Create("ShipbreakerVR clack", length, 1, Rate, false);
             made.SetData(samples, 0);
             return made;
+        }
+
+        // One knock added to samples from start on: noise through a band pass at ring Hz, and a thump below it.
+        private static void Knock(float[] samples, float start, float ring, float decay, float loudness, int seed)
+        {
+            var noise = new System.Random(seed);
+            // A two-pole band pass (resonator), quality about 6.
+            var w = 2f * Mathf.PI * ring / Rate;
+            var r = 1f - w / 12f;
+            var a1 = 2f * r * Mathf.Cos(w);
+            var a2 = -r * r;
+            float y1 = 0f, y2 = 0f;
+            var from = (int)(start * Rate);
+            for (var i = from; i < samples.Length; i++)
+            {
+                var t = (i - from) / (float)Rate;
+                var hit = ((float)noise.NextDouble() * 2f - 1f) * Mathf.Exp(-t / 0.0012f);
+                var y = hit + a1 * y1 + a2 * y2;
+                y2 = y1;
+                y1 = y;
+                var body = y * Mathf.Exp(-t / decay) * 0.12f;
+                var thump = Mathf.Sin(2f * Mathf.PI * 170f * t) * Mathf.Exp(-t / 0.006f) * 0.5f;
+                samples[i] += (body + thump) * loudness;
+            }
         }
     }
 }
