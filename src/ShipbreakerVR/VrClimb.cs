@@ -225,6 +225,7 @@ namespace ShipbreakerVR
         private class Path
         {
             public readonly Vector3[] At = new Vector3[Tracked];
+            public readonly Quaternion[] Turn = new Quaternion[Tracked];
             public readonly float[] Time = new float[Tracked];
             public int Count, Next;
         }
@@ -234,17 +235,19 @@ namespace ShipbreakerVR
         private static void Track(Hand hand)
         {
             if (!Paths.TryGetValue(hand.Input, out var path)) Paths[hand.Input] = path = new Path();
-            if (!hand.Input.TryGetPosition(out var local)) { path.Count = 0; return; }
+            if (!hand.Input.TryGetPosition(out var local) || !hand.Input.TryGetAimRotation(out var turn)) { path.Count = 0; return; }
             path.At[path.Next] = local;
+            path.Turn[path.Next] = turn;
             path.Time[path.Next] = Time.unscaledTime;
             path.Next = (path.Next + 1) % Tracked;
             path.Count = Mathf.Min(path.Count + 1, Tracked);
         }
 
-        // The controller's average speed over the window, in world space relative to the body; false with too few frames.
-        private static bool HandSpeed(Hand hand, out Vector3 speed)
+        // The controller's average speed and spin over the window, in world space relative to the body; false with too few
+        // frames.
+        private static bool HandSpeed(Hand hand, out Vector3 speed, out Vector3 spin)
         {
-            speed = Vector3.zero;
+            speed = spin = Vector3.zero;
             if (!Paths.TryGetValue(hand.Input, out var path) || path.Count < 2) return false;
             var newest = (path.Next + Tracked - 1) % Tracked;
             var oldest = newest;
@@ -256,21 +259,30 @@ namespace ShipbreakerVR
             }
             var span = path.Time[newest] - path.Time[oldest];
             if (span <= 1e-4f) return false;
-            speed = VrCamera.Instance.transform.parent.TransformVector((path.At[newest] - path.At[oldest]) / span);
+            var rig = VrCamera.Instance.transform.parent;
+            speed = rig.TransformVector((path.At[newest] - path.At[oldest]) / span);
+            (path.Turn[newest] * Quaternion.Inverse(path.Turn[oldest])).ToAngleAxis(out var angle, out var axis);
+            if (angle > 180f) angle -= 360f;
+            if (!float.IsInfinity(axis.x) && Mathf.Abs(angle) > 0.01f) spin = rig.rotation * axis * (angle * Mathf.Deg2Rad / span);
             return true;
         }
 
-        // A firmly held part let go by its last hand flies off with the hand's averaged speed (as the body flies).
+        // A firmly held part let go by its last hand flies off as the hand moved it, averaged over the window: it spins as
+        // the hand turned, and its middle goes as a point of the hand there would, so the part where the hand held it goes
+        // at the hand's speed (Raik: a crate held at its edge flew as if thrown from its middle, the held edge slower).
         private static void Throw(Hand hand, Rigidbody body)
         {
-            if (body == null || player == null || body.isKinematic || !HandSpeed(hand, out var speed)) return;
+            if (body == null || player == null || body.isKinematic || !HandSpeed(hand, out var speed, out var spin)) return;
             var gain = ClimbContact.ThrowGain(body.mass);
             var before = body.velocity - player.velocity;
-            body.velocity = player.velocity + speed * gain;
+            var lever = body.worldCenterOfMass - HandWorld(hand);
+            var middle = (speed + Vector3.Cross(spin, lever)) * gain;
+            body.velocity = player.velocity + middle;
+            body.angularVelocity = spin;
             if (logs++ < 80)
-                Plugin.Log.LogInfo($"Climbing: {hand.Name} hand throws '{body.name}' ({body.mass:0.0} kg) at {speed.magnitude * gain:0.00} m/s "
-                    + $"(hand {speed.magnitude:0.00} m/s over {ThrowWindow * 1000f:0} ms, x{gain:0.00}; the last step had {before.magnitude:0.00} m/s, "
-                    + $"{Vector3.Angle(before, speed):0}° off)");
+                Plugin.Log.LogInfo($"Climbing: {hand.Name} hand throws '{body.name}' ({body.mass:0.0} kg) at {middle.magnitude:0.00} m/s, spinning {spin.magnitude * Mathf.Rad2Deg:0}°/s "
+                    + $"(hand {speed.magnitude:0.00} m/s over {ThrowWindow * 1000f:0} ms, held {lever.magnitude:0.00} m from its middle, x{gain:0.00}; "
+                    + $"the last step had {before.magnitude:0.00} m/s, {Vector3.Angle(before, middle):0}° off)");
         }
 
         // From VrCamera.FixedUpdate, before the physics step.
