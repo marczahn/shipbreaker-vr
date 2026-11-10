@@ -88,6 +88,8 @@ namespace ShipbreakerVR
             public bool HeldBack;
             public bool ArmPushed;
             public bool ArmTurned;
+            // How far the other arm turned the tool aside last frame, on top of where it would be without the arm.
+            public Quaternion ArmTurn = Quaternion.identity;
             // The grip last frame, in tracking space.
             public Vector3 Pivot;
         }
@@ -257,6 +259,7 @@ namespace ShipbreakerVR
             var previous = state.Running ? rig.rotation * state.Rotation : desired;
             var lastTurn = previous;
             var lastPivot = state.Running ? rig.TransformPoint(state.Pivot) : pivot;
+            if (!state.Running) state.ArmTurn = Quaternion.identity;
             state.Running = true;
             var boxes = hand == VrHand.GameToolHand.Input ? Shape(tool) : null;
             var length = Length(pivot, desired);
@@ -285,7 +288,14 @@ namespace ShipbreakerVR
             if (Quaternion.Angle(result, desired) > MostOff) result = Quaternion.Slerp(result, desired, 1f - Mathf.Exp(-Time.unscaledDeltaTime / CatchUp));
             // Held off by the world only: the other arm pushes it aside each frame anew, and it turns freely meanwhile.
             var blocked = Quaternion.Angle(result, desired) > 1f;
+            // The arm's turn from last frame lets go over ArmLetGo instead of at once (Raik, 2026-11-11: the grapple reacted
+            // very strongly and suddenly); where the arm is still in the way, ByArm turns it on from there.
+            var free = result;
+            if (state.ArmTurn != Quaternion.identity)
+                result = Quaternion.Slerp(Quaternion.identity, state.ArmTurn, Mathf.Exp(-Time.unscaledDeltaTime / ArmLetGo)) * result;
             result = ByArm(state, pivot, result, lastPivot, lastTurn, boxes, length, hand, tool);
+            state.ArmTurn = result * Quaternion.Inverse(free);
+            if (Quaternion.Angle(Quaternion.identity, state.ArmTurn) < 0.05f) state.ArmTurn = Quaternion.identity;
             HoldBack(state, rig, pivot, result, boxes, length, hand, tool);
             state.Pivot = rig.InverseTransformPoint(pivot);
             if (blocked != state.Blocked && logs++ < 30)
@@ -305,6 +315,10 @@ namespace ShipbreakerVR
         private const float ShortestLever = 0.08f;
         private const float MostArmTurn = 60f;
         private const int ArmTurnSteps = 8;
+        // At most this fast, in degrees per second (a little over 6° a frame at 90 fps), so a sudden contact does not
+        // throw the tool round in one frame; what is left HoldBack pushes aside. Let go over ArmLetGo seconds.
+        private const float ArmTurnRate = 540f;
+        private const float ArmLetGo = 0.08f;
 
         private static Quaternion ByArm(State state, Vector3 pivot, Quaternion rotation, Vector3 lastPivot, Quaternion lastTurn,
             Box[] boxes, float length, VrInput.Hand hand, EquipmentController.Equipment tool)
@@ -327,9 +341,10 @@ namespace ShipbreakerVR
             if (push.sqrMagnitude < 1e-8f) return rotation;
             var axis = Vector3.Cross(lever, push).normalized;
             var turned = 0f;
-            for (var i = 0; i < ArmTurnSteps && turned < MostArmTurn; i++)
+            var most = Mathf.Min(MostArmTurn, ArmTurnRate * dt);
+            for (var i = 0; i < ArmTurnSteps && turned < most; i++)
             {
-                var step = Mathf.Clamp(Mathf.Atan2(depth + ArmGap * scale, lever.magnitude) * Mathf.Rad2Deg, 0.5f, MostArmTurn - turned);
+                var step = Mathf.Clamp(Mathf.Atan2(depth + ArmGap * scale, lever.magnitude) * Mathf.Rad2Deg, 0.1f, most - turned);
                 rotation = Quaternion.AngleAxis(step, axis) * rotation;
                 turned += step;
                 if (!ArmContact(pivot, rotation, boxes, length, out _, out _, out _, out _, out depth)) break;
@@ -377,6 +392,12 @@ namespace ShipbreakerVR
             public float Radius;
         }
 
+        // The housing as it is (Raik, 2026-11-11: the box around it, 27 x 39 x 59 cm, was larger than the grapple, which
+        // turned away from an arm that did not touch it): its own shape (VrShapeField) in cells of FieldCell, known out to
+        // FieldMargin, in meters at world scale 1. The box only where the mesh cannot be read.
+        private const float FieldCell = 0.015f;
+        private const float FieldMargin = 0.08f;
+        private static VrShapeField grappleField;
         private static Transform grappleOf;
         private static Bounds grappleHousing;
         private static readonly List<Transform> GrappleArms = new List<Transform>();
@@ -454,6 +475,8 @@ namespace ShipbreakerVR
             GrappleArms.Clear();
             var scale = model.lossyScale.x;
             var points = new List<Vector3>();
+            var corners = new List<Vector3>();
+            grappleField = null;
             var readable = true;
             var parts = new List<string>();
             foreach (var renderer in model.GetComponentsInChildren<MeshRenderer>(true))
@@ -468,7 +491,11 @@ namespace ShipbreakerVR
                 if (name.Contains(ArmPart)) { GrappleArms.Add(part); continue; }
                 if (!HousingParts.Any(h => name.EndsWith(h))) continue;
                 if (mesh.isReadable)
+                {
+                    var start = points.Count;
                     foreach (var vertex in mesh.vertices) points.Add(ToAim(model, mount, turn, scale, part.TransformPoint(vertex)));
+                    foreach (var index in mesh.triangles) corners.Add(points[start + index]);
+                }
                 else
                 {
                     readable = false;
@@ -515,8 +542,19 @@ namespace ShipbreakerVR
                 }
             }
             grappleHousing = bounds;
+            var fieldNote = "";
+            if (readable && corners.Count >= 3)
+            {
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                var field = new VrShapeField(corners, FieldCell * VrCamera.WorldScale, FieldMargin * VrCamera.WorldScale, bounds.min.y);
+                if (field.SolidCells > 0)
+                {
+                    grappleField = field;
+                    fieldNote = $"; its own shape {field.SolidBounds.size * 100f:F0} cm, {field.SolidCells} cells of {FieldCell * 100f:0.#} cm, built in {watch.ElapsedMilliseconds} ms";
+                }
+            }
             if (logs++ < 30) Plugin.Log.LogInfo($"Tool collision: grapple housing {bounds.size * 100f:F0} cm at {bounds.center * 100f:F0} cm from the grip "
-                + $"({(readable ? $"mesh read, {full.size.y * 100f - bounds.size.y * 100f:0} cm of ring left out below" : "mesh not readable, the whole height kept")}), "
+                + $"({(readable ? $"mesh read, {full.size.y * 100f - bounds.size.y * 100f:0} cm of ring left out below" : "mesh not readable, the whole height kept")}{fieldNote}), "
                 + $"{GrappleArms.Count} arm(s); parts: {string.Join("; ", parts)}");
             return true;
         }
@@ -540,6 +578,21 @@ namespace ShipbreakerVR
                 {
                     var t = s / (float)ArmSamples;
                     var p = Vector3.Lerp(a, b, t);
+                    if (grappleField != null)
+                    {
+                        var distance = grappleField.Distance(p);
+                        if (distance == float.MaxValue || radius - distance <= depth) continue;
+                        var outward = grappleField.Out(p);
+                        if (outward == Vector3.zero) continue;
+                        found = true;
+                        depth = radius - distance;
+                        // The field's way points off the housing; the tool goes the other way.
+                        way = rotation * -outward;
+                        armAt = pivot + rotation * p;
+                        piece = j;
+                        along = t;
+                        continue;
+                    }
                     var q = Vector3.Max(housing.min, Vector3.Min(housing.max, p));
                     var gap = p - q;
                     float deep;
