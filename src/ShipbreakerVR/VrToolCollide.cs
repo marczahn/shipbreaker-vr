@@ -349,14 +349,211 @@ namespace ShipbreakerVR
             piece = 0;
             along = depth = 0f;
             if (!armKnown) return false;
-            // Against the arm every tool is the ball along it, the grapple too (Raik: the cutter's way felt right, the
-            // grapple's boxes, its tall housing above all, caught on their corners and made it wonky).
+            // The grapple in the hand with its model: its housing and its four arms (GrappleShape).
+            if (boxes != null && shapeTool == EquipmentController.Equipment.GrappleHook && GrappleShape(out var housing, out var arms))
+                return InGrapple(pivot, rotation, housing, arms, out armAt, out piece, out along, out way, out depth);
+            // Otherwise the ball along it, as the cutter (Raik: the cutter's way felt right).
             var scale = VrCamera.WorldScale;
             var forward = rotation * Vector3.forward;
             var start = pivot + forward * FromGrip * scale;
             var distance = length - FromGrip * scale;
             if (distance <= 0f) return false;
             return LineInArm(start, start + forward * distance, Radius * scale, out armAt, out way, out depth, out piece, out along);
+        }
+
+        // The grapple against the other arm (Raik, 2026-11-10: the ball along it did not fit the grapple): its housing as a
+        // box in the aim's axes ('Main_1' with its spool 'Spool_1'), without the narrow ring under it, and its four arms
+        // ('Teeth_1' to 'Teeth_4') each as a capsule along its longest side, read anew each time as they open and close.
+        // The ring is found from the housing's mesh, where it is readable: the bottom rows where the housing is narrower
+        // than RingNarrow of its widest are left out.
+        private const string GrapplePart = "GB_GrappleTool_";
+        private static readonly string[] HousingParts = { "Main_1", "Spool_1" };
+        private const string ArmPart = "Teeth_";
+        private const float RingNarrow = 0.5f;
+        private const int RingRows = 24;
+        private const int ArmSamples = 12;
+
+        private struct Capsule
+        {
+            public Vector3 A, B;
+            public float Radius;
+        }
+
+        private static Transform grappleOf;
+        private static Bounds grappleHousing;
+        private static readonly List<Transform> GrappleArms = new List<Transform>();
+        private static readonly Capsule[] ArmCapsules = new Capsule[4];
+        private static int armCapsules;
+
+        private static bool GrappleShape(out Bounds housing, out Capsule[] arms)
+        {
+            housing = default;
+            arms = ArmCapsules;
+            if (!VrToolModels.TryGetFrame(out var model, out var mount, out var turn)) return false;
+            if (model != grappleOf && !BuildGrapple(model, mount, turn)) return false;
+            housing = grappleHousing;
+            armCapsules = 0;
+            var scale = model.lossyScale.x;
+            foreach (var part in GrappleArms)
+            {
+                if (part == null || armCapsules >= ArmCapsules.Length) continue;
+                var filter = part.GetComponent<MeshFilter>();
+                if (filter == null || filter.sharedMesh == null) continue;
+                var bounds = filter.sharedMesh.bounds;
+                var center = ToAim(model, mount, turn, scale, part.TransformPoint(bounds.center));
+                var partTurn = turn * (Quaternion.Inverse(model.rotation) * part.rotation);
+                var half = Vector3.Scale(bounds.extents, part.lossyScale);
+                var axis = half.x >= half.y && half.x >= half.z ? 0 : half.y >= half.z ? 1 : 2;
+                var along = axis == 0 ? Vector3.right : axis == 1 ? Vector3.up : Vector3.forward;
+                var radius = Mathf.Max(0.01f * VrCamera.WorldScale, (half.x + half.y + half.z - half[axis]) * 0.5f);
+                var reach = Mathf.Max(half[axis] - radius, 0f);
+                ArmCapsules[armCapsules++] = new Capsule { A = center - partTurn * along * reach, B = center + partTurn * along * reach, Radius = radius };
+            }
+            return true;
+        }
+
+        // A point of the model, in the aim's axes from the grip.
+        private static Vector3 ToAim(Transform model, Vector3 mount, Quaternion turn, float scale, Vector3 world) =>
+            mount + turn * (model.InverseTransformPoint(world) * scale);
+
+        private static bool BuildGrapple(Transform model, Vector3 mount, Quaternion turn)
+        {
+            grappleOf = model;
+            GrappleArms.Clear();
+            var scale = model.lossyScale.x;
+            var points = new List<Vector3>();
+            var readable = true;
+            var parts = new List<string>();
+            foreach (var renderer in model.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                var name = renderer.name;
+                if (!name.StartsWith(GrapplePart)) continue;
+                var filter = renderer.GetComponent<MeshFilter>();
+                if (filter == null || filter.sharedMesh == null) continue;
+                var mesh = filter.sharedMesh;
+                var part = renderer.transform;
+                parts.Add($"{name.Substring(GrapplePart.Length)} {Vector3.Scale(mesh.bounds.size, part.lossyScale) * 100f:F0} cm at {ToAim(model, mount, turn, scale, part.TransformPoint(mesh.bounds.center)) * 100f:F0}");
+                if (name.Contains(ArmPart)) { GrappleArms.Add(part); continue; }
+                if (!HousingParts.Any(h => name.EndsWith(h))) continue;
+                if (mesh.isReadable)
+                    foreach (var vertex in mesh.vertices) points.Add(ToAim(model, mount, turn, scale, part.TransformPoint(vertex)));
+                else
+                {
+                    readable = false;
+                    var b = mesh.bounds;
+                    for (var i = 0; i < 8; i++)
+                        points.Add(ToAim(model, mount, turn, scale, part.TransformPoint(b.center + Vector3.Scale(b.extents, new Vector3((i & 1) * 2 - 1, (i & 2) - 1, (i & 4) / 2 - 1)))));
+                }
+            }
+            if (points.Count == 0)
+            {
+                Plugin.Log.LogInfo("Tool collision: grapple housing not found, the ball along it instead");
+                return false;
+            }
+            var bounds = new Bounds(points[0], Vector3.zero);
+            foreach (var p in points) bounds.Encapsulate(p);
+            var full = bounds;
+            // The ring under the housing: the bottom rows narrower than RingNarrow of the widest row.
+            if (readable)
+            {
+                var rows = new float[RingRows];
+                var row = bounds.size.y / RingRows;
+                var rowMin = new float[RingRows];
+                var rowMax = new float[RingRows];
+                for (var i = 0; i < RingRows; i++) { rowMin[i] = float.MaxValue; rowMax[i] = float.MinValue; }
+                foreach (var p in points)
+                {
+                    var i = Mathf.Clamp((int)((p.y - bounds.min.y) / Mathf.Max(row, 1e-6f)), 0, RingRows - 1);
+                    rowMin[i] = Mathf.Min(rowMin[i], p.x);
+                    rowMax[i] = Mathf.Max(rowMax[i], p.x);
+                }
+                var widest = 0f;
+                for (var i = 0; i < RingRows; i++)
+                {
+                    rows[i] = rowMax[i] > rowMin[i] ? rowMax[i] - rowMin[i] : 0f;
+                    widest = Mathf.Max(widest, rows[i]);
+                }
+                var bottom = 0;
+                while (bottom < RingRows / 2 && rows[bottom] < widest * RingNarrow) bottom++;
+                if (bottom > 0)
+                {
+                    var min = bounds.min;
+                    min.y += bottom * row;
+                    bounds.SetMinMax(min, bounds.max);
+                }
+            }
+            grappleHousing = bounds;
+            Plugin.Log.LogInfo($"Tool collision: grapple housing {bounds.size * 100f:F0} cm at {bounds.center * 100f:F0} cm from the grip "
+                + $"({(readable ? $"mesh read, {full.size.y * 100f - bounds.size.y * 100f:0} cm of ring left out below" : "mesh not readable, the whole height kept")}), "
+                + $"{GrappleArms.Count} arm(s); parts: {string.Join("; ", parts)}");
+            return true;
+        }
+
+        // The deepest place where the other arm goes into the grapple's housing or one of its arms.
+        private static bool InGrapple(Vector3 pivot, Quaternion rotation, Bounds housing, Capsule[] arms, out Vector3 armAt, out int piece,
+            out float along, out Vector3 way, out float depth)
+        {
+            armAt = way = Vector3.zero;
+            piece = 0;
+            along = depth = 0f;
+            var back = Quaternion.Inverse(rotation);
+            var found = false;
+            for (var j = 0; j < armPieces; j++)
+            {
+                var a = back * (ArmJoints[j] - pivot);
+                var b = back * (ArmJoints[j + 1] - pivot);
+                var radius = PieceRadius(j);
+                // The housing: the arm's line, sampled, against the box.
+                for (var s = 0; s <= ArmSamples; s++)
+                {
+                    var t = s / (float)ArmSamples;
+                    var p = Vector3.Lerp(a, b, t);
+                    var q = Vector3.Max(housing.min, Vector3.Min(housing.max, p));
+                    var gap = p - q;
+                    float deep;
+                    Vector3 out_;
+                    if (gap.sqrMagnitude > 1e-10f)
+                    {
+                        deep = radius - gap.magnitude;
+                        out_ = -gap.normalized;
+                    }
+                    else
+                    {
+                        // Inside: out through the nearest side, the tool going the other way.
+                        var toMax = housing.max - p;
+                        var toMin = p - housing.min;
+                        var least = toMax.x; out_ = Vector3.left;
+                        if (toMin.x < least) { least = toMin.x; out_ = Vector3.right; }
+                        if (toMax.y < least) { least = toMax.y; out_ = Vector3.down; }
+                        if (toMin.y < least) { least = toMin.y; out_ = Vector3.up; }
+                        if (toMax.z < least) { least = toMax.z; out_ = Vector3.back; }
+                        if (toMin.z < least) { least = toMin.z; out_ = Vector3.forward; }
+                        deep = radius + least;
+                    }
+                    if (deep <= depth) continue;
+                    found = true;
+                    depth = deep;
+                    way = rotation * out_;
+                    armAt = pivot + rotation * p;
+                    piece = j;
+                    along = t;
+                }
+                // The arms: capsule against capsule.
+                for (var k = 0; k < armCapsules; k++)
+                {
+                    VrUtil.ClosestOnSegments(arms[k].A, arms[k].B, a, b, out var onTool, out var onArm);
+                    var gap = onTool - onArm;
+                    var deep = radius + arms[k].Radius - gap.magnitude;
+                    if (deep <= depth) continue;
+                    found = true;
+                    depth = deep;
+                    way = rotation * (gap.sqrMagnitude > 1e-10f ? gap.normalized : Vector3.up);
+                    armAt = pivot + rotation * onArm;
+                    piece = j;
+                    OnSegment(a, b, onArm, out along);
+                }
+            }
+            return found;
         }
 
         private static void ReportTurn(State state, bool turned, VrInput.Hand hand, EquipmentController.Equipment tool, float angle)
