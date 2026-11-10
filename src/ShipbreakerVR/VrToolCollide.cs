@@ -389,8 +389,17 @@ namespace ShipbreakerVR
         {
             housing = default;
             arms = ArmCapsules;
-            if (!VrToolModels.TryGetFrame(out var model, out var mount, out var turn)) return false;
-            if (model != grappleOf && !BuildGrapple(model, mount, turn)) return false;
+            if (!VrToolModels.TryGetFrame(out var model, out var mount, out var turn) || !Settled(model, out var root)) return false;
+            // Built again once the tool sits differently in the hand (built while it still glided in from the hip, the
+            // housing lay 1.5 m below the grip, Raik 2026-11-10).
+            if (model != grappleOf || root != grappleRoot || Vector3.Distance(root.localPosition, grappleAt) > 0.01f
+                || Quaternion.Angle(root.localRotation, grappleTurn) > 2f)
+            {
+                if (!BuildGrapple(model, mount, turn)) return false;
+                grappleRoot = root;
+                grappleAt = root.localPosition;
+                grappleTurn = root.localRotation;
+            }
             housing = grappleHousing;
             armCapsules = 0;
             var scale = model.lossyScale.x;
@@ -410,6 +419,31 @@ namespace ShipbreakerVR
                 ArmCapsules[armCapsules++] = new Capsule { A = center - partTurn * along * reach, B = center + partTurn * along * reach, Radius = radius };
             }
             return true;
+        }
+
+        // Whether the tool under the model point has sat still in the hand for SettledFor seconds: drawn, it glides in
+        // from the belt first, and a shape built meanwhile lies wherever it was.
+        private const float SettledFor = 0.25f;
+        private static Transform settledRoot, grappleRoot;
+        private static Vector3 settledAt, grappleAt;
+        private static Quaternion settledTurn, grappleTurn;
+        private static float settledSince;
+
+        private static bool Settled(Transform model, out Transform root)
+        {
+            root = null;
+            foreach (Transform child in model)
+                if (child.gameObject.activeInHierarchy && child.GetComponentInChildren<MeshRenderer>() != null) { root = child; break; }
+            if (root == null) return false;
+            var now = Time.unscaledTime;
+            if (root != settledRoot || Vector3.Distance(root.localPosition, settledAt) > 0.002f || Quaternion.Angle(root.localRotation, settledTurn) > 0.5f)
+            {
+                settledRoot = root;
+                settledAt = root.localPosition;
+                settledTurn = root.localRotation;
+                settledSince = now;
+            }
+            return now - settledSince >= SettledFor;
         }
 
         // A point of the model, in the aim's axes from the grip.
@@ -483,7 +517,7 @@ namespace ShipbreakerVR
                 }
             }
             grappleHousing = bounds;
-            Plugin.Log.LogInfo($"Tool collision: grapple housing {bounds.size * 100f:F0} cm at {bounds.center * 100f:F0} cm from the grip "
+            if (logs++ < 30) Plugin.Log.LogInfo($"Tool collision: grapple housing {bounds.size * 100f:F0} cm at {bounds.center * 100f:F0} cm from the grip "
                 + $"({(readable ? $"mesh read, {full.size.y * 100f - bounds.size.y * 100f:0} cm of ring left out below" : "mesh not readable, the whole height kept")}), "
                 + $"{GrappleArms.Count} arm(s); parts: {string.Join("; ", parts)}");
             return true;
@@ -636,6 +670,8 @@ namespace ShipbreakerVR
         private static Box[] Shape(EquipmentController.Equipment tool)
         {
             if (!VrToolModels.TryGetFrame(out var model, out var mount, out var turn)) return null;
+            // Not while the tool still glides into the hand: the boxes would lie where it was (the ball meanwhile).
+            if (!Settled(model, out _)) return null;
             if (model == shapeOf && tool == shapeTool && Time.unscaledTime - shapeAt < ShapeAgain) return shape;
             shapeAt = Time.unscaledTime;
             var scale = model.lossyScale.x;
