@@ -145,8 +145,7 @@ namespace ShipbreakerVR
         }
 
         // The other arm, which the tool does not pass through and cannot push aside (Raik, 2026-11-08): its upper arm and
-        // forearm as drawn (VrHands), set for each tool's turn (Apply), and its hand to the finger tips while it does not
-        // hold the tool as a second hand (VrToolSupport).
+        // forearm as drawn (VrHands), set for each tool's turn (Apply), and its hand to the finger tips.
         private const float ArmRadius = 0.05f;
         private const float HandRadius = 0.045f;
         private const float Fingers = 0.08f;
@@ -162,14 +161,13 @@ namespace ShipbreakerVR
         private static void OtherArm(VrInput.Hand hand)
         {
             armKnown = VrHands.TryGetArm(!hand.IsLeft, out ArmJoints[0], out ArmJoints[1], out ArmJoints[2], out var knuckles);
-            var other = hand.IsLeft ? VrInput.Right : VrInput.Left;
             var along = knuckles - ArmJoints[2];
             armPieces = 2;
             ArmJoints[3] = knuckles;
             if (armKnown && along.sqrMagnitude > 1e-6f)
             {
                 ArmJoints[3] = knuckles + along.normalized * (Fingers * VrCamera.WorldScale);
-                if (!VrToolSupport.Supports(other)) armPieces = 3;
+                armPieces = 3;
             }
             var side = hand.IsLeft ? 1 : 0;
             var before = JointsBefore[side];
