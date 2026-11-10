@@ -149,6 +149,7 @@ namespace ShipbreakerVR
                 EnumRow(L("Anti-aliasing", "Kantenglättung"), VrSettings.AntiAliasing),
                 EnumRow(L("Ambient occlusion", "Umgebungsverdeckung"), VrSettings.AmbientOcclusion),
                 new BoolRow { Label = L("Debris farther away", "Trümmer weiter sehen"), Entry = VrSettings.DebrisRange },
+                new BoolRow { Label = L("Lamp shadows only nearby", "Lampenschatten nur nah"), Entry = VrSettings.NearLampShadows },
                 new BoolRow { Label = L("Share work between eyes", "Augen teilen"), Entry = VrSettings.EyeSharing },
                 new BoolRow { Label = L("Alternate eyes", "Augen abwechselnd"), Entry = VrSettings.AlternateEyes },
                 new BoolRow { Label = L("Performance display", "Leistungsanzeige"), Entry = VrSettings.PerformanceOverlay },
