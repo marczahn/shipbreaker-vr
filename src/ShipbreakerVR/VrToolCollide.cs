@@ -152,9 +152,9 @@ namespace ShipbreakerVR
         private const float HandRadius = 0.045f;
         private const float Fingers = 0.08f;
         private static CapsuleCollider armProbe;
-        private static bool armKnown;
-        private static int armPieces;
-        private static readonly Vector3[] ArmJoints = new Vector3[4];
+        internal static bool armKnown;
+        internal static int armPieces;
+        internal static readonly Vector3[] ArmJoints = new Vector3[4];
         // How fast each joint moves, from where it was the frame before (per arm, as the tool may change hands).
         private static readonly Vector3[] JointSpeed = new Vector3[4];
         private static readonly Vector3[][] JointsBefore = { new Vector3[4], new Vector3[4] };
@@ -191,7 +191,7 @@ namespace ShipbreakerVR
             return a + line * t;
         }
 
-        private static float PieceRadius(int j) => (j == 2 ? HandRadius : ArmRadius) * VrCamera.WorldScale;
+        internal static float PieceRadius(int j) => (j == 2 ? HandRadius : ArmRadius) * VrCamera.WorldScale;
 
         // Whether the tool's line (the ball along it, without a model) comes within reach of the other arm.
         private static bool LineInArm(Vector3 start, Vector3 end, float reach, out Vector3 at, out Vector3 way, out float depth) =>
@@ -320,6 +320,25 @@ namespace ShipbreakerVR
         private const float ArmTurnRate = 540f;
         private const float ArmLetGo = 0.08f;
 
+        // Where the other arm last met the tool and the way the tool was turned (world), for a local view of the shape.
+        internal static Vector3 ContactAt, ContactWay;
+        internal static int ContactFrame = -10;
+
+        // The tool hand's grip and the tool's turn as last worked out (world), for a local view of the shape.
+        internal static bool ToolPose(out Vector3 pivot, out Quaternion rotation)
+        {
+            pivot = Vector3.zero;
+            rotation = Quaternion.identity;
+            var hand = VrHand.GameToolHand.Input;
+            var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+            if (hand == null || rig == null) return false;
+            var state = hand.IsLeft ? Left : Right;
+            if (!state.Running || state.Frame < Time.frameCount - 1) return false;
+            pivot = rig.TransformPoint(state.Pivot);
+            rotation = rig.rotation * state.Result;
+            return true;
+        }
+
         private static Quaternion ByArm(State state, Vector3 pivot, Quaternion rotation, Vector3 lastPivot, Quaternion lastTurn,
             Box[] boxes, float length, VrInput.Hand hand, EquipmentController.Equipment tool)
         {
@@ -329,6 +348,9 @@ namespace ShipbreakerVR
                 ReportTurn(state, false, hand, tool, 0f);
                 return rotation;
             }
+            ContactAt = armAt;
+            ContactWay = way;
+            ContactFrame = Time.frameCount;
             var lever = armAt - pivot;
             if (lever.magnitude < ShortestLever * scale) return rotation;
             var dt = Mathf.Max(Time.unscaledDeltaTime, 1e-4f);
@@ -386,7 +408,7 @@ namespace ShipbreakerVR
         private const int RingRows = 24;
         private const int ArmSamples = 12;
 
-        private struct Capsule
+        internal struct Capsule
         {
             public Vector3 A, B;
             public float Radius;
@@ -397,12 +419,12 @@ namespace ShipbreakerVR
         // FieldMargin, in meters at world scale 1. The box only where the mesh cannot be read.
         private const float FieldCell = 0.015f;
         private const float FieldMargin = 0.08f;
-        private static VrShapeField grappleField;
+        internal static VrShapeField grappleField;
         private static Transform grappleOf;
         private static Bounds grappleHousing;
         private static readonly List<Transform> GrappleArms = new List<Transform>();
-        private static readonly Capsule[] ArmCapsules = new Capsule[4];
-        private static int armCapsules;
+        internal static readonly Capsule[] ArmCapsules = new Capsule[4];
+        internal static int armCapsules;
 
         private static bool GrappleShape(out Bounds housing, out Capsule[] arms)
         {

@@ -16,6 +16,13 @@ namespace ShipbreakerVR
         public readonly int SolidCells;
         public readonly Bounds SolidBounds;
 
+        // The grid, for a local view of the shape.
+        public Vector3 Origin => origin;
+        public float Cell => cell;
+        public Vector3Int Size => new Vector3Int(nx, ny, nz);
+        public bool Solid(int x, int y, int z) =>
+            x >= 0 && y >= 0 && z >= 0 && x < nx && y < ny && z < nz && field[(z * ny + y) * nx + x] < 0f;
+
         // Triangles as three points each, in one frame; cells below Floor (in that frame's y) are left out; Margin around
         // the shape is in the grid, so distances up to it are known.
         public VrShapeField(List<Vector3> corners, float cell, float margin, float floor)
