@@ -45,6 +45,7 @@ namespace ShipbreakerVR
             ("diagnostics", () => VrDiagnostics.Update(VrCamera.Instance)),
             ("debris range", VrDebrisRange.Update),
             ("lamp shadows", VrLampShadows.Update),
+            ("shoulder stow", VrShoulderStow.Update),
             ("pickup layer", VrPickupLayer.Update),
             ("vr options entry", VrOptionsMenu.Update),
             ("vr options tab", VrOptionsTab.Update),

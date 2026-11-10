@@ -133,6 +133,7 @@ namespace ShipbreakerVR
                 new BoolRow { Label = L("Aim with the hand", "Zielen mit der Hand"), Entry = VrSettings.AimWithHand },
                 new BoolRow { Label = L("Two tools at once", "Zwei Werkzeuge gleichzeitig"), Entry = VrSettings.TwoTools },
                 new BoolRow { Label = L("Hold on and climb", "Festhalten und Hangeln"), Entry = VrSettings.Climbing },
+                new BoolRow { Label = L("Stow over the shoulder", "Über die Schulter einpacken"), Entry = VrSettings.ShoulderStow },
                 new BoolRow { Label = L("Walk in the station", "Frei gehen in der Station"), Entry = VrSettings.FreeWalking },
                 EnumRow(L("Controller flying", "Controllersteuerung"), VrSettings.ControlScheme),
                 new SliderRow { Label = L("Thrust deadzone (cm)", "Schub-Totzone (cm)"), Entry = VrSettings.ThrustDeadzone, Format = "0", Step = 1f },

@@ -62,6 +62,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> MirrorCutter;
         public static ConfigEntry<bool> TwoTools;
         public static ConfigEntry<bool> Climbing;
+        public static ConfigEntry<bool> ShoulderStow;
         public static ConfigEntry<bool> UprightBody;
         public static ConfigEntry<bool> Diagnostics;
         public static ConfigEntry<bool> TestMode;
@@ -176,6 +177,10 @@ namespace ShipbreakerVR
                 ("Grip with a hand that holds no tool, close to a surface, holds on there; moving the hand pulls you along it, hand over hand with both. A light part comes to the hand instead, the station and fixed hulls stay put. Letting go keeps your speed, so you can push off. While the left hand holds on, flying rests. At a control (airlock console, switch) the grip holds on too; A or X works it.",
                     "Grip mit einer Hand ohne Werkzeug, nah an einer Oberfläche, hält dich dort fest; bewegst du die Hand, ziehst du dich daran entlang, mit beiden Händen Hand über Hand. Ein leichtes Teil kommt stattdessen zur Hand, Station und feste Rümpfe bleiben, wo sie sind. Loslassen behält deinen Schwung, so kannst du dich abstoßen. Solange die linke Hand festhält, ruht das Fliegen. An einem Bedienelement (Schleusenkonsole, Schalter) hält der Grip dich ebenfalls fest; bedient wird es mit A oder X."),
                 "How far you and a light part move depends on both masses.");
+            ShoulderStow = Bind("Steuerung", "UeberDieSchulterEinpacken", true,
+                ("Things to collect (cables, circuit boards, data cassettes and the like) are collected by holding them over your left shoulder and letting go there, as into a backpack: a short rattle and a buzz confirm it. Off: only with A or X while holding them.",
+                    "Sammelteile (Kabel, Platinen, Datenkassetten und Ähnliches) sammelst du ein, indem du sie über die linke Schulter hältst und dort loslässt, wie in einen Rucksack: ein kurzes Rasseln und ein Vibrieren bestätigen es. Aus: nur mit A oder X, während du sie hältst."),
+                "Needs Festhalten.");
 
             UprightBody = Bind("Steuerung", "OberkoerperAufrecht", true,
                 ("Your body stays upright and faces your hands while you look around, and follows your head when you lean, so the hands reach the controllers the same way wherever you look. Off: the body turns with every look and stays put when you lean, as before.",

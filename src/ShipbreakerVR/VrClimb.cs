@@ -1241,6 +1241,22 @@ namespace ShipbreakerVR
             return found;
         }
 
+        // The loose part that controller's hand holds, with what can be used of it (VrShoulderStow), or false.
+        public static bool HeldLoose(VrInput.Hand input, out Rigidbody body, out InteractableObject interactable)
+        {
+            body = null;
+            interactable = null;
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input || !hand.Holding || hand.Body == null || hand.Body.isKinematic || hand.Collider == null) continue;
+                body = hand.Body;
+                interactable = hand.Collider.GetComponentInParent<InteractableObject>();
+                if (interactable == null) interactable = hand.Body.GetComponentInChildren<InteractableObject>();
+                return true;
+            }
+            return false;
+        }
+
         // The control that controller's hand holds (VrLever), or null.
         public static InteractableObject HeldControl(VrInput.Hand input)
         {

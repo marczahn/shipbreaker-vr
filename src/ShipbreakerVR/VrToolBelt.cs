@@ -73,20 +73,32 @@ namespace ShipbreakerVR
 
         private static Zone Find(VrInput.Hand controller, out Vector3 local)
         {
+            if (!HeadLocal(controller, out local)) return Zone.None;
+            var zone = ZoneAt(local);
+            return zone == Zone.Flashlight && !controller.IsLeft ? Zone.None : zone;
+        }
+
+        // Where the controller is relative to the head, in meters along the head's heading (x right, y up, z forward), as
+        // the zones are measured; also for stowing things over the left shoulder (VrShoulderStow).
+        internal static bool HeadLocal(VrInput.Hand controller, out Vector3 local)
+        {
             local = Vector3.zero;
             var vr = VrCamera.Instance;
-            if (vr == null || !controller.TryGetPosition(out var hand)) return Zone.None;
+            if (vr == null || !controller.TryGetPosition(out var hand)) return false;
             var head = vr.transform;
             var forward = head.localRotation * Vector3.forward;
             forward.y = 0f;
             // Looking straight down the top of the head points ahead.
             if (forward.sqrMagnitude < 0.01f) forward = head.localRotation * Vector3.up;
             forward.y = 0f;
-            if (forward.sqrMagnitude < 0.0001f) return Zone.None;
+            if (forward.sqrMagnitude < 0.0001f) return false;
             local = Quaternion.Inverse(Quaternion.LookRotation(forward, Vector3.up)) * (hand - head.localPosition);
-            var zone = ZoneAt(local);
-            return zone == Zone.Flashlight && !controller.IsLeft ? Zone.None : zone;
+            return true;
         }
+
+        // Over the left shoulder, the mirror of the cutter's zone over the right one, with its inner edge at the middle
+        // of the head (the cutter's reaches 10 cm past it), for stowing what a hand holds (VrShoulderStow).
+        internal static bool OverLeftShoulder(Vector3 local) => local.y > ShoulderAbove && local.z < ShoulderBehind && local.x < 0f;
 
         // The zone at a hand position relative to the head, in meters along the head's heading (x right, y up, z forward).
         // The grapple's zone is a ball of GripReach around its grip at the right hip, the demo charges' the box at the left.
