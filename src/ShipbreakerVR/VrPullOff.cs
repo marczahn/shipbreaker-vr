@@ -10,8 +10,9 @@ namespace ShipbreakerVR
     // further; from Enough on the thing tilts off the wall by up to Tilt degrees, and pulled that hard for Hold seconds it
     // comes loose and flies into the hand over Fly seconds, a quick move, not a jump. There it is a loose part like any
     // other: held, thrown, let go, and let go over the left shoulder it is used as with A (VrShoulderStow).
-    // While pulling the hand holds free (VrClimb.SetFree): it pulls neither the body nor the ship. Let go before, the
-    // thing goes back to where it was.
+    // It comes off only while the other hand holds on to the ship's wall (Raik, 2026-11-11): then the hand on it holds free
+    // (VrClimb.SetFree) and pulls neither the body nor the ship. Without that it is a hold like the wall, to climb along.
+    // Let go before it came off, the thing goes back to where it was.
     // The game has no loose form of them: they are parts of the ship's body. Pulled off, the thing's own transform (the
     // largest one around it still smaller than Largest) leaves the ship and gets a rigidbody of Mass.
     internal static class VrPullOff
@@ -37,6 +38,8 @@ namespace ShipbreakerVR
             public Vector3 Surface;
             public float Pulled;
             public float Angle;
+            public bool Braced;
+            public Rigidbody Ship;
             // Flying into the hand: from where, which point of it goes to the hand, since when.
             public Rigidbody Body;
             public Vector3 FromPosition;
@@ -83,6 +86,20 @@ namespace ShipbreakerVR
                 return;
             }
             if (!Controller(pull.Input, out var hand)) return;
+            var braced = OnWall(pull);
+            if (braced != pull.Braced)
+            {
+                pull.Braced = braced;
+                VrClimb.SetFree(pull.Input, braced, false);
+                if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{pull.Thing.name}' {(braced ? "can be pulled off, the other hand holds the ship" : "is a hold to climb on again")}");
+            }
+            if (!braced)
+            {
+                pull.Pulled = 0f;
+                pull.Angle = Mathf.MoveTowards(pull.Angle, 0f, Tilt / TiltTime * Time.deltaTime);
+                Pose(pull, hand);
+                return;
+            }
             // How far the controller is from where the hand holds, away from the wall.
             var away = Vector3.Dot(hand - pull.Root.TransformPoint(pull.Surface), pull.Normal);
             var scale = VrCamera.WorldScale;
@@ -95,6 +112,14 @@ namespace ShipbreakerVR
             pull.Angle = Mathf.MoveTowards(pull.Angle, wanted, Tilt / TiltTime * Time.deltaTime);
             Pose(pull, hand);
             if (pull.Pulled >= Hold) Loosen(pull, hand);
+        }
+
+        // The other hand holds on to the ship the thing is on, not to the thing.
+        private static bool OnWall(Pull pull)
+        {
+            var other = pull.Input == VrInput.Left ? VrInput.Right : VrInput.Left;
+            return pull.Ship != null && VrClimb.Braced(pull.Input) && VrClimb.HeldBody(other) == pull.Ship
+                && VrClimb.HeldControl(other) != pull.Thing;
         }
 
         // A thing to use, fixed on the ship: removed when used, not a lever or switch, on no loose part.
@@ -120,9 +145,10 @@ namespace ShipbreakerVR
             pull.Surface = root.InverseTransformPoint(surface);
             pull.Pulled = 0f;
             pull.Angle = 0f;
-            // The hand holds free on it and goes with it as it tilts.
+            pull.Braced = false;
+            pull.Ship = control.GetComponentInParent<Rigidbody>();
+            // The hand goes with it as it tilts; it holds free only while the other hand holds the ship.
             VrClimb.Reanchor(pull.Input, root);
-            VrClimb.SetFree(pull.Input, true, false);
             if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: {pull.Input.Name} hand holds '{control.name}', its part '{root.name}' ({Size(root):0.00} m) on '{(root.parent != null ? root.parent.name : "-")}'");
             return true;
         }
@@ -178,7 +204,7 @@ namespace ShipbreakerVR
         private static void Loosen(Pull pull, Vector3 hand)
         {
             var root = pull.Root;
-            var ship = pull.Thing.GetComponentInParent<Rigidbody>();
+            var ship = pull.Ship;
             var shipSpeed = ship != null ? ship.GetPointVelocity(root.position) : Vector3.zero;
             pull.FromPosition = root.position;
             pull.FromRotation = root.rotation;
@@ -281,6 +307,8 @@ namespace ShipbreakerVR
             pull.Body = null;
             pull.Pulled = 0f;
             pull.Angle = 0f;
+            pull.Braced = false;
+            pull.Ship = null;
             pull.FlyStart = -1f;
         }
     }
