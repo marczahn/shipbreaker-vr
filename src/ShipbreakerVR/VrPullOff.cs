@@ -9,7 +9,7 @@ namespace ShipbreakerVR
     // Things to use fixed on a ship's wall (first aid kits, oxygen and fuel tanks, repair kits) are pulled off by hand
     // (Raik, 2026-11-11), as a cargo container is torn off with the grapple: the hand holds one (VrClimb holds it as a
     // surface, the hand flat on it) and pulls away from the wall. From Start on the controller buzzes, the harder the
-    // further; from Enough on the thing tilts off the wall by up to Tilt degrees, and pulled that hard for Hold seconds it
+    // further; from Enough on the thing tilts off the wall by up to Tilt degrees, and pulled that hard for Hold seconds (a poster PosterHold) it
     // comes loose and flies into the hand over Fly seconds, a quick move, not a jump. There it is a loose part like any
     // other: held, thrown, let go, and let go over the left shoulder it is used as with A (VrShoulderStow).
     // It comes off only while the other hand holds on to the ship's wall (Raik, 2026-11-11): then the hand on it holds free
@@ -33,7 +33,9 @@ namespace ShipbreakerVR
         private const float SurfaceExtra = 0.03f;
         private const float Tilt = 7f;
         private const float TiltTime = 0.3f;
-        private const float Hold = 3f;
+        // Pulled this long it comes off; a poster, light and only stuck on, sooner (Raik, 2026-11-11: 2 s and 1 s, from 3 s).
+        private const float Hold = 2f;
+        private const float PosterHold = 1f;
         private const float Fly = 0.18f;
         private const float Largest = 2.5f;
         private const float Mass = 4f;
@@ -129,8 +131,12 @@ namespace ShipbreakerVR
             var wanted = hard ? Tilt : 0f;
             pull.Angle = Mathf.MoveTowards(pull.Angle, wanted, Tilt / TiltTime * Time.deltaTime);
             Pose(pull, hand);
-            if (pull.Pulled >= Hold) Loosen(pull, hand);
+            if (pull.Pulled >= HoldFor(pull)) Loosen(pull, hand);
         }
+
+        // How long it is pulled before it comes off: a poster (its part 'SM_Props_Signage_...', its use 'Pickup_Poster_...') sooner.
+        private static float HoldFor(Pull pull) =>
+            pull.Root.name.Contains("Signage") || pull.Thing.name.Contains("Poster") ? PosterHold : Hold;
 
         // The other hand holds on to something fixed (the ship, VrClimb.Braced), not to the thing. Before, only the very
         // body the thing is on counted, and the other hand on the wall next to a first aid kit never did (Raik, 2026-11-11).
@@ -262,7 +268,7 @@ namespace ShipbreakerVR
                 foreach (var c in Colliders) if (!c.isTrigger) solid++;
                 var parts = new List<string>();
                 foreach (var component in root.GetComponents<Component>()) parts.Add(component.GetType().Name);
-                Plugin.Log.LogInfo($"Pull off: '{pull.Thing.name}' comes off after {Hold:0} s, '{root.name}' with {solid} solid collider(s) of {Colliders.Count} flies into the {pull.Input.Name} hand; on it: {string.Join(", ", parts)}");
+                Plugin.Log.LogInfo($"Pull off: '{pull.Thing.name}' comes off after {HoldFor(pull):0} s, '{root.name}' with {solid} solid collider(s) of {Colliders.Count} flies into the {pull.Input.Name} hand; on it: {string.Join(", ", parts)}");
             }
         }
 
