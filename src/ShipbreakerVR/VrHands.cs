@@ -263,8 +263,6 @@ namespace ShipbreakerVR
             return false;
         }
 
-        // From VrCamera.LateUpdate, after VrToolModels.PoseArm: which arms follow their controllers, blended in and out
-        // over Blend, and those posed.
         // An arm as drawn last, whatever its hand does: shoulder, elbow, wrist and the middle finger's base (VrArmPush,
         // VrToolCollide).
         public static bool TryGetArm(bool left, out Vector3 shoulder, out Vector3 elbow, out Vector3 wrist, out Vector3 knuckles)
@@ -279,6 +277,8 @@ namespace ShipbreakerVR
             return true;
         }
 
+        // From VrCamera.LateUpdate, after VrToolModels.PoseArm: which arms follow their controllers, blended in and out
+        // over Blend, and those posed.
         public static void LateUpdate()
         {
             if (!Find()) return;

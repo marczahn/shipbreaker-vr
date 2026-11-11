@@ -41,6 +41,7 @@ namespace ShipbreakerVR
             if (Time.unscaledTime < next) return;
             next = Time.unscaledTime + Every;
             if (layer < 0 && !FindLayer()) return;
+            if (layer > 31) return;
             var head = VrCamera.Instance != null ? VrCamera.Instance.GameCamera : null;
             if (head == null) return;
             Forget();
@@ -58,7 +59,10 @@ namespace ShipbreakerVR
             }
         }
 
-        // The lowest layer the grapple and the cutter both aim at; the cutter's masks only once it is known.
+        // A layer the grapple and the cutter both aim at; the cutter's masks only once it is known. Of those, the one most
+        // like Ignore Raycast for the game's own use: not in the mask its interaction rays look for (so a collectable's
+        // solid body never stands before its 'Interaction' trigger), then colliding with the same layers (so it bumps into
+        // what it did before), then the lowest. None at all: int.MaxValue, and nothing is moved.
         private static bool FindLayer()
         {
             var settings = Main.Instance != null && Main.Instance.MainSettings != null ? Main.Instance.MainSettings.RaycastSettings : null;
@@ -70,14 +74,28 @@ namespace ShipbreakerVR
             if (data == null) return false;
             mask &= data.RaycastLayerMask.value & data.ValidSurfaceLayerMask.value;
             mask &= ~(1 << IgnoreRaycast);
+            var interact = settings.InteractValidLayerMask.value;
+            var best = -1;
+            var bestScore = int.MinValue;
             for (var i = 0; i < 32; i++)
-                if ((mask & (1 << i)) != 0)
-                {
-                    layer = i;
-                    Plugin.Log.LogInfo($"Pickup layer: collectables go on layer {i} '{LayerMask.LayerToName(i)}' (grapple valid {settings.GrappleValidLayerMask.value:X}, base {settings.BaseLayerMask.value:X}, "
-                        + $"cutter ray {data.RaycastLayerMask.value:X}, surface {data.ValidSurfaceLayerMask.value:X})");
-                    return true;
-                }
+            {
+                if ((mask & (1 << i)) == 0) continue;
+                var score = (interact & (1 << i)) == 0 ? 100 : 0;
+                for (var k = 0; k < 32; k++)
+                    if (Physics.GetIgnoreLayerCollision(IgnoreRaycast, k) == Physics.GetIgnoreLayerCollision(i, k)) score++;
+                if (score > bestScore) { best = i; bestScore = score; }
+            }
+            if (best >= 0)
+            {
+                layer = best;
+                var same = 0;
+                for (var k = 0; k < 32; k++)
+                    if (Physics.GetIgnoreLayerCollision(IgnoreRaycast, k) == Physics.GetIgnoreLayerCollision(best, k)) same++;
+                Plugin.Log.LogInfo($"Pickup layer: collectables go on layer {best} '{LayerMask.LayerToName(best)}' ({((interact & (1 << best)) == 0 ? "not" : "also")} in the interaction mask {interact:X}, "
+                    + $"collides like Ignore Raycast with {same} of 32 layers; grapple valid {settings.GrappleValidLayerMask.value:X}, base {settings.BaseLayerMask.value:X}, "
+                    + $"cutter ray {data.RaycastLayerMask.value:X}, surface {data.ValidSurfaceLayerMask.value:X})");
+                return true;
+            }
             if (logs++ < 20) Plugin.Log.LogInfo("Pickup layer: no layer that both the grapple and the cutter aim at");
             layer = int.MaxValue;
             return false;

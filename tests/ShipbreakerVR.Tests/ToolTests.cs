@@ -109,3 +109,25 @@ namespace ShipbreakerVR.Tests
         }
     }
 }
+
+namespace ShipbreakerVR.Tests
+{
+    public class ButtonDeviceTests
+    {
+        [Fact]
+        public void TellsTheAirConditionerFromTheWallTerminal()
+        {
+            var device = VrButtons.Device("SM_AtmosphereRegulator_Mini_1Bx1xA_Button");
+            Assert.Equal("SM_AtmosphereRegulator", device);
+            Assert.False(VrButtons.OtherDevice(device, "SM_AtmosphereRegulator_Mini_1Bx1xA1_Box"));
+            Assert.True(VrButtons.OtherDevice(device, "SM_Computer_WallTerminal_B0xBxA"));
+        }
+
+        [Fact]
+        public void TakesOtherNamesAsBefore()
+        {
+            Assert.False(VrButtons.OtherDevice(VrButtons.Device("Button_Panel"), "SM_Computer_WallTerminal_B0xBxA"));
+            Assert.False(VrButtons.OtherDevice("SM_AtmosphereRegulator", "PRF_Console"));
+        }
+    }
+}

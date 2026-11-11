@@ -252,9 +252,10 @@ namespace ShipbreakerVR
         }
 
         // The control a button uses: an active one on its own part, else the nearest on the parts around (the air
-        // conditioner's button is a part next to its box, which has the control); never a lever turned by hand. Around, only
-        // a control on a part of the same device (its name starts as the button's does): a broken air conditioner has none,
-        // and its button used the wall terminal next to it, whose use moved the player in front of it (Raik, 2026-11-08).
+        // conditioner's button is a part next to its box, which has the control); never a lever turned by hand. Around, not
+        // a control of another device: a broken air conditioner has none, and its button used the wall terminal next to it
+        // ('SM_Computer_WallTerminal_B0xBxA'), whose use moved the player in front of it (Raik, 2026-11-08). Told apart only
+        // where both names follow the 'SM_<Device>_' naming; any other control around is taken as before.
         private static InteractableObject ControlNear(Transform part, Vector3 center, string device, out Transform controlPart)
         {
             InteractableObject best = null;
@@ -266,7 +267,11 @@ namespace ShipbreakerVR
                 if (around)
                 {
                     var eachPart = each.GetComponentInParent<StructurePart>();
-                    if (eachPart == null || !eachPart.name.StartsWith(device)) return;
+                    if (eachPart != null && OtherDevice(device, eachPart.name))
+                    {
+                        if (logs++ < 60) Plugin.Log.LogInfo($"Buttons: '{each.name}' on '{eachPart.name}' belongs to another device than '{device}', left out");
+                        return;
+                    }
                 }
                 var distance = (each.transform.position - center).sqrMagnitude;
                 // The powered one before 'Unpowered Interaction Volume' at the same place.
@@ -288,6 +293,10 @@ namespace ShipbreakerVR
         }
 
         private const float ControlAround = 0.6f;
+
+        // Whether a part's name names another device than device, both in the 'SM_<Device>_' naming.
+        public static bool OtherDevice(string device, string part) =>
+            device.StartsWith("SM_") && part.StartsWith("SM_") && Device(part) != device;
 
         // The device a button's mesh belongs to: its first two words, 'SM_AtmosphereRegulator' for the air conditioner's
         // 'SM_AtmosphereRegulator_Mini_1Bx1xA_Button' (its box is 'SM_AtmosphereRegulator_Mini_1Bx1xA1_Box').

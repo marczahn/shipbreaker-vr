@@ -1206,8 +1206,6 @@ namespace ShipbreakerVR
             if (!Braced(hand)) player.AddForce(-force / BodyMass, ForceMode.Acceleration);
         }
 
-        // True while that controller's hand holds on to something large: a wall, the hull, a console, a heavy part. The hand
-        // lies flat on it there (VrHands.Curl); around a small part that turns with the hand (Firm) it closes.
         // The rigidbody that hand holds on to, if any (VrArmPush leaves it alone).
         public static Rigidbody HeldBody(VrInput.Hand input)
         {
@@ -1216,6 +1214,8 @@ namespace ShipbreakerVR
             return null;
         }
 
+        // True while that controller's hand holds on to something large: a wall, the hull, a console, a heavy part. The hand
+        // lies flat on it there (VrHands.Curl); around a small part that turns with the hand (Firm) it closes.
         public static bool HoldsFlat(VrInput.Hand input)
         {
             foreach (var hand in Hands)
@@ -1251,7 +1251,14 @@ namespace ShipbreakerVR
                 if (hand.Input != input || !hand.Holding || hand.Body == null || hand.Body.isKinematic || hand.Collider == null) continue;
                 body = hand.Body;
                 interactable = hand.Collider.GetComponentInParent<InteractableObject>();
-                if (interactable == null) interactable = hand.Body.GetComponentInChildren<InteractableObject>();
+                // Else one below the part's body, but only of the same structure part: not a collectable mounted somewhere
+                // inside a larger part, which is a structure part of its own.
+                if (interactable == null)
+                {
+                    var own = hand.Body.GetComponentInParent<StructurePart>();
+                    foreach (var each in hand.Body.GetComponentsInChildren<InteractableObject>())
+                        if (each.GetComponentInParent<StructurePart>() == own) { interactable = each; break; }
+                }
                 return true;
             }
             return false;

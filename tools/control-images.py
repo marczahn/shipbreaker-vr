@@ -241,6 +241,8 @@ def main():
               "Keep that hand's grip squeezed and it comes back after the scan."),
              (holding(), "Hold on and climb", "Grip with an empty hand within 15 cm of anything holds on.",
               "Parts up to 30 kg sit firmly in the hand. Let go moving to push off."),
+             (holding(), "Collect something", "Hold it behind your left shoulder and let go.",
+              "Into the backpack, with a rattle and a buzz."),
              (console(), "Consoles and switches", "With an empty hand: look at it and press A or X.",
               "Switches can be held with the grip too."),
              (two_buttons("X", "Y"), "Left hand", "A tool in the left hand: X works as A, Y as B.",

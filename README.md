@@ -138,6 +138,7 @@ menus still work with the controllers.
 | Hand a tool to the other hand | Reach for it with the other hand and squeeze the grip. |
 | Scan with a tool in the other hand | Take the scanner with your free hand. The other tool disappears while you scan; keep its grip squeezed and it comes back when you let go of the scanner. |
 | Hold on and climb | Squeeze the grip of a hand without a tool close to anything: the hand holds on there. Move the hand to pull yourself along, with both hands hand over hand, or with one while the other works a tool. Light parts come to your hand instead; the station and fixed hulls stay put. Let go while moving the hand to push off. |
+| Collect something | Hold a thing to collect (cable, circuit board, data cassette, ...) behind your left shoulder and let go: it goes into your backpack, with a rattle and a short buzz. |
 | Push heavy parts | Switch on **Extended physics** in the VR options. Hold on to something fixed with one hand and move a heavy part with the other, or hold two heavy parts and push them apart. The heavier a part, the slower it gets going. |
 | Work an airlock console or a switch | Look at it and press A or X. The grip only holds on, also there: near a switch your hand closes on it as a fist. |
 | Use a tool with the left hand | Take it with the left hand. X and Y then do what A and B do, and flying pauses until you let go. |

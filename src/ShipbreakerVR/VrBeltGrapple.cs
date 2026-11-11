@@ -149,7 +149,12 @@ namespace ShipbreakerVR
 
         private static bool Find()
         {
-            if (gun != null && model != null && grip != null && body != null) return true;
+            if (gun != null && model != null && grip != null && body != null)
+            {
+                // The cutter may come later than the grapple (just after loading into a ship).
+                if (cutter == null) cutter = GameRefs.Cutter;
+                return true;
+            }
             if (Time.unscaledTime < nextFind) return false;
             nextFind = Time.unscaledTime + 1f;
             Release();
@@ -163,7 +168,8 @@ namespace ShipbreakerVR
                 foreach (var target in model.GetComponentsInChildren<Transform>(true))
                 {
                     if (target.name == Grip) grip = target;
-                    if (target.name == Body && target.GetComponent<MeshFilter>()?.sharedMesh is Mesh mesh)
+                    var filter = target.name == Body ? target.GetComponent<MeshFilter>() : null;
+                    if (filter != null && filter.sharedMesh is Mesh mesh)
                     {
                         body = target;
                         bodyCenter = mesh.bounds.center;

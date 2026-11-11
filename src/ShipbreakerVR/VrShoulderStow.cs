@@ -30,6 +30,7 @@ namespace ShipbreakerVR
         private class Held
         {
             public InteractableObject Thing;
+            public Rigidbody Body;
             public bool Over;
         }
 
@@ -45,6 +46,7 @@ namespace ShipbreakerVR
                 || VrSettings.Climbing == null || !VrSettings.Climbing.Value)
             {
                 Left.Thing = Right.Thing = null;
+                Left.Body = Right.Body = null;
                 return;
             }
             Check(VrInput.Left, Left);
@@ -53,16 +55,20 @@ namespace ShipbreakerVR
 
         private static void Check(VrInput.Hand hand, Held held)
         {
-            if (VrClimb.HeldLoose(hand, out _, out var thing) && Collectable(thing))
+            if (VrClimb.HeldLoose(hand, out var body, out var thing) && Collectable(thing))
             {
                 held.Thing = thing;
+                held.Body = body;
                 held.Over = VrToolBelt.HeadLocal(hand, out var local) && VrToolBelt.OverLeftShoulder(local);
                 return;
             }
             var was = held.Thing;
+            var wasBody = held.Body;
             held.Thing = null;
-            // Let go with the grip (not lost by tracking or taken by the other hand) while over the shoulder.
+            held.Body = null;
+            // Let go with the grip (not lost by tracking) while over the shoulder, and not still held by the other hand.
             if (was == null || hand.Grip.Down) return;
+            if (wasBody != null && VrClimb.HeldBody(hand.IsLeft ? VrInput.Right : VrInput.Left) == wasBody) return;
             var over = held.Over || (VrToolBelt.HeadLocal(hand, out var at) && VrToolBelt.OverLeftShoulder(at));
             if (!over)
             {
