@@ -15,6 +15,9 @@ namespace ShipbreakerVR
     // not stopped by them (an empty hand stops at walls, VrHands.OutOfWalls). Each piece is a capsule between its joints
     // as drawn after the arm is posed (VrHands); its speed is how far each end went since the frame before. All layers
     // but triggers: the collectable spare parts (circuit boards, cables) were not pushed with the default raycast layers.
+    // Heavier parts (the small padded cargo crates) the hand strikes (Raik, 2026-11-11): a hand that comes into one faster
+    // than StrikeFrom gives it a push as of a hand of HandMass at that speed, once as it comes in, the more the more the
+    // palm faces it: the full push with the palm, BackShare of it with the back of the hand. A buzz to feel it.
     internal static class VrArmPush
     {
         // Heaviest pushed, in kg.
@@ -30,6 +33,18 @@ namespace ShipbreakerVR
         private const float MostSwing = 1f;
         // Moves faster than this, in m/s, are a jump of the tracking, not a swing.
         private const float Jump = 15f;
+        // Striking heavier parts: up to HeaviestStruck kg, from StrikeFrom m/s at world scale 1, as a hand of HandMass kg;
+        // the back of the hand gives BackShare of it. Never faster than the hand's own Share of its speed.
+        private const float HeaviestStruck = 2000f;
+        private const float StrikeFrom = 1f;
+        private const float HandMass = 6f;
+        private const float BackShare = 0.15f;
+        // The bodies each hand touched last frame: struck only as the hand comes into one.
+        private static readonly System.Collections.Generic.HashSet<Rigidbody>[] Touched =
+            { new System.Collections.Generic.HashSet<Rigidbody>(), new System.Collections.Generic.HashSet<Rigidbody>() };
+        private static readonly System.Collections.Generic.HashSet<Rigidbody>[] TouchedNow =
+            { new System.Collections.Generic.HashSet<Rigidbody>(), new System.Collections.Generic.HashSet<Rigidbody>() };
+        private static int side;
 
         private static readonly AccessTools.FieldRef<GrabController, Rigidbody> PlayerBody =
             AccessTools.FieldRefAccess<GrabController, Rigidbody>("m_PlayerRigidbodyReference");
@@ -82,13 +97,19 @@ namespace ShipbreakerVR
                         Speed[j] = (Now[j] - arm.At[j]) / dt;
                         if (Speed[j].magnitude > Jump * scale) jumped = true;
                     }
+                    side = i;
+                    TouchedNow[i].Clear();
                     if (!jumped)
                     {
                         Push(player, heldLeft, heldRight, 0, ArmRadius * scale);
                         Push(player, heldLeft, heldRight, 1, ArmRadius * scale);
                         if ((Speed[3] - player.velocity).magnitude > HandFrom * scale) Push(player, heldLeft, heldRight, 2, HandRadius * scale);
+                        else Strike(player, heldLeft, heldRight, HandRadius * scale);
                     }
+                    Touched[i].Clear();
+                    Touched[i].UnionWith(TouchedNow[i]);
                 }
+                else Touched[i].Clear();
                 System.Array.Copy(Now, arm.At, 4);
                 arm.Known = true;
             }
@@ -104,8 +125,14 @@ namespace ShipbreakerVR
             for (var i = 0; i < count; i++)
             {
                 var body = Found[i].attachedRigidbody;
-                if (body == null || body == player || body == heldLeft || body == heldRight || body.isKinematic || body.mass <= 0f || body.mass > LightestPushed) continue;
-                if (Found[i].transform.IsChildOf(player.transform) || System.Array.IndexOf(Pushed, body, 0, pushed) >= 0) continue;
+                if (body == null || body == player || body == heldLeft || body == heldRight || body.isKinematic || body.mass <= 0f) continue;
+                if (Found[i].transform.IsChildOf(player.transform)) continue;
+                if (body.mass > LightestPushed)
+                {
+                    if (j == 2) StrikeOne(player, Found[i], body);
+                    continue;
+                }
+                if (System.Array.IndexOf(Pushed, body, 0, pushed) >= 0) continue;
                 // Where the arm meets it, and how fast the arm goes there.
                 var line = to - from;
                 var t = Mathf.Clamp01(Vector3.Dot(body.worldCenterOfMass - from, line) / Mathf.Max(line.sqrMagnitude, 1e-6f));
@@ -129,6 +156,47 @@ namespace ShipbreakerVR
                 if (logs++ < 40)
                     Plugin.Log.LogInfo($"Arm push: {(j == 0 ? "upper arm" : j == 1 ? "forearm" : "hand")} knocked '{Found[i].name}' (layer {Found[i].gameObject.layer}, '{body.name}' {body.mass:0.0} kg), {change.magnitude:0.00} m/s more (flight {flight:0.00}, swing {own:0.00})");
             }
+        }
+
+        // The hand too slow to push light parts: still noted as touching heavier ones, so a strike counts only as it comes in.
+        private static void Strike(Rigidbody player, Rigidbody heldLeft, Rigidbody heldRight, float radius)
+        {
+            var count = Physics.OverlapCapsuleNonAlloc(Now[2], Now[3], radius, Found, ~0, QueryTriggerInteraction.Ignore);
+            for (var i = 0; i < count; i++)
+            {
+                var body = Found[i].attachedRigidbody;
+                if (body == null || body == player || body == heldLeft || body == heldRight || body.isKinematic || body.mass <= LightestPushed) continue;
+                TouchedNow[side].Add(body);
+            }
+        }
+
+        // The hand comes into a heavier part: a push as of the hand's mass at its speed into it, by how the palm faces it.
+        private static void StrikeOne(Rigidbody player, Collider collider, Rigidbody body)
+        {
+            var first = TouchedNow[side].Add(body);
+            if (!first || Touched[side].Contains(body) || body.mass > HeaviestStruck) return;
+            var input = side == 0 ? VrInput.Left : VrInput.Right;
+            var from = Now[2];
+            var to = Now[3];
+            var line = to - from;
+            var t = Mathf.Clamp01(Vector3.Dot(body.worldCenterOfMass - from, line) / Mathf.Max(line.sqrMagnitude, 1e-6f));
+            var axis = from + line * t;
+            var contact = collider.ClosestPoint(axis);
+            var outward = contact - axis;
+            if (outward.sqrMagnitude < 1e-8f) outward = body.worldCenterOfMass - axis;
+            if (outward.sqrMagnitude < 1e-8f) return;
+            outward.Normalize();
+            var scale = VrCamera.WorldScale;
+            var speed = Vector3.Dot(Vector3.Lerp(Speed[2], Speed[3], t) - body.GetPointVelocity(contact), outward);
+            if (speed < StrikeFrom * scale) return;
+            var facing = VrClimb.TryGetPalm(input, out var palm) ? Vector3.Dot(palm, outward) : 0f;
+            var share = Mathf.Lerp(BackShare, 1f, Mathf.InverseLerp(-0.3f, 0.7f, facing));
+            var change = Mathf.Min(HandMass * speed * share / body.mass, speed * Share);
+            body.AddForceAtPosition(outward * (change * body.mass), contact, ForceMode.Impulse);
+            input.Buzz(Mathf.Lerp(0.3f, 0.9f, share * Mathf.InverseLerp(StrikeFrom * scale, 4f * scale, speed)), 0.06f);
+            if (logs++ < 40)
+                Plugin.Log.LogInfo($"Arm push: {input.Name} hand strikes '{collider.name}' ('{body.name}' {body.mass:0.0} kg) at {speed:0.00} m/s with the "
+                    + $"{(facing > 0.3f ? "palm" : facing < -0.3f ? "back of the hand" : "side of the hand")} ({share:0.00} of a strike), {change:0.000} m/s more");
         }
     }
 }

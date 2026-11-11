@@ -1358,6 +1358,15 @@ namespace ShipbreakerVR
         // And this far towards the finger tips, in m at world scale 1 (Raik, 2026-11-08: 1 to 1.5 cm).
         private const float PalmToFingers = 0.015f;
 
+        // The way that hand's palm faces, in the world (as PalmPoint).
+        public static bool TryGetPalm(VrInput.Hand input, out Vector3 palm)
+        {
+            palm = Vector3.zero;
+            if (!input.TryGetGripPose(out _, out var grip) || VrCamera.Instance == null) return false;
+            palm = VrCamera.Instance.transform.parent.rotation * grip * (input == VrInput.Left ? Vector3.right : Vector3.left);
+            return true;
+        }
+
         // The point a hand takes hold of controls from: just above its palm. The palm faces to the right on the left hand
         // and to the left on the right hand, along the controller's grip pose.
         public static Vector3 PalmPoint(VrInput.Hand input, Vector3 at)
