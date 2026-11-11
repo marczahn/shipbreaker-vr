@@ -328,23 +328,33 @@ namespace ShipbreakerVR
             var data = asset != null ? asset.Data : null;
             var effect = data != null ? data.BreakFX : null;
             var sound = "none";
+            // Bound to the part, which the hand touches (VrTouchSound): heard through the suit, also with no air around
+            // (Raik, 2026-11-11: at a place, they were not heard in a room without air).
+            var part = root.GetComponent<EntityBlueprintComponent>();
             if (data != null)
             {
-                AudioViewSystem.RequestOneShotSFX(data.BreakSuccess, at);
+                Play(data.BreakSuccess, part, at);
                 sound = $"its own ({data.BreakSuccess})";
             }
             var settings = Main.Instance != null && Main.Instance.MainSettings != null ? Main.Instance.MainSettings.BreakableSettings : null;
             if (settings != null)
             {
-                AudioViewSystem.RequestOneShotSFX(settings.GrappleBreakJointSuccessSFX, at);
+                Play(settings.GrappleBreakJointSuccessSFX, part, at);
                 sound += $", the grapple's ({settings.GrappleBreakJointSuccessSFX})";
             }
+            sound += part != null ? ", on the part" : ", at the place";
             if (effect == null) effect = Sparks(ship);
             if (effect != null && GameSession.SpawnPoolManager != null)
                 GameSession.SpawnPoolManager.SpawnObject(effect, at, Quaternion.LookRotation(normal), null, null);
             if (logs++ < 40)
                 Plugin.Log.LogInfo($"Pull off: '{root.name}' breaks off with the effect '{(effect != null ? effect.name : "-")}'"
                     + $"{(data != null && data.BreakFX == null ? " (it has none of its own)" : "")}, sounds: {sound}");
+        }
+
+        private static void Play(WwiseShortID sound, EntityBlueprintComponent part, Vector3 at)
+        {
+            if (part != null) AudioViewSystem.RequestBoundSFX(sound, part);
+            else AudioViewSystem.RequestOneShotSFX(sound, at);
         }
 
         // The game's sparks of metal hitting metal (FXCollisionAsset): the effect for light metal on light metal.
