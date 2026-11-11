@@ -160,8 +160,14 @@ namespace ShipbreakerVR
         private static readonly Vector3[][] JointsBefore = { new Vector3[4], new Vector3[4] };
         private static readonly int[] JointsFrame = { -10, -10 };
 
+        // Off in 0.29.1 (Raik, 2026-11-11): the tools against the other arm gave nothing yet; they come back with the hands
+        // in the next release. Without the arm known, no tool ever meets it (ArmContact, LineInArm).
+        private static readonly bool OtherArmMeetsTools = false;
+
         private static void OtherArm(VrInput.Hand hand)
         {
+            armKnown = false;
+            if (!OtherArmMeetsTools) return;
             armKnown = VrHands.TryGetArm(!hand.IsLeft, out ArmJoints[0], out ArmJoints[1], out ArmJoints[2], out var knuckles);
             var along = knuckles - ArmJoints[2];
             armPieces = 2;
