@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using BBI.Unity.Game;
 using Carbon.Audio;
 using Carbon.Core.Unity;
-using HarmonyLib;
 using UnityEngine;
 
 namespace ShipbreakerVR
@@ -25,8 +24,7 @@ namespace ShipbreakerVR
     // (BreakableSettings). Without a break effect of its own, the game's sparks of metal hitting metal
     // (HierarchyCollisionListener; the light ones are only for parts of 10 kg and more, none matched, Raik 2026-11-11).
     // In space: no gravity on it (Raik: thrown, it fell down).
-    // While the hand is on it, the game hears the player touch it (AudioTouchTransferService, as when its own hand grabs a
-    // part): its sounds come through the suit, as the game lets them where there is no air (Raik, 2026-11-11).
+    // While the hand is on it, the game hears the player touch it (VrTouchSound): its sounds come through the suit.
     internal static class VrPullOff
     {
         private const float Start = 0.03f;
@@ -55,9 +53,6 @@ namespace ShipbreakerVR
             public float Angle;
             public Vector3 Contact;
             public bool Braced;
-            // Told to the game as touched (Touch), the part and the body it was on.
-            public StructurePart Touched;
-            public GameObject TouchedOn;
             public Rigidbody Ship;
             // Flying into the hand: from where, which point of it goes to the hand, since when.
             public Rigidbody Body;
@@ -189,7 +184,6 @@ namespace ShipbreakerVR
             pull.Angle = 0f;
             pull.Braced = false;
             pull.Ship = control.GetComponentInParent<Rigidbody>();
-            Touch(pull, root.GetComponent<StructurePart>(), pull.Ship != null ? pull.Ship.gameObject : null);
             // The hand goes with it as it tilts; it holds free only while the other hand holds the ship.
             VrClimb.Reanchor(pull.Input, root);
             if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: {pull.Input.Name} hand holds '{control.name}', its part '{root.name}' ({Size(root):0.00} m) on '{(root.parent != null ? root.parent.name : "-")}'");
@@ -323,35 +317,6 @@ namespace ShipbreakerVR
             return at - normal * (Vector3.Dot(at, normal) - back);
         }
 
-        private static readonly System.Reflection.FieldInfo TouchService = AccessTools.Field(typeof(AudioTouchTransferService), "Instance");
-        private static readonly System.Reflection.MethodInfo UpdateTouch = AccessTools.Method(typeof(AudioTouchTransferService), "UpdateTouch");
-        private static readonly System.Type TouchType = AccessTools.Inner(typeof(AudioTouchTransferService), "TouchType");
-        private static bool touchFailed;
-
-        // Tells the game the player touches part on its body (as a grab), or no longer touches the one told before.
-        private static void Touch(Pull pull, StructurePart part, GameObject on)
-        {
-            if (touchFailed || part == pull.Touched) return;
-            try
-            {
-                var service = TouchService != null ? TouchService.GetValue(null) : null;
-                if (service == null || UpdateTouch == null || TouchType == null) return;
-                var grab = System.Enum.ToObject(TouchType, 1);
-                if (pull.Touched != null) UpdateTouch.Invoke(service, new object[] { pull.Touched, pull.TouchedOn, grab, false });
-                pull.Touched = null;
-                pull.TouchedOn = null;
-                if (part == null || on == null) return;
-                UpdateTouch.Invoke(service, new object[] { part, on, grab, true });
-                pull.Touched = part;
-                pull.TouchedOn = on;
-            }
-            catch (System.Exception e)
-            {
-                touchFailed = true;
-                Plugin.Log.LogWarning($"Pull off: telling the game of the touch failed, sounds stay as they are: {e.Message}");
-            }
-        }
-
         private static FXElement sparks;
         private static bool sparksSought;
 
@@ -440,7 +405,6 @@ namespace ShipbreakerVR
 
         private static void Clear(Pull pull)
         {
-            Touch(pull, null, null);
             pull.Thing = null;
             pull.Root = null;
             pull.Parent = null;

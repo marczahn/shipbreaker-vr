@@ -63,6 +63,8 @@ namespace ShipbreakerVR
             public readonly List<Button> Near = new List<Button>();
             // Per button the tip is in: armed again once out.
             public readonly HashSet<Button> In = new HashSet<Button>();
+            // The button the tip pushes in this frame, if any (VrTouchSound).
+            public Button Pushing;
 
             public Tip(VrInput.Hand input) => Input = input;
         }
@@ -89,6 +91,8 @@ namespace ShipbreakerVR
             var pushed = new Dictionary<Button, float>();
             if (VrXr.IsRunning && VrAim.Active)
                 foreach (var tip in Tips) Touch(tip, pushed);
+            else
+                foreach (var tip in Tips) tip.Pushing = null;
             // Each button as far in as the deepest tip, back out when none.
             foreach (var each in pushed) Sinking.Add(each.Key);
             Done.Clear();
@@ -117,8 +121,18 @@ namespace ShipbreakerVR
             foreach (var button in Done) Sinking.Remove(button);
         }
 
+        // The button that controller's tip pushes in, as its transform, or false.
+        public static bool TryGetPushed(VrInput.Hand input, out Transform button)
+        {
+            button = null;
+            foreach (var tip in Tips)
+                if (tip.Input == input && tip.Pushing != null && tip.Pushing.Filter != null) button = tip.Pushing.Filter.transform;
+            return button != null;
+        }
+
         private static void Touch(Tip tip, Dictionary<Button, float> pushed)
         {
+            tip.Pushing = null;
             if (VrClimb.TryGetHold(tip.Input, out _)) { tip.In.Clear(); return; }
             if (!tip.Input.TryGetGripPose(out var gripLocal, out _) || !tip.Input.TryGetAimRotation(out var aimLocal)) return;
             if (!VrToolModels.TrackingToWorld(gripLocal, aimLocal, out var grip, out var aim)) return;
@@ -159,6 +173,7 @@ namespace ShipbreakerVR
                     continue;
                 }
                 if (depth <= 0f) continue;
+                tip.Pushing = button;
                 pushed[button] = Mathf.Max(pushed.TryGetValue(button, out var other) ? other : 0f, depth);
                 if (depth < PressDepth * VrCamera.WorldScale || tip.In.Contains(button)) continue;
                 tip.In.Add(button);

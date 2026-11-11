@@ -76,6 +76,7 @@ namespace ShipbreakerVR
         {
             ("climbing", VrClimb.RigPlaced),
             ("pull off", VrPullOff.Update),
+            ("touch sound", VrTouchSound.Update),
             ("tool models", VrToolModels.Place),
             ("belt grapple", VrBeltGrapple.Update),
         };
