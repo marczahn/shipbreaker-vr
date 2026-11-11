@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using BBI.Unity.Game;
+using Carbon.Audio;
+using Carbon.Core.Unity;
 using UnityEngine;
 
 namespace ShipbreakerVR
@@ -14,7 +16,9 @@ namespace ShipbreakerVR
     // (VrClimb.SetFree) and pulls neither the body nor the ship. Without that it is a hold like the wall, to climb along.
     // Let go before it came off, the thing goes back to where it was.
     // The game has no loose form of them: they are parts of the ship's body. Pulled off, the thing's own transform (the
-    // largest one around it still smaller than Largest) leaves the ship and gets a rigidbody of Mass.
+    // largest one around it still smaller than Largest) leaves the ship and gets a rigidbody of Mass. Coming off it throws
+    // sparks and smoke where it last touched its mount, as the game does where a light part hits a wall fast
+    // (HierarchyCollisionListener), and sounds as a part the grapple tears off (BreakableSettings).
     internal static class VrPullOff
     {
         private const float Start = 0.03f;
@@ -38,6 +42,7 @@ namespace ShipbreakerVR
             public Vector3 Surface;
             public float Pulled;
             public float Angle;
+            public Vector3 Contact;
             public bool Braced;
             public Rigidbody Ship;
             // Flying into the hand: from where, which point of it goes to the hand, since when.
@@ -198,6 +203,8 @@ namespace ShipbreakerVR
             var axis = Vector3.Cross(pull.Normal, along);
             var hinge = center - along * (Size(pull.Root) * 0.35f);
             pull.Root.RotateAround(hinge, axis, -pull.Angle);
+            // Where it still touches its mount: that edge, on the wall behind it.
+            pull.Contact = OnWallBehind(pull.Root, pull.Normal, hinge);
         }
 
         // Off the ship: its own body, then into the hand.
@@ -209,6 +216,7 @@ namespace ShipbreakerVR
             pull.FromPosition = root.position;
             pull.FromRotation = root.rotation;
             pull.HeldOn = pull.Surface;
+            var contact = pull.Angle > 0.01f ? pull.Contact : OnWallBehind(root, pull.Normal, root.position);
             root.SetParent(null, true);
             var body = root.gameObject.AddComponent<Rigidbody>();
             body.mass = Mass;
@@ -220,6 +228,8 @@ namespace ShipbreakerVR
             pull.FlyStart = Time.time;
             VrClimb.SetFree(pull.Input, true, false);
             pull.Input.Buzz(0.9f, 0.12f);
+            Sparks(ship, contact, pull.Normal);
+            TearSound();
             if (logs++ < 40)
             {
                 root.GetComponentsInChildren(Colliders);
@@ -262,6 +272,65 @@ namespace ShipbreakerVR
             var holds = held != null && VrClimb.TakeHold(pull.Input, held);
             if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{pull.Root.name}' {(holds ? "is in" : "did not get into")} the {pull.Input.Name} hand");
             Clear(pull);
+        }
+
+        // The point on the plane of its back, the side towards the wall, nearest to at.
+        private static Vector3 OnWallBehind(Transform root, Vector3 normal, Vector3 at)
+        {
+            var any = false;
+            var bounds = new Bounds();
+            foreach (var renderer in root.GetComponentsInChildren<Renderer>())
+            {
+                if (!renderer.enabled || !(renderer is MeshRenderer || renderer is SkinnedMeshRenderer)) continue;
+                if (!any) bounds = renderer.bounds;
+                else bounds.Encapsulate(renderer.bounds);
+                any = true;
+            }
+            if (!any) return at;
+            var e = bounds.extents;
+            var back = Vector3.Dot(bounds.center, normal) - (Mathf.Abs(e.x * normal.x) + Mathf.Abs(e.y * normal.y) + Mathf.Abs(e.z * normal.z));
+            return at - normal * (Vector3.Dot(at, normal) - back);
+        }
+
+        private static FXElement sparks;
+        private static bool sparksSought;
+
+        // The game's sparks and smoke of a light part hitting a metal wall fast: of its collision effects (FXCollisionAsset)
+        // the one for parts no heavier than Mass that needs the highest speed.
+        private static void Sparks(Rigidbody ship, Vector3 at, Vector3 normal)
+        {
+            if (!sparksSought)
+            {
+                var listener = ship != null ? ship.GetComponentInChildren<HierarchyCollisionListener>() : null;
+                if (listener == null) listener = Object.FindObjectOfType<HierarchyCollisionListener>();
+                var asset = listener != null ? listener.FXCollisionAsset : null;
+                if (asset == null || asset.CollisionData == null)
+                {
+                    if (logs++ < 40) Plugin.Log.LogInfo("Pull off: no collision effects found yet, no sparks");
+                    return;
+                }
+                sparksSought = true;
+                FXCollisionAsset.FXData best = null;
+                foreach (var data in asset.CollisionData)
+                {
+                    if (data == null) continue;
+                    Plugin.Log.LogInfo($"Pull off: collision effect '{(data.Material1 != null ? data.Material1.name : "-")}' on '{(data.Material2 != null ? data.Material2.name : "-")}', from {data.MinRequiredVelocity:0.0} m/s and {data.MinRequiredMass:0.0} kg: '{(data.CollisionFX != null ? data.CollisionFX.name : "-")}'");
+                    if (data.CollisionFX == null || data.MinRequiredMass > Mass) continue;
+                    if (best == null || data.MinRequiredVelocity > best.MinRequiredVelocity) best = data;
+                }
+                sparks = best != null ? best.CollisionFX : null;
+                Plugin.Log.LogInfo($"Pull off: sparks are '{(sparks != null ? sparks.name : "-")}'");
+            }
+            if (sparks == null || GameSession.SpawnPoolManager == null) return;
+            GameSession.SpawnPoolManager.SpawnObject(sparks, at, Quaternion.LookRotation(normal), null, null);
+        }
+
+        // The sound of a part the grapple tears off its joint.
+        private static void TearSound()
+        {
+            var settings = Main.Instance != null && Main.Instance.MainSettings != null ? Main.Instance.MainSettings.BreakableSettings : null;
+            if (settings == null) return;
+            ((Carbon.Core.Events.IEventBroadcaster)Main.EventSystem).Post(MasterSFXEvent.GetEvent(settings.GrappleBreakJointSuccessSFX));
         }
 
         private static Collider Solid(Transform root)
