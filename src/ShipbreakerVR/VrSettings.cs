@@ -34,7 +34,6 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> FlipUi;
         public static ConfigEntry<bool> MonitorLook;
         public static ConfigEntry<VrFlightComfort.Thrust> ThrustMode;
-        public static ConfigEntry<bool> BeltGrapple;
         public static ConfigEntry<bool> BracedPush;
         public static ConfigEntry<bool> ToolPhysics;
         public static ConfigEntry<bool> FreeWalking;
@@ -46,6 +45,8 @@ namespace ShipbreakerVR
         public static ConfigEntry<float> HeadHeight;
         public static ConfigEntry<float> HeadSideways;
         public static ConfigEntry<VrPerformance.Occlusion> AmbientOcclusion;
+        public static ConfigEntry<bool> DebrisRange;
+        public static ConfigEntry<bool> NearLampShadows;
         public static ConfigEntry<VrControls.Scheme> ControlScheme;
         public static ConfigEntry<VrControls.Turning> TurnMode;
         public static ConfigEntry<VrControls.TurnAxis> TurnAround;
@@ -61,6 +62,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> MirrorCutter;
         public static ConfigEntry<bool> TwoTools;
         public static ConfigEntry<bool> Climbing;
+        public static ConfigEntry<bool> ShoulderStow;
         public static ConfigEntry<bool> UprightBody;
         public static ConfigEntry<bool> Diagnostics;
         public static ConfigEntry<bool> TestMode;
@@ -113,6 +115,12 @@ namespace ShipbreakerVR
             NoVrUnfitEffects = Bind("Bild", "VrUnpassendeEffekteAus", true,
                 "Switch off effects that are wrong in a headset: motion blur, depth of field, lens distortion, chromatic aberration and Panini projection.");
 
+            DebrisRange = Bind("Bild", "TruemmerWeiterSehen", false,
+                ("Shows the small floating debris (nuts and bolts) out to 5 m instead of about 2 m. Costs a little performance where there is much of it.",
+                    "Zeigt die kleinen schwebenden Trümmer (Muttern und Schrauben) bis 5 m statt etwa 2 m. Kostet etwas Leistung, wo viele davon sind."));
+            NearLampShadows = Bind("Bild", "LampenschattenNurNah", false,
+                ("Lamps cast shadows only within 20 m; farther away they still shine. Saves a lot where many lamps light a room, as in the large freighters.",
+                    "Lampen werfen Schatten nur bis 20 m, weiter weg leuchten sie weiter. Spart viel, wo viele Lampen einen Raum erhellen, wie in den großen Frachtern."));
             AmbientOcclusion = Bind("Bild", "Umgebungsverdeckung", VrPerformance.Occlusion.Niedrig,
                 ("Shading in corners and creases. Low looks nearly the same and saves a lot of performance; the game default can stutter on the station. Off for the most performance.",
                     "Schattierung in Ecken und Fugen. Niedrig sieht fast gleich aus und spart viel Leistung; der Spielstandard kann auf der Station ruckeln. Aus für die meiste Leistung."),
@@ -169,6 +177,10 @@ namespace ShipbreakerVR
                 ("Grip with a hand that holds no tool, close to a surface, holds on there; moving the hand pulls you along it, hand over hand with both. A light part comes to the hand instead, the station and fixed hulls stay put. Letting go keeps your speed, so you can push off. While the left hand holds on, flying rests. At a control (airlock console, switch) the grip holds on too; A or X works it.",
                     "Grip mit einer Hand ohne Werkzeug, nah an einer Oberfläche, hält dich dort fest; bewegst du die Hand, ziehst du dich daran entlang, mit beiden Händen Hand über Hand. Ein leichtes Teil kommt stattdessen zur Hand, Station und feste Rümpfe bleiben, wo sie sind. Loslassen behält deinen Schwung, so kannst du dich abstoßen. Solange die linke Hand festhält, ruht das Fliegen. An einem Bedienelement (Schleusenkonsole, Schalter) hält der Grip dich ebenfalls fest; bedient wird es mit A oder X."),
                 "How far you and a light part move depends on both masses.");
+            ShoulderStow = Bind("Steuerung", "UeberDieSchulterEinpacken", true,
+                ("Things to collect (cables, circuit boards, data cassettes and the like) are collected by holding them over your left shoulder and letting go there, as into a backpack: a light buzz tells you are there, a short rattle and a buzz confirm it. Off: only with A or X while holding them.",
+                    "Sammelteile (Kabel, Platinen, Datenkassetten und Ähnliches) sammelst du ein, indem du sie über die linke Schulter hältst und dort loslässt, wie in einen Rucksack: ein leichtes Vibrieren zeigt, dass du dort bist, ein kurzes Rasseln und ein Vibrieren bestätigen es. Aus: nur mit A oder X, während du sie hältst."),
+                "Needs Festhalten.");
 
             UprightBody = Bind("Steuerung", "OberkoerperAufrecht", true,
                 ("Your body stays upright and faces your hands while you look around, and follows your head when you lean, so the hands reach the controllers the same way wherever you look. Off: the body turns with every look and stays put when you lean, as before.",
@@ -236,8 +248,6 @@ namespace ShipbreakerVR
                 ("With extended tool physics, how heavy the cutter and the grapple are in your hand: moved fast they lag behind the controller and settle, and your hand stays on them. 0 for none.",
                     "Mit erweiterter Werkzeugphysik: wie schwer Cutter und Grappler in der Hand sind. Schnell bewegt hängen sie dem Controller nach und pendeln aus, deine Hand bleibt an ihnen. 0 für keins."),
                 "In kg.", Between(0f, 20f));
-            BeltGrapple = Bind("Steuerung", "GrapplerAmKoerper", true,
-                "Shows the grapple at your right hip, where you draw it from, while it is not in a hand.");
             FreeWalking = Bind("Station", "FreiGehen", false,
                 "Walk through the station instead of hopping between its spots. Replaces the spots: sitting on the bed A stands up, the left stick walks, the right stick turns in steps, the triggers change the poster you look at, and A uses the screen or door you stand at. Walking with a stick can make you feel sick.");
             MonitorLook = Bind("Anzeige", "MonitorEffekt", true,

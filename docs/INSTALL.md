@@ -123,6 +123,10 @@ hand instead. Let go while the hand moves to push off; you keep that speed. Whil
 flying pauses. Near an airlock console or a switch the grip holds on too; A or X works it. The row "Hold on and climb"
 in the VR options switches this off.
 
+Things to collect (cables, circuit boards, data cassettes and the like) can be held like any light part. Bring one
+behind your left shoulder, where a light buzz tells you are there, and let go of the grip: it is collected as with A or X, with a short rattle and a buzz in the
+controller. The row "Stow over the shoulder" in the VR options switches this off.
+
 ### Free walking in the station
 ![Free walking in the station](images/station.svg)
 

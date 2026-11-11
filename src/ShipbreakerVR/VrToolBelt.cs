@@ -20,16 +20,11 @@ namespace ShipbreakerVR
         private const float HipDeepest = -0.85f;
         private const float HipSide = 0.1f;
         private const float HipOutside = 0.35f;
-        // The grapple's zone lies further out: from HipSide the hand would reach into the body for it.
-        private const float GrappleOut = 0.08f;
-        // And further back, around where it hangs (VrBeltGrapple).
-        private const float GrappleBack = 0.19f;
-        // With the grapple shown at the hip (VrBeltGrapple), the hand draws it only within GripReach of GripAt, in meters,
-        // as Raik asked: the zone around the hip reached far beyond the grapple. GripAt is where Raik's controller was
-        // reaching for the grapple's grip (12 grips, all within 9 cm of it), not the grip itself: the grapple hangs at the
-        // model's hip 37 cm behind the eyes, further back than a real hand reaches there, so the hand on the grip shows
-        // with the controller about 30 cm further forward, 10 cm further out and 10 cm lower.
-        private static readonly Vector3 GripAt = new Vector3(0.30f, -0.72f, -0.08f);
+        // With the grapple at the hip (VrBeltGrapple), the hand draws it only within GripReach of its grip, as Raik asked:
+        // the zone around the hip reached far beyond the grapple. The grip hangs at GripAt, where Raik's hand reached for
+        // it (12 grips, all within 9 cm); before, a copy hung at the body model's hip, 30 cm further back, and the hand took
+        // it from here.
+        public static readonly Vector3 GripAt = new Vector3(0.30f, -0.72f, -0.08f);
         private const float GripReach = 0.13f;
         private const float HipForward = 0.1f;
         private const float HipBehind = -0.2f;
@@ -56,7 +51,7 @@ namespace ShipbreakerVR
             var zone = Find(hand, out var local);
             var index = hand.IsLeft ? 0 : 1;
             // A grip pressed near the hip grapple but outside its zone: where the hand was, to fit GripReach.
-            if (zone == Zone.None && !hand.IsLeft && hand.Grip.Pressed && VrSettings.BeltGrapple.Value && missLogs < 30)
+            if (zone == Zone.None && !hand.IsLeft && hand.Grip.Pressed && missLogs < 30)
             {
                 var off = local - GripAt;
                 if (off.magnitude < 0.4f)
@@ -78,39 +73,46 @@ namespace ShipbreakerVR
 
         private static Zone Find(VrInput.Hand controller, out Vector3 local)
         {
+            if (!HeadLocal(controller, out local)) return Zone.None;
+            var zone = ZoneAt(local);
+            return zone == Zone.Flashlight && !controller.IsLeft ? Zone.None : zone;
+        }
+
+        // Where the controller is relative to the head, in meters along the head's heading (x right, y up, z forward), as
+        // the zones are measured; also for stowing things over the left shoulder (VrShoulderStow).
+        internal static bool HeadLocal(VrInput.Hand controller, out Vector3 local)
+        {
             local = Vector3.zero;
             var vr = VrCamera.Instance;
-            if (vr == null || !controller.TryGetPosition(out var hand)) return Zone.None;
+            if (vr == null || !controller.TryGetPosition(out var hand)) return false;
             var head = vr.transform;
             var forward = head.localRotation * Vector3.forward;
             forward.y = 0f;
             // Looking straight down the top of the head points ahead.
             if (forward.sqrMagnitude < 0.01f) forward = head.localRotation * Vector3.up;
             forward.y = 0f;
-            if (forward.sqrMagnitude < 0.0001f) return Zone.None;
+            if (forward.sqrMagnitude < 0.0001f) return false;
             local = Quaternion.Inverse(Quaternion.LookRotation(forward, Vector3.up)) * (hand - head.localPosition);
-            var zone = ZoneAt(local, VrSettings.BeltGrapple.Value);
-            return zone == Zone.Flashlight && !controller.IsLeft ? Zone.None : zone;
+            return true;
         }
 
+        // Over the left shoulder, the mirror of the cutter's zone over the right one, with its inner edge at the middle
+        // of the head (the cutter's reaches 10 cm past it), for stowing what a hand holds (VrShoulderStow).
+        internal static bool OverLeftShoulder(Vector3 local) => local.y > ShoulderAbove && local.z < ShoulderBehind && local.x < 0f;
+
         // The zone at a hand position relative to the head, in meters along the head's heading (x right, y up, z forward).
-        // With the grapple at the hip its zone is a ball of GripReach around its grip instead of the hip box.
-        internal static Zone ZoneAt(Vector3 local, bool grappleAtHip = false)
+        // The grapple's zone is a ball of GripReach around its grip at the right hip, the demo charges' the box at the left.
+        internal static Zone ZoneAt(Vector3 local)
         {
-            if (grappleAtHip && (local - GripAt).magnitude < GripReach) return Zone.Grapple;
+            if ((local - GripAt).magnitude < GripReach) return Zone.Grapple;
             if (local.y < HipBelow && local.y > HipDeepest)
             {
                 // Measured as if the hand were turned forward by HipTurn on its side of the body, mirrored for the left hip.
                 var side = Mathf.Abs(local.x);
                 var turnedSide = side * HipTurnCos - local.z * HipTurnSin;
                 var turnedForward = local.z * HipTurnCos + side * HipTurnSin;
-                var outward = local.x > 0f ? GrappleOut : 0f;
-                var behind = local.x > 0f ? HipBehind - GrappleBack : HipBehind;
-                if (turnedForward < HipForward && turnedForward > behind && turnedSide > HipSide + outward && turnedSide < HipOutside + outward)
-                {
-                    if (local.x <= 0f) return Zone.DemoCharge;
-                    if (!grappleAtHip) return Zone.Grapple;
-                }
+                if (local.x <= 0f && turnedForward < HipForward && turnedForward > HipBehind && turnedSide > HipSide && turnedSide < HipOutside)
+                    return Zone.DemoCharge;
             }
             if (local.magnitude < HelmetReach && local.x > HelmetSide && local.z > ShoulderBehind) return Zone.Scanner;
             if (local.magnitude < HelmetReach && local.x < -HelmetSide && local.z > ShoulderBehind) return Zone.Flashlight;

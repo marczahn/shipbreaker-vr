@@ -13,6 +13,36 @@ namespace ShipbreakerVR
         public static Vector3 ClosestPoint(Collider collider, Vector3 point) =>
             collider is MeshCollider mesh && !mesh.convex ? collider.bounds.ClosestPoint(point) : collider.ClosestPoint(point);
 
+        // The nearest points of two segments, a0-a1 and b0-b1, one on each.
+        public static void ClosestOnSegments(Vector3 a0, Vector3 a1, Vector3 b0, Vector3 b1, out Vector3 onA, out Vector3 onB)
+        {
+            var d1 = a1 - a0;
+            var d2 = b1 - b0;
+            var r = a0 - b0;
+            var a = Vector3.Dot(d1, d1);
+            var e = Vector3.Dot(d2, d2);
+            var f = Vector3.Dot(d2, r);
+            float s, t;
+            if (a < 1e-9f && e < 1e-9f) { s = t = 0f; }
+            else if (a < 1e-9f) { s = 0f; t = Mathf.Clamp01(f / e); }
+            else
+            {
+                var c = Vector3.Dot(d1, r);
+                if (e < 1e-9f) { t = 0f; s = Mathf.Clamp01(-c / a); }
+                else
+                {
+                    var b = Vector3.Dot(d1, d2);
+                    var denom = a * e - b * b;
+                    s = denom > 1e-9f ? Mathf.Clamp01((b * f - c * e) / denom) : 0f;
+                    t = (b * s + f) / e;
+                    if (t < 0f) { t = 0f; s = Mathf.Clamp01(-c / a); }
+                    else if (t > 1f) { t = 1f; s = Mathf.Clamp01((b - c) / a); }
+                }
+            }
+            onA = a0 + d1 * s;
+            onB = b0 + d2 * t;
+        }
+
         public static string Path(Transform t) => t.parent == null ? t.name : Path(t.parent) + "/" + t.name;
 
         // A transform and its parents, "name < parent < ...", at most depth of them: shorter than Path where the

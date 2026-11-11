@@ -65,13 +65,13 @@ namespace ShipbreakerVR.Tests
             Assert.Equal(thrust, VrControls.ThrustOffset(offset, tilt), 3);
 
         [Theory]
-        [InlineData(0.2f, -0.6f, 0f, (int)Zone.Grapple)]
+        [InlineData(0.2f, -0.6f, 0f, (int)Zone.None)]
         [InlineData(-0.2f, -0.6f, 0f, (int)Zone.DemoCharge)]
         [InlineData(0f, -0.6f, 0f, (int)Zone.None)]
         [InlineData(0.2f, -0.6f, 0.4f, (int)Zone.None)]
         [InlineData(0.3f, -0.6f, 0.2f, (int)Zone.None)]
         [InlineData(-0.3f, -0.6f, 0.2f, (int)Zone.None)]
-        [InlineData(0.25f, -0.6f, -0.1f, (int)Zone.Grapple)]
+        [InlineData(0.25f, -0.6f, -0.1f, (int)Zone.None)]
         [InlineData(-0.25f, -0.6f, -0.1f, (int)Zone.DemoCharge)]
         [InlineData(0.45f, -0.6f, -0.1f, (int)Zone.None)]
         [InlineData(0.2f, -0.6f, -0.55f, (int)Zone.None)]
@@ -92,7 +92,7 @@ namespace ShipbreakerVR.Tests
         [InlineData(0.20f, -0.50f, 0.10f, (int)Zone.None)]
         [InlineData(-0.25f, -0.6f, -0.1f, (int)Zone.DemoCharge)]
         public void WithTheGrappleAtTheHipOnlyItsGripDrawsIt(float x, float y, float z, int zone) =>
-            Assert.Equal((Zone)zone, VrToolBelt.ZoneAt(new Vector3(x, y, z), true));
+            Assert.Equal((Zone)zone, VrToolBelt.ZoneAt(new Vector3(x, y, z)));
     }
 
     public class ResolutionTests
@@ -106,6 +106,28 @@ namespace ShipbreakerVR.Tests
         {
             Assert.Equal(VrResolution.ResolutionScaleMin, VrResolution.FitScale(1024, 2688f, 2880f));
             Assert.Equal(VrResolution.ResolutionScaleMax, VrResolution.FitScale(1 << 20, 2688f, 2880f));
+        }
+    }
+}
+
+namespace ShipbreakerVR.Tests
+{
+    public class ButtonDeviceTests
+    {
+        [Fact]
+        public void TellsTheAirConditionerFromTheWallTerminal()
+        {
+            var device = VrButtons.Device("SM_AtmosphereRegulator_Mini_1Bx1xA_Button");
+            Assert.Equal("SM_AtmosphereRegulator", device);
+            Assert.False(VrButtons.OtherDevice(device, "SM_AtmosphereRegulator_Mini_1Bx1xA1_Box"));
+            Assert.True(VrButtons.OtherDevice(device, "SM_Computer_WallTerminal_B0xBxA"));
+        }
+
+        [Fact]
+        public void TakesOtherNamesAsBefore()
+        {
+            Assert.False(VrButtons.OtherDevice(VrButtons.Device("Button_Panel"), "SM_Computer_WallTerminal_B0xBxA"));
+            Assert.False(VrButtons.OtherDevice("SM_AtmosphereRegulator", "PRF_Console"));
         }
     }
 }

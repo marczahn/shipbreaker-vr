@@ -43,6 +43,10 @@ namespace ShipbreakerVR
             ("frame statistics", VrPerformance.FrameStart),
             ("load trace", () => VrLoadTrace.EndFrame(VrCamera.Instance)),
             ("diagnostics", () => VrDiagnostics.Update(VrCamera.Instance)),
+            ("debris range", VrDebrisRange.Update),
+            ("lamp shadows", VrLampShadows.Update),
+            ("shoulder stow", VrShoulderStow.Update),
+            ("pickup layer", VrPickupLayer.Update),
             ("vr options entry", VrOptionsMenu.Update),
             ("vr options tab", VrOptionsTab.Update),
         };
@@ -64,6 +68,7 @@ namespace ShipbreakerVR
             ("levers", VrLever.LateUpdate),
             ("nacelle switches", VrNacelle.LateUpdate),
             ("hands", VrHands.LateUpdate),
+            ("arm push", VrArmPush.LateUpdate),
             ("crosshair", VrCrosshair.LateUpdate),
         };
 

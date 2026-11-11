@@ -213,6 +213,76 @@ namespace ShipbreakerVR
             if (player == null) return;
             bodyAtRig = player.transform.position;
             rigPlaced = true;
+            foreach (var hand in Hands) Track(hand);
+        }
+
+        // Throwing (Raik, 2026-11-08): a part let go flew off with the speed of the last physics step, so a wrist that
+        // tips at the moment of letting go sent it anywhere. The controller's path over the last ThrowWindow seconds
+        // gives its speed and way instead, an average over a few frames; tiny debris gets more of it (ClimbContact.ThrowGain).
+        private const float ThrowWindow = 0.06f;
+        private const int Tracked = 16;
+
+        private class Path
+        {
+            public readonly Vector3[] At = new Vector3[Tracked];
+            public readonly Quaternion[] Turn = new Quaternion[Tracked];
+            public readonly float[] Time = new float[Tracked];
+            public int Count, Next;
+        }
+
+        private static readonly System.Collections.Generic.Dictionary<VrInput.Hand, Path> Paths = new System.Collections.Generic.Dictionary<VrInput.Hand, Path>();
+
+        private static void Track(Hand hand)
+        {
+            if (!Paths.TryGetValue(hand.Input, out var path)) Paths[hand.Input] = path = new Path();
+            if (!hand.Input.TryGetPosition(out var local) || !hand.Input.TryGetAimRotation(out var turn)) { path.Count = 0; return; }
+            path.At[path.Next] = local;
+            path.Turn[path.Next] = turn;
+            path.Time[path.Next] = Time.unscaledTime;
+            path.Next = (path.Next + 1) % Tracked;
+            path.Count = Mathf.Min(path.Count + 1, Tracked);
+        }
+
+        // The controller's average speed and spin over the window, in world space relative to the body; false with too few
+        // frames.
+        private static bool HandSpeed(Hand hand, out Vector3 speed, out Vector3 spin)
+        {
+            speed = spin = Vector3.zero;
+            if (!Paths.TryGetValue(hand.Input, out var path) || path.Count < 2) return false;
+            var newest = (path.Next + Tracked - 1) % Tracked;
+            var oldest = newest;
+            for (var i = 1; i < path.Count; i++)
+            {
+                var each = (newest + Tracked - i) % Tracked;
+                oldest = each;
+                if (path.Time[newest] - path.Time[each] >= ThrowWindow) break;
+            }
+            var span = path.Time[newest] - path.Time[oldest];
+            if (span <= 1e-4f) return false;
+            var rig = VrCamera.Instance.transform.parent;
+            speed = rig.TransformVector((path.At[newest] - path.At[oldest]) / span);
+            (path.Turn[newest] * Quaternion.Inverse(path.Turn[oldest])).ToAngleAxis(out var angle, out var axis);
+            if (angle > 180f) angle -= 360f;
+            if (!float.IsInfinity(axis.x) && Mathf.Abs(angle) > 0.01f) spin = rig.rotation * axis * (angle * Mathf.Deg2Rad / span);
+            return true;
+        }
+
+        // A firmly held part let go by its last hand flies off as the hand moved it, averaged over the window: it spins as
+        // the hand turned, and its middle goes as a point of the hand there would, so the part where the hand held it goes
+        // at the hand's speed (Raik: a crate held at its edge flew as if thrown from its middle, the held edge slower).
+        private static void Throw(Hand hand, Rigidbody body)
+        {
+            if (body == null || player == null || body.isKinematic || !HandSpeed(hand, out var speed, out var spin)) return;
+            var gain = ClimbContact.ThrowGain(body.mass);
+            var before = body.velocity - player.velocity;
+            var lever = body.worldCenterOfMass - HandWorld(hand);
+            var middle = (speed + Vector3.Cross(spin, lever)) * gain;
+            body.velocity = player.velocity + middle;
+            body.angularVelocity = spin;
+            if (logs++ < 80)
+                Plugin.Log.LogInfo($"Climbing: {hand.Name} hand throws '{body.name}' ({body.mass:0.0} kg) at {middle.magnitude:0.00} m/s, spinning {spin.magnitude * Mathf.Rad2Deg:0}°/s "
+                    + $"(hand {speed.magnitude:0.00} m/s over {ThrowWindow * 1000f:0} ms, held {lever.magnitude:0.00} m from its middle, x{gain:0.00}; "
+                    + $"the last step had {before.magnitude:0.00} m/s, {Vector3.Angle(before, middle):0}° off)");
         }
 
         // From VrCamera.FixedUpdate, before the physics step.
@@ -417,19 +487,30 @@ namespace ShipbreakerVR
             else if (hand.Tracked && hand.Vr.Free && down && (pressed || Time.time - hand.PressedAt < CatchTime)) TryHold(hand, pressed);
         }
 
+        // The small floating debris (nuts and bolts, 'PRF_MeshParticles_...') are loose 1 kg parts on the Ignore Raycast
+        // layer, which the hands never found (Raik, 2026-11-08): of that layer, loose parts are held too, nothing else.
+        private const int IgnoreRaycastLayer = 1 << 2;
+
+        private static bool Holdable(Collider collider)
+        {
+            if (collider.gameObject.layer != 2) return true;
+            var body = collider.attachedRigidbody;
+            return body != null && !body.isKinematic;
+        }
+
         // Holds on to the surface nearest to the hand, if one is within reach, right where the hand is.
         private static void TryHold(Hand hand, bool firstTry)
         {
             var at = HandWorld(hand);
             var reach = Reach * VrCamera.WorldScale;
-            var count = Physics.OverlapSphereNonAlloc(at, reach, Found, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            var count = Physics.OverlapSphereNonAlloc(at, reach, Found, Physics.DefaultRaycastLayers | IgnoreRaycastLayer, QueryTriggerInteraction.Ignore);
             Collider best = null;
             var bestDistance = float.MaxValue;
             var surface = at;
             for (var i = 0; i < count; i++)
             {
                 var collider = Found[i];
-                if (Own(collider)) continue;
+                if (Own(collider) || !Holdable(collider)) continue;
                 var closest = Closest(collider, at, reach);
                 var distance = (closest - at).sqrMagnitude;
                 if (distance >= bestDistance) continue;
@@ -1125,6 +1206,14 @@ namespace ShipbreakerVR
             if (!Braced(hand)) player.AddForce(-force / BodyMass, ForceMode.Acceleration);
         }
 
+        // The rigidbody that hand holds on to, if any (VrArmPush leaves it alone).
+        public static Rigidbody HeldBody(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input && hand.Holding) return hand.Body;
+            return null;
+        }
+
         // True while that controller's hand holds on to something large: a wall, the hull, a console, a heavy part. The hand
         // lies flat on it there (VrHands.Curl); around a small part that turns with the hand (Firm) it closes.
         public static bool HoldsFlat(VrInput.Hand input)
@@ -1152,6 +1241,29 @@ namespace ShipbreakerVR
             return found;
         }
 
+        // The loose part that controller's hand holds, with what can be used of it (VrShoulderStow), or false.
+        public static bool HeldLoose(VrInput.Hand input, out Rigidbody body, out InteractableObject interactable)
+        {
+            body = null;
+            interactable = null;
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input || !hand.Holding || hand.Body == null || hand.Body.isKinematic || hand.Collider == null) continue;
+                body = hand.Body;
+                interactable = hand.Collider.GetComponentInParent<InteractableObject>();
+                // Else one below the part's body, but only of the same structure part: not a collectable mounted somewhere
+                // inside a larger part, which is a structure part of its own.
+                if (interactable == null)
+                {
+                    var own = hand.Body.GetComponentInParent<StructurePart>();
+                    foreach (var each in hand.Body.GetComponentsInChildren<InteractableObject>())
+                        if (each.GetComponentInParent<StructurePart>() == own) { interactable = each; break; }
+                }
+                return true;
+            }
+            return false;
+        }
+
         // The control that controller's hand holds (VrLever), or null.
         public static InteractableObject HeldControl(VrInput.Hand input)
         {
@@ -1173,8 +1285,11 @@ namespace ShipbreakerVR
         }
 
         // How far ahead of the controller's grip the palm takes hold, along the palm's outward direction, in m at world
-        // scale 1: just above the palm of the hand (Raik: 1 to 2 cm over the palm, not inside the hand).
-        private const float PalmAhead = 0.035f;
+        // scale 1: just above the palm of the hand (Raik: 1 to 2 cm over the palm, not inside the hand), then 2 cm further
+        // out, so a closed hand has it between fingers and palm and an open one just above the palm (Raik, 2026-11-08).
+        private const float PalmAhead = 0.055f;
+        // And this far towards the finger tips, in m at world scale 1 (Raik, 2026-11-08: 1 to 1.5 cm).
+        private const float PalmToFingers = 0.015f;
 
         // The point a hand takes hold of controls from: just above its palm. The palm faces to the right on the left hand
         // and to the left on the right hand, along the controller's grip pose.
@@ -1183,7 +1298,15 @@ namespace ShipbreakerVR
             if (!input.TryGetGripPose(out _, out var grip) || VrCamera.Instance == null) return at;
             var turn = VrCamera.Instance.transform.parent.rotation * grip;
             var side = input == VrInput.Left ? Vector3.right : Vector3.left;
-            return at + turn * side * (PalmAhead * VrCamera.WorldScale);
+            var palm = turn * side;
+            var point = at + palm * (PalmAhead * VrCamera.WorldScale);
+            // Towards the finger tips, along the drawn hand from the wrist to the knuckles, at the same height over the palm.
+            if (VrHands.TryGetArm(input == VrInput.Left, out _, out _, out var wrist, out var knuckles))
+            {
+                var fingers = Vector3.ProjectOnPlane(knuckles - wrist, palm);
+                if (fingers.sqrMagnitude > 1e-6f) point += fingers.normalized * (PalmToFingers * VrCamera.WorldScale);
+            }
+            return point;
         }
 
         // Where that controller's hand sits on its hold, in the world.
@@ -1374,6 +1497,7 @@ namespace ShipbreakerVR
             hand.Follower = false;
             var body = hand.Body;
             if (firm) Unfirm(hand);
+            if (firm && push && body != null && !Held(body)) Throw(hand, body);
             hand.Anchor = null;
             hand.Collider = null;
             hand.Body = null;
@@ -1444,6 +1568,14 @@ namespace ShipbreakerVR
     // Outside VrClimb, whose static fields need the game: tests run this without it.
     internal static class ClimbContact
     {
+        // Thrown parts get the hand's speed; tiny debris up to TinyMass more of it (Raik: nuts and bolts flew too slowly),
+        // less and less up to NormalMass, from which they get just the hand's speed.
+        private const float TinyMass = 2f;
+        private const float NormalMass = 5f;
+        private const float TinyGain = 1.5f;
+
+        public static float ThrowGain(float mass) => Mathf.Lerp(TinyGain, 1f, Mathf.InverseLerp(TinyMass, NormalMass, mass));
+
         // Gliding along a surface held (VrClimb.Glide): from this speed on, in m/s at world scale 1; braking evenly, at
         // least LeastBrake m/s², harder when faster, so it stops within GlideMostWay meters.
         public const float GlideLeast = 0.3f;

@@ -214,6 +214,16 @@ namespace ShipbreakerVR.Tests
         }
 
         [Fact]
+        public void TinyDebrisIsThrownFaster()
+        {
+            Assert.Equal(1.5f, ClimbContact.ThrowGain(1f), 3);
+            Assert.Equal(1.5f, ClimbContact.ThrowGain(2f), 3);
+            Assert.Equal(1.25f, ClimbContact.ThrowGain(3.5f), 3);
+            Assert.Equal(1f, ClimbContact.ThrowGain(5f), 3);
+            Assert.Equal(1f, ClimbContact.ThrowGain(10f), 3);
+        }
+
+        [Fact]
         public void HeavierPartsLagBehindMore()
         {
             Assert.Equal(0.5f, ClimbContact.Follow(0f, 30f, 0.5f, 0.08f), 3);
