@@ -58,6 +58,13 @@ namespace ShipbreakerVR
         private const float AnimatorTo = 85f;
         private const float MostBusy = 30f;
         private static bool animatorBusy;
+        // The airlock's work (Raik, 2026-11-11, second try: neither the Animator nor the control showed it): an airlock room
+        // of the ship (RoomComponent.IsAirlock) filling or emptying, asked to, or with a door moving.
+        private static Unity.Entities.EntityManager rooms;
+        private static Unity.Entities.EntityQuery airlocks;
+        private static bool roomsKnown;
+        private static bool roomsFailed;
+        private static string airlockWas;
         // Back with the hand still on it while the controller stayed turned: the controller has to come back within this
         // of the lever before the lever turns with it again (Raik); a light knock says it caught it.
         private const float CatchWithin = 5f;
@@ -328,13 +335,21 @@ namespace ShipbreakerVR
                 // Where the console's Animator put the handle this frame, before our end pose.
                 var animated = LeverMath.Twist(Quaternion.Inverse(usedRest) * used.localRotation, LocalAxis);
                 var turning = animated > AnimatorFrom && animated < AnimatorTo;
-                var busy = taken && Time.time < usedAt + MostBusy && (turning || !usedControl.IsInteractable);
+                var airlock = AirlockWorking(out var state);
+                if (state != airlockWas)
+                {
+                    airlockWas = state;
+                    if (logs++ < 200) Plugin.Log.LogInfo($"Lever: airlock {state}");
+                }
+                var busy = taken && Time.time < usedAt + MostBusy && (turning || !usedControl.IsInteractable || airlock);
+                // A hand still on it keeps it at its end (Raik, 2026-11-11: it went back with the hand on it).
+                var holding = Hands[0].Handle == used || Hands[1].Handle == used;
                 if (busy != animatorBusy)
                 {
                     animatorBusy = busy;
-                    if (logs++ < 200) Plugin.Log.LogInfo($"Lever: '{used.name}' {(busy ? $"is busy with the game's work (its handle at {animated:0}°, usable {usedControl.IsInteractable})" : "the game's work is done")}");
+                    if (logs++ < 200) Plugin.Log.LogInfo($"Lever: '{used.name}' {(busy ? $"is busy with the game's work (its handle at {animated:0}°, usable {usedControl.IsInteractable}, airlock working {airlock})" : "the game's work is done")}");
                 }
-                if (!done || busy)
+                if (!done || busy || holding)
                 {
                     used.localRotation = usedEnd;
                     return;
@@ -354,6 +369,48 @@ namespace ShipbreakerVR
             if (logs++ < 200) Plugin.Log.LogInfo($"Lever: '{used.name}' is back at its rest pose");
             used = null;
             usedControl = null;
+        }
+
+        // Whether an airlock of the ship fills, empties or moves a door; state: what each airlock does, for the log.
+        private static bool AirlockWorking(out string state)
+        {
+            state = "-";
+            if (roomsFailed || usedControl == null) return false;
+            try
+            {
+                if (!roomsKnown)
+                {
+                    var blueprint = usedControl.GetComponentInParent<EntityBlueprintComponent>();
+                    if (blueprint == null) return false;
+                    rooms = blueprint.EntityManager;
+                    airlocks = rooms.CreateEntityQuery(Unity.Entities.ComponentType.ReadOnly<RoomComponent>());
+                    roomsKnown = true;
+                }
+                var working = false;
+                var parts = new List<string>();
+                using (var all = airlocks.ToComponentDataArray<RoomComponent>(Unity.Collections.Allocator.Temp))
+                {
+                    foreach (var room in all)
+                    {
+                        if (!room.IsAirlock) continue;
+                        var pressure = room.AirPressureState;
+                        var changing = pressure == RoomPressurization.Pressurizing || pressure == RoomPressurization.Decompressing
+                            || pressure == RoomPressurization.ControlledPressurizing || pressure == RoomPressurization.ControlledDecompressing;
+                        if (changing || room.AirPressureChangeRequest != 0 || room.DoorChangeingStateCount > 0) working = true;
+                        parts.Add($"{pressure} (asked {room.AirPressureChangeRequest}, doors moving {room.DoorChangeingStateCount})");
+                    }
+                }
+                if (parts.Count > 0) state = string.Join(", ", parts);
+                return working;
+            }
+            catch (System.Exception e)
+            {
+                // A ship loaded since may have its rooms elsewhere: found again; failing on its own, given up.
+                if (roomsKnown) roomsKnown = false;
+                else roomsFailed = true;
+                Plugin.Log.LogWarning($"Lever: reading the airlock failed{(roomsFailed ? ", the lever waits only for its control" : ", looked up again")}: {e.Message}");
+                return false;
+            }
         }
 
         // A hand still on a lever that went back: the hand went with it, the controller may not have. The lever turns with
