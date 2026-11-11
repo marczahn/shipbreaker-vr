@@ -532,6 +532,13 @@ namespace ShipbreakerVR
             // A thing to collect on the wall (a first aid kit, a tank, a poster, VrPullOff) is held as a surface, the hand
             // on it as on a wall, not as a fist (Raik, 2026-11-11: as on the damaged fuel can, which looked right).
             if (control != null && VrPullOff.Usable(control)) control = null;
+            // A device used by its button pushed by hand (an air conditioner, VrButtons) is held as a surface, the hand flat on
+            // it as on a wall, not as a fist (Raik, 2026-11-11).
+            if (control != null && VrButtons.PressedByButton(control))
+            {
+                if (firstTry && logs++ < 80) Plugin.Log.LogInfo($"Climbing: {hand.Name} hand at '{control.name}', used by its button: held as a surface");
+                control = null;
+            }
             var bar = Vector3.zero;
             if (control != null && VrLever.Turnable(control))
             {

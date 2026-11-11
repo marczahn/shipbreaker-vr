@@ -309,6 +309,21 @@ namespace ShipbreakerVR
 
         private const float ControlAround = 0.6f;
 
+        // Whether a control is used by a button pushed by hand: one a button found so far uses, or one on an air
+        // conditioner, whose button may not have been found yet. The hand holds such a device as a surface, flat on it, not
+        // as a fist (VrClimb; Raik, 2026-11-11).
+        public static bool PressedByButton(InteractableObject control)
+        {
+            if (control == null) return false;
+            foreach (var list in ByPart.Values)
+                foreach (var button in list)
+                    if (button.Control == control) return true;
+            var part = control.GetComponentInParent<StructurePart>();
+            return part != null && Device(part.name) == AirConditioner;
+        }
+
+        private const string AirConditioner = "SM_AtmosphereRegulator";
+
         // Whether a part's name names another device than device, both in the 'SM_<Device>_' naming.
         public static bool OtherDevice(string device, string part) =>
             device.StartsWith("SM_") && part.StartsWith("SM_") && Device(part) != device;
