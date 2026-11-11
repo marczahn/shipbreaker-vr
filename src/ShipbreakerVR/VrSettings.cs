@@ -178,8 +178,8 @@ namespace ShipbreakerVR
                     "Grip mit einer Hand ohne Werkzeug, nah an einer Oberfläche, hält dich dort fest; bewegst du die Hand, ziehst du dich daran entlang, mit beiden Händen Hand über Hand. Ein leichtes Teil kommt stattdessen zur Hand, Station und feste Rümpfe bleiben, wo sie sind. Loslassen behält deinen Schwung, so kannst du dich abstoßen. Solange die linke Hand festhält, ruht das Fliegen. An einem Bedienelement (Schleusenkonsole, Schalter) hält der Grip dich ebenfalls fest; bedient wird es mit A oder X."),
                 "How far you and a light part move depends on both masses.");
             ShoulderStow = Bind("Steuerung", "UeberDieSchulterEinpacken", true,
-                ("Things to collect (cables, circuit boards, data cassettes and the like) are collected by holding them over your left shoulder and letting go there, as into a backpack: a short rattle and a buzz confirm it. Off: only with A or X while holding them.",
-                    "Sammelteile (Kabel, Platinen, Datenkassetten und Ähnliches) sammelst du ein, indem du sie über die linke Schulter hältst und dort loslässt, wie in einen Rucksack: ein kurzes Rasseln und ein Vibrieren bestätigen es. Aus: nur mit A oder X, während du sie hältst."),
+                ("Things to collect (cables, circuit boards, data cassettes and the like) are collected by holding them over your left shoulder and letting go there, as into a backpack: a light buzz tells you are there, a short rattle and a buzz confirm it. Off: only with A or X while holding them.",
+                    "Sammelteile (Kabel, Platinen, Datenkassetten und Ähnliches) sammelst du ein, indem du sie über die linke Schulter hältst und dort loslässt, wie in einen Rucksack: ein leichtes Vibrieren zeigt, dass du dort bist, ein kurzes Rasseln und ein Vibrieren bestätigen es. Aus: nur mit A oder X, während du sie hältst."),
                 "Needs Festhalten.");
 
             UprightBody = Bind("Steuerung", "OberkoerperAufrecht", true,

@@ -21,6 +21,10 @@ namespace ShipbreakerVR
         private const uint RattleSound = 1711490748;
         private const float BuzzStrength = 0.6f;
         private const float BuzzTime = 0.08f;
+        // A short, light buzz when a hand holding something to collect comes over the shoulder, as the tool belt's at its
+        // spots (VrToolBelt): there it can be let go (Raik, 2026-11-11).
+        private const float ReachedStrength = 0.25f;
+        private const float ReachedTime = 0.04f;
 
         private static readonly AccessTools.FieldRef<InteractionController, InteractableObject> Current =
             AccessTools.FieldRefAccess<InteractionController, InteractableObject>("mCurrentInteractable");
@@ -57,9 +61,11 @@ namespace ShipbreakerVR
         {
             if (VrClimb.HeldLoose(hand, out var body, out var thing) && Collectable(thing))
             {
+                var wasOver = held.Thing == thing && held.Over;
                 held.Thing = thing;
                 held.Body = body;
                 held.Over = VrToolBelt.HeadLocal(hand, out var local) && VrToolBelt.OverLeftShoulder(local);
+                if (held.Over && !wasOver) hand.Buzz(ReachedStrength, ReachedTime);
                 return;
             }
             var was = held.Thing;
