@@ -579,6 +579,27 @@ namespace ShipbreakerVR
                 return;
             }
 
+            Take(hand, best, at, surface, Mathf.Sqrt(bestDistance), control, bar);
+        }
+
+        // That controller's hand lets go of what it holds and takes hold of that collider where the hand is: a thing pulled
+        // off a wall comes into the hand (VrPullOff).
+        public static bool TakeHold(VrInput.Hand input, Collider collider)
+        {
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input) continue;
+                if (hand.Holding) LetGo(hand, false, "takes hold of what it pulled off");
+                var at = HandWorld(hand);
+                var surface = VrUtil.ClosestPoint(collider, at);
+                Take(hand, collider, at, surface, (surface - at).magnitude, null, Vector3.zero);
+                return hand.Holding;
+            }
+            return false;
+        }
+
+        private static void Take(Hand hand, Collider best, Vector3 at, Vector3 surface, float bestDistance, InteractableObject control, Vector3 bar)
+        {
             var first = !Pulling();
             if (!VrHand.StartHolding(hand.Vr)) return;
             var body = best.attachedRigidbody;
@@ -632,7 +653,7 @@ namespace ShipbreakerVR
             if (logs++ < 80)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds '{best.name}' (layer {best.gameObject.layer}, "
                     + (body == null ? "no rigidbody" : $"rigidbody '{body.name}' {body.mass:0.#} kg{(body.isKinematic ? " kinematic" : "")}")
-                    + $", {(hand.Movable ? hand.Heavy ? "moves, above the grab range" : "moves" : "fixed")}), {Mathf.Sqrt(bestDistance):0.00} m from the surface");
+                    + $", {(hand.Movable ? hand.Heavy ? "moves, above the grab range" : "moves" : "fixed")}), {bestDistance:0.00} m from the surface");
         }
 
         // Each holding hand: the impulse between player and hold that brings the hand to its hold in this step. Both hands
