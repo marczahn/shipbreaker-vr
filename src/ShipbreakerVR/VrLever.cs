@@ -22,6 +22,8 @@ namespace ShipbreakerVR
     {
         // Further than the game's own 60°: more to feel in the turn (Raik).
         private const float EndAngle = 90f;
+        // The fastest it turns, in degrees per second: the whole way in no less than 0.2 s (Raik, 2026-11-11).
+        private const float MostSpeed = EndAngle / 0.2f;
         private static readonly Vector3 LocalAxis = new Vector3(-1f, 0f, 0f);
         // Turned past this, the hand takes over the handle from the Animator.
         private const float TakeOver = 3f;
@@ -267,7 +269,8 @@ namespace ShipbreakerVR
                 held.Input.Buzz(SnapAmplitude, UnlatchKnock);
             }
             if (Time.time - held.UnlatchedAt < Unlatch) return;
-            var angle = Mathf.Clamp(held.StartAngle + twist, 0f, EndAngle);
+            // At most MostSpeed: a fast twist of the wrist turns it quickly, not at once; it catches up with the hand.
+            var angle = Mathf.MoveTowards(held.Angle, Mathf.Clamp(held.StartAngle + twist, 0f, EndAngle), MostSpeed * Time.deltaTime);
             var speed = Mathf.Abs(angle - held.Angle) / Mathf.Max(Time.deltaTime, 1e-4f);
             held.Angle = angle;
             held.Handle.localRotation = held.Rest * Quaternion.AngleAxis(angle, LocalAxis);
