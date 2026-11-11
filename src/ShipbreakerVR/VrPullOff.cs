@@ -15,8 +15,11 @@ namespace ShipbreakerVR
     // It comes off only while the other hand holds on to the ship's wall (Raik, 2026-11-11): then the hand on it holds free
     // (VrClimb.SetFree) and pulls neither the body nor the ship. Without that it is a hold like the wall, to climb along.
     // Let go before it came off, the thing goes back to where it was.
-    // The game has no loose form of them: they are parts of the ship's body. Pulled off, the thing's own transform (the
-    // largest one around it still smaller than Largest) leaves the ship and gets a rigidbody of Mass. Coming off it throws
+    // Also a thing to collect the game gives no control (a damaged fuel can, 'SM_Collectible_..._Damaged', Raik 2026-11-11):
+    // held as a surface, it comes off the same way and is then a loose part, with nothing to use.
+    // The game has no loose form of them: they are parts of the ship's body. Pulled off, the thing's own part (its
+    // StructurePart, smaller than Largest) leaves the ship and gets a rigidbody of Mass. A poster is one too (its part
+    // 'SM_Props_Signage_Portrait' is larger than 1 m). Coming off it throws
     // sparks and smoke where it last touched its mount, as the game does where a light part hits a wall fast
     // (HierarchyCollisionListener), and sounds as a part the grapple tears off (BreakableSettings).
     internal static class VrPullOff
@@ -27,13 +30,14 @@ namespace ShipbreakerVR
         private const float TiltTime = 0.3f;
         private const float Hold = 3f;
         private const float Fly = 0.18f;
-        private const float Largest = 1f;
+        private const float Largest = 2.5f;
         private const float Mass = 4f;
 
         private class Pull
         {
             public VrInput.Hand Input;
-            public InteractableObject Thing;
+            // The control held (InteractableObject), or the part held where the game gives it none.
+            public Component Thing;
             public Transform Root;
             public Transform Parent;
             public Vector3 RestPosition;
@@ -56,6 +60,9 @@ namespace ShipbreakerVR
         private static readonly Pull Left = new Pull { Input = VrInput.Left };
         private static readonly Pull Right = new Pull { Input = VrInput.Right };
         private static readonly List<Collider> Colliders = new List<Collider>();
+        // Things found not to come off (no part of their own), told once.
+        private static readonly HashSet<Component> Refused = new HashSet<Component>();
+        private const string Collectible = "SM_Collectible_";
         private static int logs;
 
         // From VrFrame once the rig is placed, after the hands took hold or let go.
@@ -78,14 +85,14 @@ namespace ShipbreakerVR
                 Flying(pull);
                 return;
             }
-            var control = VrClimb.HeldControl(pull.Input);
-            if (control != pull.Thing)
+            var thing = Held(pull.Input);
+            if (thing != pull.Thing)
             {
                 Reset(pull);
-                if (!Usable(control) || !Begin(pull, control)) return;
+                if (thing == null || Refused.Contains(thing) || !Begin(pull, thing)) return;
             }
             if (pull.Thing == null) return;
-            if (pull.Root == null || !pull.Thing.isActiveAndEnabled)
+            if (pull.Root == null || !pull.Thing.gameObject.activeInHierarchy)
             {
                 Reset(pull);
                 return;
@@ -119,12 +126,27 @@ namespace ShipbreakerVR
             if (pull.Pulled >= Hold) Loosen(pull, hand);
         }
 
-        // The other hand holds on to the ship the thing is on, not to the thing.
+        // The other hand holds on to something fixed (the ship, VrClimb.Braced), not to the thing. Before, only the very
+        // body the thing is on counted, and the other hand on the wall next to a first aid kit never did (Raik, 2026-11-11).
         private static bool OnWall(Pull pull)
         {
             var other = pull.Input == VrInput.Left ? VrInput.Right : VrInput.Left;
-            return pull.Ship != null && VrClimb.Braced(pull.Input) && VrClimb.HeldBody(other) == pull.Ship
-                && VrClimb.HeldControl(other) != pull.Thing;
+            if (!VrClimb.Braced(pull.Input)) return false;
+            var held = VrClimb.HeldCollider(other);
+            return held == null || !held.transform.IsChildOf(pull.Root);
+        }
+
+        // What that hand holds that may come off: a control to use, or a part to collect the game gives no control.
+        private static Component Held(VrInput.Hand input)
+        {
+            var control = VrClimb.HeldControl(input);
+            if (Usable(control)) return control;
+            var collider = VrClimb.HeldCollider(input);
+            var part = collider != null ? collider.GetComponentInParent<StructurePart>() : null;
+            // Not one already off: its own body is the part.
+            if (part == null || !part.name.StartsWith(Collectible) || collider.attachedRigidbody == null
+                || collider.attachedRigidbody.transform == part.transform) return null;
+            return part;
         }
 
         // A thing to use, fixed on the ship: removed when used, not a lever or switch, on no loose part.
@@ -132,11 +154,12 @@ namespace ShipbreakerVR
             control != null && control.isActiveAndEnabled && control.DestroyOnComplete && !VrLever.Turnable(control)
             && !VrNacelle.Is(control) && !VrClimb.Loose(control);
 
-        private static bool Begin(Pull pull, InteractableObject control)
+        private static bool Begin(Pull pull, Component control)
         {
             var root = Root(control);
             if (root == null)
             {
+                Refused.Add(control);
                 if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{control.name}' has no part of its own smaller than {Largest:0.0} m, stays on the wall");
                 return false;
             }
@@ -158,20 +181,13 @@ namespace ShipbreakerVR
             return true;
         }
 
-        // The transform that is the thing: the highest one around the control whose renderers stay within Largest, not the
-        // ship's body.
-        private static Transform Root(InteractableObject control)
+        // The transform that is the thing: its part (StructurePart), within Largest, not the ship's body.
+        private static Transform Root(Component thing)
         {
-            var body = control.GetComponentInParent<Rigidbody>();
-            Transform found = null;
-            for (var t = control.transform; t != null && (body == null || t != body.transform); t = t.parent)
-            {
-                var size = Size(t);
-                if (size <= 0f) continue;
-                if (size > Largest * VrCamera.WorldScale) break;
-                found = t;
-            }
-            return found;
+            var part = thing.GetComponentInParent<StructurePart>();
+            if (part == null || part.GetComponent<Rigidbody>() != null) return null;
+            var size = Size(part.transform);
+            return size > 0f && size <= Largest * VrCamera.WorldScale ? part.transform : null;
         }
 
         private static float Size(Transform t)
@@ -251,7 +267,7 @@ namespace ShipbreakerVR
                 return;
             }
             // Let go while it flies: it floats on from where it is.
-            if (VrClimb.HeldControl(pull.Input) != pull.Thing)
+            if (!VrClimb.TryGetSurface(pull.Input, out _))
             {
                 body.isKinematic = false;
                 if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{pull.Root.name}' let go on its way into the {pull.Input.Name} hand, floats");

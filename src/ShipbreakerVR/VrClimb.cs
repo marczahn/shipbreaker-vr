@@ -1294,6 +1294,14 @@ namespace ShipbreakerVR
             return null;
         }
 
+        // The collider that controller's hand holds, or null.
+        public static Collider HeldCollider(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input && hand.Holding) return hand.Collider;
+            return null;
+        }
+
         // That controller's hand held free (VrNacelle, Hand.Free), or not.
         public static void SetFree(VrInput.Hand input, bool free, bool turns = true)
         {
