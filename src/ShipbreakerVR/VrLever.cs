@@ -50,6 +50,14 @@ namespace ShipbreakerVR
         private const float BusyBackTime = 1.2f;
         // A use the game did not take (no new mLastCompletionTime) lets the lever go back after this long.
         private const float NotTaken = 1f;
+        // The game's own work after a use (the airlock filling or emptying) keeps the lever at its end (Raik, 2026-11-11: it
+        // went back with the hand still on it before the airlock was done): while the console's Animator has its handle
+        // turned between AnimatorFrom and AnimatorTo degrees (its own turn is 60°, ours 90°), or while the control cannot be
+        // used, up to MostBusy seconds.
+        private const float AnimatorFrom = 3f;
+        private const float AnimatorTo = 85f;
+        private const float MostBusy = 30f;
+        private static bool animatorBusy;
         // Back with the hand still on it while the controller stayed turned: the controller has to come back within this
         // of the lever before the lever turns with it again (Raik); a light knock says it caught it.
         private const float CatchWithin = 5f;
@@ -300,6 +308,7 @@ namespace ShipbreakerVR
             usedEnd = held.Rest * Quaternion.AngleAxis(EndAngle, LocalAxis);
             usedAt = Time.time;
             backAt = -1f;
+            animatorBusy = false;
             used.localRotation = usedEnd;
             foreach (var each in Hands)
                 if (each.Handle == used) VrClimb.Pin(each.Input, used.parent);
@@ -316,7 +325,16 @@ namespace ShipbreakerVR
                 var last = LastCompletion?.GetValue(usedControl) is float l ? l : 0f;
                 var taken = last >= usedAt - 0.1f;
                 var done = taken ? Time.time >= last + Cooldown(usedControl) : Time.time >= usedAt + NotTaken;
-                if (!done)
+                // Where the console's Animator put the handle this frame, before our end pose.
+                var animated = LeverMath.Twist(Quaternion.Inverse(usedRest) * used.localRotation, LocalAxis);
+                var turning = animated > AnimatorFrom && animated < AnimatorTo;
+                var busy = taken && Time.time < usedAt + MostBusy && (turning || !usedControl.IsInteractable);
+                if (busy != animatorBusy)
+                {
+                    animatorBusy = busy;
+                    if (logs++ < 200) Plugin.Log.LogInfo($"Lever: '{used.name}' {(busy ? $"is busy with the game's work (its handle at {animated:0}°, usable {usedControl.IsInteractable})" : "the game's work is done")}");
+                }
+                if (!done || busy)
                 {
                     used.localRotation = usedEnd;
                     return;
