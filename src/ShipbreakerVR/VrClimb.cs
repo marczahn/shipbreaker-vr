@@ -529,6 +529,9 @@ namespace ShipbreakerVR
             var control = NearestControl(palm, reach, out var controlCollider, out var controlPoint);
             // A lever turned by hand is held on its yellow grip, the hand pulled onto its middle, only right at it; else the
             // hand holds the surface there as anywhere (Raik: no fist touching the grip with the backs of the fingers).
+            // A thing to collect on the wall (a first aid kit, a tank, a poster, VrPullOff) is held as a surface, the hand
+            // on it as on a wall, not as a fist (Raik, 2026-11-11: as on the damaged fuel can, which looked right).
+            if (control != null && VrPullOff.Usable(control)) control = null;
             var bar = Vector3.zero;
             if (control != null && VrLever.Turnable(control))
             {
@@ -1254,7 +1257,7 @@ namespace ShipbreakerVR
             foreach (var hand in Hands)
             {
                 if (!hand.Holding || hand.Collider == null || hand.HeldAt < at) continue;
-                var interactable = hand.Collider.GetComponentInParent<InteractableObject>();
+                var interactable = PartInteractable(hand.Collider);
                 if (interactable == null || !interactable.isActiveAndEnabled) continue;
                 found = interactable;
                 at = hand.HeldAt;
@@ -1283,6 +1286,21 @@ namespace ShipbreakerVR
                 return true;
             }
             return false;
+        }
+
+        // What can be used of the part a collider belongs to: the interactable above it, else a thing to collect below its
+        // structure part that belongs to that part (a first aid kit's 'VOL_Interaction' under its 'SM_Collectible_MedKit', held as a
+        // surface on the kit's own mesh).
+        public static InteractableObject PartInteractable(Collider collider)
+        {
+            if (collider == null) return null;
+            var interactable = collider.GetComponentInParent<InteractableObject>();
+            if (interactable != null) return interactable;
+            var own = collider.GetComponentInParent<StructurePart>();
+            if (own == null) return null;
+            foreach (var each in own.GetComponentsInChildren<InteractableObject>())
+                if (each.GetComponentInParent<StructurePart>() == own && VrPullOff.Usable(each)) return each;
+            return null;
         }
 
         // The control that controller's hand holds (VrLever), or null.

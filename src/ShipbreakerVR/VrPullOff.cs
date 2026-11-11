@@ -136,12 +136,15 @@ namespace ShipbreakerVR
             return held == null || !held.transform.IsChildOf(pull.Root);
         }
 
-        // What that hand holds that may come off: a control to use, or a part to collect the game gives no control.
+        // What that hand holds that may come off: a control to use, or a part to collect the game gives no control. Held
+        // as a surface (VrClimb), the control is the one on the part held.
         private static Component Held(VrInput.Hand input)
         {
             var control = VrClimb.HeldControl(input);
             if (Usable(control)) return control;
             var collider = VrClimb.HeldCollider(input);
+            control = VrClimb.PartInteractable(collider);
+            if (Usable(control)) return control;
             var part = collider != null ? collider.GetComponentInParent<StructurePart>() : null;
             // Not one already off: its own body is the part.
             if (part == null || !part.name.StartsWith(Collectible) || collider.attachedRigidbody == null
@@ -150,7 +153,7 @@ namespace ShipbreakerVR
         }
 
         // A thing to use, fixed on the ship: removed when used, not a lever or switch, on no loose part.
-        private static bool Usable(InteractableObject control) =>
+        public static bool Usable(InteractableObject control) =>
             control != null && control.isActiveAndEnabled && control.DestroyOnComplete && !VrLever.Turnable(control)
             && !VrNacelle.Is(control) && !VrClimb.Loose(control);
 
