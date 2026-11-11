@@ -8,7 +8,7 @@ namespace ShipbreakerVR
 {
     // Things to use fixed on a ship's wall (first aid kits, oxygen and fuel tanks, repair kits) are pulled off by hand
     // (Raik, 2026-11-11), as a cargo container is torn off with the grapple: the hand holds one (VrClimb holds it as a
-    // control, the hand closed on it) and pulls away from the wall. From Start on the controller buzzes, the harder the
+    // surface, the hand flat on it) and pulls away from the wall. From Start on the controller buzzes, the harder the
     // further; from Enough on the thing tilts off the wall by up to Tilt degrees, and pulled that hard for Hold seconds it
     // comes loose and flies into the hand over Fly seconds, a quick move, not a jump. There it is a loose part like any
     // other: held, thrown, let go, and let go over the left shoulder it is used as with A (VrShoulderStow).
@@ -19,13 +19,17 @@ namespace ShipbreakerVR
     // held as a surface, it comes off the same way and is then a loose part, with nothing to use.
     // The game has no loose form of them: they are parts of the ship's body. Pulled off, the thing's own part (its
     // StructurePart, smaller than Largest) leaves the ship and gets a rigidbody of Mass. A poster is one too (its part
-    // 'SM_Props_Signage_Portrait' is larger than 1 m). Coming off it throws
-    // sparks and smoke where it last touched its mount, as the game does where a light part hits a wall fast
-    // (HierarchyCollisionListener), and sounds as a part the grapple tears off (BreakableSettings).
+    // 'SM_Props_Signage_Portrait' is larger than 1 m). Coming off it plays what the game plays as its joint breaks (BreakableJointComponent.BreakJoints): the part's own
+    // break effect and sound where it last touched its mount, and the grapple's sound of a joint torn off
+    // (BreakableSettings). Without a break effect of its own, the game's sparks of metal hitting metal
+    // (HierarchyCollisionListener; the light ones are only for parts of 10 kg and more, none matched, Raik 2026-11-11).
+    // In space: no gravity on it (Raik: thrown, it fell down).
     internal static class VrPullOff
     {
         private const float Start = 0.03f;
         private const float Enough = 0.08f;
+        // A part held as a surface (no control, the damaged fuel can) is pulled from this much further out (Raik).
+        private const float SurfaceExtra = 0.03f;
         private const float Tilt = 7f;
         private const float TiltTime = 0.3f;
         private const float Hold = 3f;
@@ -115,6 +119,7 @@ namespace ShipbreakerVR
             // How far the controller is from where the hand holds, away from the wall.
             var away = Vector3.Dot(hand - pull.Root.TransformPoint(pull.Surface), pull.Normal);
             var scale = VrCamera.WorldScale;
+            if (!(pull.Thing is InteractableObject)) away -= SurfaceExtra * scale;
             if (away > Start * scale)
                 pull.Input.Buzz(Mathf.Lerp(0.1f, 0.7f, Mathf.InverseLerp(Start * scale, Enough * scale, away)), 0.05f);
             var hard = away >= Enough * scale;
@@ -239,6 +244,7 @@ namespace ShipbreakerVR
             root.SetParent(null, true);
             var body = root.gameObject.AddComponent<Rigidbody>();
             body.mass = Mass;
+            body.useGravity = false;
             body.isKinematic = true;
             body.interpolation = RigidbodyInterpolation.Interpolate;
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
@@ -247,8 +253,7 @@ namespace ShipbreakerVR
             pull.FlyStart = Time.time;
             VrClimb.SetFree(pull.Input, true, false);
             pull.Input.Buzz(0.9f, 0.12f);
-            Sparks(ship, contact, pull.Normal);
-            TearSound();
+            Break(root, ship, contact, pull.Normal);
             if (logs++ < 40)
             {
                 root.GetComponentsInChildren(Colliders);
@@ -314,42 +319,52 @@ namespace ShipbreakerVR
         private static FXElement sparks;
         private static bool sparksSought;
 
-        // The game's sparks and smoke of a light part hitting a metal wall fast: of its collision effects (FXCollisionAsset)
-        // the one for parts no heavier than Mass that needs the highest speed.
-        private static void Sparks(Rigidbody ship, Vector3 at, Vector3 normal)
+        // What the game plays as the part's joint breaks: its own break sound and effect, and the grapple's sound.
+        private static void Break(Transform root, Rigidbody ship, Vector3 at, Vector3 normal)
         {
-            if (!sparksSought)
+            var joint = root.GetComponent<BreakableJointComponent>();
+            var asset = joint != null ? joint.BreakableJointAsset : null;
+            var data = asset != null ? asset.Data : null;
+            var effect = data != null ? data.BreakFX : null;
+            var sound = "none";
+            if (data != null)
             {
-                var listener = ship != null ? ship.GetComponentInChildren<HierarchyCollisionListener>() : null;
-                if (listener == null) listener = Object.FindObjectOfType<HierarchyCollisionListener>();
-                var asset = listener != null ? listener.FXCollisionAsset : null;
-                if (asset == null || asset.CollisionData == null)
-                {
-                    if (logs++ < 40) Plugin.Log.LogInfo("Pull off: no collision effects found yet, no sparks");
-                    return;
-                }
-                sparksSought = true;
-                FXCollisionAsset.FXData best = null;
-                foreach (var data in asset.CollisionData)
-                {
-                    if (data == null) continue;
-                    Plugin.Log.LogInfo($"Pull off: collision effect '{(data.Material1 != null ? data.Material1.name : "-")}' on '{(data.Material2 != null ? data.Material2.name : "-")}', from {data.MinRequiredVelocity:0.0} m/s and {data.MinRequiredMass:0.0} kg: '{(data.CollisionFX != null ? data.CollisionFX.name : "-")}'");
-                    if (data.CollisionFX == null || data.MinRequiredMass > Mass) continue;
-                    if (best == null || data.MinRequiredVelocity > best.MinRequiredVelocity) best = data;
-                }
-                sparks = best != null ? best.CollisionFX : null;
-                Plugin.Log.LogInfo($"Pull off: sparks are '{(sparks != null ? sparks.name : "-")}'");
+                AudioViewSystem.RequestOneShotSFX(data.BreakSuccess, at);
+                sound = $"its own ({data.BreakSuccess})";
             }
-            if (sparks == null || GameSession.SpawnPoolManager == null) return;
-            GameSession.SpawnPoolManager.SpawnObject(sparks, at, Quaternion.LookRotation(normal), null, null);
+            var settings = Main.Instance != null && Main.Instance.MainSettings != null ? Main.Instance.MainSettings.BreakableSettings : null;
+            if (settings != null)
+            {
+                AudioViewSystem.RequestOneShotSFX(settings.GrappleBreakJointSuccessSFX, at);
+                sound += $", the grapple's ({settings.GrappleBreakJointSuccessSFX})";
+            }
+            if (effect == null) effect = Sparks(ship);
+            if (effect != null && GameSession.SpawnPoolManager != null)
+                GameSession.SpawnPoolManager.SpawnObject(effect, at, Quaternion.LookRotation(normal), null, null);
+            if (logs++ < 40)
+                Plugin.Log.LogInfo($"Pull off: '{root.name}' breaks off with the effect '{(effect != null ? effect.name : "-")}'"
+                    + $"{(data != null && data.BreakFX == null ? " (it has none of its own)" : "")}, sounds: {sound}");
         }
 
-        // The sound of a part the grapple tears off its joint.
-        private static void TearSound()
+        // The game's sparks of metal hitting metal (FXCollisionAsset): the effect for light metal on light metal.
+        private static FXElement Sparks(Rigidbody ship)
         {
-            var settings = Main.Instance != null && Main.Instance.MainSettings != null ? Main.Instance.MainSettings.BreakableSettings : null;
-            if (settings == null) return;
-            ((Carbon.Core.Events.IEventBroadcaster)Main.EventSystem).Post(MasterSFXEvent.GetEvent(settings.GrappleBreakJointSuccessSFX));
+            if (sparksSought) return sparks;
+            var listener = ship != null ? ship.GetComponentInChildren<HierarchyCollisionListener>() : null;
+            if (listener == null) listener = Object.FindObjectOfType<HierarchyCollisionListener>();
+            var asset = listener != null ? listener.FXCollisionAsset : null;
+            if (asset == null || asset.CollisionData == null) return null;
+            sparksSought = true;
+            foreach (var data in asset.CollisionData)
+            {
+                if (data == null || data.CollisionFX == null) continue;
+                var first = data.Material1 != null ? data.Material1.name : "";
+                var second = data.Material2 != null ? data.Material2.name : "";
+                if (sparks == null && data.CollisionFX.name.Contains("Metal")) sparks = data.CollisionFX;
+                if (first.StartsWith("LightMetal") && second.StartsWith("LightMetal")) { sparks = data.CollisionFX; break; }
+            }
+            Plugin.Log.LogInfo($"Pull off: sparks are '{(sparks != null ? sparks.name : "-")}'");
+            return sparks;
         }
 
         private static Collider Solid(Transform root)
