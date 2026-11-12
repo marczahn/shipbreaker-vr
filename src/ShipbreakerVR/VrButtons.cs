@@ -35,6 +35,9 @@ namespace ShipbreakerVR
         private const float Largest = 0.3f;
         private const float ClickAmplitude = 0.7f;
         private const float ClickLength = 0.03f;
+        // A press that uses a working device: a short vibration after the click (Raik, 2026-11-12), not for a broken one.
+        private const float UsedAmplitude = 0.5f;
+        private const float UsedLength = 0.15f;
         // After a press the game's hand would reach for the control: the hands stay with their controllers this long.
         private const float HandsKept = 1f;
 
@@ -192,6 +195,7 @@ namespace ShipbreakerVR
                 offeredUntil = Time.time + 0.3f;
                 pressedAt = Time.time;
                 VrToolInput.PressInteract();
+                tip.Input.Buzz(UsedAmplitude, UsedLength);
             }
             if (logs++ < 60)
                 Plugin.Log.LogInfo($"Buttons: {tip.Input.Name} hand pushes '{button.Filter.name}' {depth * 1000f:0} mm in, "

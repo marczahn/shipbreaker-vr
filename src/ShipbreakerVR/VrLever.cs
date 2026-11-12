@@ -32,18 +32,20 @@ namespace ShipbreakerVR
         // Within this of the end it snaps in.
         private const float SnapWithin = 2f;
         // The hum: from this turn speed on, LightLeast to LightMost at HumFull degrees per second, a pulse every HumEvery.
-        private const float HumFrom = 15f;
+        // From a slow turn on, so it hums lightly all the while it moves (Raik, 2026-11-12: from 15).
+        private const float HumFrom = 2f;
         private const float HumFull = 180f;
-        private const float LightLeast = 0.08f;
+        private const float LightLeast = 0.06f;
         private const float LightMost = 0.22f;
         private const float HumEvery = 0.05f;
         private const float HumLength = 0.07f;
         private const float SnapAmplitude = 1f;
-        private const float SnapLength = 0.035f;
+        // The knocks at its start and end a little stronger (Raik, 2026-11-12: from 0.035 and 0.12 s).
+        private const float SnapLength = 0.07f;
         // Turned out of its rest, the handle holds this long, in seconds, before it follows the hand.
         private const float Unlatch = 0.12f;
         // The knock it unlatches with, as long as it holds (Raik).
-        private const float UnlatchKnock = 0.12f;
+        private const float UnlatchKnock = 0.16f;
         // Let go before the end, the handle goes back over this long.
         private const float BackTime = 0.6f;
         // Done with its work, a used lever goes back over this long, slowly as the game's own (Raik).
