@@ -288,6 +288,7 @@ namespace ShipbreakerVR
             // play on it, so they come through the suit where there is no air (Raik, 2026-11-12: nothing to hear).
             VrTouchSound.Moved(root.GetComponent<StructurePart>(), root.gameObject);
             Break(root, ship, contact, pull.Normal);
+            VrTouchSound.Refresh(root.GetComponent<StructurePart>());
             if (logs++ < 40)
             {
                 root.GetComponentsInChildren(Colliders);

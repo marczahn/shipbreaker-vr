@@ -26,6 +26,13 @@ namespace ShipbreakerVR
         private static readonly System.Type TouchType = AccessTools.Inner(typeof(AudioTouchTransferService), "TouchType");
         private static bool failed;
         private static int logs;
+        // The game sets a touched part's sounds to come through the suit for the sounds playing as the touch begins
+        // (TouchTransferCounter.PostObjectRTPCEvents): one started later (a break sound) stays as it is. So a part's touch
+        // is told again a few frames after such a sound starts (Refresh), at these frames.
+        private static readonly int[] RefreshAfter = { 2, 6, 15 };
+        private static StructurePart refreshPart;
+        private static int refreshFrom;
+        private static int refreshed;
 
         // From VrFrame once the rig is placed, after the hands took hold or let go.
         public static void Update()
@@ -33,6 +40,29 @@ namespace ShipbreakerVR
             var on = VrXr.IsRunning && VrSettings.Climbing != null && VrSettings.Climbing.Value;
             Step(Left, on);
             Step(Right, on);
+            Renew();
+        }
+
+        // Sounds just started on part (VrPullOff's break sounds): its touch is told again shortly, so they come through too.
+        public static void Refresh(StructurePart part)
+        {
+            refreshPart = part;
+            refreshFrom = Time.frameCount;
+            refreshed = 0;
+        }
+
+        private static void Renew()
+        {
+            if (refreshPart == null || refreshed >= RefreshAfter.Length || Time.frameCount < refreshFrom + RefreshAfter[refreshed]) return;
+            refreshed++;
+            foreach (var touch in new[] { Left, Right })
+            {
+                if (touch.Part != refreshPart) continue;
+                Tell(touch.Part, touch.On, false);
+                Tell(touch.Part, touch.On, true);
+                if (logs++ < 40) Plugin.Log.LogInfo($"Touch sound: '{refreshPart.name}' told again ({refreshed} of {RefreshAfter.Length}), for its new sounds");
+            }
+            if (refreshed >= RefreshAfter.Length) refreshPart = null;
         }
 
         private static void Step(Touch touch, bool on)
@@ -54,6 +84,9 @@ namespace ShipbreakerVR
                 if (part == null || body == null) part = null;
             }
             if (part == touch.Part && body == touch.On) return;
+            // A part that flies into the hand after it came off (the hand free meanwhile) stays touched while it is told
+            // again for its break sounds.
+            if (part == null && touch.Part != null && touch.Part == refreshPart) return;
             if (touch.Part != null) Tell(touch.Part, touch.On, false);
             touch.Part = null;
             touch.On = null;
