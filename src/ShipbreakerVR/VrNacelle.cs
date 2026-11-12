@@ -22,25 +22,6 @@ namespace ShipbreakerVR
     // (3.25 to 4.33 s). The game's hand goes to 'HandGrab' on the handle, 13.9 cm out along its +Y: the grip, which
     // runs along the hinge. The handle is L-shaped, so the middle of its mesh lies 10 to 20 cm off the grip (2026-11-08
     // log). Poses are set after the Animator ran (LateUpdate).
-    // The switch's DelayAction (on its 'Interaction Volume'), started as its use starts, plays its sound and the rest only
-    // after its delay, meant for the game's own 4 s use: used by hand at the end of the moves, its sound came seconds
-    // late (Raik, 2026-11-12). For a switch used by hand it runs at once.
-    [HarmonyPatch(typeof(DelayAction), nameof(DelayAction.DoDelay))]
-    internal static class DelayNot
-    {
-        private static readonly System.Reflection.FieldInfo Done = AccessTools.Field(typeof(DelayAction), "m_OnDelayComplete");
-        private static readonly System.Reflection.FieldInfo Amount = AccessTools.Field(typeof(DelayAction), "m_DelayAmount");
-        private static int logs;
-
-        private static bool Prefix(DelayAction __instance)
-        {
-            if (!VrNacelle.UsedNow(__instance) || !(Done?.GetValue(__instance) is UnityEngine.Events.UnityEvent done)) return true;
-            if (logs++ < 20) Plugin.Log.LogInfo($"Nacelle: '{__instance.name}' does not wait its {Amount?.GetValue(__instance)} s, used by hand");
-            done.Invoke();
-            return false;
-        }
-    }
-
     internal static class VrNacelle
     {
         private const string TypeName = "Lever_Nacelle_InteractionTypeAsset";
@@ -392,13 +373,6 @@ namespace ShipbreakerVR
             if (time <= FinishLeft) return;
             Elapsed?.SetValue(completing, time - FinishLeft);
             hurried = true;
-        }
-
-        // Whether a DelayAction belongs to a switch worked by hand and being used now: then it does not wait (DelayNot).
-        public static bool UsedNow(Component action)
-        {
-            var control = action != null ? action.GetComponent<InteractableObject>() : null;
-            return control != null && (control == completing || Used.ContainsKey(control));
         }
 
         private static void Stop()
