@@ -63,6 +63,24 @@ namespace ShipbreakerVR
             if (logs++ < 40) Plugin.Log.LogInfo($"Touch sound: {touch.Input.Name} hand touches '{part.name}' on '{body.name}', heard through the suit");
         }
 
+        // A touched part that left its body for one of its own (pulled off the wall, VrPullOff): told at once, before
+        // sounds play on it, not only next frame.
+        public static void Moved(StructurePart part, GameObject body)
+        {
+            if (part == null || body == null) return;
+            foreach (var touch in new[] { Left, Right })
+            {
+                if (touch.Part != part || touch.On == body) continue;
+                Tell(touch.Part, touch.On, false);
+                touch.Part = null;
+                touch.On = null;
+                if (!Tell(part, body, true)) continue;
+                touch.Part = part;
+                touch.On = body;
+                if (logs++ < 40) Plugin.Log.LogInfo($"Touch sound: '{part.name}' is a body of its own now, still touched by the {touch.Input.Name} hand");
+            }
+        }
+
         // Told to the game as its hand's grab would tell it (AudioTouchTransferService.UpdateTouch, a grab).
         private static bool Tell(StructurePart part, GameObject body, bool add)
         {

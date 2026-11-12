@@ -284,6 +284,9 @@ namespace ShipbreakerVR
             pull.FlyStart = Time.time;
             VrClimb.SetFree(pull.Input, true, false);
             pull.Input.Buzz(0.9f, 0.12f);
+            // Off the ship it is a body of its own, which the game does not know as touched: told before its break sounds
+            // play on it, so they come through the suit where there is no air (Raik, 2026-11-12: nothing to hear).
+            VrTouchSound.Moved(root.GetComponent<StructurePart>(), root.gameObject);
             Break(root, ship, contact, pull.Normal);
             if (logs++ < 40)
             {
