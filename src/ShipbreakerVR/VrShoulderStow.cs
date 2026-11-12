@@ -19,6 +19,11 @@ namespace ShipbreakerVR
         // The game's own sound of keys picked up in the Hab ('sfx_HAB_pickup_keys' in its sound banks), played as is,
         // as the rattle of a full backpack: no sound file of the mod's own.
         private const uint RattleSound = 1711490748;
+        // The game's collect sounds start 0.8 s late on purpose (their Play action's delay in the sound banks: in the game
+        // the thing flies to the player first), which felt late letting go over the shoulder (Raik, 2026-11-12). So the
+        // game's own grab contact of that hand ('sfx_mech_hands_grab_L'/'_R', no delay) sounds at once as it goes in.
+        private const uint GrabSoundLeft = 3763847643;
+        private const uint GrabSoundRight = 3763847621;
         // A good bump as it is collected (Raik, 2026-11-12: from 0.6 for 0.08 s, felt too little after the steady buzz).
         private const float BuzzStrength = 1f;
         private const float BuzzTime = 0.15f;
@@ -123,6 +128,7 @@ namespace ShipbreakerVR
             var asset = AssetOf(thing);
             var head = VrCamera.Instance != null ? VrCamera.Instance.transform : null;
             if (asset != null && head != null) AudioViewSystem.RequestOneShotSFX(asset.Data.ProgressCompleteAudioEvent, head);
+            if (head != null) AudioViewSystem.RequestOneShotSFX(new WwiseShortID(hand.IsLeft ? GrabSoundLeft : GrabSoundRight), head);
             Completing = asset != null && head != null;
             try { thing.Complete(); }
             finally { Completing = false; }
