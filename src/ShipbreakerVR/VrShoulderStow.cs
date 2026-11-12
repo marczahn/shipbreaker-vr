@@ -25,6 +25,9 @@ namespace ShipbreakerVR
         // spots (VrToolBelt): there it can be let go (Raik, 2026-11-11).
         private const float ReachedStrength = 0.25f;
         private const float ReachedTime = 0.04f;
+        // Then a light, steady buzz while it stays there (Raik, 2026-11-12), renewed each frame.
+        private const float OverStrength = 0.08f;
+        private const float OverTime = 0.1f;
 
         private static readonly AccessTools.FieldRef<InteractableObject, InteractableObjectAsset> AssetOf =
             AccessTools.FieldRefAccess<InteractableObject, InteractableObjectAsset>("m_Asset");
@@ -43,6 +46,7 @@ namespace ShipbreakerVR
             public InteractableObject Thing;
             public Rigidbody Body;
             public bool Over;
+            public float OverSince;
         }
 
         private static readonly Held Left = new Held();
@@ -72,7 +76,12 @@ namespace ShipbreakerVR
                 held.Thing = thing;
                 held.Body = body;
                 held.Over = VrToolBelt.HeadLocal(hand, out var local) && VrToolBelt.OverLeftShoulder(local);
-                if (held.Over && !wasOver) hand.Buzz(ReachedStrength, ReachedTime);
+                if (held.Over && !wasOver)
+                {
+                    held.OverSince = Time.time;
+                    hand.Buzz(ReachedStrength, ReachedTime);
+                }
+                else if (held.Over && Time.time >= held.OverSince + ReachedTime) hand.Buzz(OverStrength, OverTime);
                 return;
             }
             var was = held.Thing;
