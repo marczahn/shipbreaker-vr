@@ -302,8 +302,10 @@ namespace ShipbreakerVR
             Pose(RightArm, Quaternion.identity);
             AtControl(LeftArm);
             AtControl(RightArm);
+            ReadChargeFingers(active && chargeLeft);
             Curl(LeftArm);
             Curl(RightArm);
+            MirrorChargeFingers();
             Charges(active && chargeLeft);
         }
 
@@ -848,6 +850,73 @@ namespace ShipbreakerVR
             wrist = arm.Wrist.position;
             frame = Quaternion.LookRotation(knuckles, thumbSide);
             return true;
+        }
+
+        // Test (0.30.0, Raik): the hand holding the demo charges keeps the game's own finger pose. With the charge in the
+        // left hand, that hand's fingers take the right hand's animated pose instead of Curl's grip, mirrored in the hands'
+        // own axes (Frame): each bone points as the right one does, from the knuckles to the tips. Read before Curl bends
+        // the right hand (around a second tool).
+        private static readonly Vector3[] chargeBones = new Vector3[17];
+        private static bool chargeBonesRead;
+        private static bool chargeFingersLogged;
+
+        private static void ReadChargeFingers(bool left)
+        {
+            chargeBonesRead = false;
+            if (!left || !Frame(RightArm, out _, out var frame)) return;
+            var toRight = Quaternion.Inverse(frame);
+            for (var i = 0; i < chargeBones.Length; i++)
+            {
+                var bone = Bone(RightArm, i);
+                chargeBones[i] = bone.sqrMagnitude > 1e-10f ? toRight * bone : Vector3.zero;
+            }
+            chargeBonesRead = true;
+        }
+
+        private static void MirrorChargeFingers()
+        {
+            if (!chargeBonesRead || LeftArm.Weight <= 0f || !Frame(LeftArm, out _, out var frame)) return;
+            var turned = 0;
+            // Root to tip within each finger, as the arrays run: a bone's direction depends only on its own joint's turn.
+            for (var i = 0; i < chargeBones.Length; i++)
+            {
+                var want = chargeBones[i];
+                if (want == Vector3.zero) continue;
+                var joint = Joint(LeftArm, i);
+                if (!Restore(LeftArm, joint, i)) continue;
+                var bone = Bone(LeftArm, i);
+                if (bone.sqrMagnitude <= 1e-10f) continue;
+                want.x = -want.x;
+                var turn = Quaternion.FromToRotation(bone, frame * want);
+                joint.rotation = Quaternion.Slerp(Quaternion.identity, turn, LeftArm.Weight) * joint.rotation;
+                LeftArm.Set[i] = joint.localRotation;
+                turned++;
+            }
+            if (chargeFingersLogged) return;
+            chargeFingersLogged = true;
+            Plugin.Log.LogInfo($"Hands: left hand takes the demo charge's finger pose from the right hand ({turned} joints)");
+        }
+
+        private static Transform Joint(Arm arm, int index) =>
+            index < arm.Joints.Length ? arm.Joints[index] : arm.Thumb[index - arm.Joints.Length];
+
+        // From a finger joint to the next one, or at the tip to its child.
+        private static Vector3 Bone(Arm arm, int index)
+        {
+            var joint = Joint(arm, index);
+            if (joint == null) return Vector3.zero;
+            Transform next = null;
+            if (index < arm.Joints.Length)
+            {
+                if (index % 3 < 2) next = arm.Joints[index + 1];
+            }
+            else
+            {
+                var thumb = index - arm.Joints.Length;
+                if (thumb + 1 < arm.Thumb.Length) next = arm.Thumb[thumb + 1];
+            }
+            if (next == null && joint.childCount > 0) next = joint.GetChild(0);
+            return next != null ? next.position - joint.position : Vector3.zero;
         }
 
         private struct Moved
