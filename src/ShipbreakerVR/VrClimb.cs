@@ -1266,6 +1266,8 @@ namespace ShipbreakerVR
         }
 
         // The loose part that controller's hand holds, with what can be used of it (VrShoulderStow), or false.
+        private static readonly System.Collections.Generic.HashSet<string> NothingToUse = new System.Collections.Generic.HashSet<string>();
+
         public static bool HeldLoose(VrInput.Hand input, out Rigidbody body, out InteractableObject interactable)
         {
             body = null;
@@ -1277,11 +1279,22 @@ namespace ShipbreakerVR
                 interactable = hand.Collider.GetComponentInParent<InteractableObject>();
                 // Else one below the part's body, but only of the same structure part: not a collectable mounted somewhere
                 // inside a larger part, which is a structure part of its own.
+                // The part is the held collider's, not the body's: parts the game joined under one body (a spare part
+                // on a 'HierarchyParent', Raik 2026-11-12: the orange spare parts did not go into the backpack) have no
+                // part above the body.
                 if (interactable == null)
                 {
-                    var own = hand.Body.GetComponentInParent<StructurePart>();
-                    foreach (var each in hand.Body.GetComponentsInChildren<InteractableObject>())
+                    var own = hand.Collider.GetComponentInParent<StructurePart>();
+                    if (own == null) own = hand.Body.GetComponentInParent<StructurePart>();
+                    var under = own != null ? own.transform : hand.Body.transform;
+                    foreach (var each in under.GetComponentsInChildren<InteractableObject>())
                         if (each.GetComponentInParent<StructurePart>() == own) { interactable = each; break; }
+                }
+                if (interactable == null && NothingToUse.Add(hand.Collider.name) && NothingToUse.Count < 40)
+                {
+                    var parts = new System.Collections.Generic.List<string>();
+                    foreach (var component in hand.Collider.GetComponents<Component>()) parts.Add(component.GetType().Name);
+                    Plugin.Log.LogInfo($"Climbing: {input.Name} hand holds '{hand.Collider.name}' on '{hand.Body.name}', nothing to use found; on it: {string.Join(", ", parts)}");
                 }
                 return true;
             }
