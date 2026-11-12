@@ -41,6 +41,10 @@
     <Reference Include="Unity.TextMeshPro" HintPath="$(ManagedDir)\Unity.TextMeshPro.dll" Private="false" />
     <Reference Include="Doozy.Engine" HintPath="$(ManagedDir)\Doozy.Engine.dll" Private="false" />
     <Reference Include="Carbon.Core" HintPath="$(ManagedDir)\Carbon.Core.dll" Private="false" />
+    <Reference Include="Carbon.Core.Unity" HintPath="$(ManagedDir)\Carbon.Core.Unity.dll" Private="false" />
+    <Reference Include="Carbon.Audio.Unity" HintPath="$(ManagedDir)\Carbon.Audio.Unity.dll" Private="false" />
+    <Reference Include="Unity.Entities" HintPath="$(ManagedDir)\Unity.Entities.dll" Private="false" />
+    <Reference Include="Unity.Collections" HintPath="$(ManagedDir)\Unity.Collections.dll" Private="false" />
     <Reference Include="Carbon.Audio" HintPath="$(ManagedDir)\Carbon.Audio.dll" Private="false" />
     <Reference Include="UnityEngine.SubsystemsModule" HintPath="$(ManagedDir)\UnityEngine.SubsystemsModule.dll" Private="false" />
     <Reference Include="UnityEngine.AnimationModule" HintPath="$(ManagedDir)\UnityEngine.AnimationModule.dll" Private="false" />

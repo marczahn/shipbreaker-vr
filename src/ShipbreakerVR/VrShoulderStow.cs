@@ -19,12 +19,28 @@ namespace ShipbreakerVR
         // The game's own sound of keys picked up in the Hab ('sfx_HAB_pickup_keys' in its sound banks), played as is,
         // as the rattle of a full backpack: no sound file of the mod's own.
         private const uint RattleSound = 1711490748;
-        private const float BuzzStrength = 0.6f;
-        private const float BuzzTime = 0.08f;
+        // The game's collect sounds start 0.8 s late on purpose (their Play action's delay in the sound banks: in the game
+        // the thing flies to the player first), which felt late letting go over the shoulder (Raik, 2026-11-12). So the
+        // game's own grab contact of that hand ('sfx_mech_hands_grab_L'/'_R', no delay) sounds at once as it goes in.
+        private const uint GrabSoundLeft = 3763847643;
+        private const uint GrabSoundRight = 3763847621;
+        // A good bump as it is collected (Raik, 2026-11-12: from 0.6 for 0.08 s, felt too little after the steady buzz).
+        private const float BuzzStrength = 1f;
+        private const float BuzzTime = 0.15f;
         // A short, light buzz when a hand holding something to collect comes over the shoulder, as the tool belt's at its
         // spots (VrToolBelt): there it can be let go (Raik, 2026-11-11).
         private const float ReachedStrength = 0.25f;
         private const float ReachedTime = 0.04f;
+        // Then a light, steady buzz while it stays there (Raik, 2026-11-12), renewed each frame.
+        private const float OverStrength = 0.08f;
+        private const float OverTime = 0.1f;
+
+        private static readonly AccessTools.FieldRef<InteractableObject, InteractableObjectAsset> AssetOf =
+            AccessTools.FieldRefAccess<InteractableObject, InteractableObjectAsset>("m_Asset");
+        // While the game completes a thing put in the backpack: its own collect sound, bound to the thing
+        // (AudioViewSystem.RequestBoundSFX), is left out (SkipBoundCompleteSound); it came late, as the thing goes away
+        // in that frame (Raik, 2026-11-11). The mod plays it at once instead, at the head.
+        public static bool Completing { get; private set; }
 
         private static readonly AccessTools.FieldRef<InteractionController, InteractableObject> Current =
             AccessTools.FieldRefAccess<InteractionController, InteractableObject>("mCurrentInteractable");
@@ -36,6 +52,7 @@ namespace ShipbreakerVR
             public InteractableObject Thing;
             public Rigidbody Body;
             public bool Over;
+            public float OverSince;
         }
 
         private static readonly Held Left = new Held();
@@ -65,7 +82,12 @@ namespace ShipbreakerVR
                 held.Thing = thing;
                 held.Body = body;
                 held.Over = VrToolBelt.HeadLocal(hand, out var local) && VrToolBelt.OverLeftShoulder(local);
-                if (held.Over && !wasOver) hand.Buzz(ReachedStrength, ReachedTime);
+                if (held.Over && !wasOver)
+                {
+                    held.OverSince = Time.time;
+                    hand.Buzz(ReachedStrength, ReachedTime);
+                }
+                else if (held.Over && Time.time >= held.OverSince + ReachedTime) hand.Buzz(OverStrength, OverTime);
                 return;
             }
             var was = held.Thing;
@@ -103,7 +125,13 @@ namespace ShipbreakerVR
             // A prompt the game is working on this thing ends first, as the game ends it on completing.
             if (interaction == null) interaction = Object.FindObjectOfType<InteractionController>();
             if (interaction != null && Current(interaction) == thing) EndInteraction(interaction);
-            thing.Complete();
+            var asset = AssetOf(thing);
+            var head = VrCamera.Instance != null ? VrCamera.Instance.transform : null;
+            if (asset != null && head != null) AudioViewSystem.RequestOneShotSFX(asset.Data.ProgressCompleteAudioEvent, head);
+            if (head != null) AudioViewSystem.RequestOneShotSFX(new WwiseShortID(hand.IsLeft ? GrabSoundLeft : GrabSoundRight), head);
+            Completing = asset != null && head != null;
+            try { thing.Complete(); }
+            finally { Completing = false; }
             ((Carbon.Core.Events.IEventBroadcaster)Main.EventSystem).Post(InteractionEvent.GetEvent(InteractionEvent.InteractionType.ProgressComplete, thing));
             // One that waits for the game's hand to take it (WaitForGrab) is taken now: the player's hand did.
             if (thing != null && thing.isActiveAndEnabled && thing.WaitForGrab) thing.OnGrabComplete();
@@ -112,5 +140,16 @@ namespace ShipbreakerVR
             hand.Buzz(BuzzStrength, BuzzTime);
             if (logs++ < 60) Plugin.Log.LogInfo($"Shoulder stow: '{name}' collected over the left shoulder by the {hand.Name} hand");
         }
+    }
+
+    // The game's collect sound bound to the thing, left out while the mod completes a thing from the backpack, which plays
+    // it itself at once (VrShoulderStow.Completing).
+    [HarmonyPatch]
+    internal static class SkipBoundCompleteSound
+    {
+        private static System.Reflection.MethodBase TargetMethod() =>
+            AccessTools.Method(typeof(AudioViewSystem), "RequestBoundSFX", new[] { typeof(WwiseShortID), typeof(EntityBlueprintComponent) });
+
+        private static bool Prefix() => !VrShoulderStow.Completing;
     }
 }

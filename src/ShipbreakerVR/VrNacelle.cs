@@ -192,7 +192,9 @@ namespace ShipbreakerVR
             List<InteractableObject> gone = null;
             foreach (var used in Used)
             {
-                if (used.Key == null || used.Value.Handle == null)
+                // Kept while its handle exists, also once the game removed its control (Raik, 2026-11-12: after its sound
+                // the switch showed the end of the game's own animation, folded out and folding back in).
+                if (used.Value.Handle == null)
                 {
                     (gone ??= new List<InteractableObject>()).Add(used.Key);
                     continue;
@@ -314,9 +316,10 @@ namespace ShipbreakerVR
         private static void Hum(Held held, float angle)
         {
             var speed = Mathf.Abs(angle - held.Pose.Angle) / Mathf.Max(Time.deltaTime, 1e-4f);
-            if (speed < 15f || Time.unscaledTime < held.PulseAt) return;
+            // From a slow turn on, so it hums lightly all the while it moves (Raik, 2026-11-12: from 15 degrees per second).
+            if (speed < 2f || Time.unscaledTime < held.PulseAt) return;
             held.PulseAt = Time.unscaledTime + Every;
-            held.Input.Buzz(Mathf.Lerp(HumLeast, HumMost, Mathf.InverseLerp(15f, 180f, speed)), PulseLength);
+            held.Input.Buzz(Mathf.Lerp(HumLeast, HumMost, Mathf.InverseLerp(2f, 180f, speed)), PulseLength);
         }
 
         // The hand ahead of the switch: the further, the harder it shakes.

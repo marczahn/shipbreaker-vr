@@ -75,6 +75,8 @@ namespace ShipbreakerVR
         private static readonly (string Name, System.Action Step)[] PlacedSteps =
         {
             ("climbing", VrClimb.RigPlaced),
+            ("pull off", VrPullOff.Update),
+            ("touch sound", VrTouchSound.Update),
             ("tool models", VrToolModels.Place),
             ("belt grapple", VrBeltGrapple.Update),
         };
