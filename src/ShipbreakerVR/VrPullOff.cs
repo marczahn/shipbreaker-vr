@@ -36,6 +36,11 @@ namespace ShipbreakerVR
         // Pulled this long it comes off; a poster, light and only stuck on, sooner (Raik, 2026-11-11: 2 s and 1 s, from 3 s).
         private const float Hold = 2f;
         private const float PosterHold = 1f;
+        // Or jerked off (Raik, 2026-11-12): a quick, short pull away from the wall, faster than JerkSpeed (m/s at world
+        // scale 1) as the controller passes Enough, counts as a third of Hold; the third one breaks it off. The next one
+        // counts once the controller came back within Start. Not posters, which come off soon enough.
+        private const float JerkSpeed = 0.7f;
+        private const int Jerks = 3;
         private const float Fly = 0.18f;
         private const float Largest = 2.5f;
         private const float Mass = 4f;
@@ -52,6 +57,10 @@ namespace ShipbreakerVR
             public Vector3 Normal;
             public Vector3 Surface;
             public float Pulled;
+            // Quick pulls so far, whether the next one may count, and how far out the controller was last frame.
+            public int Jerked;
+            public bool JerkArmed;
+            public float LastAway;
             public float Angle;
             public Vector3 Contact;
             public bool Braced;
@@ -115,6 +124,8 @@ namespace ShipbreakerVR
             if (!braced)
             {
                 pull.Pulled = 0f;
+                // A quick pull counts only from within Start, with the other hand on the ship.
+                pull.JerkArmed = false;
                 pull.Angle = Mathf.MoveTowards(pull.Angle, 0f, Tilt / TiltTime * Time.deltaTime);
                 Pose(pull, hand);
                 return;
@@ -127,11 +138,21 @@ namespace ShipbreakerVR
                 pull.Input.Buzz(Mathf.Lerp(0.1f, 0.7f, Mathf.InverseLerp(Start * scale, Enough * scale, away)), 0.05f);
             var hard = away >= Enough * scale;
             pull.Pulled = hard ? pull.Pulled + Time.deltaTime : 0f;
+            var speed = Time.deltaTime > 0f ? (away - pull.LastAway) / Time.deltaTime : 0f;
+            if (away < Start * scale) pull.JerkArmed = true;
+            else if (pull.JerkArmed && hard && pull.LastAway < Enough * scale && speed > JerkSpeed * scale && HoldFor(pull) >= Hold)
+            {
+                pull.JerkArmed = false;
+                pull.Jerked++;
+                pull.Input.Buzz(0.9f, 0.08f);
+                if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{pull.Thing.name}' jerked ({pull.Jerked} of {Jerks}) at {speed / scale:0.00} m/s");
+            }
+            pull.LastAway = away;
             // Tilted off the wall while pulled hard, back while not.
             var wanted = hard ? Tilt : 0f;
             pull.Angle = Mathf.MoveTowards(pull.Angle, wanted, Tilt / TiltTime * Time.deltaTime);
             Pose(pull, hand);
-            if (pull.Pulled >= HoldFor(pull)) Loosen(pull, hand);
+            if (pull.Pulled + pull.Jerked * Hold / Jerks >= HoldFor(pull) - 0.001f) Loosen(pull, hand);
         }
 
         // How long it is pulled before it comes off: a poster (its part 'SM_Props_Signage_...', its use 'Pickup_Poster_...') sooner.
@@ -187,6 +208,9 @@ namespace ShipbreakerVR
             pull.Normal = normal.normalized;
             pull.Surface = root.InverseTransformPoint(surface);
             pull.Pulled = 0f;
+            pull.Jerked = 0;
+            pull.JerkArmed = false;
+            pull.LastAway = 0f;
             pull.Angle = 0f;
             pull.Braced = false;
             pull.Ship = control.GetComponentInParent<Rigidbody>();
@@ -426,6 +450,9 @@ namespace ShipbreakerVR
             pull.Parent = null;
             pull.Body = null;
             pull.Pulled = 0f;
+            pull.Jerked = 0;
+            pull.JerkArmed = false;
+            pull.LastAway = 0f;
             pull.Angle = 0f;
             pull.Braced = false;
             pull.Ship = null;
