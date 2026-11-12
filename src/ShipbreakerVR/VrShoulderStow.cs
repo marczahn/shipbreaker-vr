@@ -19,8 +19,9 @@ namespace ShipbreakerVR
         // The game's own sound of keys picked up in the Hab ('sfx_HAB_pickup_keys' in its sound banks), played as is,
         // as the rattle of a full backpack: no sound file of the mod's own.
         private const uint RattleSound = 1711490748;
-        private const float BuzzStrength = 0.6f;
-        private const float BuzzTime = 0.08f;
+        // A good bump as it is collected (Raik, 2026-11-12: from 0.6 for 0.08 s, felt too little after the steady buzz).
+        private const float BuzzStrength = 1f;
+        private const float BuzzTime = 0.15f;
         // A short, light buzz when a hand holding something to collect comes over the shoulder, as the tool belt's at its
         // spots (VrToolBelt): there it can be let go (Raik, 2026-11-11).
         private const float ReachedStrength = 0.25f;
