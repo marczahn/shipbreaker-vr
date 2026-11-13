@@ -61,6 +61,10 @@ namespace ShipbreakerVR
         // the index finger at most as long as the ring finger, and this much shorter again.
         private const float FingerLength = 0.85f;
         private const float IndexShorter = 0.97f;
+        // Test (Raik, 2026-11-13): the real controller sat at the game hand's palm, so the own hand felt nearly outside
+        // the game's. An empty or grabbing hand sits this far towards where its palm faces, in meters (tracking space);
+        // a hand on the cutter or the grapple stays as fitted to the tool.
+        private const float PalmShift = 0.01f;
         // The thumb's free part (from its first joint out of the palm); its base in the palm keeps its size, so the thumb
         // sits where it did and the ball of the thumb keeps its shape (Raik: scaling the base kinked it and set it low).
         private const float ThumbLength = 0.94f;
@@ -681,6 +685,7 @@ namespace ShipbreakerVR
                 // With weight the tool lags behind the controller, and the hand on its grip with it (VrToolWeight).
                 gripLocal = VrToolWeight.Grip(arm.Input, vrHand.Tool, gripLocal);
             }
+            if (!vrHand.HoldsTool) gripLocal += aimLocal * new Vector3(arm == LeftArm ? PalmShift : -PalmShift, 0f, 0f);
             if (!VrToolModels.TrackingToWorld(gripLocal + aimLocal * VrInput.WristBehindGrip, aimLocal, out var wrist, out var aim)) return;
             var held = VrClimb.TryGetHold(arm.Input, out var point);
             if (held && VrToolModels.TrackingToWorld(gripLocal, aimLocal, out var grip, out _))
