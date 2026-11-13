@@ -70,11 +70,12 @@ namespace ShipbreakerVR
         // palm would be PalmThickness off it), the palm facing it by PressFacing (cosine) at least; let go again
         // PressRelease further out.
         private const float PressFacing = 0.5f;
-        // Test (Raik, 2026-11-13): an empty hand whose palm comes within FlatFrom of a surface it faces lies flat on it,
+        // Test (Raik, 2026-11-13): an empty hand whose palm comes within FlatFrom of a surface it faces lies flat on it
+        // (0: from touching on, so a hand folding over goes on to lie flat without a jump; 0.9 cm jumped),
         // and lets go again FlatRelease further out. Coming at a surface fingers first, the fingers bend back at the
         // knuckles as far as they need to, at most MostBack degrees; from there on the hand folds over onto the surface
         // (Fold) until it lies flat. The wall is looked for up to WallReach from the wrist.
-        private const float FlatFrom = 0.009f;
+        private const float FlatFrom = 0f;
         private const float FlatRelease = 0.01f;
         private const float MostBack = 30f;
         private const float WallReach = 0.25f;
@@ -163,6 +164,7 @@ namespace ShipbreakerVR
             // How far the fingers are bent back at the knuckles (Touch), and how far the hand is folded over (0 to 1).
             public float Back;
             public float Folded;
+            public float FoldedBefore;
             public bool ClawLogged;
             // The hand on its hold (Grip): fixed on the thing held, turned (GripTurn) and placed (GripPoint, GripOffset)
             // as it took hold, flat on large ones; blended in and out over GripTime.
@@ -608,6 +610,9 @@ namespace ShipbreakerVR
         {
             var body = arm.Wrist.root;
             var probe = EdgeProbe * VrCamera.WorldScale;
+            // Edges are looked for only once the hand lies on the surface: while it still goes there (GripBlend, Press),
+            // every finger found nothing under it and curled (the log, 2026-11-13: all four at once on each hold).
+            var arrived = arm.Pressed ? arm.Press >= 1f : arm.GripBlend >= 1f;
             for (var finger = 0; finger < arm.Joints.Length / 3; finger++)
             {
                 var over = false;
@@ -616,7 +621,7 @@ namespace ShipbreakerVR
                     var index = finger * 3 + k;
                     var joint = arm.Joints[index];
                     var next = k < 2 ? arm.Joints[index + 1] : joint != null && joint.childCount > 0 ? joint.GetChild(0) : null;
-                    if (!over && next != null && !Supported(next.position, palm, probe, body))
+                    if (!over && arrived && next != null && !Supported(next.position, palm, probe, body))
                     {
                         over = true;
                         if (arm.Edge[index] <= 0f && edgeLogs++ < 40)
@@ -668,7 +673,7 @@ namespace ShipbreakerVR
                 }
                 ClawFinger(arm, finger, saved, across, side, weight * reach);
                 for (var k = 0; k < 3; k++) arm.Set[first + k] = arm.Joints[first + k].localRotation;
-                if (log != null) log.Append($" {arm.Joints[first].name} {reach:0.00}{(edge > 0f ? " (edge)" : "")}");
+                if (log != null) log.Append($" {arm.Joints[first].name} {reach:0.00}{(edge > 0f ? " (edge)" : "")} {Under(arm, arm.Joints[first].position, palm)}");
             }
             if (log != null)
             {
@@ -679,6 +684,16 @@ namespace ShipbreakerVR
         }
 
         private static int clawLogs;
+
+        // For the log: how far the surface lies under that point towards the palm, in cm, or '-' within 10 cm none.
+        private static string Under(Arm arm, Vector3 point, Vector3 palm)
+        {
+            var count = Physics.RaycastNonAlloc(point - palm * 0.02f * VrCamera.WorldScale, palm, WallHits, 0.12f * VrCamera.WorldScale, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            var nearest = float.MaxValue;
+            for (var i = 0; i < count; i++)
+                if (!WallHits[i].collider.transform.IsChildOf(arm.Wrist.root)) nearest = Mathf.Min(nearest, WallHits[i].distance);
+            return nearest == float.MaxValue ? "(-)" : $"({(nearest - 0.02f * VrCamera.WorldScale) * 100f:0.0} cm)";
+        }
 
         private static bool Chain(Arm arm, int finger)
         {
@@ -1147,10 +1162,14 @@ namespace ShipbreakerVR
             {
                 var facing = Vector3.Dot(frame * Vector3.right * side, -normal);
                 var gap = Vector3.Dot(wrist + frame * (new Vector3(side * PalmThickness, 0f, PalmLength) * scale) - point, normal);
-                pressed = arm.Pressed
-                    ? facing > PressFacing - 0.15f && gap < (FlatFrom + FlatRelease) * scale
-                    : facing > PressFacing && gap < FlatFrom * scale;
-                if (!pressed && facing > 0f) pressed = Fold(arm, wrist, ref frame, side, point, normal);
+                pressed = arm.Pressed && facing > PressFacing - 0.15f && gap < (FlatFrom + FlatRelease) * scale;
+                if (!pressed && facing > 0f)
+                {
+                    pressed = Fold(arm, wrist, ref frame, side, point, normal);
+                    if (!pressed && arm.Folded <= 0f && facing > PressFacing && gap < FlatFrom * scale) pressed = true;
+                    // Folded over until it can fold no further: lying flat goes on from as far as it was folded.
+                    if (pressed) arm.Press = Mathf.Max(arm.Press, arm.FoldedBefore);
+                }
                 else if (!pressed)
                 {
                     var least = Mathf.Min(Tips(arm, wrist, frame, side, 0f, point, normal), Rest(arm, wrist, frame, side, point, normal));
@@ -1166,6 +1185,7 @@ namespace ShipbreakerVR
             if (pressed && !arm.Pressed && pressLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} hand lies flat on a surface");
             if (arm.Folded > 0f && foldLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} hand folds over onto a surface, {arm.Folded * 100f:0}% of the way, fingers {arm.Back:0}° back");
             arm.Pressed = pressed;
+            arm.FoldedBefore = arm.Folded;
             arm.Press = Mathf.MoveTowards(arm.Press, pressed ? 1f : 0f, Time.unscaledDeltaTime / CurlTime);
             if (arm.Press > 0f)
             {
