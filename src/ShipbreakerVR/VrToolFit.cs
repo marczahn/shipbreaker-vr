@@ -37,6 +37,10 @@ namespace ShipbreakerVR
         private static readonly Fit GrappleLeft = new Fit("GreifhakenLinks", "3.7 10.0 -23.2 / 4.9 -0.3 -1.6");
         private static readonly Fit CutterRight = new Fit("CutterRechts", "1.6 -4.6 -0.5 / 7.0 5.2 10.8");
         private static readonly Fit CutterLeft = new Fit("CutterLinks", "2.8 -4.9 1.9 / 6.5 6.2 -6.7");
+        // The demo charge hangs on the game's right hand: its fit moves that hand (its wrist) against the controller.
+        // Turned 6 degrees anticlockwise as seen from behind (Raik, 2026-11-13: the hand was turned 5 to 7 degrees too far
+        // clockwise against the empty hand).
+        private static readonly Fit ChargeRight = new Fit("SprengsatzRechts", "0 0 0 / 0 0 6");
 
         public static ConfigEntry<bool> Adjusting;
 
@@ -50,10 +54,10 @@ namespace ShipbreakerVR
         public static void Bind()
         {
             Adjusting = VrSettings.Bind("Justierung", "WerkzeugeJustieren", false,
-                ("While one hand holds the cutter or the grapple, squeeze the other hand's grip to grab the tool and move it until it sits in the hand; letting go stores the place for that tool and hand. Switch it off when they fit.",
-                    "Während eine Hand Cutter oder Greifhaken hält: Grip der anderen Hand greift das Werkzeug, bewege es, bis es in der Hand sitzt. Loslassen speichert die Lage für dieses Werkzeug und diese Hand. Danach wieder ausschalten."),
+                ("While one hand holds the cutter, the grapple or (right) a demo charge, squeeze the other hand's grip to grab the tool and move it until it sits in the hand; letting go stores the place for that tool and hand. Switch it off when they fit.",
+                    "Während eine Hand Cutter, Greifhaken oder (rechts) einen Sprengsatz hält: Grip der anderen Hand greift das Werkzeug, bewege es, bis es in der Hand sitzt. Loslassen speichert die Lage für dieses Werkzeug und diese Hand. Danach wieder ausschalten."),
                 "The places are stored in the entries below; delete an entry to get its default back.");
-            foreach (var fit in new[] { GrappleRight, GrappleLeft, CutterRight, CutterLeft })
+            foreach (var fit in new[] { GrappleRight, GrappleLeft, CutterRight, CutterLeft, ChargeRight })
                 fit.Entry = VrSettings.Bind("Justierung", fit.Key, fit.Default,
                     "Where the tool sits in that hand: its mount relative to the wrist in centimeters (x right, y up, z forward along the controller), then its turn in degrees (pitch, yaw, roll), as \"x y z / pitch yaw roll\".");
         }
@@ -115,6 +119,7 @@ namespace ShipbreakerVR
         {
             if (tool == EquipmentController.Equipment.GrappleHook) return left ? GrappleLeft : GrappleRight;
             if (tool == EquipmentController.Equipment.CuttingTool) return left ? CutterLeft : CutterRight;
+            if (tool == EquipmentController.Equipment.DemoCharge && !left) return ChargeRight;
             return null;
         }
 

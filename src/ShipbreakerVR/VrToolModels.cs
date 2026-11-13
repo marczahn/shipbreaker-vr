@@ -262,8 +262,19 @@ namespace ShipbreakerVR
             PosesRightArm = weight > 0f;
             if (weight <= 0f || vr == null || hand == null || !rigKnown) return;
             var camera = vr.GameCamera;
-            if (camera == null || !VrAim.TryGetHandLocal(out var gripLocal, out var aimLocal)
-                || !TrackingToWorld(gripLocal + aimLocal * VrInput.WristBehindGrip, aimLocal, out var wrist, out var aim))
+            var handLocal = VrAim.TryGetHandLocal(out var gripLocal, out var aimLocal);
+            var wristLocal = gripLocal + aimLocal * VrInput.WristBehindGrip;
+            if (handLocal)
+            {
+                // The hand with the charge sits as fitted (VrToolFit, dragged by the other hand while adjusting).
+                VrToolFit.Adjust(EquipmentController.Equipment.DemoCharge, false, wristLocal, aimLocal);
+                if (VrToolFit.TryGet(EquipmentController.Equipment.DemoCharge, false, out var fitOffset, out var fitTurn))
+                {
+                    wristLocal += aimLocal * (fitOffset / VrCamera.WorldScale);
+                    aimLocal *= fitTurn;
+                }
+            }
+            if (camera == null || !handLocal || !TrackingToWorld(wristLocal, aimLocal, out var wrist, out var aim))
             {
                 if (!loggedArmSkip)
                 {
