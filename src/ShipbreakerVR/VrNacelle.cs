@@ -216,6 +216,8 @@ namespace ShipbreakerVR
             if (held.Control == null || held.Step == Step.Done) return;
             // The handle where it was left, over what the Animator set this frame.
             held.Pose.Show();
+            // Its sound with it (VrNacelleSound): running while it moves, standing while it stands.
+            VrNacelleSound.Follow(held.Pose.Handle, SoundAt(held));
             if (!held.Input.TryGetGripPose(out var gripLocal, out var gripTurn)) return;
             if (!VrToolModels.TrackingToWorld(gripLocal, gripTurn, out var grip, out _)) return;
             // It goes heavily: only with the other hand braced on something fixed (Raik).
@@ -286,6 +288,21 @@ namespace ShipbreakerVR
             if (logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand {what}, '{held.Control.name}' rests {StepPause:0.0} s");
         }
 
+        // Where in the game's switch animation the hand has the switch, in seconds (VrNacelleSound).
+        private static float SoundAt(Held held)
+        {
+            var pose = held.Pose;
+            var travel = pose.Switch != null ? pose.Switch.parent.TransformVector(Vector3.up * Slide).magnitude : 0f;
+            var pulled = travel > 0f ? pose.Slid / travel : 0f;
+            switch (held.Step)
+            {
+                case Step.FoldDown: return VrNacelleSound.AnimationTime(0, pose.Angle / Fold, 0f);
+                case Step.Pull: return VrNacelleSound.AnimationTime(1, 1f, pulled);
+                case Step.FoldOver: return VrNacelleSound.AnimationTime(2, (pose.Angle - Fold) / Fold, 1f);
+                default: return VrNacelleSound.AnimationTime(3, 1f, 1f);
+            }
+        }
+
         private static void Rebase(Held held, Vector3 grip, float angleAt)
         {
             held.Based = true;
@@ -346,6 +363,7 @@ namespace ShipbreakerVR
             hurried = false;
             VrToolInput.HoldInteract = true;
             if (logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand folded '{held.Control.name}' over, uses it; it stays down");
+            VrNacelleSound.Done(SoundAt(held));
         }
 
         private static void Finish()
@@ -427,7 +445,11 @@ namespace ShipbreakerVR
             if (held.Control != null)
             {
                 VrClimb.SetFree(held.Input, false);
-                if (held.Step != Step.Done) Let.Add(new Loose { Pose = held.Pose, At = Time.time });
+                if (held.Step != Step.Done)
+                {
+                    Let.Add(new Loose { Pose = held.Pose, At = Time.time });
+                    VrNacelleSound.Stop();
+                }
                 if (logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand lets go of '{held.Control.name}' at step {held.Step}, {held.Pose.Angle:0}°, {held.Pose.Slid * 100f:0.0} cm");
             }
             held.Control = null;
