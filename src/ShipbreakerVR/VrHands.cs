@@ -62,8 +62,9 @@ namespace ShipbreakerVR
         private const float FingerLength = 0.85f;
         private const float IndexShorter = 0.97f;
         // Test (Raik, 2026-11-13): the real controller sat at the game hand's palm, so the own hand felt nearly outside
-        // the game's. An empty or grabbing hand sits this far towards where its palm faces, in meters (tracking space);
-        // a hand on the cutter or the grapple stays as fitted to the tool.
+        // the game's. An empty or grabbing hand sits this far away from where its palm faces (the hands, palms facing each
+        // other, 1 cm further apart each), in meters (tracking space); a hand on the cutter or the grapple stays as fitted
+        // to the tool.
         private const float PalmShift = 0.01f;
         // The thumb's free part (from its first joint out of the palm); its base in the palm keeps its size, so the thumb
         // sits where it did and the ball of the thumb keeps its shape (Raik: scaling the base kinked it and set it low).
@@ -322,6 +323,7 @@ namespace ShipbreakerVR
             Pose(RightArm, Quaternion.identity);
             AtControl(LeftArm);
             AtControl(RightArm);
+            MirrorThumb(active && !VrHand.Right.HoldsTool);
             ReadChargeFingers(active && chargeLeft);
             Curl(LeftArm);
             Curl(RightArm);
@@ -685,7 +687,7 @@ namespace ShipbreakerVR
                 // With weight the tool lags behind the controller, and the hand on its grip with it (VrToolWeight).
                 gripLocal = VrToolWeight.Grip(arm.Input, vrHand.Tool, gripLocal);
             }
-            if (!vrHand.HoldsTool) gripLocal += aimLocal * new Vector3(arm == LeftArm ? PalmShift : -PalmShift, 0f, 0f);
+            if (!vrHand.HoldsTool) gripLocal += aimLocal * new Vector3(arm == LeftArm ? -PalmShift : PalmShift, 0f, 0f);
             if (!VrToolModels.TrackingToWorld(gripLocal + aimLocal * VrInput.WristBehindGrip, aimLocal, out var wrist, out var aim)) return;
             var held = VrClimb.TryGetHold(arm.Input, out var point);
             if (held && VrToolModels.TrackingToWorld(gripLocal, aimLocal, out var grip, out _))
@@ -1091,6 +1093,106 @@ namespace ShipbreakerVR
             if (arm.IdleLogged) return;
             arm.IdleLogged = true;
             Plugin.Log.LogInfo($"Hands: {arm.Name} hand loose (IdleBend)");
+        }
+
+        // Test (Raik, 2026-11-13): the right thumb showed a bend in its middle the left one has not, though both lie alike
+        // (snapshot: their bones' bends and angles to the palm match within a few degrees), so it twists about its own
+        // bones. The right thumb takes the left one's pose as animated, mirrored in the hands' own axes (Frame), before
+        // anything bends the fingers. Each bone's axes are matched through the rig's bind pose (the skinned mesh's
+        // bindposes), where both thumbs are taken as mirror images: so the right thumb turns as the left one, not only
+        // points the same way. Only while both arms follow their controllers and the right hand holds no tool.
+        private static readonly Quaternion[] thumbMatch = new Quaternion[3];
+        private static bool thumbMatchKnown;
+        private static bool thumbMatchTried;
+
+        private static void MirrorThumb(bool on)
+        {
+            var share = on ? Mathf.Min(LeftArm.Weight, RightArm.Weight) : 0f;
+            if (share <= 0f) return;
+            if (!thumbMatchTried)
+            {
+                thumbMatchTried = true;
+                thumbMatchKnown = MatchThumbs();
+            }
+            if (!thumbMatchKnown || !Frame(LeftArm, out _, out var left) || !Frame(RightArm, out _, out var right)) return;
+            var toLeft = Quaternion.Inverse(left);
+            for (var i = 0; i < thumbMatch.Length; i++)
+            {
+                var from = LeftArm.Thumb[i];
+                var to = RightArm.Thumb[i];
+                if (from == null || to == null) continue;
+                var wanted = right * Mirror(toLeft * from.rotation) * thumbMatch[i];
+                to.rotation = Quaternion.Slerp(to.rotation, wanted, share);
+            }
+        }
+
+        // A rotation in a hand's own axes as on the other hand: reflected through the plane of knuckles and thumb side.
+        private static Quaternion Mirror(Quaternion q) => new Quaternion(q.x, -q.y, -q.z, q.w);
+
+        // For each thumb bone, how the right one's axes sit against the mirrored left one's in the bind pose.
+        private static bool MatchThumbs()
+        {
+            if (!BindFrame(LeftArm, out var leftMesh, out var leftFrame) || !BindFrame(RightArm, out var rightMesh, out var rightFrame))
+            {
+                Plugin.Log.LogInfo("Hands: thumb mirror: no bind pose found for both hands, right thumb stays as animated");
+                return false;
+            }
+            var log = new System.Text.StringBuilder();
+            for (var i = 0; i < thumbMatch.Length; i++)
+            {
+                if (!BindRotation(leftMesh, LeftArm.Thumb[i], out var l) || !BindRotation(rightMesh, RightArm.Thumb[i], out var r)) return false;
+                var leftInHand = Quaternion.Inverse(leftFrame) * l;
+                var rightInHand = Quaternion.Inverse(rightFrame) * r;
+                thumbMatch[i] = Quaternion.Inverse(Mirror(leftInHand)) * rightInHand;
+                thumbMatch[i].ToAngleAxis(out var angle, out var axis);
+                log.Append($" {RightArm.Thumb[i].name} {angle:0}° about {axis}");
+            }
+            Plugin.Log.LogInfo($"Hands: thumb mirror: right thumb bones against the mirrored left ones in the bind pose:{log}");
+            return true;
+        }
+
+        // The hand's own axes (as Frame) in the bind pose of the skinned mesh that carries its thumb.
+        private static bool BindFrame(Arm arm, out SkinnedMeshRenderer mesh, out Quaternion frame)
+        {
+            frame = Quaternion.identity;
+            mesh = null;
+            if (arm.Thumb[0] == null || arm.Wrist == null) return false;
+            foreach (var candidate in arm.Wrist.root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                if (candidate.bones != null && System.Array.IndexOf(candidate.bones, arm.Thumb[0]) >= 0
+                    && System.Array.IndexOf(candidate.bones, arm.Wrist) >= 0 && System.Array.IndexOf(candidate.bones, arm.Index) >= 0
+                    && System.Array.IndexOf(candidate.bones, arm.Middle) >= 0 && System.Array.IndexOf(candidate.bones, arm.Little) >= 0)
+                {
+                    mesh = candidate;
+                    break;
+                }
+            if (mesh == null) return false;
+            if (!BindPosition(mesh, arm.Wrist, out var wrist) || !BindPosition(mesh, arm.Index, out var index)
+                || !BindPosition(mesh, arm.Middle, out var middle) || !BindPosition(mesh, arm.Little, out var little)) return false;
+            var knuckles = middle - wrist;
+            var thumbSide = index - little;
+            if (knuckles.sqrMagnitude <= 1e-10f || thumbSide.sqrMagnitude <= 1e-10f) return false;
+            frame = Quaternion.LookRotation(knuckles, thumbSide);
+            return true;
+        }
+
+        private static bool BindPosition(SkinnedMeshRenderer mesh, Transform bone, out Vector3 position)
+        {
+            position = Vector3.zero;
+            var i = System.Array.IndexOf(mesh.bones, bone);
+            var poses = mesh.sharedMesh != null ? mesh.sharedMesh.bindposes : null;
+            if (i < 0 || poses == null || i >= poses.Length) return false;
+            position = poses[i].inverse.GetColumn(3);
+            return true;
+        }
+
+        private static bool BindRotation(SkinnedMeshRenderer mesh, Transform bone, out Quaternion rotation)
+        {
+            rotation = Quaternion.identity;
+            var i = bone == null ? -1 : System.Array.IndexOf(mesh.bones, bone);
+            var poses = mesh.sharedMesh != null ? mesh.sharedMesh.bindposes : null;
+            if (i < 0 || poses == null || i >= poses.Length) return false;
+            rotation = poses[i].inverse.rotation;
+            return true;
         }
 
         private struct Moved
