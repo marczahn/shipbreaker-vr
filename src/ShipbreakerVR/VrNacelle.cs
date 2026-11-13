@@ -129,17 +129,6 @@ namespace ShipbreakerVR
         private const float FinishLeft = 0.05f;
         private static int logs;
         private static int gripLogs;
-        // Test (Raik, 2026-11-13): once the switch is used by hand, the game plays its own 4.3 s switch animation, and its
-        // sound comes with that, late. Its Animators run this many times as fast until their state is through, so the
-        // sound comes as the hand finishes; given up after HastenWithin.
-        private const float HastenSpeed = 20f;
-        private const float HastenWithin = 6f;
-        private static readonly List<Animator> hastened = new List<Animator>();
-        // Each Animator's state when the switch was used: the game's switch animation is the state that follows it.
-        private static readonly Dictionary<Animator, int> hastenFrom = new Dictionary<Animator, int>();
-        private static bool hastenSeen;
-        private static float hastenSince = -1f;
-        private static int hastenLogs;
 
         // A nacelle switch: its prompt is hidden and A does not use it.
         public static bool Is(InteractableObject control)
@@ -198,7 +187,6 @@ namespace ShipbreakerVR
         {
             foreach (var held in Hands) Update(held);
             Finish();
-            Hastening();
             for (var i = Let.Count - 1; i >= 0; i--)
                 if (!Settle(Let[i])) Let.RemoveAt(i);
             List<InteractableObject> gone = null;
@@ -358,7 +346,6 @@ namespace ShipbreakerVR
             hurried = false;
             VrToolInput.HoldInteract = true;
             if (logs++ < 80) Plugin.Log.LogInfo($"Nacelle: {held.Input.Name} hand folded '{held.Control.name}' over, uses it; it stays down");
-            Hasten(held.Control);
         }
 
         private static void Finish()
@@ -386,68 +373,6 @@ namespace ShipbreakerVR
             if (time <= FinishLeft) return;
             Elapsed?.SetValue(completing, time - FinishLeft);
             hurried = true;
-        }
-
-        // The switch's Animators (and what else drives it, logged once) found from the control's parent up and down.
-        private static void Hasten(InteractableObject control)
-        {
-            foreach (var animator in hastened) if (animator != null) animator.speed = 1f;
-            hastened.Clear();
-            var root = control.transform.parent != null ? control.transform.parent : control.transform;
-            var top = root.parent != null ? root.parent : root;
-            foreach (var animator in top.GetComponentsInChildren<Animator>(true))
-                if (!hastened.Contains(animator)) hastened.Add(animator);
-            var above = root.GetComponentInParent<Animator>();
-            if (above != null && !hastened.Contains(above)) hastened.Add(above);
-            hastenSince = Time.time;
-            hastenSeen = false;
-            hastenFrom.Clear();
-            foreach (var animator in hastened)
-                hastenFrom[animator] = animator.isActiveAndEnabled && animator.runtimeAnimatorController != null ? animator.GetCurrentAnimatorStateInfo(0).fullPathHash : 0;
-            if (hastenLogs++ >= 6) return;
-            var types = new HashSet<string>();
-            foreach (var component in top.GetComponentsInChildren<Component>(true))
-                if (component != null) types.Add(component.GetType().Name);
-            Plugin.Log.LogInfo($"Nacelle: '{control.name}' under '{top.name}' has {string.Join(", ", types)}");
-            foreach (var animator in hastened)
-            {
-                var clips = animator.runtimeAnimatorController != null ? animator.runtimeAnimatorController.animationClips : new AnimationClip[0];
-                foreach (var clip in clips)
-                {
-                    if (clip == null) continue;
-                    var events = string.Join("; ", System.Linq.Enumerable.Select(clip.events, e => $"{e.time:0.00} s {e.functionName}('{e.stringParameter}', {e.intParameter}, {(e.objectReferenceParameter != null ? e.objectReferenceParameter.name : "-")})"));
-                    Plugin.Log.LogInfo($"Nacelle: animator '{animator.name}' clip '{clip.name}' {clip.length:0.00} s, events: {(events.Length > 0 ? events : "none")}");
-                }
-            }
-        }
-
-        // Each hastened Animator fast once it left the state it was in when the switch was used (into the game's switch
-        // animation) until that is through; back to normal then, or after HastenWithin.
-        private static void Hastening()
-        {
-            if (hastenSince < 0f) return;
-            var busy = false;
-            var over = Time.time - hastenSince > HastenWithin;
-            foreach (var animator in hastened)
-            {
-                if (animator == null || !animator.isActiveAndEnabled || animator.runtimeAnimatorController == null) continue;
-                var state = animator.GetCurrentAnimatorStateInfo(0);
-                var moved = animator.IsInTransition(0) || (hastenFrom.TryGetValue(animator, out var from) && state.fullPathHash != from);
-                var running = !over && moved && (animator.IsInTransition(0) || state.normalizedTime < 1f);
-                if (running && !hastenSeen)
-                {
-                    hastenSeen = true;
-                    if (hastenLogs++ < 12) Plugin.Log.LogInfo($"Nacelle: switch animation on '{animator.name}' starts {Time.time - hastenSince:0.00} s after use, {HastenSpeed:0}x as fast");
-                }
-                animator.speed = running ? HastenSpeed : 1f;
-                busy |= running;
-            }
-            if (!over && (busy || !hastenSeen)) return;
-            if (hastenLogs++ < 12) Plugin.Log.LogInfo($"Nacelle: switch animation {(hastenSeen ? "through" : "not seen")} after {Time.time - hastenSince:0.00} s");
-            foreach (var animator in hastened) if (animator != null) animator.speed = 1f;
-            hastened.Clear();
-            hastenFrom.Clear();
-            hastenSince = -1f;
         }
 
         private static void Stop()
