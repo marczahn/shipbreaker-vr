@@ -858,14 +858,45 @@ namespace ShipbreakerVR
             var count = Physics.SphereCastNonAlloc(shoulder, HandRadius, direction, WallHits, length, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             var free = length;
             var body = arm.Wrist.root;
+            var first = -1;
             for (var i = 0; i < count; i++)
             {
                 var hit = WallHits[i];
                 // Hits from where the cast starts inside something have no place on the way.
-                if (hit.distance > 0f && hit.distance < free && !hit.collider.transform.IsChildOf(body)) free = hit.distance;
+                if (hit.distance > 0f && hit.distance < free && !hit.collider.transform.IsChildOf(body))
+                {
+                    free = hit.distance;
+                    first = i;
+                }
+            }
+            if (first < 0) return wrist;
+            // The hand slides along the surface instead of back along the arm (Raik, 2026-11-13: looking at a wall at a
+            // slant, the hand was pushed towards the body, though the controller was out in front): out of it along its
+            // normal, to HandRadius off its plane. Only if the way there is free, else back along the arm as before.
+            var wall = WallHits[first];
+            var into = HandRadius - Vector3.Dot(wrist - wall.point, wall.normal);
+            if (into > 0f)
+            {
+                var slid = wrist + wall.normal * into;
+                var toSlid = slid - shoulder;
+                var reach = toSlid.magnitude;
+                if (reach > 0.01f)
+                {
+                    var blocked = false;
+                    var again = Physics.SphereCastNonAlloc(shoulder, HandRadius * 0.9f, toSlid / reach, WallHits, reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                    for (var i = 0; i < again && !blocked; i++)
+                        blocked = WallHits[i].distance > 0f && WallHits[i].distance < reach - 0.005f && !WallHits[i].collider.transform.IsChildOf(body);
+                    if (!blocked)
+                    {
+                        if (slideLogs++ < 10) Plugin.Log.LogInfo($"Hands: {arm.Name} hand slides along '{wall.collider.name}', {Vector3.Distance(slid, wrist) * 100f:0.0} cm off the controller (along the arm it would be {(length - free) * 100f:0.0} cm)");
+                        return slid;
+                    }
+                }
             }
             return shoulder + direction * free;
         }
+
+        private static int slideLogs;
 
         // Every this many seconds while an arm follows its controller, how often its wrist stayed short of it.
         private const float CountPeriod = 10f;
