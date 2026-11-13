@@ -98,6 +98,7 @@ namespace ShipbreakerVR
             public readonly Quaternion[] Base = new Quaternion[17];
             public readonly Quaternion[] Set = new Quaternion[17];
             public float IndexScale;
+            public int ThumbBendLogs;
             public bool IdleLogged;
             // The thumb's angles to the palm's plane once logged for this flat hold.
             public bool ThumbLogged;
@@ -417,12 +418,14 @@ namespace ShipbreakerVR
                 }
                 if (flatness <= 0f)
                 {
+                    ThumbInLine(arm, frame * Vector3.right * side, arm.Weight, false);
                     LogIdle(arm);
                     return;
                 }
                 var palm = frame * Vector3.right * side;
                 OverEdges(arm, palm, across, side, flatness);
                 for (var i = 0; i < arm.Thumb.Length; i++) LiftThumb(arm, i, palm, flatness);
+                ThumbInLine(arm, palm, flatness, true);
                 LogThumb(arm, palm, flatness);
                 return;
             }
@@ -591,6 +594,38 @@ namespace ShipbreakerVR
             var into = 90f - Vector3.Angle(bone, palm) - ThumbIn;
             joint.rotation = Quaternion.AngleAxis(-into * share, axis.normalized) * joint.rotation;
             arm.Set[at] = joint.localRotation;
+        }
+
+        // Test (Raik, 2026-11-13: the right thumb kinked, the left not, both lying in the palm's plane alike): the right hand's
+        // animation (it carries the tools) bends the thumb's outer bones sideways in that plane. Each bone after the base
+        // turned about the palm's normal until it runs on as the one before it, seen from above, by that share. The first
+        // few times per hand the bends found are logged, so left and right compare.
+        private static void ThumbInLine(Arm arm, Vector3 palm, float share, bool lifted)
+        {
+            if (share <= 0f) return;
+            var found = new System.Text.StringBuilder();
+            for (var index = 1; index < arm.Thumb.Length; index++)
+            {
+                var joint = arm.Thumb[index];
+                var before = arm.Thumb[index - 1];
+                if (joint == null || before == null) continue;
+                var next = index + 1 < arm.Thumb.Length && arm.Thumb[index + 1] != null ? arm.Thumb[index + 1]
+                    : joint.childCount > 0 ? joint.GetChild(0) : null;
+                if (next == null) continue;
+                var bone = Vector3.ProjectOnPlane(next.position - joint.position, palm);
+                var last = Vector3.ProjectOnPlane(joint.position - before.position, palm);
+                if (bone.sqrMagnitude <= 1e-12f || last.sqrMagnitude <= 1e-12f) continue;
+                var at = arm.Joints.Length + index;
+                // On top of LiftThumb this frame, or else from the animation's pose.
+                if (!lifted && !Restore(arm, joint, at)) continue;
+                var bend = Vector3.SignedAngle(last, bone, palm);
+                found.Append($" {joint.name} {bend:0}°");
+                joint.rotation = Quaternion.AngleAxis(-bend * share, palm) * joint.rotation;
+                arm.Set[at] = joint.localRotation;
+            }
+            if (arm.ThumbBendLogs >= 4 || found.Length == 0) return;
+            arm.ThumbBendLogs++;
+            Plugin.Log.LogInfo($"Hands: {arm.Name} thumb bent sideways in the palm's plane:{found}");
         }
 
         // The joint back to the animation's pose if it is still as it was set here, that pose kept as its base.
