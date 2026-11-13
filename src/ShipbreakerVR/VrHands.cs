@@ -53,6 +53,14 @@ namespace ShipbreakerVR
         // 2 to 3 mm over its length (Raik).
         private static readonly float[] FlatBend = { 4f, 6f, 4f };
         private const float ThumbIn = 3f;
+        // Test (0.30.0, Raik's photos of his hand): an empty hand is loose, not as the game animates it. Each finger joint
+        // (index, middle, ring, little; base, middle, tip) bent this far from the knuckles' line towards the palm, in
+        // degrees: the index finger nearly straight, each further finger a little more curled, the little one the most.
+        private static readonly float[] IdleBend = { 8f, 18f, 28f, 12f, 26f, 38f, 15f, 32f, 45f, 20f, 40f, 54f };
+        // Test (Raik): the game's fingers are long, the index finger the longest. All fingers this much of their length,
+        // the index finger at most as long as the ring finger, and this much shorter again.
+        private const float FingerLength = 0.85f;
+        private const float IndexShorter = 0.97f;
         // Over an edge a flat hand's fingers curl around it: each joint whose next bone finds no surface under it bends
         // this much (base, middle, tip, in degrees), over EdgeTime. Under a bone means within EdgeProbe of it towards the
         // palm, in meters at world scale 1.
@@ -86,6 +94,8 @@ namespace ShipbreakerVR
             // own pose again, instead of bending further every frame.
             public readonly Quaternion[] Base = new Quaternion[17];
             public readonly Quaternion[] Set = new Quaternion[17];
+            public float IndexScale;
+            public bool IdleLogged;
             // The thumb's angles to the palm's plane once logged for this flat hold.
             public bool ThumbLogged;
             // How far the fingers are closed (0 open, 1 the full bend), and towards what.
@@ -282,6 +292,8 @@ namespace ShipbreakerVR
         public static void LateUpdate()
         {
             if (!Find()) return;
+            Shorten(LeftArm);
+            Shorten(RightArm);
             var leftWasDriven = LeftArm.Driven;
             var rightWasDriven = RightArm.Driven;
             var active = VrAim.Active;
@@ -380,7 +392,9 @@ namespace ShipbreakerVR
             }
             var amount = arm.Closed * arm.Weight;
             var flatness = arm.Flat * arm.Weight;
-            if ((amount <= 0f && flatness <= 0f) || !Frame(arm, out _, out var frame))
+            // The loose hand fades out as the hand closes, so a grip still starts from the animation's pose.
+            var loose = arm.Weight * (1f - arm.Closed);
+            if ((amount <= 0f && flatness <= 0f && loose <= 0f) || !Frame(arm, out _, out var frame))
             {
                 Open(arm);
                 return;
@@ -391,9 +405,17 @@ namespace ShipbreakerVR
             if (amount <= 0f)
             {
                 // Held on by the glove, as by a magnet: the fingers along the knuckles, barely bent, the thumb in
-                // their plane instead of in the surface.
+                // their plane instead of in the surface. Empty, loose (IdleBend), and from there to flat.
                 for (var i = 0; i < arm.Joints.Length; i++)
-                    Straighten(arm, i, across, Quaternion.AngleAxis(side * FlatBend[i % 3], across) * along, across, flatness);
+                {
+                    var toward = Mathf.Lerp(IdleBend[i], FlatBend[i % 3], arm.Flat);
+                    Straighten(arm, i, across, Quaternion.AngleAxis(side * toward, across) * along, across, arm.Weight);
+                }
+                if (flatness <= 0f)
+                {
+                    LogIdle(arm);
+                    return;
+                }
                 var palm = frame * Vector3.right * side;
                 OverEdges(arm, palm, across, side, flatness);
                 for (var i = 0; i < arm.Thumb.Length; i++) LiftThumb(arm, i, palm, flatness);
@@ -402,7 +424,16 @@ namespace ShipbreakerVR
             }
             var bend = arm.Fist ? FistBend : GripBend;
             for (var i = 0; i < arm.Joints.Length; i++)
-                Turn(arm, arm.Joints[i], i, Quaternion.AngleAxis(side * bend[i % 3] * amount, across));
+            {
+                // Closing from the loose hand: the grip on top of what is left of it.
+                if (loose > 0f)
+                    Straighten(arm, i, across, Quaternion.AngleAxis(side * IdleBend[i], across) * along, across, loose);
+                else if (!Restore(arm, arm.Joints[i], i)) continue;
+                var joint = arm.Joints[i];
+                if (joint == null) continue;
+                joint.rotation = Quaternion.AngleAxis(side * bend[i % 3] * amount, across) * joint.rotation;
+                arm.Set[i] = joint.localRotation;
+            }
             var thumb = (arm.Fist ? FistThumb : GripThumb) * amount;
             // The humanoid three only: the rig's further thumb bones keep their pose relative to them.
             for (var i = 0; i < 3; i++)
@@ -917,6 +948,49 @@ namespace ShipbreakerVR
             }
             if (next == null && joint.childCount > 0) next = joint.GetChild(0);
             return next != null ? next.position - joint.position : Vector3.zero;
+        }
+
+        // Test (Raik): shorter fingers. Each finger's base joint (and the thumb's) scaled as a whole, so the finger keeps its
+        // shape and only gets smaller; the palm stays as it is. The index finger to at most the ring finger's length,
+        // measured once from the game's skeleton, and IndexShorter more. Every frame, in case anything sets the scale back.
+        private static void Shorten(Arm arm)
+        {
+            if (arm.IndexScale <= 0f)
+            {
+                var index = Length(arm, 0);
+                var ring = Length(arm, 6);
+                if (index <= 0f || ring <= 0f) return;
+                arm.IndexScale = FingerLength * Mathf.Min(1f, ring / index) * IndexShorter;
+                Plugin.Log.LogInfo($"Hands: {arm.Name} fingers to {FingerLength:0.00} of their length, the index finger ({index:0.000} m, ring finger {ring:0.000} m) to {arm.IndexScale:0.00}");
+            }
+            for (var finger = 0; finger < arm.Joints.Length / 3; finger++)
+            {
+                var root = arm.Joints[finger * 3];
+                if (root != null) root.localScale = Vector3.one * (finger == 0 ? arm.IndexScale : FingerLength);
+            }
+            if (arm.Thumb[0] != null) arm.Thumb[0].localScale = Vector3.one * FingerLength;
+        }
+
+        // A finger's length from its base joint to the tip of its last bone, as the skeleton has it.
+        private static float Length(Arm arm, int first)
+        {
+            var length = 0f;
+            for (var k = 0; k < 3; k++)
+            {
+                var joint = arm.Joints[first + k];
+                if (joint == null) return 0f;
+                var next = k < 2 ? arm.Joints[first + k + 1] : joint.childCount > 0 ? joint.GetChild(0) : null;
+                if (next == null) return k == 2 ? length : 0f;
+                length += Vector3.Distance(joint.position, next.position);
+            }
+            return length;
+        }
+
+        private static void LogIdle(Arm arm)
+        {
+            if (arm.IdleLogged) return;
+            arm.IdleLogged = true;
+            Plugin.Log.LogInfo($"Hands: {arm.Name} hand loose (IdleBend)");
         }
 
         private struct Moved
