@@ -48,6 +48,11 @@ namespace ShipbreakerVR
         // fingers (where the palm faces), in meters at world scale 1: it lies over it.
         private const float ThumbOver = 0.015f;
         private const float GripThumb = 25f;
+        // Test (Raik's photos, 2026-11-13: the closed hand on a tool looked too stiff): the cutter and the grapple held as a
+        // handle in the hand, each finger joint (index, middle, ring, little; base, middle, tip) this far from the knuckles'
+        // line towards the palm, in degrees, wrapped round it: the index finger a little more open, each further finger a
+        // little more curled. The thumb lies over the index finger's middle bone (ThumbOnIndex), ThumbOver out from it.
+        private static readonly float[] ToolBend = { 62f, 145f, 185f, 68f, 155f, 195f, 74f, 162f, 205f, 80f, 170f, 215f };
         // A flat hand is not stiff: each finger joint (base, middle, tip) stays bent this much towards the palm, in
         // degrees. The thumb lies in the palm's plane with the fingers, each of its bones this much towards the palm, about
         // 2 to 3 mm over its length (Raik).
@@ -438,6 +443,13 @@ namespace ShipbreakerVR
             var bend = arm.Fist ? FistBend : GripBend;
             for (var i = 0; i < arm.Joints.Length; i++)
             {
+                // A tool: wrapped round its handle, from the animation's pose (ToolBend).
+                if (tool)
+                {
+                    Straighten(arm, i, across, Quaternion.AngleAxis(side * ToolBend[i], across) * along, across, amount);
+                    InLine(arm, i, across, amount);
+                    continue;
+                }
                 // Closing from the loose hand: the grip on top of what is left of it.
                 if (loose > 0f)
                 {
@@ -455,6 +467,7 @@ namespace ShipbreakerVR
             for (var i = 0; i < 3; i++)
                 Turn(arm, arm.Thumb[i], arm.Joints.Length + i, Quaternion.AngleAxis(-side * thumb, along));
             if (arm.Fist) ThumbOnMiddle(arm, frame * Vector3.right * side, amount);
+            else if (tool) ThumbOnIndex(arm, frame * Vector3.right * side, amount);
         }
 
         // The thumb's base turned so that its tip lies over the middle finger's last joint, closing the fist's tunnel.
@@ -466,6 +479,22 @@ namespace ShipbreakerVR
             if (root == null || last == null || middle == null) return;
             var tip = last.childCount > 0 ? last.GetChild(0).position : last.position;
             var target = middle.position + palm * ThumbOver * VrCamera.WorldScale;
+            var turn = Quaternion.FromToRotation(tip - root.position, target - root.position);
+            root.rotation = Quaternion.Slerp(Quaternion.identity, turn, share) * root.rotation;
+            arm.Set[arm.Joints.Length] = root.localRotation;
+        }
+
+        // On a tool, the thumb's base turned so that its tip lies over the middle of the index finger's middle bone, out
+        // from it by ThumbOver, as when holding a handle (Raik's photos).
+        private static void ThumbOnIndex(Arm arm, Vector3 palm, float share)
+        {
+            var root = arm.Thumb[0];
+            var last = arm.Thumb.LastOrDefault(j => j != null);
+            var from = arm.Joints[1];
+            var to = arm.Joints[2];
+            if (root == null || last == null || from == null || to == null) return;
+            var tip = last.childCount > 0 ? last.GetChild(0).position : last.position;
+            var target = (from.position + to.position) * 0.5f + palm * ThumbOver * VrCamera.WorldScale;
             var turn = Quaternion.FromToRotation(tip - root.position, target - root.position);
             root.rotation = Quaternion.Slerp(Quaternion.identity, turn, share) * root.rotation;
             arm.Set[arm.Joints.Length] = root.localRotation;
