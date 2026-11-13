@@ -61,6 +61,9 @@ namespace ShipbreakerVR
         // the index finger at most as long as the ring finger, and this much shorter again.
         private const float FingerLength = 0.85f;
         private const float IndexShorter = 0.97f;
+        // The thumb's free part (from its first joint out of the palm); its base in the palm keeps its size, so the thumb
+        // sits where it did and the ball of the thumb keeps its shape (Raik: scaling the base kinked it and set it low).
+        private const float ThumbLength = 0.94f;
         // Over an edge a flat hand's fingers curl around it: each joint whose next bone finds no surface under it bends
         // this much (base, middle, tip, in degrees), over EdgeTime. Under a bone means within EdgeProbe of it towards the
         // palm, in meters at world scale 1.
@@ -410,6 +413,7 @@ namespace ShipbreakerVR
                 {
                     var toward = Mathf.Lerp(IdleBend[i], FlatBend[i % 3], arm.Flat);
                     Straighten(arm, i, across, Quaternion.AngleAxis(side * toward, across) * along, across, arm.Weight);
+                    InLine(arm, i, across, arm.Weight);
                 }
                 if (flatness <= 0f)
                 {
@@ -427,7 +431,10 @@ namespace ShipbreakerVR
             {
                 // Closing from the loose hand: the grip on top of what is left of it.
                 if (loose > 0f)
+                {
                     Straighten(arm, i, across, Quaternion.AngleAxis(side * IdleBend[i], across) * along, across, loose);
+                    InLine(arm, i, across, loose);
+                }
                 else if (!Restore(arm, arm.Joints[i], i)) continue;
                 var joint = arm.Joints[i];
                 if (joint == null) continue;
@@ -485,6 +492,27 @@ namespace ShipbreakerVR
             if (bone.sqrMagnitude <= 1e-10f) return;
             var angle = Vector3.SignedAngle(bone, Vector3.ProjectOnPlane(along, across), axis);
             joint.rotation = Quaternion.AngleAxis(angle * share, axis) * joint.rotation;
+            arm.Set[index] = joint.localRotation;
+        }
+
+        // Test (Raik): seen from above a finger runs straight, not in an arc. Its middle and last bone turned sideways (towards
+        // or away from the thumb side) until they lean as far to that side as the bone before them, by that share.
+        private static void InLine(Arm arm, int index, Vector3 across, float share)
+        {
+            if (index % 3 == 0 || share <= 0f) return;
+            var joint = arm.Joints[index];
+            var before = arm.Joints[index - 1];
+            if (joint == null || before == null) return;
+            var next = index % 3 < 2 ? arm.Joints[index + 1] : joint.childCount > 0 ? joint.GetChild(0) : null;
+            if (next == null) return;
+            var bone = next.position - joint.position;
+            var last = joint.position - before.position;
+            if (bone.sqrMagnitude <= 1e-10f || last.sqrMagnitude <= 1e-10f) return;
+            var axis = Vector3.Cross(bone, across);
+            if (axis.sqrMagnitude <= 1e-10f) return;
+            var lean = Mathf.Asin(Mathf.Clamp(Vector3.Dot(bone.normalized, across), -1f, 1f));
+            var lastLean = Mathf.Asin(Mathf.Clamp(Vector3.Dot(last.normalized, across), -1f, 1f));
+            joint.rotation = Quaternion.AngleAxis(-(lean - lastLean) * Mathf.Rad2Deg * share, axis.normalized) * joint.rotation;
             arm.Set[index] = joint.localRotation;
         }
 
@@ -968,7 +996,8 @@ namespace ShipbreakerVR
                 var root = arm.Joints[finger * 3];
                 if (root != null) root.localScale = Vector3.one * (finger == 0 ? arm.IndexScale : FingerLength);
             }
-            if (arm.Thumb[0] != null) arm.Thumb[0].localScale = Vector3.one * FingerLength;
+            if (arm.Thumb[0] != null) arm.Thumb[0].localScale = Vector3.one;
+            if (arm.Thumb[1] != null) arm.Thumb[1].localScale = Vector3.one * ThumbLength;
         }
 
         // A finger's length from its base joint to the tip of its last bone, as the skeleton has it.
