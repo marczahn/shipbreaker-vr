@@ -872,9 +872,7 @@ namespace ShipbreakerVR
                 else if (hand.Anchor == null || !hand.Anchor.gameObject.activeInHierarchy || hand.Collider == null || !hand.Collider.enabled)
                     LetGo(hand, false, "the hold is gone");
             }
-            // Raik (0.30.1): pointing (the index finger off the trigger) the hand takes hold of nothing; its stiff finger
-            // meets the wall instead (VrHands).
-            else if (hand.Tracked && hand.Vr.Free && down && !hand.Input.Pointing && (pressed || Time.time - hand.PressedAt < CatchTime)) TryHold(hand, pressed);
+            else if (hand.Tracked && hand.Vr.Free && down && (pressed || Time.time - hand.PressedAt < CatchTime)) TryHold(hand, pressed);
         }
 
         // The small floating debris (nuts and bolts, 'PRF_MeshParticles_...') are loose 1 kg parts on the Ignore Raycast

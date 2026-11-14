@@ -144,7 +144,6 @@ menus still work with the controllers.
 | Put out a fire on my suit | Shake each hand hard back and forth, about seven quick strokes, until its flames go out. Left alone, the fire keeps burning. |
 | Work an airlock console or a switch | Look at it and press A or X. The grip only holds on, also there: your hand lies on it as on a wall, and closes as a fist only round a lever's grip. |
 | Press an air conditioner's button | Push it in with your hand: right at the button your fingers stay straight and press it, broken or working. |
-| Point | Squeeze the grip and take your index finger clearly off the trigger: the hand makes a fist with the index finger out. The finger is stiff: at a wall it does not bend back, the hand stops there, and while pointing the hand holds on to nothing. Needs controllers that sense a finger on the trigger (Quest / Oculus Touch). |
 | Use a tool with the left hand | Take it with the left hand. X and Y then do what A and B do, and flying pauses until you let go. |
 | Feel what I do | The controllers vibrate: the cutter's hand while it cuts, the grapple's hand while it holds a part (stronger the closer the part comes to slipping away), and a short buzz for each tether end. |
 

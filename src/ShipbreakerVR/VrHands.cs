@@ -55,10 +55,6 @@ namespace ShipbreakerVR
         // Raik (2026-11-14, a picture of the hand on the grapple): the fingers closed parallel, all bent alike, not fanning
         // out more from the index finger down to the little one.
         private static readonly float[] ToolBend = { 68f, 155f, 195f, 68f, 155f, 195f, 68f, 155f, 195f, 68f, 155f, 195f };
-        // Raik (0.30.1): the grip held, the index finger clearly off the trigger (VrInput.Pointing): a fist with the index
-        // finger out, barely bent (each joint's bone to the knuckles' line, as ToolBend, in degrees). It is stiff: it does
-        // not bend back at a wall, nor does the hand fold over; the hand stops where the finger meets it (Stiff).
-        private static readonly float[] PointBend = { 3f, 6f, 9f };
         // Raik (2026-11-14): on a tool the thumb lies a little above the index finger, this far towards the thumb's side.
         private const float ThumbAbove = 0.01f;
         // A second hand on a tool (VrToolSupport) closes each finger in WrapSteps until one of its bones comes within
@@ -175,9 +171,7 @@ namespace ShipbreakerVR
             // How far the fingers are closed (0 open, 1 the full bend), and towards what.
             public float Closed;
             public bool Fist;
-            // How far the index finger points out of the fist (0 to 1, VrInput.Pointing), and how far the open hand's
-            // fingers are straight at a button (VrButtons.AtButton).
-            public float Point;
+            // How far the open hand's fingers are straight at a button (VrButtons.AtButton).
             public float Straight;
             // The fingertips (index to little) as Curl left them last frame, for pushing buttons (VrButtons), and whether known.
             public readonly Vector3[] TipWorld = new Vector3[4];
@@ -587,10 +581,7 @@ namespace ShipbreakerVR
             var flat = arm.Driven && !tool && (held || (!grip && arm.Pressed));
             arm.Claw = Mathf.MoveTowards(arm.Claw, flat && held ? 1f : 0f, Time.unscaledDeltaTime / CurlTime);
             var support = arm.Driven && VrToolSupport.Supports(arm.Input);
-            var free = arm.Driven && !tool && !support && hand.State == HandState.Empty;
-            var pointing = free && arm.Input.Pointing;
-            var atButton = free && !grip && VrButtons.AtButton(arm.Input);
-            arm.Point = Mathf.MoveTowards(arm.Point, pointing ? 1f : 0f, Time.unscaledDeltaTime / CurlTime);
+            var atButton = arm.Driven && !tool && !support && hand.State == HandState.Empty && !grip && VrButtons.AtButton(arm.Input);
             arm.Straight = Mathf.MoveTowards(arm.Straight, atButton ? 1f : 0f, Time.unscaledDeltaTime / CurlTime);
             var closing = arm.Driven && (tool || support || (grip && !flat));
             if (closing) arm.Fist = !tool && !support && (hand.State != HandState.Holding || VrClimb.HoldsControl(arm.Input));
@@ -662,10 +653,8 @@ namespace ShipbreakerVR
                     // A tool: wrapped round its handle, from the animation's pose (ToolBend).
                     if (handle)
                     {
-                        // Pointing: the index finger (its three joints first) out of the fist.
-                        var point = i < 3 && !tool ? arm.Point : 0f;
-                        Straighten(arm, i, across, Quaternion.AngleAxis(side * Mathf.Lerp(ToolBend[i], PointBend[i % 3], point), across) * along, across, amount);
-                        Parallel(arm, i, across, amount * (1f - point));
+                        Straighten(arm, i, across, Quaternion.AngleAxis(side * ToolBend[i], across) * along, across, amount);
+                        Parallel(arm, i, across, amount);
                         InLine(arm, i, across, amount);
                         continue;
                     }
@@ -682,14 +671,13 @@ namespace ShipbreakerVR
                     arm.Set[i] = joint.localRotation;
                 }
             }
-            var pointed = !tool && arm.Point > 0.5f;
-            if (!support && (handle || arm.Fist)) PalmFold(arm, frame, side, amount, tool ? 0f : arm.Point);
-            var thumb = (arm.Fist && (!handle || pointed) ? FistThumb : GripThumb) * amount;
+            if (!support && (handle || arm.Fist)) PalmFold(arm, frame, side, amount);
+            var thumb = (arm.Fist && !handle ? FistThumb : GripThumb) * amount;
             // The humanoid three only: the rig's further thumb bones keep their pose relative to them.
             // A second hand on a tool has closed its thumb on it already (Wrap).
             for (var i = 0; i < 3 && !support; i++)
                 Turn(arm, arm.Thumb[i], arm.Joints.Length + i, Quaternion.AngleAxis(-side * thumb, along));
-            if (handle && !pointed) ThumbOnIndex(arm, frame * Vector3.right * side, amount);
+            if (handle) ThumbOnIndex(arm, frame * Vector3.right * side, amount);
             else if (arm.Fist) ThumbOnMiddle(arm, frame * Vector3.right * side, amount);
         }
 
@@ -914,8 +902,7 @@ namespace ShipbreakerVR
         private static readonly float[] FoldAt = { 8f, 10f, 13f, 16f };
         private static int foldPalmLogs;
 
-        // The index finger pointing out of the fist (pointing, 0 to 1) keeps its knuckle where it is, stiff.
-        private static void PalmFold(Arm arm, Quaternion frame, float side, float share, float pointing = 0f)
+        private static void PalmFold(Arm arm, Quaternion frame, float side, float share)
         {
             if (share <= 0f) return;
             var scale = VrCamera.WorldScale;
@@ -928,7 +915,7 @@ namespace ShipbreakerVR
                 var index = finger * 3;
                 var joint = arm.Joints[index];
                 if (joint == null) continue;
-                var angle = FoldAt[finger] * share * (finger == 0 ? 1f - pointing : 1f);
+                var angle = FoldAt[finger] * share;
                 var pivot = joint.position - along * (CreaseShare * PalmLength * scale) + palm * (PalmThickness * 0.5f * scale);
                 var turn = Quaternion.AngleAxis(side * angle, across);
                 joint.position = pivot + turn * (joint.position - pivot);
@@ -2070,11 +2057,10 @@ namespace ShipbreakerVR
             var pressed = false;
             var empty = state == HandState.Empty && arm.Driven && arm.Wrist != null;
             if (empty) VrHandShape.Gather(wrist, WallReach * scale, arm.Wrist.root, SeesTool(arm), OtherLimb(arm));
-            // Pointing, or right at a button: nothing bends back or folds over (Stiff).
-            var atButton = empty && VrButtons.AtButton(arm.Input) && !arm.Input.Grip.Down;
-            if (empty && arm.ShapeKnown && (arm.Input.Pointing || atButton))
+            // Right at a button: nothing bends back or folds over (AtButton).
+            if (empty && arm.ShapeKnown && VrButtons.AtButton(arm.Input) && !arm.Input.Grip.Down)
             {
-                Stiff(arm, ref wrist, frame, side, !atButton);
+                AtButton(arm, ref wrist, frame, side);
                 Ease(arm, fromWrist, fromFrame, ref wrist, ref frame, true);
                 return;
             }
@@ -2172,29 +2158,16 @@ namespace ShipbreakerVR
             Ease(arm, fromWrist, fromFrame, ref wrist, ref frame, empty);
         }
 
-        // Raik (0.30.1): a pointing index finger is stiff, a sign of a hand in full control: it neither bends back nor lets
-        // the hand fold over; where it meets a wall the whole hand stops, pushed back out along the way out of it (the
-        // straight finger's capsule, VrHandShape). Right at a button the fingers push it in instead (pushes false); only
-        // the palm is kept out of things.
-        private static int stiffLogs;
-
-        private static void Stiff(Arm arm, ref Vector3 wrist, Quaternion frame, float side, bool pushes)
+        // Raik (0.30.1): right at a button the fingers stay straight and push it in; the hand neither lies flat nor folds
+        // over, only the palm is kept out of things.
+        private static void AtButton(Arm arm, ref Vector3 wrist, Quaternion frame, float side)
         {
-            var scale = VrCamera.WorldScale;
             arm.Pressed = false;
             arm.Press = 0f;
             arm.Folded = arm.FoldShown = arm.FoldedBefore = 0f;
             arm.Back = arm.BackShown = 0f;
             arm.PushShown = 0f;
             arm.FingerPush = Vector3.zero;
-            for (var step = 0; step < 3 && pushes; step++)
-            {
-                var depth = VrHandShape.Capsule(wrist + frame * arm.ShapeKnuckle[0], wrist + frame * arm.ShapeTip[0],
-                    VrHandShape.FingerRadius[0] * scale, out var way);
-                if (depth <= 0.0005f || VrHandShape.FromTool || VrHandShape.FromArm) break;
-                wrist += way * depth;
-                if (stiffLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} pointing finger meets something, the hand held back {depth * 100f:0.0} cm");
-            }
             PalmOut(arm, ref wrist, frame, side);
         }
 

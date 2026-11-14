@@ -19,10 +19,6 @@ namespace ShipbreakerVR
         // The aim pose points where the controller points; the device (grip) pose runs along the handle, tilted upward.
         public static readonly InputFeatureUsage<Vector3> PointerPosition = new InputFeatureUsage<Vector3>("PointerPosition");
         public static readonly InputFeatureUsage<Quaternion> PointerRotation = new InputFeatureUsage<Quaternion>("PointerRotation");
-        // The index finger resting on the trigger (Oculus Touch Controller OpenXR has it; not every controller does).
-        public static readonly InputFeatureUsage<bool> TriggerTouch = new InputFeatureUsage<bool>("TriggerTouch");
-        // The trigger counts as untouched only below this.
-        private const float PointingTriggerMost = 0.05f;
 
         // The wrist relative to the grip pose (which runs along the handle): an estimate, about 8 cm behind the grip.
         public static readonly Vector3 WristBehindGrip = new Vector3(0f, 0f, -0.08f);
@@ -52,9 +48,6 @@ namespace ShipbreakerVR
             public bool Tracked;
             public float TriggerValue;
             public float GripValue;
-            // The index finger rests on the trigger; whether the controller tells at all.
-            public bool TriggerTouched;
-            public bool TriggerTouchKnown;
             public Vector2 Stick;
             public Button Trigger;
             public Button Grip;
@@ -127,24 +120,18 @@ namespace ShipbreakerVR
                 if (Device.isValid) Device.SendHapticImpulse(0, amplitude, seconds);
             }
 
-            // Raik (0.30.1): the grip held, the index finger clearly off the trigger: the hand points, its index finger out
-            // and stiff (VrHands). Only on controllers that tell whether the trigger is touched.
-            public bool Pointing => Valid && Grip.Down && TriggerTouchKnown && !TriggerTouched && TriggerValue < PointingTriggerMost;
-
             public void Read()
             {
                 Valid = VrXr.IsRunning && Get();
                 Tracked = Valid && (!Device.TryGetFeatureValue(CommonUsages.isTracked, out var tracked) || tracked)
                     && Device.TryGetFeatureValue(CommonUsages.devicePosition, out _);
                 TriggerValue = GripValue = 0f;
-                TriggerTouched = TriggerTouchKnown = false;
                 Stick = Vector2.zero;
                 bool primary = false, secondary = false, stickClick = false;
                 if (Valid)
                 {
                     Device.TryGetFeatureValue(CommonUsages.trigger, out TriggerValue);
                     Device.TryGetFeatureValue(CommonUsages.grip, out GripValue);
-                    TriggerTouchKnown = Device.TryGetFeatureValue(TriggerTouch, out TriggerTouched);
                     Device.TryGetFeatureValue(CommonUsages.primary2DAxis, out Stick);
                     Device.TryGetFeatureValue(CommonUsages.primaryButton, out primary);
                     Device.TryGetFeatureValue(CommonUsages.secondaryButton, out secondary);
