@@ -238,23 +238,61 @@ namespace ShipbreakerVR.Tests
             Assert.Equal(2f, limited.y, 3);
         }
 
-        [Fact]
-        public void GlideStopsWithinItsWayEvenWhenFast()
+        [Theory]
+        [InlineData(1f, 0.1f)]
+        [InlineData(3f, 0.9f)]
+        [InlineData(6f, 3.6f)]
+        public void GloveBrakesAGlideTheFurtherTheFaster(float speed, float expected)
         {
-            foreach (var speed in new[] { 0.5f, 2f, 6f })
+            var velocity = new Vector3(speed, 0f, 0f);
+            var brake = ClimbContact.GloveBrake(500f, 1, 1f);
+            var way = 0f;
+            var steps = 0;
+            while (velocity != Vector3.zero && steps++ < 10000)
             {
-                var velocity = new Vector3(speed, 0f, 0f);
-                var brake = ClimbContact.GlideBrake(speed, 1f);
-                var way = 0f;
-                var steps = 0;
-                while (velocity != Vector3.zero && steps++ < 1000)
-                {
-                    velocity = ClimbContact.Brake(velocity, brake, Step);
-                    way += velocity.x * Step;
-                }
-                Assert.True(steps < 1000);
-                Assert.InRange(way, 0f, 0.8f);
+                way += velocity.x * Step;
+                velocity = ClimbContact.Brake(velocity, brake, Step);
             }
+            Assert.InRange(way, expected * 0.9f, expected * 1.1f);
+        }
+
+        [Fact]
+        public void TwoHandsBrakeTwiceAsHard()
+        {
+            Assert.Equal(2f * ClimbContact.GloveBrake(500f, 1, 1f), ClimbContact.GloveBrake(500f, 2, 1f), 4);
+            Assert.Equal(5f, ClimbContact.GloveBrake(500f, 1, 1f), 4);
+        }
+
+        [Fact]
+        public void AHandleCatchesUpToThreeMetersASecondAcross()
+        {
+            var limit = ClimbContact.CatchLimit(ClimbContact.HandleForce, ClimbContact.HandleStroke, 1f);
+            Assert.Equal(3f, limit, 3);
+            Assert.True(ClimbContact.Catch(2.9f, limit, out var none));
+            Assert.Equal(0f, none);
+            Assert.False(ClimbContact.Catch(4f, limit, out var left));
+            Assert.Equal(Mathf.Sqrt(7f), left, 3);
+        }
+
+        [Fact]
+        public void ComingInAtASlantOnlyTheSpeedAcrossCounts()
+        {
+            var limit = ClimbContact.CatchLimit(ClimbContact.HandleForce, ClimbContact.HandleStroke, 1f);
+            var edge = new Vector3(0f, 0f, 1f);
+            // 4 m/s at 40 degrees to the edge: 2.6 across, held; 3.1 along, glides on.
+            var velocity = new Vector3(Mathf.Sin(40f * Mathf.Deg2Rad), 0f, Mathf.Cos(40f * Mathf.Deg2Rad)) * 4f;
+            var across = Vector3.ProjectOnPlane(velocity, edge).magnitude;
+            Assert.True(ClimbContact.Catch(across, limit, out _));
+            Assert.Equal(4f * Mathf.Cos(40f * Mathf.Deg2Rad), Vector3.Dot(velocity, edge), 3);
+            // Straight on it is not.
+            Assert.False(ClimbContact.Catch(4f, limit, out _));
+        }
+
+        [Fact]
+        public void ASeamTakesSomeSpeedNeverTurningItBack()
+        {
+            Assert.Equal(0.7f, ClimbContact.Lose(new Vector3(1f, 0f, 0f), ClimbContact.SeamLoss).x, 4);
+            Assert.Equal(Vector3.zero, ClimbContact.Lose(new Vector3(0.2f, 0f, 0f), ClimbContact.SeamLoss));
         }
 
         [Fact]
@@ -262,7 +300,7 @@ namespace ShipbreakerVR.Tests
         {
             var velocity = Vector3.zero;
             for (var i = 0; i < 500; i++)
-                velocity = ClimbContact.ThrustGlide(velocity + new Vector3(0.1f, 0f, 0f), velocity.magnitude, ClimbContact.GlideBrake(velocity.magnitude, 1f), Step, 1f);
+                velocity = ClimbContact.ThrustGlide(velocity + new Vector3(0.1f, 0f, 0f), velocity.magnitude, ClimbContact.GloveBrake(500f, 1, 1f), Step, 1f);
             Assert.Equal(1.5f, velocity.x, 3);
         }
 
@@ -270,7 +308,7 @@ namespace ShipbreakerVR.Tests
         public void FastGlideBrakesDownToTheThrustLimit()
         {
             var velocity = new Vector3(4f, 0f, 0f);
-            var brake = ClimbContact.GlideBrake(4f, 1f);
+            var brake = ClimbContact.GloveBrake(500f, 1, 1f);
             var slower = ClimbContact.ThrustGlide(velocity + new Vector3(0.1f, 0f, 0f), 4f, brake, Step, 1f);
             Assert.InRange(slower.x, 1.5f, 4f - 0.01f);
             for (var i = 0; i < 200; i++) slower = ClimbContact.ThrustGlide(slower + new Vector3(0.1f, 0f, 0f), slower.magnitude, brake, Step, 1f);
@@ -280,7 +318,7 @@ namespace ShipbreakerVR.Tests
         [Fact]
         public void GlideBrakesAlongItsOwnWay()
         {
-            var slower = ClimbContact.Brake(new Vector3(0f, 0f, -1f), ClimbContact.GlideBrake(1f, 1f), Step);
+            var slower = ClimbContact.Brake(new Vector3(0f, 0f, -1f), ClimbContact.GloveBrake(500f, 1, 1f), Step);
             Assert.Equal(0f, slower.x, 5);
             Assert.InRange(slower.z, -1f, -0.9f);
         }
