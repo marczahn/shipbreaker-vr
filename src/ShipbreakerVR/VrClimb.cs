@@ -529,6 +529,16 @@ namespace ShipbreakerVR
             var control = NearestControl(palm, reach, out var controlCollider, out var controlPoint);
             // A lever turned by hand is held on its yellow grip, the hand pulled onto its middle, only right at it; else the
             // hand holds the surface there as anywhere (Raik: no fist touching the grip with the backs of the fingers).
+            // A thing to collect on the wall (a first aid kit, a tank, a poster, VrPullOff) is held as a surface, the hand
+            // on it as on a wall, not as a fist (Raik, 2026-11-11: as on the damaged fuel can, which looked right).
+            if (control != null && VrPullOff.Usable(control)) control = null;
+            // A device used by its button pushed by hand (an air conditioner, VrButtons) is held as a surface, the hand flat on
+            // it as on a wall, not as a fist (Raik, 2026-11-11).
+            if (control != null && VrButtons.PressedByButton(control))
+            {
+                if (firstTry && logs++ < 80) Plugin.Log.LogInfo($"Climbing: {hand.Name} hand at '{control.name}', used by its button: held as a surface");
+                control = null;
+            }
             var bar = Vector3.zero;
             if (control != null && VrLever.Turnable(control))
             {
@@ -579,6 +589,27 @@ namespace ShipbreakerVR
                 return;
             }
 
+            Take(hand, best, at, surface, Mathf.Sqrt(bestDistance), control, bar);
+        }
+
+        // That controller's hand lets go of what it holds and takes hold of that collider where the hand is: a thing pulled
+        // off a wall comes into the hand (VrPullOff).
+        public static bool TakeHold(VrInput.Hand input, Collider collider)
+        {
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input) continue;
+                if (hand.Holding) LetGo(hand, false, "takes hold of what it pulled off");
+                var at = HandWorld(hand);
+                var surface = VrUtil.ClosestPoint(collider, at);
+                Take(hand, collider, at, surface, (surface - at).magnitude, null, Vector3.zero);
+                return hand.Holding;
+            }
+            return false;
+        }
+
+        private static void Take(Hand hand, Collider best, Vector3 at, Vector3 surface, float bestDistance, InteractableObject control, Vector3 bar)
+        {
             var first = !Pulling();
             if (!VrHand.StartHolding(hand.Vr)) return;
             var body = best.attachedRigidbody;
@@ -632,7 +663,7 @@ namespace ShipbreakerVR
             if (logs++ < 80)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds '{best.name}' (layer {best.gameObject.layer}, "
                     + (body == null ? "no rigidbody" : $"rigidbody '{body.name}' {body.mass:0.#} kg{(body.isKinematic ? " kinematic" : "")}")
-                    + $", {(hand.Movable ? hand.Heavy ? "moves, above the grab range" : "moves" : "fixed")}), {Mathf.Sqrt(bestDistance):0.00} m from the surface");
+                    + $", {(hand.Movable ? hand.Heavy ? "moves, above the grab range" : "moves" : "fixed")}), {bestDistance:0.00} m from the surface");
         }
 
         // Each holding hand: the impulse between player and hold that brings the hand to its hold in this step. Both hands
@@ -1233,7 +1264,7 @@ namespace ShipbreakerVR
             foreach (var hand in Hands)
             {
                 if (!hand.Holding || hand.Collider == null || hand.HeldAt < at) continue;
-                var interactable = hand.Collider.GetComponentInParent<InteractableObject>();
+                var interactable = PartInteractable(hand.Collider);
                 if (interactable == null || !interactable.isActiveAndEnabled) continue;
                 found = interactable;
                 at = hand.HeldAt;
@@ -1242,6 +1273,8 @@ namespace ShipbreakerVR
         }
 
         // The loose part that controller's hand holds, with what can be used of it (VrShoulderStow), or false.
+        private static readonly System.Collections.Generic.HashSet<string> NothingToUse = new System.Collections.Generic.HashSet<string>();
+
         public static bool HeldLoose(VrInput.Hand input, out Rigidbody body, out InteractableObject interactable)
         {
             body = null;
@@ -1253,15 +1286,41 @@ namespace ShipbreakerVR
                 interactable = hand.Collider.GetComponentInParent<InteractableObject>();
                 // Else one below the part's body, but only of the same structure part: not a collectable mounted somewhere
                 // inside a larger part, which is a structure part of its own.
+                // The part is the held collider's, not the body's: parts the game joined under one body (a spare part
+                // on a 'HierarchyParent', Raik 2026-11-12: the orange spare parts did not go into the backpack) have no
+                // part above the body.
                 if (interactable == null)
                 {
-                    var own = hand.Body.GetComponentInParent<StructurePart>();
-                    foreach (var each in hand.Body.GetComponentsInChildren<InteractableObject>())
+                    var own = hand.Collider.GetComponentInParent<StructurePart>();
+                    if (own == null) own = hand.Body.GetComponentInParent<StructurePart>();
+                    var under = own != null ? own.transform : hand.Body.transform;
+                    foreach (var each in under.GetComponentsInChildren<InteractableObject>())
                         if (each.GetComponentInParent<StructurePart>() == own) { interactable = each; break; }
+                }
+                if (interactable == null && NothingToUse.Add(hand.Collider.name) && NothingToUse.Count < 40)
+                {
+                    var parts = new System.Collections.Generic.List<string>();
+                    foreach (var component in hand.Collider.GetComponents<Component>()) parts.Add(component.GetType().Name);
+                    Plugin.Log.LogInfo($"Climbing: {input.Name} hand holds '{hand.Collider.name}' on '{hand.Body.name}', nothing to use found; on it: {string.Join(", ", parts)}");
                 }
                 return true;
             }
             return false;
+        }
+
+        // What can be used of the part a collider belongs to: the interactable above it, else a thing to collect below its
+        // structure part that belongs to that part (a first aid kit's 'VOL_Interaction' under its 'SM_Collectible_MedKit', held as a
+        // surface on the kit's own mesh).
+        public static InteractableObject PartInteractable(Collider collider)
+        {
+            if (collider == null) return null;
+            var interactable = collider.GetComponentInParent<InteractableObject>();
+            if (interactable != null) return interactable;
+            var own = collider.GetComponentInParent<StructurePart>();
+            if (own == null) return null;
+            foreach (var each in own.GetComponentsInChildren<InteractableObject>())
+                if (each.GetComponentInParent<StructurePart>() == own && VrPullOff.Usable(each)) return each;
+            return null;
         }
 
         // The control that controller's hand holds (VrLever), or null.
@@ -1270,6 +1329,14 @@ namespace ShipbreakerVR
             foreach (var hand in Hands)
                 if (hand.Input == input && hand.Holding && hand.Control && hand.Collider != null)
                     return hand.Collider.GetComponentInParent<InteractableObject>();
+            return null;
+        }
+
+        // The collider that controller's hand holds, or null.
+        public static Collider HeldCollider(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input && hand.Holding) return hand.Collider;
             return null;
         }
 

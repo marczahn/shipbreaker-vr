@@ -22,6 +22,8 @@ namespace ShipbreakerVR
     {
         // Further than the game's own 60°: more to feel in the turn (Raik).
         private const float EndAngle = 90f;
+        // The fastest it turns, in degrees per second: the whole way in no less than 0.2 s (Raik, 2026-11-11).
+        private const float MostSpeed = EndAngle / 0.2f;
         private static readonly Vector3 LocalAxis = new Vector3(-1f, 0f, 0f);
         // Turned past this, the hand takes over the handle from the Animator.
         private const float TakeOver = 3f;
@@ -30,24 +32,41 @@ namespace ShipbreakerVR
         // Within this of the end it snaps in.
         private const float SnapWithin = 2f;
         // The hum: from this turn speed on, LightLeast to LightMost at HumFull degrees per second, a pulse every HumEvery.
-        private const float HumFrom = 15f;
+        // From a slow turn on, so it hums lightly all the while it moves (Raik, 2026-11-12: from 15).
+        private const float HumFrom = 2f;
         private const float HumFull = 180f;
-        private const float LightLeast = 0.08f;
+        private const float LightLeast = 0.06f;
         private const float LightMost = 0.22f;
         private const float HumEvery = 0.05f;
         private const float HumLength = 0.07f;
         private const float SnapAmplitude = 1f;
-        private const float SnapLength = 0.035f;
+        // The knocks at its start and end a little stronger (Raik, 2026-11-12: from 0.035 and 0.12 s).
+        private const float SnapLength = 0.07f;
         // Turned out of its rest, the handle holds this long, in seconds, before it follows the hand.
         private const float Unlatch = 0.12f;
         // The knock it unlatches with, as long as it holds (Raik).
-        private const float UnlatchKnock = 0.12f;
+        private const float UnlatchKnock = 0.16f;
         // Let go before the end, the handle goes back over this long.
         private const float BackTime = 0.6f;
         // Done with its work, a used lever goes back over this long, slowly as the game's own (Raik).
         private const float BusyBackTime = 1.2f;
         // A use the game did not take (no new mLastCompletionTime) lets the lever go back after this long.
         private const float NotTaken = 1f;
+        // The game's own work after a use (the airlock filling or emptying) keeps the lever at its end (Raik, 2026-11-11: it
+        // went back with the hand still on it before the airlock was done): while the console's Animator has its handle
+        // turned between AnimatorFrom and AnimatorTo degrees (its own turn is 60°, ours 90°), or while the control cannot be
+        // used, up to MostBusy seconds.
+        private const float AnimatorFrom = 3f;
+        private const float AnimatorTo = 85f;
+        private const float MostBusy = 30f;
+        private static bool animatorBusy;
+        // The airlock's work (Raik, 2026-11-11, second try: neither the Animator nor the control showed it): an airlock room
+        // of the ship (RoomComponent.IsAirlock) filling or emptying, asked to, or with a door moving.
+        private static Unity.Entities.EntityManager rooms;
+        private static Unity.Entities.EntityQuery airlocks;
+        private static bool roomsKnown;
+        private static bool roomsFailed;
+        private static string airlockWas;
         // Back with the hand still on it while the controller stayed turned: the controller has to come back within this
         // of the lever before the lever turns with it again (Raik); a light knock says it caught it.
         private const float CatchWithin = 5f;
@@ -267,7 +286,8 @@ namespace ShipbreakerVR
                 held.Input.Buzz(SnapAmplitude, UnlatchKnock);
             }
             if (Time.time - held.UnlatchedAt < Unlatch) return;
-            var angle = Mathf.Clamp(held.StartAngle + twist, 0f, EndAngle);
+            // At most MostSpeed: a fast twist of the wrist turns it quickly, not at once; it catches up with the hand.
+            var angle = Mathf.MoveTowards(held.Angle, Mathf.Clamp(held.StartAngle + twist, 0f, EndAngle), MostSpeed * Time.deltaTime);
             var speed = Mathf.Abs(angle - held.Angle) / Mathf.Max(Time.deltaTime, 1e-4f);
             held.Angle = angle;
             held.Handle.localRotation = held.Rest * Quaternion.AngleAxis(angle, LocalAxis);
@@ -297,6 +317,7 @@ namespace ShipbreakerVR
             usedEnd = held.Rest * Quaternion.AngleAxis(EndAngle, LocalAxis);
             usedAt = Time.time;
             backAt = -1f;
+            animatorBusy = false;
             used.localRotation = usedEnd;
             foreach (var each in Hands)
                 if (each.Handle == used) VrClimb.Pin(each.Input, used.parent);
@@ -313,7 +334,24 @@ namespace ShipbreakerVR
                 var last = LastCompletion?.GetValue(usedControl) is float l ? l : 0f;
                 var taken = last >= usedAt - 0.1f;
                 var done = taken ? Time.time >= last + Cooldown(usedControl) : Time.time >= usedAt + NotTaken;
-                if (!done)
+                // Where the console's Animator put the handle this frame, before our end pose.
+                var animated = LeverMath.Twist(Quaternion.Inverse(usedRest) * used.localRotation, LocalAxis);
+                var turning = animated > AnimatorFrom && animated < AnimatorTo;
+                var airlock = AirlockWorking(out var state);
+                if (state != airlockWas)
+                {
+                    airlockWas = state;
+                    if (logs++ < 200) Plugin.Log.LogInfo($"Lever: airlock {state}");
+                }
+                var busy = taken && Time.time < usedAt + MostBusy && (turning || !usedControl.IsInteractable || airlock);
+                // A hand still on it keeps it at its end (Raik, 2026-11-11: it went back with the hand on it).
+                var holding = Hands[0].Handle == used || Hands[1].Handle == used;
+                if (busy != animatorBusy)
+                {
+                    animatorBusy = busy;
+                    if (logs++ < 200) Plugin.Log.LogInfo($"Lever: '{used.name}' {(busy ? $"is busy with the game's work (its handle at {animated:0}°, usable {usedControl.IsInteractable}, airlock working {airlock})" : "the game's work is done")}");
+                }
+                if (!done || busy || holding)
                 {
                     used.localRotation = usedEnd;
                     return;
@@ -333,6 +371,48 @@ namespace ShipbreakerVR
             if (logs++ < 200) Plugin.Log.LogInfo($"Lever: '{used.name}' is back at its rest pose");
             used = null;
             usedControl = null;
+        }
+
+        // Whether an airlock of the ship fills, empties or moves a door; state: what each airlock does, for the log.
+        private static bool AirlockWorking(out string state)
+        {
+            state = "-";
+            if (roomsFailed || usedControl == null) return false;
+            try
+            {
+                if (!roomsKnown)
+                {
+                    var blueprint = usedControl.GetComponentInParent<EntityBlueprintComponent>();
+                    if (blueprint == null) return false;
+                    rooms = blueprint.EntityManager;
+                    airlocks = rooms.CreateEntityQuery(Unity.Entities.ComponentType.ReadOnly<RoomComponent>());
+                    roomsKnown = true;
+                }
+                var working = false;
+                var parts = new List<string>();
+                using (var all = airlocks.ToComponentDataArray<RoomComponent>(Unity.Collections.Allocator.Temp))
+                {
+                    foreach (var room in all)
+                    {
+                        if (!room.IsAirlock) continue;
+                        var pressure = room.AirPressureState;
+                        var changing = pressure == RoomPressurization.Pressurizing || pressure == RoomPressurization.Decompressing
+                            || pressure == RoomPressurization.ControlledPressurizing || pressure == RoomPressurization.ControlledDecompressing;
+                        if (changing || room.AirPressureChangeRequest != 0 || room.DoorChangeingStateCount > 0) working = true;
+                        parts.Add($"{pressure} (asked {room.AirPressureChangeRequest}, doors moving {room.DoorChangeingStateCount})");
+                    }
+                }
+                if (parts.Count > 0) state = string.Join(", ", parts);
+                return working;
+            }
+            catch (System.Exception e)
+            {
+                // A ship loaded since may have its rooms elsewhere: found again; failing on its own, given up.
+                if (roomsKnown) roomsKnown = false;
+                else roomsFailed = true;
+                Plugin.Log.LogWarning($"Lever: reading the airlock failed{(roomsFailed ? ", the lever waits only for its control" : ", looked up again")}: {e.Message}");
+                return false;
+            }
         }
 
         // A hand still on a lever that went back: the hand went with it, the controller may not have. The lever turns with

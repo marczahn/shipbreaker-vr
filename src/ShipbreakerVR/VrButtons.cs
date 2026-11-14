@@ -35,6 +35,9 @@ namespace ShipbreakerVR
         private const float Largest = 0.3f;
         private const float ClickAmplitude = 0.7f;
         private const float ClickLength = 0.03f;
+        // A press that uses a working device: a short vibration after the click (Raik, 2026-11-12), not for a broken one.
+        private const float UsedAmplitude = 0.5f;
+        private const float UsedLength = 0.15f;
         // After a press the game's hand would reach for the control: the hands stay with their controllers this long.
         private const float HandsKept = 1f;
 
@@ -63,6 +66,8 @@ namespace ShipbreakerVR
             public readonly List<Button> Near = new List<Button>();
             // Per button the tip is in: armed again once out.
             public readonly HashSet<Button> In = new HashSet<Button>();
+            // The button the tip pushes in this frame, if any (VrTouchSound).
+            public Button Pushing;
 
             public Tip(VrInput.Hand input) => Input = input;
         }
@@ -89,6 +94,8 @@ namespace ShipbreakerVR
             var pushed = new Dictionary<Button, float>();
             if (VrXr.IsRunning && VrAim.Active)
                 foreach (var tip in Tips) Touch(tip, pushed);
+            else
+                foreach (var tip in Tips) tip.Pushing = null;
             // Each button as far in as the deepest tip, back out when none.
             foreach (var each in pushed) Sinking.Add(each.Key);
             Done.Clear();
@@ -117,8 +124,18 @@ namespace ShipbreakerVR
             foreach (var button in Done) Sinking.Remove(button);
         }
 
+        // The button that controller's tip pushes in, as its transform, or false.
+        public static bool TryGetPushed(VrInput.Hand input, out Transform button)
+        {
+            button = null;
+            foreach (var tip in Tips)
+                if (tip.Input == input && tip.Pushing != null && tip.Pushing.Filter != null) button = tip.Pushing.Filter.transform;
+            return button != null;
+        }
+
         private static void Touch(Tip tip, Dictionary<Button, float> pushed)
         {
+            tip.Pushing = null;
             if (VrClimb.TryGetHold(tip.Input, out _)) { tip.In.Clear(); return; }
             if (!tip.Input.TryGetGripPose(out var gripLocal, out _) || !tip.Input.TryGetAimRotation(out var aimLocal)) return;
             if (!VrToolModels.TrackingToWorld(gripLocal, aimLocal, out var grip, out var aim)) return;
@@ -159,6 +176,7 @@ namespace ShipbreakerVR
                     continue;
                 }
                 if (depth <= 0f) continue;
+                tip.Pushing = button;
                 pushed[button] = Mathf.Max(pushed.TryGetValue(button, out var other) ? other : 0f, depth);
                 if (depth < PressDepth * VrCamera.WorldScale || tip.In.Contains(button)) continue;
                 tip.In.Add(button);
@@ -177,6 +195,7 @@ namespace ShipbreakerVR
                 offeredUntil = Time.time + 0.3f;
                 pressedAt = Time.time;
                 VrToolInput.PressInteract();
+                tip.Input.Buzz(UsedAmplitude, UsedLength);
             }
             if (logs++ < 60)
                 Plugin.Log.LogInfo($"Buttons: {tip.Input.Name} hand pushes '{button.Filter.name}' {depth * 1000f:0} mm in, "
@@ -293,6 +312,21 @@ namespace ShipbreakerVR
         }
 
         private const float ControlAround = 0.6f;
+
+        // Whether a control is used by a button pushed by hand: one a button found so far uses, or one on an air
+        // conditioner, whose button may not have been found yet. The hand holds such a device as a surface, flat on it, not
+        // as a fist (VrClimb; Raik, 2026-11-11).
+        public static bool PressedByButton(InteractableObject control)
+        {
+            if (control == null) return false;
+            foreach (var list in ByPart.Values)
+                foreach (var button in list)
+                    if (button.Control == control) return true;
+            var part = control.GetComponentInParent<StructurePart>();
+            return part != null && Device(part.name) == AirConditioner;
+        }
+
+        private const string AirConditioner = "SM_AtmosphereRegulator";
 
         // Whether a part's name names another device than device, both in the 'SM_<Device>_' naming.
         public static bool OtherDevice(string device, string part) =>
