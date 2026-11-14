@@ -1202,7 +1202,7 @@ namespace ShipbreakerVR
                 {
                     // Just taken hold: the hand is taken to stay on the hold, the body going on as it went, until the
                     // next step shows how the hand really moves (else each hold taken hand over hand braked for a step).
-                    var holdVelocityNow = hand.Body != null ? hand.Body.GetPointVelocity(Hold(hand)) : Vector3.zero;
+                    var holdVelocityNow = (hand.Body != null ? hand.Body.GetPointVelocity(Hold(hand)) : Vector3.zero) + hand.GlideVelocity;
                     hand.Motion = -(player.velocity - holdVelocityNow);
                     hand.MotionKnown = false;
                 }
@@ -1229,6 +1229,9 @@ namespace ShipbreakerVR
                     // Without the twist the body takes (Twist): that turns the body, it does not pull at the part.
                     var error = hold - PullPoint(hand) - (hand == LeftHand ? twistLeft : hand == RightHand ? twistRight : Vector3.zero);
                     var holdVelocityHere = hand.Body != null ? hand.Body.GetPointVelocity(hold) : Vector3.zero;
+                    // Realistic climbing (Raik, 0.30.1): a hand gliding along the wall (faster than HoldsUpTo, Glide) moves with
+                    // its hold, which goes along at the glide's speed: the gloves brake that glide (GloveBrake), not the arm.
+                    if (realistic && !hand.Movable) holdVelocityHere += hand.GlideVelocity;
                     if (pass == 0) holdsVelocity += holdVelocityHere;
                     // The player's velocity relative to the hold that closes the gap within this step, or softly on a part
                     // that moves.
