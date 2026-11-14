@@ -158,6 +158,11 @@ namespace ShipbreakerVR
             // Held on an edge or a bar (a handle, a pillar's corner): its line on Anchor, along which the hold glides;
             // zero on a face.
             public Vector3 EdgeLine;
+            // Taken hold of an edge too fast to stop at once (VrClimb.Stretch): the hand stays on the edge while the body
+            // goes on, slowed by the arm, the way across it it goes (world); drawn back softly until SoftUntil once caught.
+            public bool Stretch;
+            public Vector3 StretchWay;
+            public float SoftUntil;
             // The way the hold glided in the last physics step (in the anchor's axes) and that step's time: the hand is
             // shown that far behind, less how far the frame is into the next step (TryGetHold).
             public Vector3 GlideStep;
@@ -308,6 +313,7 @@ namespace ShipbreakerVR
             foreach (var hand in Hands) Rethink(hand);
             foreach (var hand in Hands) Slide(hand);
             Glide();
+            foreach (var hand in Hands) Stretch(hand);
             var start = Momentum.Begin();
             Pull();
             Momentum.End(start);
@@ -647,6 +653,48 @@ namespace ShipbreakerVR
             if (hand.EdgeLine == Vector3.zero) hand.Normal = hand.Anchor.InverseTransformDirection(normal);
         }
 
+        // Raik, 0.30.1 (a 90° edge taken hold of too fast was lost at once, the hand still ahead): from StretchFrom m/s
+        // across an edge the hand stays on it and the body goes on past, the arm braking the speed across with
+        // HandleForce on BrakeMass (9 m/s²), the hand leaving its controller meanwhile. Stopped before the hold is behind
+        // the head, the hand holds and the body is drawn back to the controller over PullBack seconds; else, once the hold
+        // has passed the head, the hand lets go and the body flies on slower. Along the edge it glides as ever (Glide).
+        private const float StretchFrom = 1f;
+        private const float PullBack = 0.25f;
+        private const float SoftFor = 1f;
+
+        private static void Stretch(Hand hand)
+        {
+            if (!hand.Stretch) return;
+            if (!hand.Holding)
+            {
+                hand.Stretch = false;
+                return;
+            }
+            var scale = VrCamera.WorldScale;
+            var hold = Hold(hand);
+            var holdVelocity = hand.Body != null ? hand.Body.GetPointVelocity(hold) : Vector3.zero;
+            var relative = player.velocity - holdVelocity;
+            var away = Vector3.Dot(relative, hand.StretchWay);
+            if (away <= 0.05f * scale)
+            {
+                hand.Stretch = false;
+                hand.SoftUntil = Time.time + SoftFor;
+                player.velocity -= hand.StretchWay * away;
+                hand.Input.Buzz(0.5f, 0.06f);
+                if (edgeLogs++ < 30) Plugin.Log.LogInfo($"Climbing: {hand.Name} hand stopped the body at the edge, {(hold - VrCamera.Instance.transform.position).magnitude:0.00} m from the head; drawn back");
+                return;
+            }
+            var slower = Mathf.Max(away - ClimbContact.HandleForce / ClimbContact.BrakeMass * scale * Time.fixedDeltaTime, 0f);
+            player.velocity += hand.StretchWay * (slower - away);
+            hand.Input.Buzz(0.4f, 0.03f);
+            var head = VrCamera.Instance.transform.position;
+            if (Vector3.Dot(hold - head, hand.StretchWay) >= 0f) return;
+            hand.Stretch = false;
+            hand.PressedAt = -1f;
+            hand.Input.Buzz(1f, 0.12f);
+            LetGo(hand, false, $"the edge passed the head, flies on at {slower:0.00} m/s across it");
+        }
+
         // The nearest surface along a ray that is not the player's own.
         private static bool SurfaceRay(Vector3 from, Vector3 way, float length, out RaycastHit found)
         {
@@ -967,6 +1015,8 @@ namespace ShipbreakerVR
             // one holds on at speeds that tear the hand off straight on; faster, the arm takes what it can and the hand is
             // torn off, the body flying on slower.
             hand.EdgeLine = Vector3.zero;
+            hand.Stretch = false;
+            hand.SoftUntil = 0f;
             if (Glides(hand) && EdgeAt(best, at, surface, out var line))
             {
                 hand.EdgeLine = hand.Anchor.InverseTransformDirection(line);
@@ -980,13 +1030,13 @@ namespace ShipbreakerVR
                 if (edgeLogs++ < 30)
                     Plugin.Log.LogInfo($"Climbing: {hand.Name} hand takes hold of an edge of '{best.name}' at {acrossEdge.magnitude:0.00} m/s across, {alongEdge.magnitude:0.00} along "
                         + $"({slant:0}° to it, holds {limit:0.00} m/s across)");
-                if (!ClimbContact.Catch(acrossEdge.magnitude, limit, out var left))
+                // Raik, 0.30.1: fast across it, the hand stays on the edge and the body goes on, the arm braking it, until
+                // the hold passes the head (Stretch): caught by then, the body is drawn back; else the hand lets go.
+                if (acrossEdge.magnitude > StretchFrom * VrCamera.WorldScale)
                 {
-                    player.velocity = holdVelocity + alongEdge + acrossEdge.normalized * left;
-                    hand.PressedAt = -1f;
-                    hand.Input.Buzz(1f, 0.12f);
-                    LetGo(hand, false, $"torn off the edge, flies on at {(player.velocity - holdVelocity).magnitude:0.00} m/s");
-                    return;
+                    hand.Stretch = true;
+                    hand.StretchWay = acrossEdge.normalized;
+                    hand.Input.Buzz(0.8f, 0.08f);
                 }
                 hand.GlideVelocity = alongEdge.magnitude < ClimbContact.GlideLeast * VrCamera.WorldScale ? Vector3.zero : alongEdge;
             }
@@ -1021,21 +1071,21 @@ namespace ShipbreakerVR
             foreach (var hand in Hands)
             {
                 if (!hand.Holding) continue;
-                if (hand.Free)
+                if (hand.Free || hand.Stretch)
                 {
                     holding++;
                     continue;
                 }
                 var error = Hold(hand) - (Pushes(hand) ? HandWorld(hand) : PullPoint(hand));
                 // A part that moves follows the hand softly (PartPullTime), so it lags further in a quick swing: torn off
-                // only at twice the distance, as a firmly held one.
-                if ((!blocked || Pushes(hand)) && error.magnitude > (hand.Firm || hand.Follower || hand.Movable ? 2f : 1f) * TearOff * VrCamera.WorldScale) LetGo(hand, false, $"held back {error.magnitude:0.00} m from the hold");
+                // only at twice the distance, as a firmly held one. Not while the body is drawn back after a catch on an edge.
+                if ((!blocked || Pushes(hand)) && Time.time >= hand.SoftUntil && error.magnitude > (hand.Firm || hand.Follower || hand.Movable ? 2f : 1f) * TearOff * VrCamera.WorldScale) LetGo(hand, false, $"held back {error.magnitude:0.00} m from the hold");
                 else holding++;
             }
             // A firmly held part goes with the hand and pulls at nothing.
             var pulling = 0;
             foreach (var hand in Hands)
-                if (hand.Holding && !hand.Firm && !hand.Follower && !hand.Free && !Pushes(hand)) pulling++;
+                if (hand.Holding && !hand.Firm && !hand.Follower && !hand.Free && !hand.Stretch && !Pushes(hand)) pulling++;
             if (pulling == 0)
             {
                 bodySpin = Vector3.zero;
@@ -1062,7 +1112,7 @@ namespace ShipbreakerVR
                 var change = Vector3.zero;
                 foreach (var hand in Hands)
                 {
-                    if (!hand.Holding || hand.Firm || hand.Follower || hand.Free || Pushes(hand)) continue;
+                    if (!hand.Holding || hand.Firm || hand.Follower || hand.Free || hand.Stretch || Pushes(hand)) continue;
                     var hold = Hold(hand);
                     // Without the twist the body takes (Twist): that turns the body, it does not pull at the part.
                     var error = hold - PullPoint(hand) - (hand == LeftHand ? twistLeft : hand == RightHand ? twistRight : Vector3.zero);
@@ -1070,7 +1120,10 @@ namespace ShipbreakerVR
                     if (pass == 0) holdsVelocity += holdVelocityHere;
                     // The player's velocity relative to the hold that closes the gap within this step, or softly on a part
                     // that moves.
-                    var wanted = Vector3.ClampMagnitude(error / (hand.Movable ? Mathf.Max(dt, PartPullTime) : dt), MaxPull * VrCamera.WorldScale);
+                    // After a catch on an edge (Stretch) the body is drawn back to where hand and controller meet again
+                    // over PullBack, not at once.
+                    var over = hand.Movable ? Mathf.Max(dt, PartPullTime) : Time.time < hand.SoftUntil ? Mathf.Max(dt, PullBack) : dt;
+                    var wanted = Vector3.ClampMagnitude(error / over, MaxPull * VrCamera.WorldScale);
                     var needed = wanted - (velocity - holdVelocityHere);
                     if (needed.sqrMagnitude < 1e-10f) continue;
                     var inverse = pulling / BodyMass;
@@ -2168,7 +2221,7 @@ namespace ShipbreakerVR
         // Raik, 0.30.1: the gloves brake a glide evenly with a force of their own, the same at any speed (a magnetic grip
         // on the hull, stronger than five fingers' friction), instead of always stopping within 0.8 m: the faster one comes
         // in, the further one glides. Each hand gliding brakes with that force (VrSettings.GloveBrake, newtons) on a body
-        // of BrakeMass kg: 500 N is 5 m/s² a hand, 10 cm from 1 m/s, 90 cm from 3 m/s, 3.6 m from 6 m/s.
+        // of BrakeMass kg. Raik set it to 100 N and then asked for 15% more: 115 N, 1.15 m/s² a hand, 43 cm from 1 m/s.
         public const float BrakeMass = 100f;
 
         // How hard a glide brakes, in m/s² at that world scale.

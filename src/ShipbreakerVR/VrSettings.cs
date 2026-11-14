@@ -249,10 +249,10 @@ namespace ShipbreakerVR
                 ("With realistic climbing: how far the hands have to be twisted against each other, crosswise, before the body starts to turn. Within it you hold on and move to and fro as before.",
                     "Beim realistischen Hangeln: wie weit die Hände quer gegeneinander verdreht sein müssen, bevor sich der Körper dreht. Darunter hältst du dich fest und bewegst dich wie bisher hin und her."),
                 "In centimeters.", Between(0f, 15f));
-            GloveBrake = Bind("Steuerung", "HandschuhBremse", 500f,
-                ("How hard a hand holding on to a hull or other fixed surface brakes you when you take hold at speed and glide along it. Two hands brake twice as hard. 500 N stops you within 10 cm from 1 m/s and within 90 cm from 3 m/s.",
-                    "Wie stark eine Hand bremst, die an der Hülle oder einer anderen festen Fläche zugreift, während du darauf entlanggleitest. Zwei Hände bremsen doppelt so stark. 500 N halten dich aus 1 m/s nach 10 cm an, aus 3 m/s nach 90 cm."),
-                "In newtons.", Between(100f, 2000f));
+            GloveBrake = Bind("Steuerung", "HandschuhBremse", 115f,
+                ("How hard a hand holding on to a hull or other fixed surface brakes you when you take hold at speed and glide along it. Two hands brake twice as hard. 115 N (1.15 m/s²) stops you within 43 cm from 1 m/s and within 3.9 m from 3 m/s.",
+                    "Wie stark eine Hand bremst, die an der Hülle oder einer anderen festen Fläche zugreift, während du darauf entlanggleitest. Zwei Hände bremsen doppelt so stark. 115 N (1,15 m/s²) halten dich aus 1 m/s nach 43 cm an, aus 3 m/s nach 3,9 m."),
+                "In newtons.", Between(25f, 2000f));
             // Extended world physics (the key's old name kept, so the setting survives the rename).
             BracedPush = Bind("Steuerung", "SchwereTeileSchieben", false,
                 ("Extended world physics. On: holding on to something fixed, the other hand moves heavy parts up to 5 t with a limited force of 250 N, with each hand on a heavy part they push each other apart, and your body weighs 100 kg in these pulls and pushes. Off: the game's own physics, where such parts do not move.",
