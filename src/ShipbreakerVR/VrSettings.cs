@@ -37,6 +37,8 @@ namespace ShipbreakerVR
         public static ConfigEntry<VrClimb.Turning> ClimbTurning;
         public static ConfigEntry<float> ClimbTurnDeadzone;
         public static ConfigEntry<float> GloveBrake;
+        public static ConfigEntry<float> ArmPull;
+        public static ConfigEntry<float> CatchForce;
         public static ConfigEntry<bool> BracedPush;
         public static ConfigEntry<bool> ToolPhysics;
         public static ConfigEntry<bool> FreeWalking;
@@ -242,8 +244,8 @@ namespace ShipbreakerVR
                 (new[] { "Simple", "Standard", "Realistic" }, new[] { "Einfach", "Standard", "Realistisch" }));
             // Test (Raik, 2026-11-14): whether twisting the arms at a large part turns the body, and from how far.
             ClimbTurning = Bind("Steuerung", "Hangeln", VrClimb.Turning.Einfach,
-                ("How the body moves when both hands hold the same large part that moves. Simple: you move along it but never turn or swing round; you stay level as you are. Realistic: twisting your arms against each other turns you round the part as far as its weight lets you, past a dead zone (Climbing dead zone).",
-                    "Wie sich der Körper bewegt, wenn beide Hände dasselbe große Teil halten, das sich bewegen kann. Einfach: Du bewegst dich daran entlang, drehst und schwenkst dich aber nie; du bleibst in deiner Ebene. Realistisch: Verdrehst du die Arme gegeneinander, drehst du dich um das Teil, so weit sein Gewicht es zulässt, erst nach einer Totzone (Hangeln-Totzone)."),
+                ("How the body moves when both hands hold the same large part that moves. Simple: you move along it but never turn or swing round; you stay level as you are. Realistic: twisting your arms against each other turns you round the part as far as its weight lets you, past a dead zone (Climbing dead zone); and your body has inertia: your arms move it only with their force (Arm force), and taking hold it glides on a little (Catch force).",
+                    "Wie sich der Körper bewegt, wenn beide Hände dasselbe große Teil halten, das sich bewegen kann. Einfach: Du bewegst dich daran entlang, drehst und schwenkst dich aber nie; du bleibst in deiner Ebene. Realistisch: Verdrehst du die Arme gegeneinander, drehst du dich um das Teil, so weit sein Gewicht es zulässt, erst nach einer Totzone (Hangeln-Totzone); außerdem hat dein Körper Trägheit: Deine Arme bewegen ihn nur mit ihrer Kraft (Armkraft), und beim Zugreifen gleitet er kurz nach (Abfangkraft)."),
                 (new[] { "Simple", "Realistic" }, new[] { "Einfach", "Realistisch" }));
             ClimbTurnDeadzone = Bind("Steuerung", "HangelnTotzone", 3f,
                 ("With realistic climbing: how far the hands have to be twisted against each other, crosswise, before the body starts to turn. Within it you hold on and move to and fro as before.",
@@ -253,6 +255,15 @@ namespace ShipbreakerVR
                 ("How hard a hand holding on to a hull or other fixed surface brakes you when you take hold at speed and glide along it. Two hands brake twice as hard. 180 N (1.8 m/s²) stops you within 28 cm from 1 m/s and within 2.5 m from 3 m/s.",
                     "Wie stark eine Hand bremst, die an der Hülle oder einer anderen festen Fläche zugreift, während du darauf entlanggleitest. Zwei Hände bremsen doppelt so stark. 180 N (1,8 m/s²) halten dich aus 1 m/s nach 28 cm an, aus 3 m/s nach 2,5 m."),
                 "In newtons.", Between(25f, 2000f));
+            // Raik, 0.30.1: the body's inertia with realistic climbing.
+            ArmPull = Bind("Steuerung", "Armkraft", 300f,
+                ("With realistic climbing: how hard each arm pulls or pushes your body (100 kg) on a fixed hold, so you speed up only as fast as your arms can make you. 300 N is 3 m/s² a hand; pushing off over an arm's length you reach about 1.7 m/s with one hand and 2.4 m/s with both.",
+                    "Beim realistischen Hangeln: wie stark jeder Arm deinen Körper (100 kg) an einem festen Halt zieht oder schiebt, du wirst also nur so schnell, wie deine Arme dich machen. 300 N sind 3 m/s² pro Hand; stößt du dich über eine Armlänge ab, erreichst du mit einer Hand etwa 1,7 m/s, mit beiden 2,4 m/s."),
+                "In newtons.", Between(50f, 1500f));
+            CatchForce = Bind("Steuerung", "Abfangkraft", 900f,
+                ("With realistic climbing: how hard a hand that takes hold stops your body (100 kg). The hand stays put at once, the body glides on a little and is drawn back. 900 N: about 6 cm from 1 m/s, 22 cm from 2 m/s, 57 cm from 3.2 m/s; two hands half of that.",
+                    "Beim realistischen Hangeln: wie stark eine Hand, die zugreift, deinen Körper (100 kg) abfängt. Die Hand steht sofort, der Körper gleitet kurz nach und wird zurückgezogen. 900 N: etwa 6 cm aus 1 m/s, 22 cm aus 2 m/s, 57 cm aus 3,2 m/s; mit zwei Händen die Hälfte."),
+                "In newtons.", Between(100f, 5000f));
             // Extended world physics (the key's old name kept, so the setting survives the rename).
             BracedPush = Bind("Steuerung", "SchwereTeileSchieben", false,
                 ("Extended world physics. On: holding on to something fixed, the other hand moves heavy parts up to 5 t with a limited force of 250 N, with each hand on a heavy part they push each other apart, and your body weighs 100 kg in these pulls and pushes. Off: the game's own physics, where such parts do not move.",

@@ -87,6 +87,12 @@ namespace ShipbreakerVR
         // extended world physics the game's mass, as before.
         private const float ExtendedBodyMass = 100f;
         private static float BodyMass => VrSettings.BracedPush.Value ? ExtendedBodyMass : player.mass;
+        // Raik, 0.30.1: with realistic climbing the body (ClimbContact.BrakeMass) has inertia: the arms move it on fixed
+        // holds with VrSettings.ArmPull each (Pull), a hand taking hold stops it with VrSettings.CatchForce (Swing, Stretch).
+        private static bool Realistic => VrSettings.ClimbTurning != null && VrSettings.ClimbTurning.Value == Turning.Realistisch;
+        // What each hand changed the body's velocity by this step (Pull), within ArmPull.
+        private static readonly Vector3[] PullApplied = new Vector3[2];
+        private static int inertiaLogs;
         // LynxUnityEngineExtensions.InStaticLayer: the station and other things that never move.
         private const int StaticLayer = 27;
 
@@ -677,7 +683,7 @@ namespace ShipbreakerVR
         {
             hand.Stretch = true;
             hand.StretchWay = velocity.normalized;
-            hand.StretchBrake = SwingBrake * VrCamera.WorldScale;
+            hand.StretchBrake = Realistic ? ClimbContact.GloveBrake(VrSettings.CatchForce.Value, 1, VrCamera.WorldScale) : SwingBrake * VrCamera.WorldScale;
             hand.StretchSwing = true;
             if (edgeLogs++ < 30) Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds at once at {velocity.magnitude:0.00} m/s along the surface; the body swings on");
         }
@@ -1075,7 +1081,9 @@ namespace ShipbreakerVR
                 {
                     hand.Stretch = true;
                     hand.StretchWay = stopped.normalized;
-                    hand.StretchBrake = ClimbContact.HandleForce / ClimbContact.BrakeMass * VrCamera.WorldScale;
+                    hand.StretchBrake = Realistic
+                        ? ClimbContact.GloveBrake(VrSettings.CatchForce.Value, 1, VrCamera.WorldScale)
+                        : ClimbContact.HandleForce / ClimbContact.BrakeMass * VrCamera.WorldScale;
                     hand.StretchSwing = false;
                     hand.Input.Buzz(0.8f, 0.08f);
                 }
@@ -1157,6 +1165,12 @@ namespace ShipbreakerVR
             Twist(dt, out var twistLeft, out var twistRight);
             var velocity = player.velocity;
             var holdsVelocity = Vector3.zero;
+            // Realistic climbing: on a fixed hold each arm speeds the body up or slows it down by at most armAccel, and the
+            // body closes a gap no faster than it can still stop at it with all arms (no overshoot).
+            var realistic = Realistic;
+            var armAccel = realistic ? ClimbContact.GloveBrake(VrSettings.ArmPull.Value, 1, VrCamera.WorldScale) : 0f;
+            PullApplied[0] = PullApplied[1] = Vector3.zero;
+            var limited = false;
             // Worked out PullPasses times, each from the velocities the pass before left; a part's change at once (Kick),
             // so the other hand on it sees it. Worked out once from the same velocities, two hands on a turning crate
             // overcorrected each other and it swung (review of the soft pull). The hands share the body as before:
@@ -1178,17 +1192,34 @@ namespace ShipbreakerVR
                     // over PullBack, not at once.
                     var over = hand.Movable ? Mathf.Max(dt, PartPullTime) : Time.time < hand.SoftUntil ? Mathf.Max(dt, PullBack) : dt;
                     var wanted = Vector3.ClampMagnitude(error / over, MaxPull * VrCamera.WorldScale);
+                    var inert = realistic && !hand.Movable;
+                    if (inert)
+                    {
+                        var most = ClimbContact.MostApproach(error.magnitude, armAccel * pulling);
+                        if (wanted.magnitude > most) wanted = wanted.normalized * most;
+                    }
                     var needed = wanted - (velocity - holdVelocityHere);
                     if (needed.sqrMagnitude < 1e-10f) continue;
                     var inverse = pulling / BodyMass;
                     if (hand.Movable) inverse += Sharing(hand) * InverseMass(hand.Body, hold, needed.normalized);
                     var impulse = needed / inverse * (hand.Movable ? PartRelax : 1f);
-                    change += impulse / BodyMass;
+                    var step = impulse / BodyMass;
+                    if (inert)
+                    {
+                        var index = hand == LeftHand ? 0 : 1;
+                        var allowed = Vector3.ClampMagnitude(PullApplied[index] + step, armAccel * dt) - PullApplied[index];
+                        if ((allowed - step).sqrMagnitude > 1e-8f) limited = true;
+                        step = allowed;
+                        PullApplied[index] += step;
+                    }
+                    change += step;
                     if (hand.Movable) Kick(hand.Body, -impulse, hold);
                 }
                 velocity += change;
             }
             holdVelocity = holdsVelocity / pulling;
+            if (limited && inertiaLogs++ < 20)
+                Plugin.Log.LogInfo($"Climbing: the arms move the body at most {armAccel:0.0} m/s² each ({VrSettings.ArmPull.Value:0} N), body at {(velocity - holdVelocity).magnitude:0.00} m/s");
             player.velocity = velocity;
             CalmSpin(dt);
             // Held off a part before stopping short of walls, so what HoldOff gives the body is kept clear of them too
@@ -2335,6 +2366,15 @@ namespace ShipbreakerVR
         // How hard a glide brakes, in m/s² at that world scale.
         public static float GloveBrake(float newtons, int hands, float scale) =>
             Mathf.Max(newtons, 0f) * Mathf.Max(hands, 1) / BrakeMass * scale;
+
+        // Raik, 0.30.1 (realistic climbing): the fastest the body may close a gap of that many meters and still stop at it
+        // with that acceleration, in m/s.
+        public static float MostApproach(float gap, float acceleration) =>
+            Mathf.Sqrt(2f * Mathf.Max(acceleration, 0f) * Mathf.Max(gap, 0f));
+
+        // One step of the body towards a velocity, changing by at most acceleration over dt.
+        public static Vector3 Accelerate(Vector3 velocity, Vector3 toward, float acceleration, float dt) =>
+            velocity + Vector3.ClampMagnitude(toward - velocity, acceleration * dt);
 
         // What a hand catches on, the arm giving way over a stroke as it takes the blow: a handle, a bar or the edge of a
         // pillar (HandleForce over HandleStroke, up to 3 m/s for 100 kg) and a step up between two hull parts (LipForce

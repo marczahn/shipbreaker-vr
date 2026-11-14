@@ -256,6 +256,52 @@ namespace ShipbreakerVR.Tests
             Assert.InRange(way, expected * 0.9f, expected * 1.1f);
         }
 
+        // Raik, 0.30.1: realistic climbing, the arms push the 100 kg body with 300 N each over an arm's length.
+        [Theory]
+        [InlineData(1, 1.73f)]
+        [InlineData(2, 2.45f)]
+        public void PushingOffOverAnArmLengthGivesWhatTheArmsCan(int hands, float expected)
+        {
+            var acceleration = ClimbContact.GloveBrake(300f, hands, 1f);
+            var velocity = Vector3.zero;
+            var way = 0f;
+            var steps = 0;
+            while (way < 0.5f && steps++ < 10000)
+            {
+                var before = velocity.x;
+                velocity = ClimbContact.Accelerate(velocity, new Vector3(10f, 0f, 0f), acceleration, Step);
+                way += (before + velocity.x) * 0.5f * Step;
+            }
+            Assert.InRange(velocity.x, expected * 0.95f, expected * 1.05f);
+        }
+
+        [Theory]
+        [InlineData(1f, 0.056f)]
+        [InlineData(2f, 0.222f)]
+        [InlineData(3.2f, 0.569f)]
+        public void TakingHoldTheBodyGlidesOnByTheCatchForce(float speed, float expected)
+        {
+            var velocity = new Vector3(speed, 0f, 0f);
+            var brake = ClimbContact.GloveBrake(900f, 1, 1f);
+            var way = 0f;
+            var steps = 0;
+            while (velocity != Vector3.zero && steps++ < 10000)
+            {
+                var before = velocity.x;
+                velocity = ClimbContact.Brake(velocity, brake, Step);
+                way += (before + velocity.x) * 0.5f * Step;
+            }
+            Assert.InRange(way, expected * 0.95f, expected * 1.05f);
+        }
+
+        [Fact]
+        public void TheBodyClosesAGapNoFasterThanItCanStopAtIt()
+        {
+            Assert.Equal(1.732f, ClimbContact.MostApproach(0.5f, 3f), 3);
+            Assert.Equal(0f, ClimbContact.MostApproach(0f, 3f), 4);
+            Assert.Equal(0f, ClimbContact.MostApproach(-0.1f, 3f), 4);
+        }
+
         [Fact]
         public void TwoHandsBrakeTwiceAsHard()
         {
