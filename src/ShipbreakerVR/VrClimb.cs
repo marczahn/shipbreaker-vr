@@ -162,6 +162,10 @@ namespace ShipbreakerVR
             // goes on, slowed by the arm, the way across it it goes (world); drawn back softly until SoftUntil once caught.
             public bool Stretch;
             public Vector3 StretchWay;
+            // How hard the arm stops the body meanwhile (m/s²), and whether it is only the swing after taking hold (Swing),
+            // which never lets go.
+            public float StretchBrake;
+            public bool StretchSwing;
             public float SoftUntil;
             // The way the hold glided in the last physics step (in the anchor's axes) and that step's time: the hand is
             // shown that far behind, less how far the frame is into the next step (TryGetHold).
@@ -661,6 +665,20 @@ namespace ShipbreakerVR
         private const float StretchFrom = 1f;
         private const float PullBack = 0.25f;
         private const float SoftFor = 1f;
+        // Raik, 0.30.1 (first 2, then 3.2 m/s): taking hold at up to HoldsUpTo m/s along a surface the hand holds at once instead of gliding; the
+        // body swings on past it, the arm stopping it with SwingBrake m/s² (15 cm from 3.2 m/s, 6 cm from 2, 1.4 from 1), and is
+        // drawn back as after a catch on an edge. It never lets go for passing the head.
+        private const float HoldsUpTo = 3.2f;
+        private const float SwingBrake = 35f;
+
+        private static void Swing(Hand hand, Vector3 velocity)
+        {
+            hand.Stretch = true;
+            hand.StretchWay = velocity.normalized;
+            hand.StretchBrake = SwingBrake * VrCamera.WorldScale;
+            hand.StretchSwing = true;
+            if (edgeLogs++ < 30) Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds at once at {velocity.magnitude:0.00} m/s along the surface; the body swings on");
+        }
 
         private static void Stretch(Hand hand)
         {
@@ -681,14 +699,15 @@ namespace ShipbreakerVR
                 hand.SoftUntil = Time.time + SoftFor;
                 player.velocity -= hand.StretchWay * away;
                 hand.Input.Buzz(0.5f, 0.06f);
-                if (edgeLogs++ < 30) Plugin.Log.LogInfo($"Climbing: {hand.Name} hand stopped the body at the edge, {(hold - VrCamera.Instance.transform.position).magnitude:0.00} m from the head; drawn back");
+                if (edgeLogs++ < 30) Plugin.Log.LogInfo($"Climbing: {hand.Name} hand stopped the body {(hand.StretchSwing ? "on the surface" : "at the edge")}, {(hold - VrCamera.Instance.transform.position).magnitude:0.00} m from the head; drawn back");
+                hand.StretchSwing = false;
                 return;
             }
-            var slower = Mathf.Max(away - ClimbContact.HandleForce / ClimbContact.BrakeMass * scale * Time.fixedDeltaTime, 0f);
+            var slower = Mathf.Max(away - hand.StretchBrake * Time.fixedDeltaTime, 0f);
             player.velocity += hand.StretchWay * (slower - away);
             hand.Input.Buzz(0.4f, 0.03f);
             var head = VrCamera.Instance.transform.position;
-            if (Vector3.Dot(hold - head, hand.StretchWay) >= 0f) return;
+            if (hand.StretchSwing || Vector3.Dot(hold - head, hand.StretchWay) >= 0f) return;
             hand.Stretch = false;
             hand.PressedAt = -1f;
             hand.Input.Buzz(1f, 0.12f);
@@ -1017,6 +1036,7 @@ namespace ShipbreakerVR
             hand.EdgeLine = Vector3.zero;
             hand.Stretch = false;
             hand.SoftUntil = 0f;
+            hand.StretchSwing = false;
             if (Glides(hand) && EdgeAt(best, at, surface, out var line))
             {
                 hand.EdgeLine = hand.Anchor.InverseTransformDirection(line);
@@ -1032,20 +1052,38 @@ namespace ShipbreakerVR
                         + $"({slant:0}° to it, holds {limit:0.00} m/s across)");
                 // Raik, 0.30.1: fast across it, the hand stays on the edge and the body goes on, the arm braking it, until
                 // the hold passes the head (Stretch): caught by then, the body is drawn back; else the hand lets go.
+                // Up to HoldsUpTo along it the hand stays put too, and that speed is taken by the arm as well (Swing).
+                var holdsAlong = alongEdge.magnitude <= HoldsUpTo * VrCamera.WorldScale;
+                var stopped = acrossEdge + (holdsAlong ? alongEdge : Vector3.zero);
                 if (acrossEdge.magnitude > StretchFrom * VrCamera.WorldScale)
                 {
                     hand.Stretch = true;
-                    hand.StretchWay = acrossEdge.normalized;
+                    hand.StretchWay = stopped.normalized;
+                    hand.StretchBrake = ClimbContact.HandleForce / ClimbContact.BrakeMass * VrCamera.WorldScale;
+                    hand.StretchSwing = false;
                     hand.Input.Buzz(0.8f, 0.08f);
                 }
-                hand.GlideVelocity = alongEdge.magnitude < ClimbContact.GlideLeast * VrCamera.WorldScale ? Vector3.zero : alongEdge;
+                else if (holdsAlong && stopped.magnitude >= ClimbContact.GlideLeast * VrCamera.WorldScale) Swing(hand, stopped);
+                hand.GlideVelocity = holdsAlong || alongEdge.magnitude < ClimbContact.GlideLeast * VrCamera.WorldScale ? Vector3.zero : alongEdge;
             }
             else
             {
                 // The other hand already gliding: this one glides on with the same speed, else with the body's own.
                 hand.GlideVelocity = GlideAtHold(hand);
+                var othersGlide = false;
                 foreach (var other in Hands)
-                    if (other != hand && other.GlideVelocity != Vector3.zero && Glides(hand)) hand.GlideVelocity = other.GlideVelocity;
+                    if (other != hand && other.GlideVelocity != Vector3.zero && Glides(hand))
+                    {
+                        hand.GlideVelocity = other.GlideVelocity;
+                        othersGlide = true;
+                    }
+                // Raik, 0.30.1: up to HoldsUpTo the hand holds at once where it took hold, and the body swings on a few
+                // centimeters, the arm taking it (Swing), instead of gliding.
+                if (!othersGlide && hand.GlideVelocity != Vector3.zero && hand.GlideVelocity.magnitude <= HoldsUpTo * VrCamera.WorldScale)
+                {
+                    Swing(hand, hand.GlideVelocity);
+                    hand.GlideVelocity = Vector3.zero;
+                }
             }
             if (hand.GlideVelocity != Vector3.zero && logs++ < 80)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand takes hold at {hand.GlideVelocity.magnitude:0.00} m/s along the surface and glides to a stop");
