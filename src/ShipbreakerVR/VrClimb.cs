@@ -2221,7 +2221,7 @@ namespace ShipbreakerVR
         // Raik, 0.30.1: the gloves brake a glide evenly with a force of their own, the same at any speed (a magnetic grip
         // on the hull, stronger than five fingers' friction), instead of always stopping within 0.8 m: the faster one comes
         // in, the further one glides. Each hand gliding brakes with that force (VrSettings.GloveBrake, newtons) on a body
-        // of BrakeMass kg. Raik set it to 100 N and then asked for 15% more: 115 N, 1.15 m/s² a hand, 43 cm from 1 m/s.
+        // of BrakeMass kg. Raik chose 180 N after testing: 1.8 m/s² a hand, 28 cm from 1 m/s, 2.5 m from 3 m/s.
         public const float BrakeMass = 100f;
 
         // How hard a glide brakes, in m/s² at that world scale.
