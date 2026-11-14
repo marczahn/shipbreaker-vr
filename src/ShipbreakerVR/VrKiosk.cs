@@ -16,6 +16,7 @@ namespace ShipbreakerVR
     internal static class VrKiosk
     {
         private static readonly Dictionary<int, bool> Known = new Dictionary<int, bool>();
+        private static readonly Dictionary<int, bool> KnownFixture = new Dictionary<int, bool>();
         private static readonly HashSet<int> Fitted = new HashSet<int>();
         // The housings made not convex here, convex again when the mod is unloaded (F3, a reload).
         private static readonly List<MeshCollider> Unconvexed = new List<MeshCollider>();
@@ -41,6 +42,45 @@ namespace ShipbreakerVR
             Known[id] = kiosk;
             if (kiosk) Plugin.Log.LogInfo($"Kiosk: '{Path(thing.transform)}' is used with A or X from the view, with its prompt");
             return kiosk;
+        }
+
+        // Test (Raik, 2026-11-15: the exit door to end the shift has no switch to take hold of either, so it could not be
+        // used at all): whatever belongs to the MasterJack itself, not to the ship being salvaged, is used as the kiosk
+        // is, with A or X from the view and its prompt. The ship's controls, collectibles and breakers all lie under its
+        // 'HierarchyParent' or belong to one of its structure parts; a fixture of the MasterJack does neither and does
+        // not float freely. Its levers stay turned by hand.
+        public static bool UsedFromView(InteractableObject thing)
+        {
+            if (thing == null) return false;
+            if (Is(thing)) return true;
+            var id = thing.GetInstanceID();
+            if (KnownFixture.TryGetValue(id, out var known)) return known;
+            var fixture = Fixture(thing);
+            KnownFixture[id] = fixture;
+            if (fixtureLogs++ < 40) Plugin.Log.LogInfo($"Interaction: '{FullPath(thing.transform)}' ({VrLever.TypeName(thing)}) "
+                + (fixture ? "belongs to the MasterJack: used with A or X from the view, with its prompt" : "belongs to the ship: used only by hand"));
+            return fixture;
+        }
+
+        private static int fixtureLogs;
+
+        private static bool Fixture(InteractableObject thing)
+        {
+            if (thing.StructurePartParent != null) return false;
+            // A lever stays turned by hand wherever it is.
+            if (VrLever.Turnable(thing) || VrNacelle.Is(thing) || VrLever.TypeName(thing).StartsWith("Lever")) return false;
+            for (var t = thing.transform; t != null; t = t.parent)
+                if (t.name.StartsWith("HierarchyParent", System.StringComparison.Ordinal)) return false;
+            var collider = thing.GetComponent<Collider>();
+            var body = collider != null ? collider.attachedRigidbody : thing.GetComponentInParent<Rigidbody>();
+            return body == null || body.isKinematic;
+        }
+
+        private static string FullPath(Transform t)
+        {
+            var path = t.name;
+            for (var up = t.parent; up != null; up = up.parent) path = up.name + "/" + path;
+            return path;
         }
 
         private static bool Within(Transform at)
