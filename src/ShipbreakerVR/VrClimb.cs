@@ -685,10 +685,11 @@ namespace ShipbreakerVR
         private const float StretchFrom = 1f;
         private const float PullBack = 0.25f;
         private const float SoftFor = 1f;
-        // Raik, 0.30.1 (first 2, then 3.2 m/s): taking hold at up to HoldsUpTo m/s along a surface the hand holds at once instead of gliding; the
+        // Raik, 0.30.1 (first 2, then 3.2, after testing the body's inertia 2 m/s again: above it a little glide leaves time
+        // to push off once more with the hand): taking hold at up to HoldsUpTo m/s along a surface the hand holds at once instead of gliding; the
         // body swings on past it, the arm stopping it with SwingBrake m/s² (15 cm from 3.2 m/s, 6 cm from 2, 1.4 from 1), and is
         // drawn back as after a catch on an edge. It never lets go for passing the head.
-        private const float HoldsUpTo = 3.2f;
+        private const float HoldsUpTo = 2f;
         private const float SwingBrake = 35f;
 
         private static void Swing(Hand hand, Vector3 velocity)
@@ -2415,7 +2416,8 @@ namespace ShipbreakerVR
         // Raik, 0.30.1: the gloves brake a glide evenly with a force of their own, the same at any speed (a magnetic grip
         // on the hull, stronger than five fingers' friction), instead of always stopping within 0.8 m: the faster one comes
         // in, the further one glides. Each hand gliding brakes with that force (VrSettings.GloveBrake, newtons) on a body
-        // of BrakeMass kg. Raik chose 180 N after testing: 1.8 m/s² a hand, 28 cm from 1 m/s, 2.5 m from 3 m/s.
+        // of BrakeMass kg. Raik chose 180 N after testing, then about 20 % more with the body's inertia (2026-11-15): 215 N, 2.15 m/s² a hand,
+        // 23 cm from 1 m/s, 2.1 m from 3 m/s.
         public const float BrakeMass = 100f;
 
         // How hard a glide brakes, in m/s² at that world scale.

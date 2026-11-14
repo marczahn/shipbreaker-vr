@@ -251,9 +251,9 @@ namespace ShipbreakerVR
                 ("With realistic climbing: how far the hands have to be twisted against each other, crosswise, before the body starts to turn. Within it you hold on and move to and fro as before.",
                     "Beim realistischen Hangeln: wie weit die Hände quer gegeneinander verdreht sein müssen, bevor sich der Körper dreht. Darunter hältst du dich fest und bewegst dich wie bisher hin und her."),
                 "In centimeters.", Between(0f, 15f));
-            GloveBrake = Bind("Steuerung", "HandschuhBremse", 180f,
-                ("How hard a hand holding on to a hull or other fixed surface brakes you when you take hold at speed and glide along it. Two hands brake twice as hard. 180 N (1.8 m/s²) stops you within 28 cm from 1 m/s and within 2.5 m from 3 m/s.",
-                    "Wie stark eine Hand bremst, die an der Hülle oder einer anderen festen Fläche zugreift, während du darauf entlanggleitest. Zwei Hände bremsen doppelt so stark. 180 N (1,8 m/s²) halten dich aus 1 m/s nach 28 cm an, aus 3 m/s nach 2,5 m."),
+            GloveBrake = Bind("Steuerung", "HandschuhBremse", 215f,
+                ("How hard a hand holding on to a hull or other fixed surface brakes you when you take hold at speed and glide along it. Two hands brake twice as hard. 215 N (2.15 m/s²) stops you within 23 cm from 1 m/s and within 2.1 m from 3 m/s.",
+                    "Wie stark eine Hand bremst, die an der Hülle oder einer anderen festen Fläche zugreift, während du darauf entlanggleitest. Zwei Hände bremsen doppelt so stark. 215 N (2,15 m/s²) halten dich aus 1 m/s nach 23 cm an, aus 3 m/s nach 2,1 m."),
                 "In newtons.", Between(25f, 2000f));
             // Raik, 0.30.1: the body's inertia with realistic climbing.
             ArmPull = Bind("Steuerung", "Armkraft", 500f,
