@@ -140,6 +140,8 @@ namespace ShipbreakerVR
             public Vector3 Bar;
             // A part that turns with the hand: its turn relative to the controller, and its speed limit before.
             public bool Firm;
+            // A small part (Small): held as a fist round it; anything larger the hand lies on (HoldsFlat).
+            public bool Small;
             // The second hand on a firmly held part: it stays on the part, the first hand moves it.
             public bool Follower;
             public Quaternion FirmTurn;
@@ -870,7 +872,9 @@ namespace ShipbreakerVR
                 else if (hand.Anchor == null || !hand.Anchor.gameObject.activeInHierarchy || hand.Collider == null || !hand.Collider.enabled)
                     LetGo(hand, false, "the hold is gone");
             }
-            else if (hand.Tracked && hand.Vr.Free && down && (pressed || Time.time - hand.PressedAt < CatchTime)) TryHold(hand, pressed);
+            // Raik (0.30.1): pointing (the index finger off the trigger) the hand takes hold of nothing; its stiff finger
+            // meets the wall instead (VrHands).
+            else if (hand.Tracked && hand.Vr.Free && down && !hand.Input.Pointing && (pressed || Time.time - hand.PressedAt < CatchTime)) TryHold(hand, pressed);
         }
 
         // The small floating debris (nuts and bolts, 'PRF_MeshParticles_...') are loose 1 kg parts on the Ignore Raycast
@@ -944,8 +948,18 @@ namespace ShipbreakerVR
             if (control != null && best != null
                 && (controlPoint - at).magnitude > Mathf.Sqrt(bestDistance) + ControlPreference * VrCamera.WorldScale)
                 control = null;
+            // Raik (0.30.1): a control without a grip to close round (a door switch, a console, the hoist truck) is held with
+            // the flat hand, as on a wall (HoldsFlat); one with only a trigger (the hoist truck's 'PRF_SpaceTruck_ExtractionVolume')
+            // is held for its use, the hand lying on the solid surface under it.
+            Collider shape = null;
+            var shapeSurface = Vector3.zero;
             if (control != null)
             {
+                if (bar == Vector3.zero && controlCollider.isTrigger && best != null)
+                {
+                    shape = best;
+                    shapeSurface = surface;
+                }
                 best = controlCollider;
                 surface = controlPoint;
                 bestDistance = (surface - at).sqrMagnitude;
@@ -977,7 +991,7 @@ namespace ShipbreakerVR
                 return;
             }
 
-            Take(hand, best, at, surface, Mathf.Sqrt(bestDistance), control, bar);
+            Take(hand, best, at, surface, Mathf.Sqrt(bestDistance), control, bar, shape, shapeSurface);
         }
 
         // That controller's hand lets go of what it holds and takes hold of that collider where the hand is: a thing pulled
@@ -996,7 +1010,8 @@ namespace ShipbreakerVR
             return false;
         }
 
-        private static void Take(Hand hand, Collider best, Vector3 at, Vector3 surface, float bestDistance, InteractableObject control, Vector3 bar)
+        private static void Take(Hand hand, Collider best, Vector3 at, Vector3 surface, float bestDistance, InteractableObject control, Vector3 bar,
+            Collider shape = null, Vector3 shapeSurface = default)
         {
             var first = !Pulling();
             if (!VrHand.StartHolding(hand.Vr)) return;
@@ -1013,9 +1028,12 @@ namespace ShipbreakerVR
             if (hand.Movable) Separate(body);
             hand.Anchor = body != null ? body.transform : best.transform;
             hand.Point = hand.Anchor.InverseTransformPoint(at);
-            hand.Surface = hand.Anchor.InverseTransformPoint(surface);
+            hand.Surface = hand.Anchor.InverseTransformPoint(shape != null ? shapeSurface : surface);
             hand.Control = control != null;
-            hand.Normal = hand.Anchor.InverseTransformDirection(SurfaceNormal(best, at, surface, hand));
+            hand.Normal = hand.Anchor.InverseTransformDirection(shape != null
+                ? SurfaceNormal(shape, at, shapeSurface, hand)
+                : SurfaceNormal(best, at, surface, hand));
+            hand.Small = body != null && !body.isKinematic && Small(body);
             hand.HeldAt = Time.time;
             hand.TurnAtHold = VrCamera.Instance.Playspace;
             hand.Sliding = false;
@@ -1742,7 +1760,7 @@ namespace ShipbreakerVR
             var control = held.GetComponentInParent<InteractableObject>();
             if (control == null || switchLogs >= 40) return;
             switchLogs++;
-            Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds the control '{control.name}'{(hand.Control ? ", as a fist where it took hold" : ", as a plain surface")}");
+            Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds the control '{control.name}'{(hand.Control ? hand.Bar != Vector3.zero ? ", as a fist round its grip" : ", the hand flat on it where it took hold" : ", as a plain surface")}");
         }
 
         // The directions of a cube's faces and corners.
@@ -1851,11 +1869,37 @@ namespace ShipbreakerVR
 
         // True while that controller's hand holds on to something large: a wall, the hull, a console, a heavy part. The hand
         // lies flat on it there (VrHands.Curl); around a small part that turns with the hand (Firm) it closes.
+        // Raik (0.30.1): only really small things (nuts and bolts, debris, Small) and a lever's or nacelle's grip (Bar) close
+        // the hand round them; a light but large part turning with the hand, a door switch, a console and the hoist truck
+        // are held flat, the fingers laid on as on a wall.
         public static bool HoldsFlat(VrInput.Hand input)
         {
             foreach (var hand in Hands)
-                if (hand.Input == input && hand.Holding) return !hand.Firm && !hand.Follower && !hand.Control;
+                if (hand.Input == input && hand.Holding)
+                    return (!(hand.Firm || hand.Follower) || !hand.Small) && (!hand.Control || hand.Bar == Vector3.zero);
             return false;
+        }
+
+        // A part no longer than SmallMost each way, by its solid colliders' bounds.
+        private const float SmallMost = 0.35f;
+        private static readonly System.Collections.Generic.List<Collider> SmallParts = new System.Collections.Generic.List<Collider>();
+
+        private static bool Small(Rigidbody body)
+        {
+            body.GetComponentsInChildren(true, SmallParts);
+            var known = false;
+            var bounds = new Bounds();
+            foreach (var part in SmallParts)
+            {
+                if (part == null || part.isTrigger || !part.enabled) continue;
+                if (known) bounds.Encapsulate(part.bounds);
+                else bounds = part.bounds;
+                known = true;
+            }
+            SmallParts.Clear();
+            if (!known) return true;
+            var size = bounds.size;
+            return Mathf.Max(size.x, Mathf.Max(size.y, size.z)) <= SmallMost * VrCamera.WorldScale;
         }
 
         // True while that controller's hand holds a control (a door switch, a console's button) as a fist.
