@@ -34,6 +34,8 @@ namespace ShipbreakerVR
             if (finishing != null) held = finishing;
             var closest = Closest(__instance);
             if (held == closest) return;
+            // The kiosk has nothing to take hold of: used from the view, as the game picks it (VrKiosk).
+            if (held == null && VrKiosk.Is(closest)) return;
             // The game's own hit stays only for the thing it found itself; a held thing it did not see has none.
             Closest(__instance) = held;
             ClosestHit(__instance) = null;

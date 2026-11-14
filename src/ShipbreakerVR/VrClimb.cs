@@ -157,6 +157,10 @@ namespace ShipbreakerVR
             // brakes, set when the glide starts or the thrust ends.
             public Vector3 GlideVelocity;
             public float GlideBrake;
+            // The way the hold glided in the last physics step (in the anchor's axes) and that step's time: the hand is
+            // shown that far behind, less how far the frame is into the next step (TryGetHold).
+            public Vector3 GlideStep;
+            public float GlideStepAt;
 
             public Hand(VrHand vr)
             {
@@ -277,12 +281,17 @@ namespace ShipbreakerVR
             var before = body.velocity - player.velocity;
             var lever = body.worldCenterOfMass - HandWorld(hand);
             var middle = (speed + Vector3.Cross(spin, lever)) * gain;
+            // Test (Raik, 2026-11-14): no faster than the arm's force over a throw can make it (ClimbContact.MostThrowSpeed).
+            var allowed = ClimbContact.MostThrowSpeed(body.mass) * gain * VrCamera.WorldScale;
+            var wanted = middle.magnitude;
+            middle = Vector3.ClampMagnitude(middle, allowed);
             body.velocity = player.velocity + middle;
             body.angularVelocity = spin;
             if (logs++ < 80)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand throws '{body.name}' ({body.mass:0.0} kg) at {middle.magnitude:0.00} m/s, spinning {spin.magnitude * Mathf.Rad2Deg:0}°/s "
                     + $"(hand {speed.magnitude:0.00} m/s over {ThrowWindow * 1000f:0} ms, held {lever.magnitude:0.00} m from its middle, x{gain:0.00}; "
-                    + $"the last step had {before.magnitude:0.00} m/s, {Vector3.Angle(before, middle):0}° off)");
+                    + $"the last step had {before.magnitude:0.00} m/s, {Vector3.Angle(before, middle):0}° off"
+                    + (wanted > allowed + 0.01f ? $"; the hand's {wanted:0.00} m/s held to {allowed:0.00} by the arm's force)" : ")"));
         }
 
         // From VrCamera.FixedUpdate, before the physics step.
@@ -298,8 +307,94 @@ namespace ShipbreakerVR
             foreach (var hand in Hands) Rethink(hand);
             foreach (var hand in Hands) Slide(hand);
             Glide();
+            var start = Momentum.Begin();
             Pull();
+            Momentum.End(start);
         }
+
+        // Diagnostics for a light part pulled with the hands (Raik: rowing a 60 kg barrel with both arms still gathers
+        // speed, which two bodies pushing each other cannot do): the momentum of body and part together, how much of its
+        // change comes from the pulls here (should be none but what KeepClear takes away), and how much from elsewhere
+        // between two steps (the game, collisions). Logged each second while it lasts, the first few times.
+        private static class Momentum
+        {
+            private static Rigidbody part;
+            private static bool predicted;
+            private static Vector3 expectedBody;
+            private static Vector3 expectedPart;
+            private static Vector3 ours;
+            private static Vector3 onBody;
+            private static Vector3 onPart;
+            private static Vector3 since;
+            private static int steps;
+            private static int touching;
+            private static float nextLog;
+            private static int logs;
+            private static readonly Collider[] Near = new Collider[16];
+
+            // The part and the momentum now, or null without one.
+            public static Vector3? Begin()
+            {
+                part = null;
+                foreach (var hand in Hands)
+                    if (hand.Holding && hand.Movable && !hand.Firm && hand.Body != null) part = hand.Body;
+                if (part == null || logs >= 80)
+                {
+                    predicted = false;
+                    return null;
+                }
+                var body = BodyMass * player.velocity;
+                var held = part.mass * part.velocity;
+                if (predicted)
+                {
+                    // Between two steps: what changed the body's momentum and the part's, apart from the pulls.
+                    onBody += body - expectedBody;
+                    onPart += held - expectedPart;
+                }
+                else
+                {
+                    ours = onBody = onPart = Vector3.zero;
+                    steps = touching = 0;
+                    since = body + held;
+                    nextLog = Time.time + 1f;
+                }
+                steps++;
+                if (Touches()) touching++;
+                return body + held;
+            }
+
+            public static void End(Vector3? start)
+            {
+                if (start == null || part == null) return;
+                expectedBody = BodyMass * player.velocity;
+                expectedPart = part.mass * part.velocity;
+                predicted = true;
+                var total = expectedBody + expectedPart;
+                ours += total - start.Value;
+                if (Time.time < nextLog) return;
+                nextLog = Time.time + 1f;
+                logs++;
+                var way = total.sqrMagnitude > 1e-6f ? total.normalized : Vector3.zero;
+                Plugin.Log.LogInfo($"Climbing momentum: body {BodyMass:0} kg at {player.velocity.magnitude:0.00} m/s, '{part.name}' {part.mass:0} kg at {part.velocity.magnitude:0.00} m/s; "
+                    + $"together {total.magnitude:0.0} kg m/s ({(total - since).magnitude:0.0} changed in a second), from the pulls {ours.magnitude:0.0}; "
+                    + $"from elsewhere on the body {onBody.magnitude:0.0} ({Vector3.Dot(onBody, way):0.0} along the drift), on the part {onPart.magnitude:0.0} ({Vector3.Dot(onPart, way):0.0} along); "
+                    + $"body touching the part in {touching} of {steps} steps");
+                ours = onBody = onPart = Vector3.zero;
+                steps = touching = 0;
+                since = total;
+            }
+
+            // The part within 2 cm of the body's solid sphere.
+            private static bool Touches()
+            {
+                BodyBall(out var center, out var radius);
+                var count = Physics.OverlapSphereNonAlloc(center, radius + 0.02f, Near, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                for (var i = 0; i < count; i++)
+                    if (Near[i].attachedRigidbody == part) return true;
+                return false;
+            }
+        }
+
 
         // A hand flat on a large fixed surface (a hull) while the body turns on with the controls: past SlideAfter degrees
         // from where it took hold, the hold slides along the surface to under the hand, over SlideTime, so the hand comes
@@ -397,6 +492,8 @@ namespace ShipbreakerVR
                     continue;
                 }
                 var moved = hand.Anchor.InverseTransformPoint(hit.point) - hand.Surface;
+                hand.GlideStep = moved;
+                hand.GlideStepAt = Time.fixedTime;
                 hand.Point += moved;
                 hand.Surface += moved;
                 if (glideLogs++ < 10)
@@ -575,7 +672,9 @@ namespace ShipbreakerVR
                     if (!collider.isTrigger || Own(collider)) continue;
                     // A lever turned by hand is held on its grip only (Raik: not in the air over it, as on a wall).
                     var volume = collider.GetComponentInParent<InteractableObject>();
-                    if (volume == null || VrLever.Turnable(volume) || VrNacelle.Is(volume)) continue;
+                    // Nor a device used by its button (an air conditioner, VrButtons): it has a body of its own to hold, and its
+                    // trigger reaches past it (Raik, 2026-11-14: held in the open air near the air conditioner's left edge).
+                    if (volume == null || VrLever.Turnable(volume) || VrNacelle.Is(volume) || VrButtons.PressedByButton(volume)) continue;
                     var distance = (VrUtil.ClosestPoint(collider, at) - at).sqrMagnitude;
                     if (distance >= bestDistance) continue;
                     best = collider;
@@ -691,6 +790,7 @@ namespace ShipbreakerVR
                 if (hand.Holding && !hand.Firm && !hand.Follower && !hand.Free && !Pushes(hand)) pulling++;
             if (pulling == 0)
             {
+                bodySpin = Vector3.zero;
                 foreach (var hand in Hands)
                     if (Pushes(hand)) Push(hand);
                 blocked = false;
@@ -702,6 +802,7 @@ namespace ShipbreakerVR
             var dt = Time.fixedDeltaTime;
             foreach (var hand in Hands)
                 if (Pushes(hand)) Push(hand);
+            Twist(dt, out var twistLeft, out var twistRight);
             var velocity = player.velocity;
             var holdsVelocity = Vector3.zero;
             // Worked out PullPasses times, each from the velocities the pass before left; a part's change at once (Kick),
@@ -715,7 +816,8 @@ namespace ShipbreakerVR
                 {
                     if (!hand.Holding || hand.Firm || hand.Follower || hand.Free || Pushes(hand)) continue;
                     var hold = Hold(hand);
-                    var error = hold - PullPoint(hand);
+                    // Without the twist the body takes (Twist): that turns the body, it does not pull at the part.
+                    var error = hold - PullPoint(hand) - (hand == LeftHand ? twistLeft : hand == RightHand ? twistRight : Vector3.zero);
                     var holdVelocityHere = hand.Body != null ? hand.Body.GetPointVelocity(hold) : Vector3.zero;
                     if (pass == 0) holdsVelocity += holdVelocityHere;
                     // The player's velocity relative to the hold that closes the gap within this step, or softly on a part
@@ -742,6 +844,82 @@ namespace ShipbreakerVR
             pulled = true;
             MoveFirm(dt);
             pushOff = Vector3.Lerp(pushOff, player.velocity - holdVelocity, 1f - Mathf.Exp(-dt / PushOffSmoothing));
+        }
+
+        // Test (Raik, 2026-11-14: with both hands on a 4.8 t part he could turn it by twisting his arms, though he is far
+        // lighter and braced on nothing; the body should turn instead): the hands' pulls turned the part at the holds but
+        // the body, a point, never turned back. Now the twist of the two holds against the two hands (the hands moved
+        // apart crosswise, about their middle) is shared by how hard each turns: the body, BodyTurnInertia about its
+        // middle and its mass about the hands' middle, and the part, its inertia about the hands' middle. The body's
+        // share turns the playspace about the head (TakeSpin, VrBody), closing it within PartPullTime, at most TwistMost;
+        // the pulls leave it out and only turn the part by its own share. A heavy part hardly turns, the body turns
+        // round it; a light one turns as before. Only with both hands pulling at the same part that moves; none of it
+        // stays once they let go (the suit holds the body steady).
+        // Test (Raik, 2026-11-14: holding on and moving to and fro should stay one to one; turning that starts at once is
+        // tiring for many): the twist turns the body only past VrSettings.ClimbTurnDeadzone (crosswise, per hand), and
+        // only with realistic climbing (VrSettings.ClimbTurning). Simple climbing never turns the body. Either way the
+        // pulls leave the body's share of the twist out, so a heavy part is not turned by it.
+        public enum Turning { Einfach, Realistisch }
+
+        private const float BodyTurnInertia = 12f;
+        private const float TwistMost = 2f;
+        private const float TwistLeast = 0.1f;
+        private static Vector3 bodySpin;
+        private static float spinAt;
+        private static float twistLogAt;
+        private static int twistLogs;
+
+        private static bool Twists(Hand hand) =>
+            hand.Holding && hand.Movable && !hand.Firm && !hand.Follower && !hand.Free && hand.Body != null && !Pushes(hand);
+
+        private static void Twist(float dt, out Vector3 left, out Vector3 right)
+        {
+            left = right = Vector3.zero;
+            bodySpin = Vector3.zero;
+            if (!Twists(LeftHand) || !Twists(RightHand) || LeftHand.Body != RightHand.Body) return;
+            var scale = VrCamera.WorldScale;
+            var a = PullPoint(LeftHand);
+            var b = PullPoint(RightHand);
+            var half = (a - b) * 0.5f;
+            if (half.sqrMagnitude < TwistLeast * TwistLeast * scale * scale) return;
+            var apart = ((Hold(LeftHand) - a) - (Hold(RightHand) - b)) * 0.5f;
+            var turn = Vector3.Cross(half, apart) / half.sqrMagnitude;
+            var angle = turn.magnitude;
+            if (angle < 1e-4f) return;
+            var axis = turn / angle;
+            var middle = (a + b) * 0.5f;
+            var part = LeftHand.Body;
+            var frame = part.rotation * part.inertiaTensorRotation;
+            var inPart = Quaternion.Inverse(frame) * axis;
+            var partInertia = Vector3.Dot(Vector3.Scale(part.inertiaTensor, inPart), inPart)
+                + part.mass * Vector3.Cross(part.worldCenterOfMass - middle, axis).sqrMagnitude;
+            var bodyInertia = BodyTurnInertia * scale * scale + BodyMass * Vector3.Cross(player.worldCenterOfMass - middle, axis).sqrMagnitude;
+            var share = partInertia / Mathf.Max(partInertia + bodyInertia, 1e-6f);
+            var crosswise = Vector3.Cross(turn, half);
+            var across = crosswise * share;
+            left = across;
+            right = -across;
+            if (VrSettings.ClimbTurning == null || VrSettings.ClimbTurning.Value != Turning.Realistisch) return;
+            var dead = VrSettings.ClimbTurnDeadzone.Value * 0.01f * scale;
+            var past = crosswise.magnitude - dead;
+            if (past <= 0f) return;
+            var beyond = turn * (past / crosswise.magnitude);
+            bodySpin = Vector3.ClampMagnitude(beyond * share / Mathf.Max(dt, PartPullTime), TwistMost);
+            spinAt = Time.time;
+            if (twistLogs < 40 && Time.time >= twistLogAt && bodySpin.magnitude > 0.05f)
+            {
+                twistLogs++;
+                twistLogAt = Time.time + 1f;
+                Plugin.Log.LogInfo($"Climbing: both hands twist '{part.name}' {part.mass:0} kg: the body turns {bodySpin.magnitude * Mathf.Rad2Deg:0} °/s, "
+                    + $"taking {share * 100f:0}% of it (inertia part {partInertia:0}, body {bodyInertia:0} kg m²)");
+            }
+        }
+
+        // The body's turn from twisting at a held part for this frame (VrBody), about the head; none once it stopped.
+        public static Quaternion TakeSpin(float dt)
+        {
+            if (bodySpin == Vector3.zero || Time.time - spinAt > 0.1f || !VrXr.IsRunning) return Quaternion.identity;
+            return Quaternion.AngleAxis(bodySpin.magnitude * dt * Mathf.Rad2Deg, bodySpin.normalized);
         }
 
         // The velocity without what would carry the body's colliders closer than Clearance to anything ahead within this
@@ -993,6 +1171,15 @@ namespace ShipbreakerVR
             return false;
         }
 
+        // How many hands hold that part.
+        private static int HandsOn(Rigidbody body)
+        {
+            var count = 0;
+            foreach (var hand in Hands)
+                if (hand.Holding && hand.Body == body) count++;
+            return Mathf.Max(1, count);
+        }
+
         // Each firmly held part goes part of the way to where the hand has it, with the body's speed on top.
         private static void MoveFirm(float dt)
         {
@@ -1007,7 +1194,14 @@ namespace ShipbreakerVR
                 if (angle > 180f) angle -= 360f;
                 var center = body.worldCenterOfMass;
                 var wantedCenter = HandWorld(hand) - turn * (Hold(hand) - center);
-                body.velocity = player.velocity + Vector3.ClampMagnitude((wantedCenter - center) * follow / dt, MaxPull * VrCamera.WorldScale);
+                var toHand = Vector3.ClampMagnitude((wantedCenter - center) * follow / dt, MaxPull * VrCamera.WorldScale);
+                // Test (Raik, 2026-11-14: a 10 kg crate flew as fast as the arm moved): the arms speed it up and slow it down
+                // with ClimbContact.ArmForce each at most, so a heavy part lags a quick swing and goes as fast as that force
+                // can make it.
+                var hands = HandsOn(body);
+                var now = body.velocity - player.velocity;
+                var most = ClimbContact.MostAcceleration(body.mass, hands) * VrCamera.WorldScale * dt;
+                body.velocity = player.velocity + now + Vector3.ClampMagnitude(toHand - now, most);
                 body.angularVelocity = Mathf.Abs(angle) < 0.01f || float.IsInfinity(axis.x)
                     ? Vector3.zero
                     : Vector3.ClampMagnitude(axis * (angle * Mathf.Deg2Rad * follow / dt), FirmSpin);
@@ -1235,6 +1429,49 @@ namespace ShipbreakerVR
                 force -= normal * Mathf.Max(Vector3.Dot(force, normal), 0f);
             hand.Body.AddForceAtPosition(force, hold, ForceMode.Force);
             if (!Braced(hand)) player.AddForce(-force / BodyMass, ForceMode.Acceleration);
+            PushLog.Step(hand, force);
+        }
+
+        // Diagnostics only, not for the mod: what a push gives a heavy part each second (Raik: the hoist truck seemed to
+        // move more easily after the barrel fix). Force applied, the acceleration that should give, and the part's real
+        // change of speed.
+        private static class PushLog
+        {
+            private static Rigidbody part;
+            private static Vector3 startVelocity;
+            private static float since;
+            private static float forceSum;
+            private static float forceMost;
+            private static int steps;
+            private static int logs;
+
+            public static void Step(Hand hand, Vector3 force)
+            {
+                if (logs >= 60) return;
+                var body = hand.Body;
+                if (body != part)
+                {
+                    part = body;
+                    startVelocity = body.velocity;
+                    since = Time.time;
+                    forceSum = forceMost = 0f;
+                    steps = 0;
+                }
+                steps++;
+                forceSum += force.magnitude;
+                forceMost = Mathf.Max(forceMost, force.magnitude);
+                if (Time.time - since < 1f) return;
+                var seconds = Time.time - since;
+                var mean = forceSum / steps;
+                logs++;
+                Plugin.Log.LogInfo($"Climbing push: {hand.Name} hand on '{body.name}' {body.mass:0} kg, {(Braced(hand) ? "braced" : "against the other part")}, "
+                    + $"force {mean:0} N on average (most {forceMost:0}, limit {BracedPush.Limit(body.mass):0}), so at most {mean / body.mass:0.00} m/s²; "
+                    + $"its speed {startVelocity.magnitude:0.00} -> {body.velocity.magnitude:0.00} m/s, {(body.velocity - startVelocity).magnitude / seconds:0.00} m/s² measured, drag {body.drag:0.00}");
+                startVelocity = body.velocity;
+                since = Time.time;
+                forceSum = forceMost = 0f;
+                steps = 0;
+            }
         }
 
         // The rigidbody that hand holds on to, if any (VrArmPush leaves it alone).
@@ -1524,6 +1761,14 @@ namespace ShipbreakerVR
             {
                 if (hand.Input != input || !hand.Holding || hand.Anchor == null) continue;
                 point = Vector3.Lerp(Hold(hand), hand.Anchor.TransformPoint(hand.Surface), (Time.time - hand.HeldAt) / SnapTime);
+                // Raik (2026-11-14: a hand that glides on after taking hold at speed stutters): the glide moves the hold
+                // once per physics step (20 ms), the body is drawn in between (interpolated), the headset shows 90 frames a
+                // second. The hand is drawn in between the same way: the last step's way less how far into the next.
+                if (hand.PinAnchor == null && hand.GlideStepAt == Time.fixedTime && hand.GlideStep != Vector3.zero)
+                {
+                    var into = Time.fixedDeltaTime > 0f ? Mathf.Clamp01((Time.time - Time.fixedTime) / Time.fixedDeltaTime) : 1f;
+                    point -= hand.Anchor.TransformVector(hand.GlideStep) * (1f - into);
+                }
                 return true;
             }
             return false;
@@ -1651,6 +1896,23 @@ namespace ShipbreakerVR
         private const float TinyGain = 1.5f;
 
         public static float ThrowGain(float mass) => Mathf.Lerp(TinyGain, 1f, Mathf.InverseLerp(TinyMass, NormalMass, mass));
+
+        // Test (Raik, 2026-11-14: a 10 kg crate could be thrown far too hard; an arm has some 150 to 180 N): each arm
+        // pushes a part it holds with at most ArmForce newtons, and moves its own ArmMass (forearm, hand and the suit's
+        // glove) along with it. So a firmly held part speeds up or slows down by at most ArmForce / (mass + ArmMass) per
+        // arm, and a throw, that force over a stroke of ThrowStroke meters, gives it at most
+        // sqrt(2 * ArmForce * ThrowStroke / (mass + ArmMass)): about 4.5 m/s for 10 kg, 8.9 m/s for 1 kg.
+        public const float ArmForce = 170f;
+        public const float ArmMass = 2f;
+        public const float ThrowStroke = 0.7f;
+
+        // Meters per second squared, at world scale 1.
+        public static float MostAcceleration(float mass, int hands) =>
+            ArmForce * hands / (Mathf.Max(mass, 0f) + ArmMass * hands);
+
+        // Meters per second, at world scale 1.
+        public static float MostThrowSpeed(float mass) =>
+            Mathf.Sqrt(2f * ArmForce * ThrowStroke / (Mathf.Max(mass, 0f) + ArmMass));
 
         // Gliding along a surface held (VrClimb.Glide): from this speed on, in m/s at world scale 1; braking evenly, at
         // least LeastBrake m/s², harder when faster, so it stops within GlideMostWay meters.

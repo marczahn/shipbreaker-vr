@@ -117,8 +117,8 @@ instead, and flying pauses until you let go.
 | Look up or down | Push the right stick up or down. |
 | Slow down | Depends on **Thrust mode**: in *Simple* you stop by yourself when you let go of the trigger, in *Standard* the game's automatic brake slows you after a few seconds, in *Realistic* nothing slows you. With a free left hand you can also use the game's brake with a button on the left controller; the picture above and the explanation of **Controller flying** in the VR options name it. |
 | Open the pause menu | Press the right stick (also in the station). |
-| Put the view back in front of me | Press the left stick (or F4 on the keyboard). |
-| Get upright again | Hold the left stick in for half a second. You turn back to level, keeping your heading. |
+| Put the view back in front of me | Hold the left stick in for 1.2 seconds (or press F4 on the keyboard). |
+| Get upright again | Press the left stick briefly while flying. You turn back to level, keeping your heading. |
 | Find the point where thrust starts | Watch the small **flight globe** in the visor while you hold the trigger: its center is where you pressed it, its surface is full thrust. |
 | Fly while the grapple holds something big | Fly and brake as usual. If you fly farther away than the grapple reaches, the rope snaps. |
 
@@ -140,6 +140,8 @@ menus still work with the controllers.
 | Hold on and climb | Squeeze the grip of a hand without a tool close to anything: the hand holds on there. Move the hand to pull yourself along, with both hands hand over hand, or with one while the other works a tool. Light parts come to your hand instead; the station and fixed hulls stay put. Let go while moving the hand to push off. |
 | Collect something | Hold a thing to collect (cable, circuit board, data cassette, ...) behind your left shoulder (a light buzz tells you are there) and let go: it goes into your backpack, with a rattle and a short buzz. |
 | Push heavy parts | Switch on **Extended physics** in the VR options. Hold on to something fixed with one hand and move a heavy part with the other, or hold two heavy parts and push them apart. The heavier a part, the slower it gets going. |
+| Turn myself on a big part | Set **Climbing** to *Realistic*, hold the same big part with both hands and twist your arms against each other: past the **Climbing dead zone** you turn round the part, the more the heavier it is. With *Simple* you never turn. |
+| Put out a fire on my suit | Shake each hand hard back and forth, about seven quick strokes, until its flames go out. Left alone, the fire keeps burning. |
 | Work an airlock console or a switch | Look at it and press A or X. The grip only holds on, also there: near a switch your hand closes on it as a fist. |
 | Use a tool with the left hand | Take it with the left hand. X and Y then do what A and B do, and flying pauses until you let go. |
 | Feel what I do | The controllers vibrate: the cutter's hand while it cuts, the grapple's hand while it holds a part (stronger the closer the part comes to slipping away), and a short buzz for each tether end. |
@@ -230,6 +232,8 @@ The ones you are most likely to need:
 - **Turning:** smooth turning, or turning in steps of 30, 45 or 90 degrees, which is easier on the stomach.
 - **Thrust mode:** *Simple*, *Standard* or *Realistic*, see [Playing](#playing). *Simple* is the easiest to start
   with if you get lost in free flight.
+- **Climbing** and **Climbing dead zone:** with both hands on the same big part, *Simple* keeps you level, *Realistic*
+  turns you round the part when you twist your arms past the dead zone (4 cm by default).
 - **Turn around:** whether the right stick turns you around your head's up (where you look) or your body's, so that
   looking up or down does not tip the turn.
 - **Head height** and **Head sideways:** move your view if you seem to sit too low or off to one side in the suit.
@@ -274,7 +278,7 @@ The graphics card does not keep up there. Lower **Station resolution** in the VR
 Use **Head height** and **Head sideways** in the VR options.
 
 ### The menu or the view is behind me or off to the side
-Press the **left stick**, press **F4**, or choose **Center view** in the VR options. This puts everything in front of
+Hold the **left stick** in for 1.2 seconds, press **F4**, or choose **Center view** in the VR options. This puts everything in front of
 you again.
 
 ### I keep drifting or cannot stop

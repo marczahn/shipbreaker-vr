@@ -39,7 +39,7 @@ namespace ShipbreakerVR
                 // Without VR the game turns the body as usual.
                 synced = false;
                 // Turns from the motion controllers act on the body directly; the camera follows it.
-                body.MoveRotation(vr != null ? VrControls.TakeTurn() * gameTarget : gameTarget);
+                body.MoveRotation(vr != null ? VrClimb.TakeSpin(Time.deltaTime) * VrControls.TakeTurn() * gameTarget : gameTarget);
                 return;
             }
 
@@ -81,7 +81,7 @@ namespace ShipbreakerVR
             var headAsBody = head * Quaternion.Inverse(cameraOffset);
             var playspace = vr.Playspace * headAsBody * mouse * Quaternion.Inverse(headAsBody);
             // Roll and turns from the motion controllers act in world space.
-            playspace = VrControls.TakeTurn() * playspace;
+            playspace = VrClimb.TakeSpin(Time.deltaTime) * VrControls.TakeTurn() * playspace;
 
             // In VR, "Reorient" levels the playspace instead of the body.
             if (LynxControls.Instance != null && LynxControls.Instance.GetInputIsPressed(GameplayActions.GameplayActionSet.Reorient))

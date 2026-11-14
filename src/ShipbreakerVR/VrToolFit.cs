@@ -76,8 +76,22 @@ namespace ShipbreakerVR
             return true;
         }
 
-        // While adjusting: the other hand's grip blocks drawing from the belt with that hand.
-        public static bool Blocks(XRNode node) => Adjusting != null && Adjusting.Value && node != VrHand.GameToolHand.Node && HoldsModel();
+        // While adjusting: the other hand's grip blocks drawing from the belt and holding on with that hand, only while it
+        // drags the tool or is near it (Raik, 2026-11-14: with a charge in the left hand the right one could not hold the
+        // wall; that charge has no fit to adjust at all).
+        public static bool Blocks(XRNode node) => Adjusting != null && Adjusting.Value && node != VrHand.GameToolHand.Node && HoldsModel()
+            && (dragged != null || NearTool(node));
+
+        // Within this of the tool hand's grip, the other hand's grip takes the tool to adjust it.
+        private const float AdjustReach = 0.2f;
+        private static bool farGrip;
+
+        private static bool NearTool(XRNode node)
+        {
+            var hand = node == XRNode.LeftHand ? VrInput.Left : VrInput.Right;
+            var tool = node == XRNode.LeftHand ? VrInput.Right : VrInput.Left;
+            return hand.TryGetPosition(out var at) && tool.TryGetPosition(out var toolAt) && Vector3.Distance(at, toolAt) <= AdjustReach;
+        }
 
         // From VrToolModels.Place, before the tool is placed, with the tool hand's wrist and aim pose in tracking space: the
         // other hand's grip drags the tool while adjusting.
@@ -88,6 +102,10 @@ namespace ShipbreakerVR
             var held = fit != null && other.Grip.Down;
             var pressed = held && !gripping;
             gripping = held;
+            // A grip pressed away from the tool holds on to the wall instead (Blocks), until it is let go.
+            if (pressed) farGrip = dragged == null && !NearTool(other.Node);
+            if (!held) farGrip = false;
+            if (farGrip) held = pressed = false;
             if (dragged != null && (dragged != fit || !held))
             {
                 Store(dragged);
@@ -113,7 +131,7 @@ namespace ShipbreakerVR
             fit.Offset = Quaternion.Inverse(aim) * (position - wrist) * scale;
         }
 
-        private static bool HoldsModel() => VrAim.Active && Find(VrToolModels.Equipped, false) != null;
+        private static bool HoldsModel() => VrAim.Active && Find(VrToolModels.Equipped, VrHand.GameToolHand.IsLeft) != null;
 
         private static Fit Find(EquipmentController.Equipment tool, bool left)
         {

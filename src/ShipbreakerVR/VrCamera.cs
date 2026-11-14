@@ -340,10 +340,13 @@ namespace ShipbreakerVR
             var cam = gameCamera.transform;
             // At a monitor in the Hab the head goes in front of it instead of right up to it (VrHab.Monitor).
             var position = cam.position;
-            if (VrHabWalk.Walking) position = VrHabWalk.Head(WorldScale);
+            // Test (Raik, 2026-11-14: a smaller world scale put the head in the Hab's ceiling): the eye height over the
+            // floor is the same in the room whatever the world scale, so floor and ceiling stay as far away as they look
+            // at scale 1; only how far the head moves from there goes with the scale.
+            if (VrHabWalk.Walking) position = VrHabWalk.Head(1f);
             else if (FollowsHab && VrHab.Monitor != null) position = VrHab.MonitorViewpoint(VrHab.Monitor, position);
             // Each spot's height was made for the flat game: 32 cm apart between two spots where one stands.
-            else if (FollowsHab && !Lying(cam.rotation)) position = VrHab.Standing(position, WorldScale);
+            else if (FollowsHab && !Lying(cam.rotation)) position = VrHab.Standing(position, 1f);
             VrHab.StandShift = FollowsHab && VrHab.Monitor == null && !VrHabWalk.Walking ? position - cam.position : Vector3.zero;
             // The Hab camera swings between bed, kitchen and terminal; the playspace turns along, but only around the
             // vertical axis: its pitch would tilt the room. Looking up or down is up to the head. Except lying in bed.
@@ -390,28 +393,39 @@ namespace ShipbreakerVR
             return forward.sqrMagnitude < 1e-8f ? Quaternion.identity : Quaternion.LookRotation(forward, Vector3.up);
         }
 
-        private const float StickHold = 0.5f;
+        // The left stick (Raik, 2026-11-14): a short press, let go before CenterHold, straightens up in flight; held for
+        // CenterHold it centers the view, the same as F4, everywhere. After centering, nothing more until it is let go
+        // and pressed again. Nothing else uses that press (VrMenuInput sends no L3).
+        private const float CenterHold = 1.2f;
+        private float centerPressedAt = -1f;
+        private bool centerDone;
 
-        private float stickPressedAt = -1f;
-
-        // Pressing the left stick: the same as F4. Nothing else uses that press (VrMenuInput sends no L3).
         private void UpdateCenterPress()
         {
-            if (!VrXr.IsRunning) return;
-            var stick = VrInput.Left.StickClick;
-            if (stick.Pressed) stickPressedAt = Time.unscaledTime;
-            if (stickPressedAt < 0f) return;
-            // Flying, holding it straightens up instead, so centering waits for the stick to come back.
-            if (VrControls.Flying && stick.Down)
+            if (!VrXr.IsRunning)
             {
-                if (Time.unscaledTime - stickPressedAt < StickHold) return;
-                stickPressedAt = -1f;
-                VrFlightComfort.StartAligning();
+                centerPressedAt = -1f;
                 return;
             }
-            stickPressedAt = -1f;
-            Plugin.Log.LogInfo("Left stick pressed: centering the view");
-            Recenter(true);
+            var stick = VrInput.Left.StickClick;
+            if (stick.Pressed)
+            {
+                centerPressedAt = Time.unscaledTime;
+                centerDone = false;
+            }
+            if (centerPressedAt < 0f) return;
+            var held = Time.unscaledTime - centerPressedAt;
+            if (stick.Down)
+            {
+                if (centerDone || held < CenterHold) return;
+                centerDone = true;
+                VrInput.Left.Buzz(0.5f, 0.06f);
+                Plugin.Log.LogInfo($"Left stick held {held:0.0} s: centering the view");
+                Recenter(true);
+                return;
+            }
+            if (!centerDone && held < CenterHold && VrControls.Flying) VrFlightComfort.StartAligning();
+            centerPressedAt = -1f;
         }
 
         // "Center view" in the VR options: the same as F4.
