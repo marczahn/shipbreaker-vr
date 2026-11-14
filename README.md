@@ -233,7 +233,7 @@ The ones you are most likely to need:
 - **Thrust mode:** *Simple*, *Standard* or *Realistic*, see [Playing](#playing). *Simple* is the easiest to start
   with if you get lost in free flight.
 - **Climbing** and **Climbing dead zone:** with both hands on the same big part, *Simple* keeps you level, *Realistic*
-  turns you round the part when you twist your arms past the dead zone (4 cm by default).
+  turns you round the part when you twist your arms past the dead zone (3 cm by default).
 - **Turn around:** whether the right stick turns you around your head's up (where you look) or your body's, so that
   looking up or down does not tip the turn.
 - **Head height** and **Head sideways:** move your view if you seem to sit too low or off to one side in the suit.

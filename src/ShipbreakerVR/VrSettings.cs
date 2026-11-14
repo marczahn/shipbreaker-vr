@@ -245,7 +245,7 @@ namespace ShipbreakerVR
                 ("How the body moves when both hands hold the same large part that moves. Simple: you move along it but never turn or swing round; you stay level as you are. Realistic: twisting your arms against each other turns you round the part as far as its weight lets you, past a dead zone (Climbing dead zone).",
                     "Wie sich der Körper bewegt, wenn beide Hände dasselbe große Teil halten, das sich bewegen kann. Einfach: Du bewegst dich daran entlang, drehst und schwenkst dich aber nie; du bleibst in deiner Ebene. Realistisch: Verdrehst du die Arme gegeneinander, drehst du dich um das Teil, so weit sein Gewicht es zulässt, erst nach einer Totzone (Hangeln-Totzone)."),
                 (new[] { "Simple", "Realistic" }, new[] { "Einfach", "Realistisch" }));
-            ClimbTurnDeadzone = Bind("Steuerung", "HangelnTotzone", 4f,
+            ClimbTurnDeadzone = Bind("Steuerung", "HangelnTotzone", 3f,
                 ("With realistic climbing: how far the hands have to be twisted against each other, crosswise, before the body starts to turn. Within it you hold on and move to and fro as before.",
                     "Beim realistischen Hangeln: wie weit die Hände quer gegeneinander verdreht sein müssen, bevor sich der Körper dreht. Darunter hältst du dich fest und bewegst dich wie bisher hin und her."),
                 "In centimeters.", Between(0f, 15f));
