@@ -1173,11 +1173,20 @@ namespace ShipbreakerVR
         private static bool Twists(Hand hand) =>
             hand.Holding && hand.Movable && !hand.Firm && !hand.Follower && !hand.Free && hand.Body != null && !Pushes(hand);
 
+        // Raik, 0.30.1: the same on fixed holds (the hull, a pillar, two handles; they may be two different things): what
+        // is held does not turn, so the body takes all of the twist past the dead zone, with realistic climbing only.
+        // Within the dead zone, and with simple climbing, the hands pull as before.
+        private static bool TwistsFixed(Hand hand) =>
+            hand.Holding && !hand.Movable && !hand.Firm && !hand.Follower && !hand.Free && !hand.Stretch && hand.PinAnchor == null
+            && hand.Anchor != null && !Pushes(hand);
+
         private static void Twist(float dt, out Vector3 left, out Vector3 right)
         {
             left = right = Vector3.zero;
             bodySpin = Vector3.zero;
-            if (!Twists(LeftHand) || !Twists(RightHand) || LeftHand.Body != RightHand.Body) return;
+            var onFixed = TwistsFixed(LeftHand) && TwistsFixed(RightHand);
+            if (!onFixed && (!Twists(LeftHand) || !Twists(RightHand) || LeftHand.Body != RightHand.Body)) return;
+            if (onFixed && (VrSettings.ClimbTurning == null || VrSettings.ClimbTurning.Value != Turning.Realistisch)) return;
             var scale = VrCamera.WorldScale;
             var a = PullPoint(LeftHand);
             var b = PullPoint(RightHand);
@@ -1187,6 +1196,25 @@ namespace ShipbreakerVR
             var turn = Vector3.Cross(half, apart) / half.sqrMagnitude;
             var angle = turn.magnitude;
             if (angle < 1e-4f) return;
+            if (onFixed)
+            {
+                var twisted = Vector3.Cross(turn, half);
+                var overDead = twisted.magnitude - VrSettings.ClimbTurnDeadzone.Value * 0.01f * scale;
+                if (overDead <= 0f) return;
+                var cut = overDead / twisted.magnitude;
+                // The pulls leave out what the body turns away; the rest they pull as ever.
+                left = twisted * cut;
+                right = -left;
+                bodySpin = Vector3.ClampMagnitude(turn * cut / Mathf.Max(dt, PartPullTime), TwistMost);
+                spinAt = Time.time;
+                if (twistLogs < 40 && Time.time >= twistLogAt && bodySpin.magnitude > 0.05f)
+                {
+                    twistLogs++;
+                    twistLogAt = Time.time + 1f;
+                    Plugin.Log.LogInfo($"Climbing: both hands twist against fixed holds ('{LeftHand.Collider?.name}', '{RightHand.Collider?.name}'): the body turns {bodySpin.magnitude * Mathf.Rad2Deg:0} °/s");
+                }
+                return;
+            }
             var axis = turn / angle;
             var middle = (a + b) * 0.5f;
             var part = LeftHand.Body;
