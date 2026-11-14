@@ -256,13 +256,13 @@ namespace ShipbreakerVR.Tests
             Assert.InRange(way, expected * 0.9f, expected * 1.1f);
         }
 
-        // Raik, 0.30.1: realistic climbing, the arms push the 100 kg body with 300 N each over an arm's length.
+        // Raik, 0.30.1: realistic climbing, the arms push the 100 kg body with 500 N each over an arm's length.
         [Theory]
-        [InlineData(1, 1.73f)]
-        [InlineData(2, 2.45f)]
+        [InlineData(1, 2.24f)]
+        [InlineData(2, 3.16f)]
         public void PushingOffOverAnArmLengthGivesWhatTheArmsCan(int hands, float expected)
         {
-            var acceleration = ClimbContact.GloveBrake(300f, hands, 1f);
+            var acceleration = ClimbContact.GloveBrake(500f, hands, 1f);
             var velocity = Vector3.zero;
             var way = 0f;
             var steps = 0;
@@ -292,6 +292,22 @@ namespace ShipbreakerVR.Tests
                 way += (before + velocity.x) * 0.5f * Step;
             }
             Assert.InRange(way, expected * 0.95f, expected * 1.05f);
+        }
+
+        // Hand over hand: the hand going back along the body at 2 m/s keeps the body going at 2 m/s, gap or not.
+        [Fact]
+        public void HandOverHandKeepsTheBodysSpeed()
+        {
+            var wanted = ClimbContact.KeepToHold(Vector3.zero, new Vector3(-2f, 0f, 0f), Step, 5f, 10f);
+            Assert.Equal(2f, wanted.x, 3);
+        }
+
+        // The hand held still against the body: nothing but the gap counts, which pulls the body back to the hold.
+        [Fact]
+        public void AHandHeldStillDrawsTheBodyBackToTheHold()
+        {
+            var wanted = ClimbContact.KeepToHold(new Vector3(-0.2f, 0f, 0f), Vector3.zero, Step, 5f, 10f);
+            Assert.Equal(-ClimbContact.MostApproach(0.2f, 5f), wanted.x, 3);
         }
 
         [Fact]

@@ -256,13 +256,13 @@ namespace ShipbreakerVR
                     "Wie stark eine Hand bremst, die an der Hülle oder einer anderen festen Fläche zugreift, während du darauf entlanggleitest. Zwei Hände bremsen doppelt so stark. 180 N (1,8 m/s²) halten dich aus 1 m/s nach 28 cm an, aus 3 m/s nach 2,5 m."),
                 "In newtons.", Between(25f, 2000f));
             // Raik, 0.30.1: the body's inertia with realistic climbing.
-            ArmPull = Bind("Steuerung", "Armkraft", 300f,
-                ("With realistic climbing: how hard each arm pulls or pushes your body (100 kg) on a fixed hold, so you speed up only as fast as your arms can make you. 300 N is 3 m/s² a hand; pushing off over an arm's length you reach about 1.7 m/s with one hand and 2.4 m/s with both.",
-                    "Beim realistischen Hangeln: wie stark jeder Arm deinen Körper (100 kg) an einem festen Halt zieht oder schiebt, du wirst also nur so schnell, wie deine Arme dich machen. 300 N sind 3 m/s² pro Hand; stößt du dich über eine Armlänge ab, erreichst du mit einer Hand etwa 1,7 m/s, mit beiden 2,4 m/s."),
+            ArmPull = Bind("Steuerung", "Armkraft", 500f,
+                ("With realistic climbing: how hard each arm speeds your body (100 kg) up on a fixed hold, pulling or pushing off; only your body, parts you move keep their own force. 500 N is 5 m/s² a hand; pushing off over an arm's length you reach about 2.2 m/s with one hand and 3.2 m/s with both, and hand over hand you keep your speed and can push it on.",
+                    "Beim realistischen Hangeln: wie stark jeder Arm deinen Körper (100 kg) an einem festen Halt beschleunigt, beim Ziehen und Abstoßen; nur deinen Körper, Teile bewegst du weiter mit ihrer eigenen Kraft. 500 N sind 5 m/s² pro Hand; stößt du dich über eine Armlänge ab, erreichst du mit einer Hand etwa 2,2 m/s, mit beiden 3,2 m/s, und Hand über Hand behältst du dein Tempo und kannst weiter zulegen."),
                 "In newtons.", Between(50f, 1500f));
             CatchForce = Bind("Steuerung", "Abfangkraft", 900f,
-                ("With realistic climbing: how hard a hand that takes hold stops your body (100 kg). The hand stays put at once, the body glides on a little and is drawn back. 900 N: about 6 cm from 1 m/s, 22 cm from 2 m/s, 57 cm from 3.2 m/s; two hands half of that.",
-                    "Beim realistischen Hangeln: wie stark eine Hand, die zugreift, deinen Körper (100 kg) abfängt. Die Hand steht sofort, der Körper gleitet kurz nach und wird zurückgezogen. 900 N: etwa 6 cm aus 1 m/s, 22 cm aus 2 m/s, 57 cm aus 3,2 m/s; mit zwei Händen die Hälfte."),
+                ("With realistic climbing: how hard a hand that takes hold stops your body (100 kg), as far as you hold the hand still against your body; move it back along with your body and you keep your speed. The hand stays put at once, the body glides on a little and is drawn back. 900 N: about 6 cm from 1 m/s, 22 cm from 2 m/s; too fast to stop within half a meter (about 3 m/s with one hand), the hand is torn off.",
+                    "Beim realistischen Hangeln: wie stark eine Hand, die zugreift, deinen Körper (100 kg) abfängt, so weit du die Hand gegenüber dem Körper stillhältst; nimmst du sie mit dem Körper nach hinten mit, behältst du dein Tempo. Die Hand steht sofort, der Körper gleitet kurz nach und wird zurückgezogen. 900 N: etwa 6 cm aus 1 m/s, 22 cm aus 2 m/s; zu schnell, um innerhalb eines halben Meters zu halten (mit einer Hand etwa 3 m/s), reißt die Hand ab."),
                 "In newtons.", Between(100f, 5000f));
             // Extended world physics (the key's old name kept, so the setting survives the rename).
             BracedPush = Bind("Steuerung", "SchwereTeileSchieben", false,
