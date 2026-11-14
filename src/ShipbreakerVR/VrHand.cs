@@ -72,7 +72,7 @@ namespace ShipbreakerVR
 
         // Free to hold on (VrClimb): nothing in the hand, not at the belt, where the grip draws a tool, and not fitting a
         // tool (VrToolFit, where the other hand's grip moves the tool).
-        public bool Free => State == HandState.Empty && Zone == VrToolBelt.Zone.None && !VrToolFit.Blocks(Node);
+        public bool Free => State == HandState.Empty && Zone == VrToolBelt.Zone.None && !VrToolFit.Blocks(Node) && !VrToolSupport.Claims(this);
 
         // ---- Bringing the state up to date with the game ----
 
