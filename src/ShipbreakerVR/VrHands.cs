@@ -76,6 +76,18 @@ namespace ShipbreakerVR
         // knuckles as far as they need to, at most MostBack degrees; from there on the hand folds over onto the surface
         // (Fold) until it lies flat. The wall is looked for up to WallReach from the wrist.
         private const float FlatFrom = 0f;
+        // Test (Raik, 2026-11-14): a flat hand follows what lies under its palm. PalmGrid points over the palm (from the
+        // heel to the knuckles, from the index to the little finger) look for a surface from PalmLook behind the palm out
+        // to PalmFind in front of it; the hand lies on the average of what they find, each weighed less the further it lies,
+        // so over an edge it turns over as the palm goes over it. The turn follows within about SurfaceTurnTime.
+        private const int PalmGrid = 3;
+        private const float PalmLook = 0.03f;
+        private const float PalmFind = 0.04f;
+        private const float SurfaceTurnTime = 0.04f;
+        // A surface the hand would be deeper in than IntoAtMost is a plane drawn on past its edge, not one it touches
+        // (the log, 2026-11-14: hands thrown 20 cm by it); at its back or side the hand is pushed out at most BackPushAtMost.
+        private const float IntoAtMost = 0.1f;
+        private const float BackPushAtMost = 0.04f;
         private const float FlatRelease = 0.01f;
         private const float MostBack = 30f;
         private const float WallReach = 0.25f;
@@ -156,6 +168,10 @@ namespace ShipbreakerVR
             public float WallDepth;
             public bool Pressed;
             public float Press;
+            // The surface the flat hand lies on (Touch, PalmSurface): its own, not OutOfWalls', turned over smoothly as the
+            // palm passes onto another surface.
+            public Vector3 FlatPoint;
+            public Vector3 FlatNormal;
             // The hand's shape in its own axes (Frame), as last posed before bending back: each finger's knuckle and tip
             // (index to little), for Touch to try the hand against a wall before it is posed.
             public readonly Vector3[] ShapeKnuckle = new Vector3[4];
@@ -485,6 +501,7 @@ namespace ShipbreakerVR
                 var palm = frame * Vector3.right * side;
                 OverEdges(arm, palm, across, side, flatness);
                 Claw(arm, palm, across, side, flatness * arm.Claw);
+                KeepOut(arm, across, side, flatness);
                 for (var i = 0; i < arm.Thumb.Length; i++) LiftThumb(arm, i, palm, flatness, ThumbIn + ClawThumb * arm.Claw);
                 ThumbInLine(arm, palm, flatness, true);
                 LogThumb(arm, palm, flatness);
@@ -613,6 +630,8 @@ namespace ShipbreakerVR
             // Edges are looked for only once the hand lies on the surface: while it still goes there (GripBlend, Press),
             // every finger found nothing under it and curled (the log, 2026-11-13: all four at once on each hold).
             var arrived = arm.Pressed ? arm.Press >= 1f : arm.GripBlend >= 1f;
+            VrHandShape.Gather(arm.Wrist.position, WallReach * VrCamera.WorldScale, body);
+            var saved = new Quaternion[3];
             for (var finger = 0; finger < arm.Joints.Length / 3; finger++)
             {
                 var over = false;
@@ -629,16 +648,73 @@ namespace ShipbreakerVR
                     }
                     arm.Edge[index] = Mathf.MoveTowards(arm.Edge[index], over ? 1f : 0f, Time.unscaledDeltaTime / EdgeTime);
                 }
-                for (var k = 0; k < 3; k++)
+                // Test (Raik, 2026-11-14: the ring finger went into the held wall, curled over an edge that was none): the
+                // curl only as far as the finger stays out of what it lies on, ClawPress at most.
+                var first = finger * 3;
+                if (arm.Edge[first] <= 0f && arm.Edge[first + 1] <= 0f && arm.Edge[first + 2] <= 0f) continue;
+                if (!Chain(arm, finger)) continue;
+                for (var k = 0; k < 3; k++) saved[k] = arm.Joints[first + k].localRotation;
+                var reach = 1f;
+                if (EdgeCurl(arm, finger, saved, across, side, share, 1f))
                 {
-                    var index = finger * 3 + k;
-                    var joint = arm.Joints[index];
-                    if (joint == null || arm.Edge[index] <= 0f) continue;
-                    joint.rotation = Quaternion.AngleAxis(side * EdgeBend[k] * arm.Edge[index] * share, across) * joint.rotation;
-                    arm.Set[index] = joint.localRotation;
+                    var low = 0f;
+                    for (var step = 0; step < 6; step++)
+                    {
+                        var middle = (low + reach) * 0.5f;
+                        if (EdgeCurl(arm, finger, saved, across, side, share, middle)) reach = middle; else low = middle;
+                    }
+                    reach = low;
+                    if (curlLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} {arm.Joints[first].name} curls over an edge only {reach * 100f:0}%, the surface is under it");
                 }
+                EdgeCurl(arm, finger, saved, across, side, share, reach);
+                for (var k = 0; k < 3; k++) arm.Set[first + k] = arm.Joints[first + k].localRotation;
             }
         }
+
+        private static int curlLogs;
+
+        // The finger curled over an edge by that share of its Edge, from saved; true when it is then in something.
+        private static bool EdgeCurl(Arm arm, int finger, Quaternion[] saved, Vector3 across, float side, float share, float reach)
+        {
+            for (var k = 0; k < 3; k++) arm.Joints[finger * 3 + k].localRotation = saved[k];
+            for (var k = 0; k < 3; k++)
+            {
+                var index = finger * 3 + k;
+                if (arm.Edge[index] <= 0f) continue;
+                var joint = arm.Joints[index];
+                joint.rotation = Quaternion.AngleAxis(side * EdgeBend[k] * arm.Edge[index] * share * reach, across) * joint.rotation;
+            }
+            return FingerIn(arm, finger, ClawPress * VrCamera.WorldScale);
+        }
+
+        // Test (Raik, 2026-11-14): a finger of the flat hand still in the surface (the ring finger on a held wall) bends
+        // back at its knuckle until it is out, ClawPress at most, up to MostBack.
+        private static void KeepOut(Arm arm, Vector3 across, float side, float share)
+        {
+            if (share <= 0f) return;
+            var allowed = ClawPress * VrCamera.WorldScale;
+            for (var finger = 0; finger < 4; finger++)
+            {
+                if (!Chain(arm, finger) || !FingerIn(arm, finger, allowed)) continue;
+                var root = arm.Joints[finger * 3];
+                var start = root.localRotation;
+                var least = 0f;
+                var most = MostBack;
+                for (var step = 0; step < 6; step++)
+                {
+                    var middle = (least + most) * 0.5f;
+                    root.localRotation = start;
+                    root.rotation = Quaternion.AngleAxis(-side * middle, across) * root.rotation;
+                    if (FingerIn(arm, finger, allowed)) least = middle; else most = middle;
+                }
+                root.localRotation = start;
+                root.rotation = Quaternion.AngleAxis(-side * most * share, across) * root.rotation;
+                arm.Set[finger * 3] = root.localRotation;
+                if (keepLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} {root.name} lifted {most:0}° out of the surface it lies on");
+            }
+        }
+
+        private static int keepLogs;
 
         // Each finger with the surface under it (not curled over an edge) bends by ClawBend, scaled down until its tip's
         // capsule (VrHandShape) presses at most ClawPress into the surface, so it adapts to how far off it the hand is.
@@ -771,14 +847,16 @@ namespace ShipbreakerVR
         private static int backLogs;
 
         // Whether any bone of the finger, as a capsule, is in something.
-        private static bool FingerIn(Arm arm, int finger)
+        private static bool FingerIn(Arm arm, int finger) => FingerIn(arm, finger, 0.001f);
+
+        private static bool FingerIn(Arm arm, int finger, float allowed)
         {
             var radius = VrHandShape.FingerRadius[finger] * VrCamera.WorldScale;
             for (var k = 0; k < 3; k++)
             {
                 var joint = arm.Joints[finger * 3 + k];
                 var next = k < 2 ? arm.Joints[finger * 3 + k + 1] : joint.GetChild(0);
-                if (VrHandShape.Capsule(joint.position, next.position, radius, out _) > 0.001f) return true;
+                if (VrHandShape.Capsule(joint.position, next.position, radius, out _) > allowed) return true;
             }
             return false;
         }
@@ -1158,7 +1236,21 @@ namespace ShipbreakerVR
             var pressed = false;
             var empty = state == HandState.Empty && arm.Driven && arm.Wrist != null;
             if (empty) VrHandShape.Gather(wrist, WallReach * scale, arm.Wrist.root);
-            if (empty && arm.ShapeKnown && Wall(arm, wrist, frame, side, out var point, out var normal))
+            var stays = false;
+            if (empty && arm.ShapeKnown && arm.Pressed && PalmSurface(arm, wrist, frame, side, out var under, out var underNormal))
+            {
+                // Lying flat: on what lies under the palm, while the controller's palm still faces it and is near it.
+                var facing = Vector3.Dot(frame * Vector3.right * side, -underNormal);
+                var gap = Vector3.Dot(wrist + frame * (new Vector3(side * PalmThickness, 0f, PalmLength) * scale) - under, underNormal);
+                stays = facing > PressFacing - 0.15f && gap < (FlatFrom + FlatRelease) * scale;
+                if (stays)
+                {
+                    pressed = true;
+                    arm.FlatNormal = Vector3.Slerp(arm.FlatNormal, underNormal, 1f - Mathf.Exp(-Time.unscaledDeltaTime / SurfaceTurnTime)).normalized;
+                    arm.FlatPoint = under;
+                }
+            }
+            if (!stays && empty && arm.ShapeKnown && Wall(arm, wrist, frame, side, out var point, out var normal))
             {
                 var facing = Vector3.Dot(frame * Vector3.right * side, -normal);
                 var gap = Vector3.Dot(wrist + frame * (new Vector3(side * PalmThickness, 0f, PalmLength) * scale) - point, normal);
@@ -1174,12 +1266,13 @@ namespace ShipbreakerVR
                 {
                     var least = Mathf.Min(Tips(arm, wrist, frame, side, 0f, point, normal), Rest(arm, wrist, frame, side, point, normal));
                     least = Mathf.Min(least, Vector3.Dot(wrist + frame * (new Vector3(-side * 0.012f, 0f, PalmLength * 0.5f) * scale) - point, normal));
-                    if (least < 0f) wrist -= normal * least;
+                    if (least < 0f && least > -BackPushAtMost * scale) wrist -= normal * least;
                 }
                 if (pressed)
                 {
-                    arm.WallPoint = point;
-                    arm.WallNormal = normal;
+                    // From the surface found, at once when the hand did not lie flat before.
+                    arm.FlatPoint = point;
+                    arm.FlatNormal = arm.Press > 0f ? Vector3.Slerp(arm.FlatNormal, normal, 1f - Mathf.Exp(-Time.unscaledDeltaTime / SurfaceTurnTime)).normalized : normal;
                 }
             }
             if (pressed && !arm.Pressed && pressLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} hand lies flat on a surface");
@@ -1189,9 +1282,9 @@ namespace ShipbreakerVR
             arm.Press = Mathf.MoveTowards(arm.Press, pressed ? 1f : 0f, Time.unscaledDeltaTime / CurlTime);
             if (arm.Press > 0f)
             {
-                frame = Quaternion.Slerp(frame, FlatFrame(arm, frame, arm.WallNormal), arm.Press);
-                var off = Vector3.Dot(wrist - arm.WallPoint, arm.WallNormal);
-                wrist += arm.WallNormal * ((PalmThickness * scale - off) * arm.Press);
+                frame = Quaternion.Slerp(frame, FlatFrame(arm, frame, arm.FlatNormal), arm.Press);
+                var off = Vector3.Dot(wrist - arm.FlatPoint, arm.FlatNormal);
+                wrist += arm.FlatNormal * ((PalmThickness * scale - off) * arm.Press);
             }
             if (empty && arm.Press < 1f) PalmOut(arm, ref wrist, frame, side);
         }
@@ -1219,6 +1312,7 @@ namespace ShipbreakerVR
                     var hit = WallHits[i];
                     if (hit.distance <= 0f || Vector3.Dot(hit.normal, way) >= 0f || !VrHandShape.Stops(hit.collider, body)) continue;
                     var least = Mathf.Min(Tips(arm, wrist, frame, side, 0f, hit.point, hit.normal), Rest(arm, wrist, frame, side, hit.point, hit.normal));
+                    if (least < -IntoAtMost * VrCamera.WorldScale) continue;
                     if (least < best)
                     {
                         best = least;
@@ -1228,6 +1322,59 @@ namespace ShipbreakerVR
                 }
             }
             return best < (FlatFrom + FlatRelease + 0.03f) * VrCamera.WorldScale;
+        }
+
+        private static readonly RaycastHit[] PalmHits = new RaycastHit[16];
+
+        // What lies under the flat hand's palm (Test, Raik 2026-11-14): PalmGrid by PalmGrid points over the palm, as the
+        // hand lies now (FlatNormal), each looking from PalmLook behind the palm towards it for the nearest surface out to
+        // PalmFind in front of it. Their points and outward directions averaged, each weighed less the further in front of
+        // the palm it lies. False when none finds one.
+        private static bool PalmSurface(Arm arm, Vector3 wrist, Quaternion frame, float side, out Vector3 point, out Vector3 normal)
+        {
+            point = Vector3.zero;
+            normal = Vector3.zero;
+            if (arm.FlatNormal.sqrMagnitude < 0.5f) return false;
+            var scale = VrCamera.WorldScale;
+            var flat = FlatFrame(arm, frame, arm.FlatNormal);
+            var palm = -arm.FlatNormal;
+            var body = arm.Wrist.root;
+            var length = Mathf.Max(arm.ShapeKnuckle[1].z, 0.05f * scale);
+            var across0 = arm.ShapeKnuckle[0].y;
+            var across3 = arm.ShapeKnuckle[3].y;
+            // The palm's plane: the flat wrist lies PalmThickness off the surface.
+            var plane = arm.FlatPoint + arm.FlatNormal * (PalmThickness * scale);
+            var onPlane = wrist - arm.FlatNormal * Vector3.Dot(wrist - plane, arm.FlatNormal);
+            var look = PalmLook * scale;
+            var reach = look + (PalmThickness + PalmFind) * scale;
+            var total = 0f;
+            for (var a = 0; a < PalmGrid; a++)
+                for (var b = 0; b < PalmGrid; b++)
+                {
+                    var along = Mathf.Lerp(0.2f, 1f, a / (PalmGrid - 1f)) * length;
+                    var across = Mathf.Lerp(across0, across3, b / (PalmGrid - 1f));
+                    var start = onPlane + flat * new Vector3(0f, across, along) - palm * look;
+                    var count = Physics.RaycastNonAlloc(start, palm, PalmHits, reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                    var nearest = -1;
+                    for (var i = 0; i < count; i++)
+                    {
+                        var hit = PalmHits[i];
+                        if (hit.distance <= 0f || Vector3.Dot(hit.normal, palm) >= 0f || !VrHandShape.Stops(hit.collider, body)) continue;
+                        if (nearest < 0 || hit.distance < PalmHits[nearest].distance) nearest = i;
+                    }
+                    if (nearest < 0) continue;
+                    var found = PalmHits[nearest];
+                    var beyond = found.distance - look - PalmThickness * scale;
+                    var weight = Mathf.Clamp01(1f - beyond / (PalmFind * scale));
+                    if (weight <= 0f) continue;
+                    point += found.point * weight;
+                    normal += found.normal * weight;
+                    total += weight;
+                }
+            if (total <= 0f || normal.sqrMagnitude < 1e-6f) return false;
+            point /= total;
+            normal.Normalize();
+            return true;
         }
 
         // The fingers' tips' least distance off a wall, less their radius, with the fingers bent back at the knuckles.
