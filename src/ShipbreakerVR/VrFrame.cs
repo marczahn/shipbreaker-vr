@@ -53,6 +53,7 @@ namespace ShipbreakerVR
             ("charges afloat", VrChargeByHand.Track),
             ("charge disarm", VrChargeDisarm.Track),
             ("charge count", VrChargeCount.Update),
+            ("ai node", VrAiNode.Update),
             ("pickup layer", VrPickupLayer.Update),
             ("thumb skin", VrThumbSkin.Update),
             ("vr options entry", VrOptionsMenu.Update),

@@ -175,7 +175,8 @@ namespace ShipbreakerVR
             control = VrClimb.PartInteractable(collider);
             if (Usable(control)) return control;
             var part = collider != null ? collider.GetComponentInParent<StructurePart>() : null;
-            if (part == null || !part.name.StartsWith(Collectible)) return null;
+            // Experiment: an AI node comes off by hand the same way (VrAiNode).
+            if (part == null || !(part.name.StartsWith(Collectible) || VrAiNode.Is(part))) return null;
             // Not one already off: its own body is the part, or it hangs on one made here with its group.
             var body = collider.attachedRigidbody;
             if (body == null || body.transform == part.transform || Made.Contains(body)) return null;
@@ -183,6 +184,9 @@ namespace ShipbreakerVR
         }
 
         // A thing to use, fixed on the ship: removed when used, not a lever or switch, on no loose part.
+        // A body the hand is pulling off or that flies into it (VrAiNode waits with it).
+        public static bool Busy(Rigidbody body) => body != null && (Left.Body == body || Right.Body == body);
+
         public static bool Usable(InteractableObject control) =>
             control != null && control.isActiveAndEnabled && control.DestroyOnComplete && !VrLever.Turnable(control)
             && !VrNacelle.Is(control) && !VrClimb.Loose(control);
@@ -197,9 +201,10 @@ namespace ShipbreakerVR
                 return false;
             }
             // Heavy things (the large coolant and fuel tanks, Raik 2026-11-19) come off with the grapple only, as in the
-            // game, with the game's own body and mass: the hand holds them as part of the wall.
+            // game, with the game's own body and mass: the hand holds them as part of the wall. The AI nodes come off by
+            // hand whatever they weigh, as they did when Raik tried the collection (VrAiNode).
             var mass = GameMass(root);
-            if (mass > HandMost)
+            if (mass > HandMost && !VrAiNode.Is(root))
             {
                 Refused.Add(control);
                 if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{root.name}' weighs {mass:0} kg, more than {HandMost:0} kg: only the grapple takes it off");
@@ -424,7 +429,7 @@ namespace ShipbreakerVR
         private static bool sparksSought;
 
         // What the game plays as the part's joint breaks: its own break sound and effect, and the grapple's sound.
-        private static void Break(Transform root, Rigidbody ship, Vector3 at, Vector3 normal)
+        internal static void Break(Transform root, Rigidbody ship, Vector3 at, Vector3 normal)
         {
             var joint = root.GetComponent<BreakableJointComponent>();
             var asset = joint != null ? joint.BreakableJointAsset : null;
