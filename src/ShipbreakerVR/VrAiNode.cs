@@ -6,6 +6,7 @@ using HarmonyLib;
 using Unity.Collections;
 using Unity.Entities;
 using UnityEngine;
+using UnityEngine.Rendering.HighDefinition;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 
@@ -67,6 +68,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> Fine;
         public static ConfigEntry<float> GrappleTime;
         public static ConfigEntry<string> LargePlace;
+        public static ConfigEntry<float> BenchLight;
 
         // Nodes put in the backpack, removed once the game's salvage accounting had a moment to see them destroyed.
         private const float Settle = 1f;
@@ -119,18 +121,26 @@ namespace ShipbreakerVR
                 "Experiment: an AI node put in the backpack is fined by the game as one thrown into the processor (at the end of the shift).");
             LargePlace = VrSettings.Bind("Experimente", "KiKnotenPlatzGross", "",
                 "Experiment: where the large round AI node rests in the Hab, 'x; y; z' in the room's axes as a hand snapshot writes them (y above the floor), its bottom's middle. Empty: on the white crate's top as measured.");
+            BenchLight = VrSettings.Bind("Experimente", "KiKnotenAufhellung", 40f,
+                "Experiment: a small light above the AI node on the workbench, in lumen, as the lamps above the bench light the bench (0: none).");
         }
 
         // A place written 'x; y; z' (decimal point or comma), in the room's axes with y above the floor, in the world.
-        private static bool TryPlace(ConfigEntry<string> entry, Transform room, float floor, out Vector3 place)
+        private static bool TryPlace(ConfigEntry<string> entry, Transform room, float floor, out Vector3 place) =>
+            TryPlace(entry != null ? entry.Value : null, room, floor, out place, out _);
+
+        // The same with an optional fourth number: a turn about the room's up, in degrees (0 when left out).
+        internal static bool TryPlace(string text, Transform room, float floor, out Vector3 place, out float turn)
         {
             place = default;
-            var parts = entry != null ? entry.Value.Split(';') : new string[0];
-            if (parts.Length != 3) return false;
-            var v = new float[3];
-            for (var i = 0; i < 3; i++)
+            turn = 0f;
+            var parts = text != null ? text.Split(';') : new string[0];
+            if (parts.Length != 3 && parts.Length != 4) return false;
+            var v = new float[4];
+            for (var i = 0; i < parts.Length; i++)
                 if (!float.TryParse(parts[i].Trim().Replace(',', '.'), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out v[i])) return false;
             place = room.TransformPoint(new Vector3(v[0], v[1] + floor, v[2]));
+            turn = v[3];
             return true;
         }
 
@@ -573,6 +583,7 @@ namespace ShipbreakerVR
                         node.transform.position += up * (Vector3.Dot(spot, up) - low);
                     }
                     Shown.Add(node);
+                    VrContactShadow.Add(node, mesh, up, "the long AI node");
                     var at = room.InverseTransformPoint(node.transform.position);
                     text.Add($"'{kind}' leaning at ({at.x:0.00}, {at.y - floor:0.00}, {at.z:0.00})");
                     continue;
@@ -585,10 +596,36 @@ namespace ShipbreakerVR
                 var bottom = Lowest(node, mesh, up);
                 node.transform.position += up * (restOn - bottom);
                 Shown.Add(node);
+                // Not under the large round one: it lies flat on the crate and throws no shadow worth one, and the
+                // patch's corners showed square around its round foot (Raik 2026-11-16).
+                if (kind != AllKinds[1]) VrContactShadow.Add(node, mesh, up, "the AI node on the bench");
+                if (kind == AllKinds[0]) Brighten(node, up);
                 var local = room.InverseTransformPoint(node.transform.position);
                 text.Add($"'{kinds[i]}' at ({local.x:0.00}, {local.y - floor:0.00}, {local.z:0.00}), {drawn.bounds.size.x:0.00} x {drawn.bounds.size.y:0.00} x {drawn.bounds.size.z:0.00} m");
             }
             Plugin.Log.LogInfo($"AI node: in the Hab {string.Join("; ", text)}");
+        }
+
+        // The node on the workbench a little brighter (Raik 2026-11-16, pictures: the bench, lit by the lamps above it,
+        // is brighter than the node, which only takes the room's baked light). A small light above it, no shadows, its
+        // reach not much beyond the node.
+        private const float BenchLightHeight = 0.3f;
+        private const float BenchLightRange = 0.6f;
+
+        private static void Brighten(GameObject node, Vector3 up)
+        {
+            if (BenchLight == null || BenchLight.Value <= 0f) return;
+            var lamp = new GameObject("ShipbreakerVR AI Node light");
+            lamp.transform.SetParent(node.transform, false);
+            lamp.transform.position = node.GetComponent<MeshRenderer>().bounds.center + up * BenchLightHeight;
+            var data = lamp.AddHDLight(HDLightTypeAndShape.Point);
+            data.SetIntensity(BenchLight.Value, LightUnit.Lumen);
+            data.SetRange(BenchLightRange);
+            data.SetColor(new Color(1f, 0.96f, 0.9f));
+            data.EnableShadows(false);
+            // Not in the Hab's haze: lit, it showed as a bright point in the air (Raik 2026-11-16).
+            data.volumetricDimmer = 0f;
+            Plugin.Log.LogInfo($"AI node: the one on the bench lit by a small light of {BenchLight.Value:0} lumen");
         }
 
         // The long one upright on the floor, its back leaning on the black crate's side (Raik 2026-11-15: pictures looking

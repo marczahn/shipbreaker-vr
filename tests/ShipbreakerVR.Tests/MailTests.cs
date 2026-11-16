@@ -22,6 +22,18 @@ namespace ShipbreakerVR.Tests
             }
         }
 
+        [Theory]
+        [InlineData("Models/Radio.obj")]
+        [InlineData("Models/Radio.png")]
+        public void TheRadiosModelIsInTheDll(string name)
+        {
+            using (var stream = typeof(VrModMail).Assembly.GetManifestResourceStream(name))
+            {
+                Assert.NotNull(stream);
+                Assert.True(stream.Length > 100000);
+            }
+        }
+
         [Fact]
         public void ReadsSenderSubjectAndBodyFromPlainText()
         {

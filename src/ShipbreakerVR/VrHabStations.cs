@@ -19,6 +19,8 @@ namespace ShipbreakerVR
         // After a screen closed, A and X wait this long before they open anything: the game is still on its way back to
         // the bed, and the exit opened from there went nowhere, no walking, no screens (Raik).
         private const float InputLock = 1.5f;
+        // The collected radio (VrRadioMusic): this near, and looked at more closely than the terminal beside it.
+        private const float RadioReach = 1.5f;
         private const string HomeSpot = "BedSitting_Virtual_Camera";
         private const string ExitSpot = "Exit_Virtual_Camera";
 
@@ -36,6 +38,7 @@ namespace ShipbreakerVR
         private static Station exit;
         private static NavigationOption home;
         private static Station near;
+        private static bool nearRadio;
         private static TextMeshProUGUI prompt;
         private static string target;
         private static bool opened;
@@ -80,15 +83,26 @@ namespace ShipbreakerVR
         public static void Update(Transform head, float scale)
         {
             if (home == null) return;
-            var next = Nearest(head, scale);
-            if (next != near)
+            var next = Nearest(head, scale, out var nextAngle);
+            var radio = VrRadio.InHab;
+            var radioNow = RadioInView(head, scale, radio, out var radioAngle) && (next == null || radioAngle < nextAngle);
+            if (radioNow) next = null;
+            if (next != near || radioNow != nearRadio)
             {
                 near = next;
+                nearRadio = radioNow;
                 // In front of the head, as one may stand turned away from the canvas's place.
-                if (near != null && VrUi.Instance != null) VrUi.Instance.Recenter();
-                Show(near != null ? $"[A] {near.Name}" : "");
+                if ((near != null || nearRadio) && VrUi.Instance != null) VrUi.Instance.Recenter();
             }
+            Show(nearRadio ? RadioPrompt() : near != null ? $"[A] {near.Name}" : "");
             if (Time.unscaledTime < lockedUntil) return;
+            if (nearRadio)
+            {
+                if (VrInput.Right.Primary.Pressed) VrRadioMusic.Next(radio);
+                else if (VrInput.Right.Secondary.Pressed) VrRadioMusic.Off();
+                else if (exit != null && VrInput.Left.Primary.Pressed) Open(exit);
+                return;
+            }
             if (near != null && VrInput.Right.Primary.Pressed) Open(near);
             else if (exit != null && VrInput.Left.Primary.Pressed) Open(exit);
         }
@@ -141,6 +155,7 @@ namespace ShipbreakerVR
         {
             Done();
             near = null;
+            nearRadio = false;
             Show("");
             HideNavigation(false);
         }
@@ -160,9 +175,23 @@ namespace ShipbreakerVR
             closing = false;
         }
 
-        private static Station Nearest(Transform head, float scale)
+        private static string RadioPrompt() => VrRadioMusic.On
+            ? $"[A] {VrOptions.L("Next song", "Nächstes Lied")}    [B] {VrOptions.L("Radio off", "Radio aus")}"
+            : $"[A] {VrOptions.L("Radio on", "Radio einschalten")}";
+
+        private static bool RadioInView(Transform head, float scale, Transform radio, out float angle)
+        {
+            angle = float.MaxValue;
+            if (radio == null) return false;
+            var way = radio.TransformPoint(VrRadioModel.Body.center) - head.position;
+            angle = Vector3.Angle(head.forward, way);
+            return way.magnitude <= RadioReach * scale && angle <= Cone;
+        }
+
+        private static Station Nearest(Transform head, float scale, out float angle)
         {
             Station best = null;
+            angle = float.MaxValue;
             var bestDistance = float.MaxValue;
             var controller = VrHab.Controller;
             foreach (var station in stations)
@@ -172,6 +201,7 @@ namespace ShipbreakerVR
                 if (way.magnitude > station.Reach * scale || way.magnitude >= bestDistance || Vector3.Angle(head.forward, way) > Cone) continue;
                 bestDistance = way.magnitude;
                 best = station;
+                angle = Vector3.Angle(head.forward, way);
             }
             return best;
         }

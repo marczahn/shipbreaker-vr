@@ -20,6 +20,8 @@
   <ItemGroup>
     <!-- The mod's own mails as plain text (VrModMail), built into the DLL -->
     <EmbeddedResource Include="Mails\*.txt" LogicalName="Mails/%(Filename)%(Extension)" />
+    <!-- The radio of the collection campaign (VrRadioModel), Raik's own model -->
+    <EmbeddedResource Include="Models\Radio.obj;Models\Radio.png" LogicalName="Models/%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
@@ -52,6 +54,7 @@
     <Reference Include="Unity.Entities" HintPath="$(ManagedDir)\Unity.Entities.dll" Private="false" />
     <Reference Include="Unity.Collections" HintPath="$(ManagedDir)\Unity.Collections.dll" Private="false" />
     <Reference Include="Unity.Mathematics" HintPath="$(ManagedDir)\Unity.Mathematics.dll" Private="false" />
+    <Reference Include="Unity.Transforms" HintPath="$(ManagedDir)\Unity.Transforms.dll" Private="false" />
     <Reference Include="Unity.Addressables" HintPath="$(ManagedDir)\Unity.Addressables.dll" Private="false" />
     <Reference Include="Unity.ResourceManager" HintPath="$(ManagedDir)\Unity.ResourceManager.dll" Private="false" />
     <Reference Include="Carbon.Localization.Core" HintPath="$(ManagedDir)\Carbon.Localization.Core.dll" Private="false" />
