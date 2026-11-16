@@ -307,6 +307,11 @@ namespace ShipbreakerVR
         private static void Throw(Hand hand, Rigidbody body)
         {
             if (body == null || player == null || body.isKinematic || !HandSpeed(hand, out var speed, out var spin)) return;
+            // Letting go turns and moves the hand a little by itself; below these the release puts nothing in, above them
+            // only what goes beyond (Raik 2026-11-16: the radio, held 28 cm from its middle, flew off from a hand at rest,
+            // a 3° wrist turn while opening times the lever).
+            speed = Beyond(speed, ReleaseDrift * VrCamera.WorldScale);
+            spin = Beyond(spin, ReleaseTurn * Mathf.Deg2Rad);
             var gain = ClimbContact.ThrowGain(body.mass);
             var before = body.velocity - player.velocity;
             var lever = body.worldCenterOfMass - HandWorld(hand);
@@ -322,6 +327,16 @@ namespace ShipbreakerVR
                     + $"(hand {speed.magnitude:0.00} m/s over {ThrowWindow * 1000f:0} ms, held {lever.magnitude:0.00} m from its middle, x{gain:0.00}; "
                     + $"the last step had {before.magnitude:0.00} m/s, {Vector3.Angle(before, middle):0}° off"
                     + (wanted > allowed + 0.01f ? $"; the hand's {wanted:0.00} m/s held to {allowed:0.00} by the arm's force)" : ")"));
+        }
+
+        private const float ReleaseDrift = 0.05f;   // m/s
+        private const float ReleaseTurn = 60f;      // °/s
+
+        // A vector shortened by floor, zero when shorter.
+        private static Vector3 Beyond(Vector3 v, float floor)
+        {
+            var length = v.magnitude;
+            return length <= floor ? Vector3.zero : v * ((length - floor) / length);
         }
 
         // From VrCamera.FixedUpdate, before the physics step.
