@@ -12,7 +12,7 @@ namespace ShipbreakerVR
     // ("x y z / pitch yaw roll"). The tool turns with it, and so does the aim, which runs along the barrel. Measuring the
     // flat game's hold left the tools off in both hands, each differently, so they are set in the headset: with
     // "WerkzeugeJustieren" on, the grip of the other hand grabs the tool in the hand and moves it rigidly, and letting go
-    // stores where it is (Adjust). The defaults are where Marc put them; the option stays for anyone whose hands differ.
+    // stores where it is (Adjust). The defaults are where Raik put them; the option stays for anyone whose hands differ.
     internal static class VrToolFit
     {
 
@@ -32,11 +32,13 @@ namespace ShipbreakerVR
             }
         }
 
-        // As Marc fitted them in the headset.
-        private static readonly Fit GrappleRight = new Fit("GreifhakenRechts", "-6.5 12.1 -20.7 / 5.9 1.1 8.6");
-        private static readonly Fit GrappleLeft = new Fit("GreifhakenLinks", "3.7 10.0 -23.2 / 4.9 -0.3 -1.6");
-        private static readonly Fit CutterRight = new Fit("CutterRechts", "1.6 -4.6 -0.5 / 7.0 5.2 10.8");
-        private static readonly Fit CutterLeft = new Fit("CutterLinks", "2.8 -4.9 1.9 / 6.5 6.2 -6.7");
+        // As Raik fitted them in the headset (his config of 2026-11-17, the mod's standard from then on, as he asked).
+        // Before, as Marc had fitted them: grapple "-6.5 12.1 -20.7 / 5.9 1.1 8.6" right and "3.7 10.0 -23.2 / 4.9 -0.3
+        // -1.6" left, cutter "1.6 -4.6 -0.5 / 7.0 5.2 10.8" right and "2.8 -4.9 1.9 / 6.5 6.2 -6.7" left.
+        private static readonly Fit GrappleRight = new Fit("GreifhakenRechts", "-1.3 6.0 -19.1 / 2.0 -3.9 7.0");
+        private static readonly Fit GrappleLeft = new Fit("GreifhakenLinks", "-3.4 10.0 -17.5 / 10.6 10.8 -4.5");
+        private static readonly Fit CutterRight = new Fit("CutterRechts", "-3.2 -4.5 20.5 / -10.0 -8.2 4.3");
+        private static readonly Fit CutterLeft = new Fit("CutterLinks", "4.7 -4.9 18.6 / -9.4 12.0 -5.0");
         // The demo charge hangs on the game's right hand: its fit moves that hand (its wrist) against the controller.
         // Turned 6 degrees anticlockwise as seen from behind (Raik, 2026-11-13: the hand was turned 5 to 7 degrees too far
         // clockwise against the empty hand).

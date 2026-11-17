@@ -177,9 +177,12 @@ interacting, the grapple and the "entity of interest".
   second after the right hand held it closed: the animated wrist and the hand's directions relative to the point at
   rest, mirrored for the left hand) and turned the hand to match; Marc found the tools off in both hands, each
   differently. The measured wrist positions (grapple (-0.25, -0.30, 0.34) m, i.e. the point at (25, 30, -34) cm from the
-  wrist) were the starting values of the fit. Marc set the fit in the headset, and his values are the defaults (grapple
+  wrist) were the starting values of the fit. Marc set the fit in the headset, and his values were the defaults (grapple
   right `-6.5 12.1 -20.7 / 5.9 1.1 8.6`, left `3.7 10.0 -23.2 / 4.9 -0.3 -1.6`; cutter right `1.6 -4.6 -0.5 / 7.0 5.2
-  10.8`, left `2.8 -4.9 1.9 / 6.5 6.2 -6.7`). Meant as temporary, the option stays at his wish, so anyone can fit the
+  10.8`, left `2.8 -4.9 1.9 / 6.5 6.2 -6.7`) until Raik asked for his own fit as the mod's standard (2026-11-17, branch
+  `idea/werkzeug-leine`: grapple right `-1.3 6.0 -19.1 / 2.0 -3.9 7.0`, left `-3.4 10.0 -17.5 / 10.6 10.8 -4.5`; cutter
+  right `-3.2 -4.5 20.5 / -10.0 -8.2 4.3`, left `4.7 -4.9 18.6 / -9.4 12.0 -5.0`). A config that already holds the
+  entries keeps its values: BepInEx writes the defaults into the file. Meant as temporary, the option stays at his wish, so anyone can fit the
   tools to their own hands: with `WerkzeugeJustieren` (VR tab, "Fit tools in the hand"), the grip of the other hand grabs the tool in the hand (press
   above 0.5, release below 0.4) and moves it rigidly with that controller; letting go writes the entry (log `Tool fit:
   <key> grabbed with the <hand> hand` and `Tool fit: <key> = ...`). Meanwhile that grip does not draw from the belt.
