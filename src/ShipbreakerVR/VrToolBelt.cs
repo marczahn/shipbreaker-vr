@@ -36,6 +36,10 @@ namespace ShipbreakerVR
         private const float ShoulderAbove = -0.12f;
         private const float ShoulderBehind = -0.05f;
         private const float ShoulderInside = -0.1f;
+        // The cutter's zone over the right shoulder reaches a little lower and further in than that (Raik, 2026-11-17: it
+        // may be a touch larger); the zone over the left shoulder for stowing (OverLeftShoulder) stays as it was.
+        private const float CutterAbove = -0.17f;
+        private const float CutterInside = -0.15f;
         private const float HelmetReach = 0.22f;
         private const float HelmetSide = 0.06f;
 
@@ -117,7 +121,7 @@ namespace ShipbreakerVR
             }
             if (local.magnitude < HelmetReach && local.x > HelmetSide && local.z > ShoulderBehind) return Zone.Scanner;
             if (local.magnitude < HelmetReach && local.x < -HelmetSide && local.z > ShoulderBehind) return Zone.Flashlight;
-            if (local.y > ShoulderAbove && local.z < ShoulderBehind && local.x > ShoulderInside) return Zone.Cutter;
+            if (local.y > CutterAbove && local.z < ShoulderBehind && local.x > CutterInside) return Zone.Cutter;
             return Zone.None;
         }
 

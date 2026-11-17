@@ -1700,6 +1700,10 @@ namespace ShipbreakerVR
                 var center = body.worldCenterOfMass;
                 var wantedCenter = HandWorld(hand) - turn * (Hold(hand) - center);
                 var toHand = Vector3.ClampMagnitude((wantedCenter - center) * follow / dt, MaxPull * VrCamera.WorldScale);
+                // Experiment (Raik, 2026-11-17, third test of the tools afloat): a tool held by its body went with a swung
+                // hand at up to MaxPull and batted the other tool away at 7.9 m/s, more than the arm can throw its 5 kg at
+                // (ClimbContact.MostThrowSpeed, 5.8 m/s; let go, it was held to that already). Held, it goes no faster.
+                if (VrLooseTools.Owns(body)) toHand = Vector3.ClampMagnitude(toHand, ClimbContact.MostThrowSpeed(body.mass) * VrCamera.WorldScale);
                 // Test (Raik, 2026-11-14: a 10 kg crate flew as fast as the arm moved): the arms speed it up and slow it down
                 // with ClimbContact.ArmForce each at most, so a heavy part lags a quick swing and goes as fast as that force
                 // can make it.

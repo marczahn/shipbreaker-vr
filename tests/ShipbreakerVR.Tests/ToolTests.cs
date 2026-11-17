@@ -81,6 +81,10 @@ namespace ShipbreakerVR.Tests
         [InlineData(-0.15f, 0f, 0.05f, (int)Zone.Flashlight)]
         [InlineData(0f, 0f, 0.5f, (int)Zone.None)]
         [InlineData(-0.3f, 0f, -0.3f, (int)Zone.None)]
+        // The cutter's zone reaches a little lower and further in than the shoulder's bounds.
+        [InlineData(0.2f, -0.15f, -0.2f, (int)Zone.Cutter)]
+        [InlineData(-0.13f, 0.1f, -0.2f, (int)Zone.Cutter)]
+        [InlineData(0.2f, -0.2f, -0.2f, (int)Zone.None)]
         // The zone as a number: the test method is public, the enum internal.
         public void ZoneAroundTheBody(float x, float y, float z, int zone) =>
             Assert.Equal((Zone)zone, VrToolBelt.ZoneAt(new Vector3(x, y, z)));
