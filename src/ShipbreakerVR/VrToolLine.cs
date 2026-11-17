@@ -13,8 +13,10 @@ namespace ShipbreakerVR
     // sun, and dark where something stands between it and the sun.
     // With the tool in the hand the hip reels the line: a little more than the way to the tool is out, the rest wound in.
     // Afloat nothing is wound in, so a tool that comes back leaves its line slack in the room.
-    // A hand can take hold of the line of a tool afloat (Take): the point it holds goes with the hand, the hip reels the
-    // part up to the hand, and the part from the hand to the tool keeps its length, so a pull goes to the tool.
+    // A hand can take hold of a line (Take), both hands of the same one: the points they hold go with the hands, the
+    // hip reels the part up to the first hand, and the parts between the hands and from the last hand to the tool keep
+    // their length, so a pull goes to the tool. With the tool itself in a hand, the line runs through the hand that
+    // holds the line instead: more of it can be drawn out, and the hip winds it in again once it is let go.
     internal static class VrToolLine
     {
         private const int Points = 26;
@@ -23,11 +25,15 @@ namespace ShipbreakerVR
         // In meters at world scale 1.
         private const float Width = 0.007f;
         // In the hand: this share of the way to the tool, and Spare, is out as slack; wound in at Reel per second.
-        private const float Slack = 0.25f;
-        private const float Spare = 0.12f;
+        private const float Slack = 0.15f;
+        private const float Spare = 0.1f;
         private const float Reel = 1.2f;
-        // The share of its own movement the line loses per second.
+        // The share of its own movement the line loses per second: afloat, and on the reel with the tool in the hand,
+        // where the short line took every turn of the wrist as a jerk and its bow flipped from side to side (Raik,
+        // 2026-11-17). There it also drifts towards the feet at Settle per second, so its bow has one side to rest on.
         private const float Loss = 1.4f;
+        private const float LossReeled = 7f;
+        private const float Settle = 0.05f;
         // How stiff it is against bending: each point goes this share of the way towards the middle of its neighbors
         // per second (1 - e^-Stiff dt).
         private const float Stiff = 9f;
@@ -61,11 +67,11 @@ namespace ShipbreakerVR
             public float StepBefore;
             public Mesh Mesh;
             public bool Reels;
-            // The point a hand holds (-1: none), where the hand is, and how much line lies between the hip and the hand
-            // (Near) and between the hand and the tool (Rest).
-            public int Held = -1;
-            public Vector3 HeldAt;
-            public float Near, Rest;
+            // The point each hand holds (left, right; -1: none), where that hand is, and how much line lies between the
+            // hip and the first hand (Near), between the two hands (Mid) and between the last hand and the tool (Rest).
+            public readonly int[] Held = { -1, -1 };
+            public readonly Vector3[] HeldAt = new Vector3[2];
+            public float Near, Mid, Rest;
             // How much of the sun reaches each point (0 in shadow to 1), what it goes towards, and the point asked next.
             public readonly float[] Lit = new float[Points];
             public readonly float[] LitGoal = new float[Points];
@@ -93,7 +99,7 @@ namespace ShipbreakerVR
             if (!show)
             {
                 line.Out = false;
-                line.Held = -1;
+                line.Held[0] = line.Held[1] = -1;
                 return;
             }
             var scale = VrCamera.WorldScale;
@@ -119,52 +125,138 @@ namespace ShipbreakerVR
             // Frames differ in length: the points' last move is scaled to this frame's.
             var ratio = line.StepBefore > 1e-5f ? Mathf.Clamp(dt / line.StepBefore, 0.5f, 2f) : 1f;
             line.StepBefore = dt;
-            var keep = Mathf.Exp(-Loss * dt) * ratio;
+            var keep = Mathf.Exp(-(reels ? LossReeled : Loss) * dt) * ratio;
             var bend = 1f - Mathf.Exp(-Stiff * dt);
-            if (line.Held > 0)
+            var moved = carried * dt;
+            if (reels)
+            {
+                var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+                if (rig != null) moved -= rig.up * (Settle * scale * dt);
+            }
+            Order(line, out var inner, out var outer);
+            if (inner >= 0)
             {
                 // Held in a hand: the hip reels what lies up to the hand, as it does up to a tool in the hand; the rest
-                // keeps its length (drawn no shorter than the way to the tool, should the tool not come along).
-                line.Near = ToolLine.PaidOut(line.Near, (line.HeldAt - hip).magnitude, most, true, Slack, Spare * scale, Reel * scale, dt);
-                var far = Mathf.Max(line.Rest, (end - line.HeldAt).magnitude);
-                line.PaidOut = line.Near + far;
-                line.Line.Step(hip, end, far, line.Held, line.HeldAt, line.Near, line.CarriedBefore, carried * dt, keep, bend, Rounds);
+                // keeps its length (drawn no shorter than the way to the tool, should the tool not come along). With the
+                // tool itself in a hand the line runs through the hand that holds the line instead.
+                var two = outer != inner;
+                line.Near = ToolLine.PaidOut(line.Near, (line.HeldAt[inner] - hip).magnitude, most, true, Slack, Spare * scale, Reel * scale, dt);
+                if (two) line.Mid = Mathf.Max(line.Mid, (line.HeldAt[outer] - line.HeldAt[inner]).magnitude);
+                var far = Mathf.Max(line.Rest, (end - line.HeldAt[outer]).magnitude);
+                if (reels) line.Rest = far;
+                line.PaidOut = line.Near + (two ? line.Mid : 0f) + far;
+                line.Line.Step(hip, end, far, new ToolLine.Hold { Point = line.Held[inner], At = line.HeldAt[inner], Length = line.Near },
+                    two ? new ToolLine.Hold { Point = line.Held[outer], At = line.HeldAt[outer], Length = line.Mid } : ToolLine.Hold.None,
+                    line.CarriedBefore, moved, keep, bend, Rounds);
             }
             else
             {
                 line.PaidOut = ToolLine.PaidOut(line.PaidOut, straight, most, reels, Slack, Spare * scale, Reel * scale, dt);
-                line.Line.Step(hip, end, line.PaidOut, line.CarriedBefore, carried * dt, keep, bend, Rounds);
+                line.Line.Step(hip, end, line.PaidOut, line.CarriedBefore, moved, keep, bend, Rounds);
             }
-            line.CarriedBefore = carried * dt;
+            line.CarriedBefore = moved;
         }
 
-        // A hand at that place takes hold of a tool's line, if the line is within reach of it: rest is how much line
-        // lies from the hand to the tool then.
-        public static bool Take(int index, Vector3 at, float reach, out float rest)
+        // The hands that hold a line, by where they hold it: inner the one nearer to the hip, outer the one nearer to the
+        // tool (the same hand when only one holds it, -1 when none does).
+        private static void Order(Shown line, out int inner, out int outer)
+        {
+            inner = outer = -1;
+            for (var hand = 0; hand < 2; hand++)
+            {
+                if (line.Held[hand] <= 0) continue;
+                if (inner < 0 || line.Held[hand] < line.Held[inner]) inner = hand;
+                if (outer < 0 || line.Held[hand] > line.Held[outer]) outer = hand;
+            }
+        }
+
+        // A hand (0 left, 1 right) at that place takes hold of a tool's line, if the line is within reach of it. The
+        // chain's points are spread anew along the line as it lies, so the hands can take hold again and again, one
+        // beyond the other.
+        public static bool Take(int index, int hand, Vector3 at, float reach)
         {
             var line = Lines[index];
-            rest = 0f;
-            if (!line.Out || line.Held > 0) return false;
-            if (line.Line.Nearest(at, out var point, out rest) > reach) return false;
-            var points = line.Line.At;
-            line.Held = point;
-            line.HeldAt = at;
-            line.Near = Mathf.Max(line.Line.Length() - rest, (at - points[0]).magnitude);
-            line.Rest = rest = Mathf.Max(rest, (points[points.Length - 1] - at).magnitude);
+            if (!line.Out || line.Held[hand] > 0) return false;
+            var chain = line.Line;
+            if (chain.Nearest(at, out var along) > reach) return false;
+            var last = chain.At.Length - 1;
+            var total = chain.Length();
+            var hip = chain.At[0];
+            var end = chain.At[last];
+            var other = 1 - hand;
+            line.HeldAt[hand] = at;
+            if (line.Held[other] > 0)
+            {
+                var otherAlong = chain.Along(line.Held[other]);
+                var beyond = along >= otherAlong;
+                var innerAlong = beyond ? otherAlong : along;
+                var outerAlong = beyond ? along : otherAlong;
+                var innerPoint = Mathf.Clamp(chain.PointAt(innerAlong), 1, last - 2);
+                var outerPoint = Mathf.Clamp(chain.PointAt(outerAlong), innerPoint + 1, last - 1);
+                chain.Spread(innerPoint, innerAlong, outerPoint, outerAlong);
+                line.Held[hand] = beyond ? outerPoint : innerPoint;
+                line.Held[other] = beyond ? innerPoint : outerPoint;
+                line.Mid = Mathf.Max(outerAlong - innerAlong, (at - line.HeldAt[other]).magnitude);
+                if (beyond) line.Rest = Mathf.Max(total - outerAlong, (end - at).magnitude);
+                else line.Near = Mathf.Max(innerAlong, (at - hip).magnitude);
+            }
+            else
+            {
+                var point = Mathf.Clamp(chain.PointAt(along), 1, last - 1);
+                chain.Spread(point, along, -1, 0f);
+                line.Held[hand] = point;
+                line.Mid = 0f;
+                line.Near = Mathf.Max(along, (at - hip).magnitude);
+                line.Rest = Mathf.Max(total - along, (end - at).magnitude);
+            }
             return true;
         }
 
-        // Where the hand that holds a tool's line is now.
-        public static void Carry(int index, Vector3 at) => Lines[index].HeldAt = at;
+        // Where a hand that holds a tool's line is now.
+        public static void Carry(int index, int hand, Vector3 at) => Lines[index].HeldAt[hand] = at;
 
-        public static void Drop(int index) => Lines[index].Held = -1;
+        public static bool Holds(int index, int hand) => Lines[index].Out && Lines[index].Held[hand] > 0;
+
+        // The hand that holds a tool's line nearest to the tool, and how much line lies from it to the tool.
+        public static bool Outer(int index, out int hand, out float rest)
+        {
+            var line = Lines[index];
+            Order(line, out _, out hand);
+            rest = line.Rest;
+            return line.Out && hand >= 0;
+        }
+
+        // A hand lets a tool's line go: its part of the line goes to the hand that still holds it, or to the hip.
+        public static void Drop(int index, int hand)
+        {
+            var line = Lines[index];
+            if (line.Held[hand] <= 0) return;
+            var chain = line.Line;
+            var last = chain.At.Length - 1;
+            var other = 1 - hand;
+            if (line.Held[other] > 0)
+            {
+                if (line.Held[hand] > line.Held[other]) line.Rest += line.Mid;
+                else line.Near += line.Mid;
+                line.Mid = 0f;
+                line.Held[hand] = -1;
+                var along = chain.Along(line.Held[other]);
+                var point = Mathf.Clamp(chain.PointAt(along), 1, last - 1);
+                chain.Spread(point, along, -1, 0f);
+                line.Held[other] = point;
+                return;
+            }
+            line.Held[hand] = -1;
+            line.PaidOut = line.Near + line.Rest;
+            chain.Spread(-1, 0f, -1, 0f);
+        }
 
         public static void Hide()
         {
             foreach (var line in Lines)
             {
                 line.Out = false;
-                line.Held = -1;
+                line.Held[0] = line.Held[1] = -1;
             }
         }
 

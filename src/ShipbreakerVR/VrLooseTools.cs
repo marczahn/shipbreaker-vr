@@ -23,8 +23,9 @@ namespace ShipbreakerVR
     // The line ends on the tool's model, at the lowest place of its shape under the hand that holds it (Fit): where the
     // hand is on the model is taken from the hand itself while it holds the tool, so the tool's fit to the hand
     // (VrToolFit) is in it.
-    // A free hand can take hold of the line of a tool afloat and pull (Haul): the line from the hand to the tool keeps
-    // its length then, so the tool comes along with the hand and flies on towards it when the hand stops.
+    // A free hand can take hold of a line and pull (Haul), both hands of the same one, hand over hand: the line from the
+    // hand nearest to the tool keeps its length then, so a tool afloat comes along with that hand and flies on towards
+    // it when the hand stops. With the tool in one hand the other can take its line as well and draw more of it out.
     // Hands and arms neither stop at a tool afloat nor knock it (VrHands, VrHandShape.Stops, VrArmPush): let go, it is
     // still in the hand, and the arm sent the cutter off at up to 4.7 m/s (the log, 2026-11-17).
     internal static class VrLooseTools
@@ -137,12 +138,14 @@ namespace ShipbreakerVR
             public bool HandKnown, EndKnown;
             public long EndShape;
             public float FitFrom;
-            // The hand that holds its line, how much line lies from that hand to the tool, and the hand against the
-            // player's body with its own speed there, for the physics steps.
-            public VrHand Puller;
+            // The hands that hold its line (left, right), each against the player's body with its own speed there, for
+            // the physics steps; and of them the one nearest to the tool (-1: none), with the line from it to the tool.
+            public readonly bool[] Hauls = new bool[2];
+            public readonly Vector3[] PullFromBody = new Vector3[2], PullSpeed = new Vector3[2];
+            public readonly bool[] PullKnown = new bool[2];
+            public int Outer = -1;
             public float Rest;
-            public Vector3 PullFromBody, PullSpeed;
-            public bool PullKnown, Pulled, Slipped;
+            public bool Pulled, Slipped;
 
             public Tool(EquipmentController.Equipment kind, VrToolBelt.Zone zone, int index, Vector3 hip)
             {
@@ -219,60 +222,78 @@ namespace ShipbreakerVR
 
         // ---- Pulling a tool in by its line ----
 
-        // A free hand that closes its grip at the line of a tool afloat holds the line until the grip opens.
+        // A free hand that closes its grip at a tool's line holds the line until the grip opens: the line of a tool
+        // afloat, or of a tool in the other hand.
         private static void Haul(Tool tool)
         {
-            if (tool.Puller != null)
-            {
-                var hand = tool.Puller;
-                if (!tool.Loose) Drop(tool, null);
-                else if (tool.Slipped) Drop(tool, "the line ran through the hand, the tool does not come");
-                else if (!hand.Input.Grip.Down) Drop(tool, "let go");
-                else if (hand.State != HandState.Empty) Drop(tool, "the hand took something else");
-                return;
-            }
             var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
-            if (!tool.Loose || !Pulling || rig == null) return;
-            foreach (var hand in VrHand.Both)
+            for (var h = 0; h < 2; h++)
             {
-                if (!hand.Input.Grip.Pressed || !hand.Free || Grapple.Puller == hand || Cutter.Puller == hand) continue;
+                var hand = VrHand.Both[h];
+                if (tool.Hauls[h])
+                {
+                    if (!VrToolLine.Holds(tool.Index, h)) Drop(tool, h, "the line is gone");
+                    else if (tool.Slipped && tool.Outer == h) Drop(tool, h, "the line ran through the hand, the tool does not come");
+                    else if (!hand.Input.Grip.Down) Drop(tool, h, "let go");
+                    else if (hand.State != HandState.Empty) Drop(tool, h, "the hand took something else");
+                    continue;
+                }
+                if (!Pulling || rig == null || !hand.Input.Grip.Pressed || !hand.Free || Grapple.Hauls[h] || Cutter.Hauls[h]) continue;
                 if (!hand.Input.TryGetPosition(out var local)) continue;
-                if (!VrToolLine.Take(tool.Index, rig.TransformPoint(local), LineReach * VrCamera.WorldScale, out var rest)) continue;
-                tool.Puller = hand;
-                tool.Rest = rest;
-                tool.PullKnown = tool.Pulled = tool.Slipped = false;
-                tool.PullSpeed = Vector3.zero;
+                if (!VrToolLine.Take(tool.Index, h, rig.TransformPoint(local), LineReach * VrCamera.WorldScale)) continue;
+                tool.Hauls[h] = true;
+                tool.PullKnown[h] = false;
+                tool.PullSpeed[h] = Vector3.zero;
                 hand.Input.Buzz(0.3f, 0.04f);
-                if (logs++ < 160) Plugin.Log.LogInfo($"Loose tools: the {hand.Name} hand takes the {tool.Kind}'s line, {rest / VrCamera.WorldScale:0.00} m of it to the tool");
-                break;
+                VrToolLine.Outer(tool.Index, out _, out var rest);
+                if (logs++ < 200)
+                    Plugin.Log.LogInfo($"Loose tools: the {hand.Name} hand takes the {tool.Kind}'s line{(tool.Hauls[1 - h] ? " as well" : "")}"
+                        + $"{(tool.Loose ? "" : " (the tool is in the other hand)")}, {rest / VrCamera.WorldScale:0.00} m of it from the last hand to the tool");
             }
         }
 
-        private static void Drop(Tool tool, string why)
+        private static void Drop(Tool tool, int h, string why)
         {
-            if (tool.Puller == null) return;
-            if (why != null && logs++ < 160) Plugin.Log.LogInfo($"Loose tools: the {tool.Puller.Name} hand no longer holds the {tool.Kind}'s line ({why})");
-            if (tool.Slipped) tool.Puller.Input.Buzz(0.5f, 0.08f);
-            tool.Puller = null;
-            tool.PullKnown = tool.Pulled = tool.Slipped = false;
-            VrToolLine.Drop(tool.Index);
+            if (!tool.Hauls[h]) return;
+            var hand = VrHand.Both[h];
+            if (why != null && logs++ < 200) Plugin.Log.LogInfo($"Loose tools: the {hand.Name} hand no longer holds the {tool.Kind}'s line ({why})");
+            if (tool.Slipped && tool.Outer == h)
+            {
+                hand.Input.Buzz(0.5f, 0.08f);
+                tool.Slipped = false;
+            }
+            tool.Hauls[h] = false;
+            tool.PullKnown[h] = false;
+            if (tool.Outer == h) tool.Pulled = false;
+            tool.Outer = -1;
+            VrToolLine.Drop(tool.Index, h);
         }
 
-        // Each frame while a hand holds the line: where the hand is against the body and how fast it moves there.
+        // Each frame while hands hold the line: where each is against the body and how fast it moves there, and which
+        // of them is nearest to the tool.
         private static void Carry(Tool tool, Rigidbody player, Transform rig)
         {
-            var hand = tool.Puller;
-            if (hand == null || player == null || rig == null || !hand.Input.TryGetPosition(out var local)) return;
-            var at = rig.TransformPoint(local);
-            var from = at - player.transform.position;
+            if (!tool.Hauls[0] && !tool.Hauls[1])
+            {
+                tool.Outer = -1;
+                return;
+            }
+            if (player == null || rig == null) return;
             var dt = Time.deltaTime;
-            if (tool.PullKnown && dt > 1e-5f)
-                tool.PullSpeed = Vector3.ClampMagnitude(Vector3.Lerp(tool.PullSpeed, (from - tool.PullFromBody) / dt, 0.5f), MostPullSpeed * VrCamera.WorldScale);
-            tool.PullFromBody = from;
-            tool.PullKnown = true;
-            VrToolLine.Carry(tool.Index, at);
+            for (var h = 0; h < 2; h++)
+            {
+                if (!tool.Hauls[h] || !VrHand.Both[h].Input.TryGetPosition(out var local)) continue;
+                var at = rig.TransformPoint(local);
+                var from = at - player.transform.position;
+                if (tool.PullKnown[h] && dt > 1e-5f)
+                    tool.PullSpeed[h] = Vector3.ClampMagnitude(Vector3.Lerp(tool.PullSpeed[h], (from - tool.PullFromBody[h]) / dt, 0.5f), MostPullSpeed * VrCamera.WorldScale);
+                tool.PullFromBody[h] = from;
+                tool.PullKnown[h] = true;
+                VrToolLine.Carry(tool.Index, h, at);
+            }
+            if (!VrToolLine.Outer(tool.Index, out tool.Outer, out tool.Rest)) tool.Outer = -1;
             // The line felt in the hand while it pulls at the tool.
-            if (tool.Pulled) hand.Input.Buzz(0.12f, 0.02f);
+            if (tool.Loose && tool.Pulled && tool.Outer >= 0) VrHand.Both[tool.Outer].Input.Buzz(0.12f, 0.02f);
         }
 
         // ---- Letting go ----
@@ -462,7 +483,7 @@ namespace ShipbreakerVR
             if (!tool.Loose) return;
             tool.Loose = false;
             tool.Taut = false;
-            Drop(tool, null);
+            tool.Pulled = tool.Slipped = false;
             if (tool.Body != null) tool.Body.SetActive(false);
             if (logs++ < 80) Plugin.Log.LogInfo($"Loose tools: {tool.Kind} no longer afloat ({why}) after {Time.unscaledTime - tool.LooseSince:0.0} s");
         }
@@ -511,7 +532,7 @@ namespace ShipbreakerVR
                 }
                 if (inHand) Fit(tool, model, rig);
                 else tool.FitFrom = Time.unscaledTime;
-                if (tool.Loose) Carry(tool, player, rig);
+                Carry(tool, player, rig);
                 if (tool.Loose && (tool.Body.transform.TransformPoint(tool.End) - hip).magnitude > (Length + Lost) * scale)
                     End(tool, "too far off, back onto the body");
                 if (!tool.Loose && !(inHand && LineInHand))
@@ -672,11 +693,12 @@ namespace ShipbreakerVR
                     Plugin.Log.LogInfo($"Loose tools: {tool.Kind}'s line taut at {far / scale:0.00} m, moving apart at {apart:0.00} m/s, impulse {impulse:0.0} kg m/s"
                         + $" (body {(bodyShare > 0f ? $"{1f / bodyShare:0} kg" : "held")})");
                 tool.Taut = taut;
-                if (tool.Puller == null || !tool.PullKnown) continue;
-                // The line in a hand: the same between the tool and that hand, over the line that lies between them.
-                var pulled = Tighten(tool, player, player.position + tool.PullFromBody, player.velocity + tool.PullSpeed, tool.Rest, bodyShare, out far, out apart, out impulse);
-                if (pulled && !tool.Pulled && logs++ < 160)
-                    Plugin.Log.LogInfo($"Loose tools: {tool.Kind} pulled by its line, {far / scale:0.00} m from the hand, hand at {tool.PullSpeed.magnitude:0.00} m/s, moving apart at {apart:0.00} m/s, impulse {impulse:0.0} kg m/s");
+                var outer = tool.Outer;
+                if (outer < 0 || !tool.Hauls[outer] || !tool.PullKnown[outer]) continue;
+                // The line in a hand: the same between the tool and the hand nearest to it, over the line between them.
+                var pulled = Tighten(tool, player, player.position + tool.PullFromBody[outer], player.velocity + tool.PullSpeed[outer], tool.Rest, bodyShare, out far, out apart, out impulse);
+                if (pulled && !tool.Pulled && logs++ < 200)
+                    Plugin.Log.LogInfo($"Loose tools: {tool.Kind} pulled by its line, {far / scale:0.00} m from the {VrHand.Both[outer].Name} hand, hand at {tool.PullSpeed[outer].magnitude:0.00} m/s, moving apart at {apart:0.00} m/s, impulse {impulse:0.0} kg m/s");
                 tool.Pulled = pulled;
                 if (pulled && far - tool.Rest > Slip * scale) tool.Slipped = true;
             }
@@ -750,7 +772,7 @@ namespace ShipbreakerVR
         {
             var text = $"loose tools: {(On ? "on" : "off")}, line {Length:0.#} m";
             foreach (var tool in Tools)
-                text += $", {tool.Kind} {(tool.Loose ? $"afloat{(tool.Taut ? " (line taut)" : "")}{(tool.Puller != null ? $" (line in the {tool.Puller.Name} hand)" : "")}" : "not afloat")}"
+                text += $", {tool.Kind} {(tool.Loose ? $"afloat{(tool.Taut ? " (line taut)" : "")}" : "not afloat")}{(tool.Hauls[0] || tool.Hauls[1] ? $" (line in {(tool.Hauls[0] && tool.Hauls[1] ? "both hands" : tool.Hauls[0] ? "the left hand" : "the right hand")})" : "")}"
                     + (tool.EndKnown ? "" : ", line's end not yet on the model");
             return text;
         }

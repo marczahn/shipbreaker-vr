@@ -25,8 +25,11 @@ namespace ShipbreakerVR.Tests
             line.Lay(hip, tool, new Vector3(0f, -0.02f, 0f));
             for (var i = 0; i < 200; i++) line.Step(hip, tool, 3f, Vector3.zero, Vector3.zero, 0.98f, 0.1f, 14);
             var hand = line.At[5] + new Vector3(0f, 0.03f, 0f);
-            Assert.True(line.Nearest(hand, out var held, out var rest) < 0.05f);
+            Assert.True(line.Nearest(hand, out var along) < 0.05f);
+            Assert.InRange(along, 0.7f, 0.8f);
+            var held = line.PointAt(along);
             Assert.Equal(5, held);
+            var rest = line.Length() - along;
             // The hand goes 0.3 m away from the tool; the tool's end follows it by as much, as the pull would bring it.
             var pulledHand = hand + new Vector3(-0.3f, 0f, 0f);
             var straight = (tool - pulledHand).magnitude;
@@ -41,6 +44,51 @@ namespace ShipbreakerVR.Tests
             var before = 0f;
             for (var i = 0; i < held; i++) before += (line.At[i + 1] - line.At[i]).magnitude;
             Assert.InRange(before, near - 0.03f, near + 0.03f);
+        }
+
+        [Fact]
+        public void HandOverHandTheChainDoesNotRunOutOfPoints()
+        {
+            // 4 m to the tool, the line straight. The hands take it in turn, each beyond the other, six times over.
+            var line = new ToolLine(26);
+            var hip = Vector3.zero;
+            var tool = new Vector3(4f, 0f, 0f);
+            line.Lay(hip, tool, Vector3.zero);
+            var innerAlong = 0.4f;
+            var innerPoint = line.PointAt(innerAlong);
+            line.Spread(innerPoint, innerAlong, -1, 0f);
+            for (var turn = 0; turn < 6; turn++)
+            {
+                var outerAlong = innerAlong + 0.5f;
+                var first = System.Math.Min(System.Math.Max(line.PointAt(innerAlong), 1), 23);
+                var second = System.Math.Min(System.Math.Max(line.PointAt(outerAlong), first + 1), 24);
+                line.Spread(first, innerAlong, second, outerAlong);
+                Assert.InRange(line.Along(first), innerAlong - 0.01f, innerAlong + 0.01f);
+                Assert.InRange(line.Along(second), outerAlong - 0.01f, outerAlong + 0.01f);
+                Assert.InRange(line.Length(), 3.99f, 4.01f);
+                Assert.True(second < 24, $"turn {turn}: the far hand is at the chain's last point");
+                // The near hand lets go; the far one is the near one of the next turn.
+                innerAlong = outerAlong;
+            }
+        }
+
+        [Fact]
+        public void TwoHandsHoldTheLineEachStretchKeepsItsLength()
+        {
+            var line = new ToolLine(26);
+            var hip = Vector3.zero;
+            var tool = new Vector3(3f, 0f, 0f);
+            line.Lay(hip, tool, new Vector3(0f, -0.02f, 0f));
+            line.Spread(4, 0.5f, 9, 1.1f);
+            var left = new ToolLine.Hold { Point = 4, At = new Vector3(0.4f, 0.2f, 0f), Length = 0.6f };
+            var right = new ToolLine.Hold { Point = 9, At = new Vector3(0.9f, 0.2f, 0f), Length = 0.7f };
+            var far = 2.3f;
+            for (var i = 0; i < 300; i++) line.Step(hip, tool, far, left, right, Vector3.zero, Vector3.zero, 0.95f, 0.1f, 14);
+            Assert.True((line.At[4] - left.At).magnitude < 1e-4f);
+            Assert.True((line.At[9] - right.At).magnitude < 1e-4f);
+            Assert.InRange(line.Along(4), 0.57f, 0.63f);
+            Assert.InRange(line.Along(9) - line.Along(4), 0.67f, 0.73f);
+            Assert.InRange(line.Length() - line.Along(9), far - 0.04f, far + 0.04f);
         }
 
         [Fact]
