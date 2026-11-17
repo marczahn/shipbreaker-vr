@@ -33,6 +33,7 @@ namespace ShipbreakerVR
             ("input", VrInput.Update),
             ("tool input", VrToolInput.Update),
             ("loose tools", VrLooseTools.Track),
+            ("cutter idle", VrCutterIdle.Update),
             ("tool support", VrToolSupport.Update),
             ("aim", VrAim.Update),
             ("second aim", VrDualTools.UpdateAim),
