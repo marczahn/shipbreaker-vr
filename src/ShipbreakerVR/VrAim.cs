@@ -634,7 +634,7 @@ namespace ShipbreakerVR
         {
             var text = $"aim with hand: option {VrSettings.AimWithHand.Value}{(PatchReport.HandAimWorks ? "" : " (off, patches incomplete)")}, active {Active}, tool {withTool}";
             if (active) text += $", hand at {VrDiagnostics.Direction(head, aim.transform.position)} {Vector3.Distance(head.position, aim.transform.position):0.00} m, pointing {VrDiagnostics.Direction(head, head.position + aim.transform.forward)}, beam on {beamTarget}, Splitsaw line {cutLineInfo}";
-            return text + "; " + VrHand.Describe() + "; " + VrDualTools.Describe() + CutterModel();
+            return text + "; " + VrHand.Describe() + "; " + VrDualTools.Describe() + "; " + VrLooseTools.Describe() + CutterModel();
         }
 
         // Where the game keeps the cutter's model, for moving the tools into the hand later.

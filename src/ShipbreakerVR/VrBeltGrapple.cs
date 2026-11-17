@@ -89,7 +89,8 @@ namespace ShipbreakerVR
             var gunModel = Gun(gun);
             var rest = GunRest(gun);
             var hanging = heading * Quaternion.Euler(-MuzzleForward, 0f, 0f) * Quaternion.LookRotation(Vector3.down, Vector3.forward);
-            if (gunModel != null && rest != null && VrToolModels.TrackingToWorld(head + heading * BodyAt, hanging, out var at, out var rotation))
+            if (gunModel != null && rest != null && !VrLooseTools.IsLoose(EquipmentController.Equipment.GrappleHook)
+                && VrToolModels.TrackingToWorld(head + heading * BodyAt, hanging, out var at, out var rotation))
             {
                 var modelInGun = Quaternion.Inverse(gunModel.rotation) * model.rotation;
                 Hang(gunModel, rest, Shadow(gun), ShadowRest(gun), at, rotation * Quaternion.Inverse(modelInGun),
@@ -102,7 +103,8 @@ namespace ShipbreakerVR
             var cutterModel = cutter != null ? Cutter(cutter) : null;
             var cutterRest = cutter != null ? CutterRest(cutter) : null;
             var onBack = heading * Quaternion.Euler(0f, 0f, -CutterSlant) * Quaternion.LookRotation(Vector3.down, Vector3.back);
-            if (cutterModel != null && cutterRest != null && VrToolModels.TrackingToWorld(head + heading * CutterGripAt, onBack, out var cutterAt, out var cutterRotation))
+            if (cutterModel != null && cutterRest != null && !VrLooseTools.IsLoose(EquipmentController.Equipment.CuttingTool)
+                && VrToolModels.TrackingToWorld(head + heading * CutterGripAt, onBack, out var cutterAt, out var cutterRotation))
                 Hang(cutterModel, cutterRest, CutterShadow(cutter), CutterShadowRest(cutter), cutterAt, cutterRotation, Vector3.zero);
         }
 
@@ -140,7 +142,32 @@ namespace ShipbreakerVR
             tool.localRotation = Quaternion.Slerp(tool.localRotation, Quaternion.identity, t);
         }
 
-        private static void Remember(Transform point)
+        // Experiment (VrLooseTools): a tool's model and rest points as the game keeps them; false while they are not there.
+        internal static bool Parts(EquipmentController.Equipment kind, out Transform tool, out Transform rest, out Transform shadow, out Transform shadowRest)
+        {
+            tool = rest = shadow = shadowRest = null;
+            if (kind == EquipmentController.Equipment.GrappleHook)
+            {
+                var controller = GameRefs.Gun;
+                if (controller == null) return false;
+                tool = Gun(controller);
+                rest = GunRest(controller);
+                shadow = Shadow(controller);
+                shadowRest = ShadowRest(controller);
+            }
+            else if (kind == EquipmentController.Equipment.CuttingTool)
+            {
+                var controller = GameRefs.Cutter;
+                if (controller == null) return false;
+                tool = Cutter(controller);
+                rest = CutterRest(controller);
+                shadow = CutterShadow(controller);
+                shadowRest = CutterShadowRest(controller);
+            }
+            return tool != null && rest != null;
+        }
+
+        internal static void Remember(Transform point)
         {
             foreach (var m in moved)
                 if (m.Point == point) return;
@@ -182,13 +209,14 @@ namespace ShipbreakerVR
         // longer runs.
         public static void Hide()
         {
+            // A tool afloat keeps its rest points where it floats (VrLooseTools); they go back once it is on the body again.
             foreach (var m in moved)
-                if (m.Point != null)
+                if (m.Point != null && !VrLooseTools.Holds(m.Point))
                 {
                     m.Point.localPosition = m.Position;
                     m.Point.localRotation = m.Rotation;
                 }
-            moved.Clear();
+            moved.RemoveAll(m => m.Point == null || !VrLooseTools.Holds(m.Point));
         }
 
         private static void Release()

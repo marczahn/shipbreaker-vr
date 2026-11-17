@@ -32,6 +32,7 @@ namespace ShipbreakerVR
         {
             ("input", VrInput.Update),
             ("tool input", VrToolInput.Update),
+            ("loose tools", VrLooseTools.Track),
             ("tool support", VrToolSupport.Update),
             ("aim", VrAim.Update),
             ("second aim", VrDualTools.UpdateAim),
@@ -56,6 +57,7 @@ namespace ShipbreakerVR
         {
             ("hitbox", VrHitbox.FixedUpdate),
             ("climbing", VrClimb.FixedUpdate),
+            ("loose tools", VrLooseTools.FixedUpdate),
             ("frame statistics", VrPerformance.FixedStep),
         };
 
@@ -80,6 +82,7 @@ namespace ShipbreakerVR
             ("pull off", VrPullOff.Update),
             ("touch sound", VrTouchSound.Update),
             ("tool models", VrToolModels.Place),
+            ("loose tools", VrLooseTools.Place),
             ("belt grapple", VrBeltGrapple.Update),
         };
 

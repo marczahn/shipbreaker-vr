@@ -65,7 +65,18 @@ namespace ShipbreakerVR
             public Vector3 Center;
             public Vector3 Half;
             public Quaternion Turn;
+            // Experiment (Raik, 2026-11-17, VrLooseTools.Exact): the part's shape as its model shows it (VrToolShape),
+            // with the part's own origin and turn in the aim's axes. The box, at its full size (Full), then only finds
+            // what is near; the pieces decide whether the tool is in it.
+            public Vector3 Full;
+            public Vector3 Origin;
+            public Quaternion PartTurn;
+            public VrToolShape.Part Part;
         }
+
+        // A tool's piece may sink this far into something before it counts as in it, in meters at world scale 1, so the
+        // tool does not catch on what it only grazes (what shrinking the boxes was for).
+        private const float Graze = 0.004f;
 
         // The game tool's shape, built once per tool model once it is in the hand.
         private static Transform shapeOf;
@@ -912,7 +923,15 @@ namespace ShipbreakerVR
                 var partTurn = turn * (Quaternion.Inverse(model.rotation) * part.rotation);
                 var half = Vector3.Scale(bounds.extents, part.lossyScale);
                 if (Mathf.Max(half.x, half.y, half.z) < Smallest * VrCamera.WorldScale) continue;
-                boxes.Add(new Box { Center = center, Half = half * Shrink, Turn = partTurn });
+                var box = new Box { Center = center, Half = half * Shrink, Turn = partTurn };
+                if (VrLooseTools.Exact)
+                {
+                    box.Full = new Vector3(Mathf.Abs(half.x), Mathf.Abs(half.y), Mathf.Abs(half.z));
+                    box.Origin = mount + turn * (model.InverseTransformPoint(part.position) * scale);
+                    box.PartTurn = partTurn;
+                    box.Part = VrToolShape.For(filter.sharedMesh, part.lossyScale);
+                }
+                boxes.Add(box);
             }
             shapeOf = model;
             shapeTool = tool;
@@ -959,10 +978,19 @@ namespace ShipbreakerVR
                 foreach (var box in boxes)
                 {
                     var center = pivot + rotation * box.Center;
-                    var count = Physics.OverlapBoxNonAlloc(center, box.Half, Overlaps, rotation * box.Turn, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                    var count = Physics.OverlapBoxNonAlloc(center, box.Part != null ? box.Full : box.Half, Overlaps, rotation * box.Turn, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
                     for (var i = 0; i < count; i++)
                     {
-                        if (Own(Overlaps[i], player)) continue;
+                        // A tool afloat (VrLooseTools) is no obstacle to the one in the hand: it is taken, not pushed.
+                        if (Own(Overlaps[i], player) || VrLooseTools.Owns(Overlaps[i])) continue;
+                        if (box.Part != null)
+                        {
+                            // Near it: in it only if one of the part's pieces is.
+                            if (!VrToolShape.Touches(box.Part, pivot + rotation * box.Origin, rotation * box.PartTurn, Overlaps[i], Graze * VrCamera.WorldScale,
+                                out var pieceWay, out _, out var pieceAt)) continue;
+                            contact = new Contact { Thing = Overlaps[i], At = pieceAt, Separated = true, Out = pieceWay };
+                            return false;
+                        }
                         contact = new Contact { Thing = Overlaps[i], At = center };
                         var turn = rotation * box.Turn;
                         if (Separate(Overlaps[i], center, box.Half, turn, out var way))
@@ -991,7 +1019,7 @@ namespace ShipbreakerVR
             {
                 var hit = Hits[i];
                 // What the ball starts in counts too (distance 0): the tool lies in it.
-                if (Own(hit.collider, player) || hit.distance >= nearest) continue;
+                if (Own(hit.collider, player) || VrLooseTools.Owns(hit.collider) || hit.distance >= nearest) continue;
                 nearest = hit.distance;
                 contact = new Contact { Thing = hit.collider, At = start + forward * Mathf.Max(hit.distance, distance * 0.5f) };
             }

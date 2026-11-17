@@ -74,7 +74,8 @@ namespace ShipbreakerVR
         private static Zone Find(VrInput.Hand controller, out Vector3 local)
         {
             if (!HeadLocal(controller, out local)) return Zone.None;
-            var zone = ZoneAt(local);
+            // Experiment (VrLooseTools): a tool afloat is not at the body; its zone is around the tool itself.
+            var zone = VrLooseTools.Zone(controller, ZoneAt(local));
             return zone == Zone.Flashlight && !controller.IsLeft ? Zone.None : zone;
         }
 
@@ -119,6 +120,13 @@ namespace ShipbreakerVR
             if (local.y > ShoulderAbove && local.z < ShoulderBehind && local.x > ShoulderInside) return Zone.Cutter;
             return Zone.None;
         }
+
+        // Experiment (VrLooseTools): whether a tool let go with the hand there goes back onto the body, where it is drawn
+        // from; the grapple's ball a little wider than for drawing it, as the hand need not find the grip.
+        private const float StowWider = 1.6f;
+
+        internal static bool Stows(Zone zone, Vector3 local) =>
+            zone == Zone.Grapple ? (local - GripAt).magnitude < GripReach * StowWider : zone != Zone.None && ZoneAt(local) == zone;
 
         public static void Reset() => announced[0] = announced[1] = Zone.None;
     }

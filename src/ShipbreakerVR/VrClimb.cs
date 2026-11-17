@@ -329,6 +329,25 @@ namespace ShipbreakerVR
                     + (wanted > allowed + 0.01f ? $"; the hand's {wanted:0.00} m/s held to {allowed:0.00} by the arm's force)" : ")"));
         }
 
+        // Experiment (VrLooseTools): how the hand moved a tool it lets go, in the world relative to the body, over the same
+        // window; what stays below drift (m/s) and turn (degrees per second) counts as none. False without a path.
+        internal static bool LetGoMotion(VrInput.Hand input, float drift, float turn, out Vector3 speed, out Vector3 spin)
+        {
+            speed = spin = Vector3.zero;
+            var hand = input.IsLeft ? LeftHand : RightHand;
+            if (VrCamera.Instance == null || !HandSpeed(hand, out speed, out spin))
+            {
+                speed = spin = Vector3.zero;
+                return false;
+            }
+            speed = Beyond(speed, drift);
+            spin = Beyond(spin, turn * Mathf.Deg2Rad);
+            return true;
+        }
+
+        // The body's mass as the pulls and pushes take it, for the tug of a tool's line (VrLooseTools).
+        internal static float BodyWeight => player != null ? BodyMass : ExtendedBodyMass;
+
         private const float ReleaseDrift = 0.05f;   // m/s
         private const float ReleaseTurn = 60f;      // °/s
 
@@ -2297,9 +2316,10 @@ namespace ShipbreakerVR
             VrCamera.Instance.transform.parent.TransformPoint(ClimbContact.Closer(hand.Local, VrCamera.Instance.transform.localPosition) + hand.PullOffset)
             + (player.position - bodyAtRig);
 
-        // The player's own colliders (body, tools) are nothing to hold on to.
+        // The player's own colliders (body, tools) are nothing to hold on to; nor is a tool afloat (VrLooseTools), which
+        // the hand takes as a tool.
         private static bool Own(Collider collider) =>
-            collider.attachedRigidbody == player || collider.transform.IsChildOf(player.transform);
+            collider.attachedRigidbody == player || collider.transform.IsChildOf(player.transform) || VrLooseTools.Owns(collider);
 
         // The point of the collider nearest to the hand. Non-convex meshes have no such query, most of a ship's are: rays
         // all around the hand find it; a hand with no surface around counts as on them.

@@ -610,6 +610,7 @@ namespace ShipbreakerVR
             {
                 if (VrUi.Instance == null) return;
                 VrAim.Draw(ctx, VrCamera.Instance != null ? VrCamera.Instance.Camera : null);
+                VrToolLine.Draw(ctx, VrCamera.Instance != null ? VrCamera.Instance.Camera : null);
                 VrUi.Instance.Draw(ctx);
                 VrUi.Instance.DrawFade(ctx);
             }
