@@ -39,9 +39,16 @@ namespace ShipbreakerVR
         // One step: the ends at from and to, length paid out, the player's own way in the step before and in this one
         // (carriedBefore, carried), keep of the line's own movement left, bend how far each point goes towards the
         // middle of its neighbors (0 to 1), the links brought to their length in rounds passes.
-        public void Step(Vector3 from, Vector3 to, float length, Vector3 carriedBefore, Vector3 carried, float keep, float bend, int rounds)
+        public void Step(Vector3 from, Vector3 to, float length, Vector3 carriedBefore, Vector3 carried, float keep, float bend, int rounds) =>
+            Step(from, to, length, -1, Vector3.zero, 0f, carriedBefore, carried, keep, bend, rounds);
+
+        // The same with one point held in a hand (held, at heldAt; -1 for none): nearLength of line lies between from
+        // and the hand, length between the hand and to, so the two sides have links of their own length and a pull of
+        // the hand goes to the far end alone.
+        public void Step(Vector3 from, Vector3 to, float length, int held, Vector3 heldAt, float nearLength, Vector3 carriedBefore, Vector3 carried, float keep, float bend, int rounds)
         {
             var last = At.Length - 1;
+            if (held <= 0 || held >= last) held = -1;
             for (var i = 1; i < last; i++)
             {
                 var move = (At[i] - before[i] - carriedBefore) * keep + carried;
@@ -50,6 +57,7 @@ namespace ShipbreakerVR
             }
             At[0] = before[0] = from;
             At[last] = before[last] = to;
+            if (held > 0) At[held] = before[held] = heldAt;
             if (bend > 0f)
             {
                 // From the points as they were, so the line is smoothed evenly, not from one end.
@@ -57,11 +65,12 @@ namespace ShipbreakerVR
                 for (var i = 1; i < last; i++)
                 {
                     var own = At[i];
-                    At[i] += ((previous + At[i + 1]) * 0.5f - own) * bend;
+                    if (i != held) At[i] += ((previous + At[i + 1]) * 0.5f - own) * bend;
                     previous = own;
                 }
             }
-            var link = length / last;
+            var near = held > 0 ? nearLength / held : 0f;
+            var far = held > 0 ? length / (last - held) : length / last;
             for (var round = 0; round < rounds; round++)
             {
                 for (var i = 0; i < last; i++)
@@ -69,10 +78,13 @@ namespace ShipbreakerVR
                     var along = At[i + 1] - At[i];
                     var now = along.magnitude;
                     if (now < 1e-7f) continue;
-                    var back = along * (1f - link / now);
-                    // The ends stay where they are held; the point next to one takes the whole correction.
-                    if (i == 0) At[1] -= back;
-                    else if (i + 1 == last) At[i] += back;
+                    var back = along * (1f - (i < held ? near : far) / now);
+                    // The ends and the held point stay where they are; the point next to one takes the whole correction.
+                    var first = i == 0 || i == held;
+                    var second = i + 1 == last || i + 1 == held;
+                    if (first && second) continue;
+                    if (first) At[i + 1] -= back;
+                    else if (second) At[i] += back;
                     else
                     {
                         At[i] += back * 0.5f;
@@ -81,15 +93,20 @@ namespace ShipbreakerVR
                 }
                 // Kept in the same passes as the links, or one undoes the other.
                 if (round % 2 == 1) continue;
-                var span = link * 2f * LeastSpan;
                 for (var i = 0; i + 2 <= last; i++)
                 {
+                    // The line may bend sharply in the hand that holds it.
+                    if (i + 1 == held) continue;
+                    var span = (i + 1 < held ? near : far) * 2f * LeastSpan;
                     var across = At[i + 2] - At[i];
                     var now = across.magnitude;
                     if (now >= span || now < 1e-7f) continue;
                     var apart = across * (span / now - 1f);
-                    if (i == 0) At[2] += apart;
-                    else if (i + 2 == last) At[i] -= apart;
+                    var first = i == 0 || i == held;
+                    var second = i + 2 == last || i + 2 == held;
+                    if (first && second) continue;
+                    if (first) At[i + 2] += apart;
+                    else if (second) At[i] -= apart;
                     else
                     {
                         At[i] -= apart * 0.5f;
@@ -97,6 +114,27 @@ namespace ShipbreakerVR
                     }
                 }
             }
+        }
+
+        // The place on the line nearest to a point (a hand that takes hold of it): the inner point of the chain next to
+        // it, how far the line is from the point, and how much line lies from that inner point to the far end.
+        public float Nearest(Vector3 point, out int index, out float rest)
+        {
+            var last = At.Length - 1;
+            var nearest = float.MaxValue;
+            index = 1;
+            for (var i = 0; i < last; i++)
+            {
+                var along = At[i + 1] - At[i];
+                var t = along.sqrMagnitude > 1e-12f ? Mathf.Clamp01(Vector3.Dot(point - At[i], along) / along.sqrMagnitude) : 0f;
+                var distance = (At[i] + along * t - point).sqrMagnitude;
+                if (distance >= nearest) continue;
+                nearest = distance;
+                index = Mathf.Clamp(t < 0.5f ? i : i + 1, 1, last - 1);
+            }
+            rest = 0f;
+            for (var i = index; i < last; i++) rest += (At[i + 1] - At[i]).magnitude;
+            return Mathf.Sqrt(nearest);
         }
 
         // The line's length along its points.

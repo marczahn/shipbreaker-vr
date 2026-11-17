@@ -16,6 +16,34 @@ namespace ShipbreakerVR.Tests
         }
 
         [Fact]
+        public void LineHeldInAHandKeepsItsLengthToTheTool()
+        {
+            // 2 m from the hip to the tool, 3 m of line out, a hand takes it 0.5 m beside the hip.
+            var line = new ToolLine(21);
+            var hip = Vector3.zero;
+            var tool = new Vector3(2f, 0f, 0f);
+            line.Lay(hip, tool, new Vector3(0f, -0.02f, 0f));
+            for (var i = 0; i < 200; i++) line.Step(hip, tool, 3f, Vector3.zero, Vector3.zero, 0.98f, 0.1f, 14);
+            var hand = line.At[5] + new Vector3(0f, 0.03f, 0f);
+            Assert.True(line.Nearest(hand, out var held, out var rest) < 0.05f);
+            Assert.Equal(5, held);
+            // The hand goes 0.3 m away from the tool; the tool's end follows it by as much, as the pull would bring it.
+            var pulledHand = hand + new Vector3(-0.3f, 0f, 0f);
+            var straight = (tool - pulledHand).magnitude;
+            var far = System.Math.Max(rest, straight);
+            // As the hip reels it: a quarter more than the way to the hand, and a little spare.
+            var near = (pulledHand - hip).magnitude * 1.25f + 0.12f;
+            for (var i = 0; i < 200; i++) line.Step(hip, tool, far, held, pulledHand, near, Vector3.zero, Vector3.zero, 0.98f, 0.1f, 14);
+            Assert.True((line.At[held] - pulledHand).magnitude < 1e-4f, "the held point is not in the hand");
+            var beyond = 0f;
+            for (var i = held; i + 1 < line.At.Length; i++) beyond += (line.At[i + 1] - line.At[i]).magnitude;
+            Assert.InRange(beyond, far - 0.03f, far + 0.03f);
+            var before = 0f;
+            for (var i = 0; i < held; i++) before += (line.At[i + 1] - line.At[i]).magnitude;
+            Assert.InRange(before, near - 0.03f, near + 0.03f);
+        }
+
+        [Fact]
         public void TautLineIsStraight()
         {
             var to = new Vector3(3f, 0f, 0f);

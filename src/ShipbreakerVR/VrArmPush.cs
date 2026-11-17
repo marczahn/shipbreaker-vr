@@ -153,8 +153,10 @@ namespace ShipbreakerVR
             }
         }
 
+        // Not a tool afloat (VrLooseTools): let go, it is still in the hand and along the forearm, and the arm knocked it
+        // away at up to 4.7 m/s (the log, 2026-11-17: the cutter above all, which lies along the forearm).
         private static bool Pushable(Rigidbody body, Rigidbody player, Rigidbody heldLeft, Rigidbody heldRight) =>
-            body != null && body != player && body != heldLeft && body != heldRight && !body.isKinematic && body.mass > 0f;
+            body != null && body != player && body != heldLeft && body != heldRight && !body.isKinematic && body.mass > 0f && !VrLooseTools.Owns(body);
 
         // A light part gets the speed it is to have along the push: the body's flight, and a share of the arm's own swing.
         private static void Knock(Rigidbody player, Collider collider, Rigidbody body, Vector3 contact, Vector3 outward, Vector3 swing, string piece)

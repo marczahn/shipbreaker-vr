@@ -1628,7 +1628,7 @@ namespace ShipbreakerVR
             var count = Physics.RaycastNonAlloc(point - palm * probe, palm, WallHits, 2f * probe, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             var found = false;
             for (var i = 0; i < count; i++)
-                if (!WallHits[i].collider.transform.IsChildOf(body)) found = true;
+                if (!WallHits[i].collider.transform.IsChildOf(body) && !VrLooseTools.Owns(WallHits[i].collider)) found = true;
             return found;
         }
 
@@ -1914,7 +1914,7 @@ namespace ShipbreakerVR
                     for (var i = 0; i < count; i++)
                     {
                         var hit = WallHits[i];
-                        if (hit.distance <= 0f || hit.collider.transform.IsChildOf(body)) continue;
+                        if (hit.distance <= 0f || hit.collider.transform.IsChildOf(body) || VrLooseTools.Owns(hit.collider)) continue;
                         deepest = Mathf.Max(deepest, probe - hit.distance);
                     }
                 }
@@ -2001,7 +2001,7 @@ namespace ShipbreakerVR
             {
                 var hit = WallHits[i];
                 // Hits from where the cast starts inside something have no place on the way.
-                if (hit.distance > 0f && hit.distance < free && !hit.collider.transform.IsChildOf(body))
+                if (hit.distance > 0f && hit.distance < free && !hit.collider.transform.IsChildOf(body) && !VrLooseTools.Owns(hit.collider))
                 {
                     free = hit.distance;
                     first = i;
@@ -2027,7 +2027,8 @@ namespace ShipbreakerVR
                     var blocked = false;
                     var again = Physics.SphereCastNonAlloc(shoulder, WristRadius * 0.9f, toSlid / reach, WallHits, reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
                     for (var i = 0; i < again && !blocked; i++)
-                        blocked = WallHits[i].distance > 0f && WallHits[i].distance < reach - 0.005f && !WallHits[i].collider.transform.IsChildOf(body);
+                        blocked = WallHits[i].distance > 0f && WallHits[i].distance < reach - 0.005f && !WallHits[i].collider.transform.IsChildOf(body)
+                            && !VrLooseTools.Owns(WallHits[i].collider);
                     if (!blocked)
                     {
                         if (slideLogs++ < 10) Plugin.Log.LogInfo($"Hands: {arm.Name} hand slides along '{wall.collider.name}', {Vector3.Distance(slid, wrist) * 100f:0.0} cm off the controller (along the arm it would be {(length - free) * 100f:0.0} cm)");
