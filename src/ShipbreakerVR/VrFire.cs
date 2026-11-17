@@ -26,6 +26,9 @@ namespace ShipbreakerVR
         private const float ShakeGap = 0.5f;
         // What the game's times are held at, seconds.
         private const float HoldTime = 0.5f;
+        // Raik, 2026-11-18: shaken out, the flames were gone within one frame. They get this long to go out, in seconds:
+        // their effect is stopped (no new flames, those alight burn down) and only switched off after it.
+        private const float FadeTime = 0.6f;
         // Test (Raik, 2026-11-14: held burning, the suit took no damage): while held, the fire takes its own toll, a
         // DeathTime-th of full health each Tick seconds, so a fire never shaken off kills from full health in a minute.
         // Taken straight off the player's HealthComponent (VitalitySystem.TryModifyHealth changed nothing).
@@ -59,6 +62,9 @@ namespace ShipbreakerVR
             public float LastShakeAt;
             public Vector3 LastAt;
             public bool Known;
+            // Its arm's effect, stopped and going out, and when it is switched off.
+            public Behaviour Fading;
+            public float OffAt;
             public Side(bool left) { Left = left; }
             public VrInput.Hand Input => Left ? VrInput.Left : VrInput.Right;
         }
@@ -100,10 +106,16 @@ namespace ShipbreakerVR
             }
             Shake(__instance, LeftSide);
             Shake(__instance, RightSide);
+            Fade(LeftSide);
+            Fade(RightSide);
             if (LeftSide.Out && RightSide.Out)
             {
+                // The last flames go out over FadeTime: the game counts that down and switches all of them off; the
+                // burning itself, with its damage, ends now.
                 held = false;
-                EffectTime(__instance) = 0f;
+                Stop(Effect(__instance, "HeadEffect"));
+                LeftSide.Fading = RightSide.Fading = null;
+                EffectTime(__instance) = FadeTime;
                 SetTimer(__instance, 0f);
                 VrInput.Left.Buzz(0.6f, 0.15f);
                 VrInput.Right.Buzz(0.6f, 0.15f);
@@ -187,6 +199,7 @@ namespace ShipbreakerVR
             side.Shakes = 0;
             side.Way = Vector3.zero;
             side.Known = false;
+            side.Fading = null;
         }
 
         // The controller's speed in the playspace (the body's own frame, so flying does not count): each time it swings
@@ -219,21 +232,42 @@ namespace ShipbreakerVR
             side.Input.Buzz(0.2f, 0.03f);
             if (side.Shakes < ShakesNeeded) return;
             side.Out = true;
-            StopArm(controller, side.Left);
+            StopArm(controller, side);
             side.Input.Buzz(0.5f, 0.1f);
             Plugin.Log.LogInfo($"Fire: {(side.Left ? "left" : "right")} hand shaken out");
         }
 
-        // That arm's flames off, as the game puts them out (Stop, then the object off); its next fire turns them on again.
-        private static void StopArm(PlayerElementalHandsAndHeadController controller, bool left)
+        // That arm's flames off, as the game puts them out (Stop, then the object off), but the object only after
+        // FadeTime (Fade), so the flames burn down; its next fire turns them on again.
+        private static void StopArm(PlayerElementalHandsAndHeadController controller, Side side)
         {
-            if (!(EffectsField?.GetValue(controller) is System.Array effects) || effects.Length <= (int)ElementalType.Fire) return;
+            var effect = Effect(controller, side.Left ? "LeftArmEffect" : "RightArmEffect");
+            if (effect == null) return;
+            Stop(effect);
+            side.Fading = effect;
+            side.OffAt = Time.unscaledTime + FadeTime;
+        }
+
+        // An arm's stopped effect switched off once its flames have had their time.
+        private static void Fade(Side side)
+        {
+            if (side.Fading == null || Time.unscaledTime < side.OffAt) return;
+            side.Fading.gameObject.SetActive(false);
+            side.Fading = null;
+        }
+
+        // One of the fire's effects (LeftArmEffect, RightArmEffect, HeadEffect), a VisualEffect; null without one.
+        private static Behaviour Effect(PlayerElementalHandsAndHeadController controller, string name)
+        {
+            if (!(EffectsField?.GetValue(controller) is System.Array effects) || effects.Length <= (int)ElementalType.Fire) return null;
             var fx = effects.GetValue((int)ElementalType.Fire);
-            if (fx == null) return;
-            var field = AccessTools.Field(fx.GetType(), left ? "LeftArmEffect" : "RightArmEffect");
-            if (!(field?.GetValue(fx) is Behaviour effect) || effect == null) return;
-            AccessTools.Method(effect.GetType(), "Stop", new System.Type[0])?.Invoke(effect, null);
-            effect.gameObject.SetActive(false);
+            if (fx == null) return null;
+            return AccessTools.Field(fx.GetType(), name)?.GetValue(fx) is Behaviour effect && effect != null ? effect : null;
+        }
+
+        private static void Stop(Behaviour effect)
+        {
+            if (effect != null) AccessTools.Method(effect.GetType(), "Stop", new System.Type[0])?.Invoke(effect, null);
         }
 
         private static int timerLogs;
