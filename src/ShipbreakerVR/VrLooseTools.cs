@@ -28,6 +28,11 @@ namespace ShipbreakerVR
     // it when the hand stops. With the tool in one hand the other can take its line as well and draw more of it out.
     // Hands and arms neither stop at a tool afloat nor knock it (VrHands, VrHandShape.Stops, VrArmPush): let go, it is
     // still in the hand, and the arm sent the cutter off at up to 4.7 m/s (the log, 2026-11-17).
+    // A tool is taken by its grip (Raik, 2026-11-17): within GripBall of where the hand holds it on its model, afloat
+    // and, for the grapple, at the belt as well, where the hand used to reach for a fixed place beside the hip instead.
+    // A hand that closes on a tool afloat anywhere else holds it by its body as it holds any loose part (VrClimb) and
+    // can move it about; to use the tool, a hand has to take its grip. Where the hand holds each tool on its model is
+    // kept in the config (GriffGreifhaken, GriffCutter), so it is known before the tool was first held.
     internal static class VrLooseTools
     {
         static VrLooseTools() => VrSession.OnUnload("loose tools", Release);
@@ -45,9 +50,10 @@ namespace ShipbreakerVR
         // The taut line pulls back what is stretched past its length at Pull per second, at most MostPull.
         private const float Pull = 4f;
         private const float MostPull = 1f;
-        // The hand takes a tool afloat within GripReach of its grip or Touch of its shape.
-        private const float GripReach = 0.16f;
-        private const float Touch = 0.07f;
+        // The hand takes a tool by its grip within GripBall of where it holds it, and a tool let go within StowBall of
+        // where its grip hangs on the body goes back there.
+        private const float GripBall = 0.10f;
+        private const float StowBall = 0.18f;
         // A tool this far beyond its line's length (the player was moved, a respawn) goes back onto the body.
         private const float Lost = 4f;
         // The line leaves the tool this far under its grip, as long as the hand's place on the model is not known.
@@ -68,6 +74,7 @@ namespace ShipbreakerVR
         private const string SuitName = "geo_suit";
 
         private static ConfigEntry<bool> enabled, exact, lineInHand, shaded, pulling;
+        private static int missLogs;
         private static ConfigEntry<float> lineLength;
         private static bool bound, closing;
 
@@ -87,6 +94,30 @@ namespace ShipbreakerVR
                 "Experiment: the line is shaded by the sun, round against it and dark in shadow, instead of evenly bright.");
             pulling = VrSettings.Bind("Experimente", "LeineZiehen", true,
                 "Experiment: a free hand takes hold of the line of a tool afloat with the grip and pulls the tool in by it.");
+            Grapple.GripEntry = VrSettings.Bind("Experimente", "GriffGreifhaken", "",
+                "Experiment: where the hand holds the grapple on its model (x y z in the model's own axes), measured by the mod while it is held. Empty: not measured yet.");
+            Cutter.GripEntry = VrSettings.Bind("Experimente", "GriffCutter", "",
+                "Experiment: where the hand holds the cutter on its model (x y z in the model's own axes), measured by the mod while it is held. Empty: not measured yet.");
+            foreach (var tool in Tools) Load(tool);
+        }
+
+        private static void Load(Tool tool)
+        {
+            var parts = tool.GripEntry.Value.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
+            var culture = System.Globalization.CultureInfo.InvariantCulture;
+            if (parts.Length != 3 || !float.TryParse(parts[0], System.Globalization.NumberStyles.Float, culture, out var x)
+                || !float.TryParse(parts[1], System.Globalization.NumberStyles.Float, culture, out var y)
+                || !float.TryParse(parts[2], System.Globalization.NumberStyles.Float, culture, out var z)) return;
+            tool.HandOn = new Vector3(x, y, z);
+            tool.HandKnown = true;
+        }
+
+        // The hand's place on the model into the config, once the tool leaves the hand.
+        private static void Save(Tool tool)
+        {
+            if (!tool.Fresh || tool.GripEntry == null) return;
+            var text = string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:0.####} {1:0.####} {2:0.####}", tool.HandOn.x, tool.HandOn.y, tool.HandOn.z);
+            if (tool.GripEntry.Value != text) tool.GripEntry.Value = text;
         }
 
         public static bool On { get { Bind(); return enabled != null && enabled.Value && !closing; } }
@@ -138,6 +169,9 @@ namespace ShipbreakerVR
             public bool HandKnown, EndKnown;
             public long EndShape;
             public float FitFrom;
+            // Measured on this model with this hand since it took the tool (not only read from the config).
+            public bool Fresh;
+            public ConfigEntry<string> GripEntry;
             // The hands that hold its line (left, right), each against the player's body with its own speed there, for
             // the physics steps; and of them the one nearest to the tool (-1: none), with the line from it to the tool.
             public readonly bool[] Hauls = new bool[2];
@@ -305,11 +339,12 @@ namespace ShipbreakerVR
             if (tool == null) return;
             var holder = tool.Holder;
             tool.Holder = null;
+            Save(tool);
             if (!On || tool.Loose || holder == null || !Usable()) return;
             // Put away by the game with the grip still held (the scanner hides it, another tool takes its place).
             if (holder.Input.Grip.Down) return;
             if (!VrBeltGrapple.Parts(kind, out var model, out var rest, out _, out _) || model.parent != rest) return;
-            if (VrToolBelt.HeadLocal(holder.Input, out var local) && VrToolBelt.Stows(tool.Zone, local))
+            if ((VrToolBelt.HeadLocal(holder.Input, out var local) && VrToolBelt.Stows(tool.Zone, local)) || AtItsGripOnTheBody(tool, holder.Input, model, rest))
             {
                 if (logs++ < 80) Plugin.Log.LogInfo($"Loose tools: {kind} let go at its place on the body, put away");
                 return;
@@ -418,8 +453,7 @@ namespace ShipbreakerVR
         private static void Measure(Tool tool, Transform model)
         {
             var body = tool.Body.transform;
-            var known = tool.HandKnown && tool.HandModel == model;
-            tool.Grip = body.InverseTransformPoint(known ? model.TransformPoint(tool.HandOn) : GripAt(tool, model));
+            tool.Grip = body.InverseTransformPoint(tool.HandKnown ? model.TransformPoint(tool.HandOn) : GripAt(tool, model));
             tool.End = body.InverseTransformPoint(EndAt(tool, model));
             var middle = Vector3.zero;
             var count = 0;
@@ -560,15 +594,19 @@ namespace ShipbreakerVR
             if (hand == null || rig == null || !hand.Input.TryGetPosition(out var local)) return;
             if (tool.HandOf != hand || tool.HandModel != model)
             {
-                // Another hand or another model (the cutter's side for the left hand): measured anew.
+                // Another hand or another model (the cutter's side for the left hand): measured anew. Until then the
+                // place last measured counts, or the one from the config.
                 tool.HandOf = hand;
                 tool.HandModel = model;
-                tool.HandKnown = tool.EndKnown = false;
+                tool.Fresh = tool.EndKnown = false;
             }
-            if (Time.unscaledTime - tool.FitFrom < FitAfter) return;
-            var on = model.InverseTransformPoint(rig.TransformPoint(local));
-            tool.HandOn = tool.HandKnown ? Vector3.Lerp(tool.HandOn, on, 0.1f) : on;
-            tool.HandKnown = true;
+            if (Time.unscaledTime - tool.FitFrom >= FitAfter)
+            {
+                var on = model.InverseTransformPoint(rig.TransformPoint(local));
+                tool.HandOn = tool.Fresh ? Vector3.Lerp(tool.HandOn, on, 0.1f) : on;
+                tool.HandKnown = tool.Fresh = true;
+            }
+            if (!tool.HandKnown) return;
             if (tool.Body == null || tool.Pieces.Count == 0) return;
             var size = Mathf.Max(Mathf.Abs(model.lossyScale.x), 1e-4f);
             var scale = VrCamera.WorldScale / size;
@@ -740,31 +778,50 @@ namespace ShipbreakerVR
 
         // ---- Taking a tool out of the air ----
 
-        // The belt zone of a hand (VrToolBelt): a tool afloat is not drawn at the body, but where it floats.
+        // The belt zone of a hand (VrToolBelt): a tool afloat is not drawn at the body, but by its grip where it floats;
+        // and the grapple at the belt is drawn by its grip as well, not at the fixed place beside the hip.
         public static VrToolBelt.Zone Zone(VrInput.Hand controller, VrToolBelt.Zone zone)
         {
-            if (!On || (!Grapple.Loose && !Cutter.Loose)) return zone;
-            foreach (var tool in Tools)
-                if (tool.Loose && zone == tool.Zone) zone = VrToolBelt.Zone.None;
+            if (!On) return zone;
             var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
             if (rig == null || !controller.TryGetPosition(out var local)) return zone;
             var hand = rig.TransformPoint(local);
+            var reach = GripBall * VrCamera.WorldScale;
+            if (!Grapple.Loose && TryGetGripOnBody(Grapple, out var grip))
+            {
+                if (zone == VrToolBelt.Zone.Grapple) zone = VrToolBelt.Zone.None;
+                var off = (hand - grip).magnitude;
+                if (off < reach) return VrToolBelt.Zone.Grapple;
+                if (zone == VrToolBelt.Zone.None && controller.Grip.Pressed && off < 0.4f * VrCamera.WorldScale && missLogs++ < 30)
+                    Plugin.Log.LogInfo($"Loose tools: {controller.Name} grip pressed {off / VrCamera.WorldScale:0.00} m from the grip of the grapple at the belt, outside its {GripBall:0.00} m");
+            }
             foreach (var tool in Tools)
-                if (tool.Loose && Near(tool, hand)) return tool.Zone;
+                if (tool.Loose && zone == tool.Zone) zone = VrToolBelt.Zone.None;
+            foreach (var tool in Tools)
+                if (tool.Loose && tool.Body != null && tool.Body.activeInHierarchy && (hand - tool.Body.transform.TransformPoint(tool.Grip)).magnitude < reach) return tool.Zone;
             return zone;
         }
 
-        private static bool Near(Tool tool, Vector3 hand)
+        // Where the grip of a tool is that hangs on the body (the hand's place on its model), in the world; false while
+        // it does not hang there or the hand's place is not known yet.
+        private static bool TryGetGripOnBody(Tool tool, out Vector3 grip)
         {
-            if (tool.Body == null || !tool.Body.activeInHierarchy) return false;
-            var scale = VrCamera.WorldScale;
-            var body = tool.Body.transform;
-            if ((hand - body.TransformPoint(tool.Middle)).magnitude > 1.5f * scale) return false;
-            if ((hand - body.TransformPoint(tool.Grip)).magnitude < GripReach * scale) return true;
-            var touch = Touch * scale;
-            foreach (var piece in tool.Pieces)
-                if (piece.Collider != null && (piece.Collider.ClosestPoint(hand) - hand).sqrMagnitude < touch * touch) return true;
-            return false;
+            grip = Vector3.zero;
+            if (!tool.HandKnown || !VrBeltGrapple.Parts(tool.Kind, out var model, out var rest, out _, out _) || model.parent != rest) return false;
+            if (!model.gameObject.activeInHierarchy) return false;
+            grip = model.TransformPoint(tool.HandOn);
+            return true;
+        }
+
+        // Whether the hand that lets a tool go is where the tool's grip hangs on the body (the grapple's, at the belt):
+        // the tool has just been laid on its rest point, which is at the hip already (VrBeltGrapple).
+        private static bool AtItsGripOnTheBody(Tool tool, VrInput.Hand controller, Transform model, Transform rest)
+        {
+            if (tool != Grapple || !tool.HandKnown) return false;
+            var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+            if (rig == null || !controller.TryGetPosition(out var local)) return false;
+            var hung = rest.TransformPoint(Vector3.Scale(model.localScale, tool.HandOn));
+            return (rig.TransformPoint(local) - hung).magnitude < StowBall * VrCamera.WorldScale;
         }
 
         // For the F8 dump.
@@ -773,7 +830,7 @@ namespace ShipbreakerVR
             var text = $"loose tools: {(On ? "on" : "off")}, line {Length:0.#} m";
             foreach (var tool in Tools)
                 text += $", {tool.Kind} {(tool.Loose ? $"afloat{(tool.Taut ? " (line taut)" : "")}" : "not afloat")}{(tool.Hauls[0] || tool.Hauls[1] ? $" (line in {(tool.Hauls[0] && tool.Hauls[1] ? "both hands" : tool.Hauls[0] ? "the left hand" : "the right hand")})" : "")}"
-                    + (tool.EndKnown ? "" : ", line's end not yet on the model");
+                    + (tool.EndKnown ? "" : ", line's end not yet on the model") + (tool.HandKnown ? "" : ", grip not yet measured");
             return text;
         }
 

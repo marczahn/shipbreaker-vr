@@ -951,7 +951,8 @@ namespace ShipbreakerVR
             for (var i = 0; i < count; i++)
             {
                 var collider = Found[i];
-                if (Own(collider) || !Holdable(collider)) continue;
+                // A tool afloat is held by its body like any loose part (its grip is the tool belt's, VrLooseTools.Zone).
+                if ((Own(collider) && !VrLooseTools.Owns(collider)) || !Holdable(collider)) continue;
                 var closest = Closest(collider, at, reach);
                 var distance = (closest - at).sqrMagnitude;
                 if (distance >= bestDistance) continue;
