@@ -24,8 +24,12 @@ namespace ShipbreakerVR
         // how far its muzzle points forward from straight down, in degrees: where Raik held it, as he would like it to
         // hang (hand snapshot 2026-11-08 13:31:16, looking down about 58°). Hung by its grip at the middle of the zone
         // (VrToolBelt.GripAt) its body lay 23 cm lower and 26 cm further forward, too far away (Raik). Then 10 cm further
-        // out to the right, and 3 cm further right, forward and up (Raik).
-        private static readonly Vector3 BodyAt = new Vector3(0.40f, -0.69f, -0.16f);
+        // out to the right, and 3 cm further right, forward and up (Raik). Then 7 cm further forward, to see and reach it
+        // better (Raik, 2026-11-18).
+        // Both tools hang on the body, not on the head (Raik, 2026-11-18): the places stay written as from the head, for
+        // the head as it was when they were found (VrToolBelt.HipRef, ShoulderRef), and are taken from the neck along the
+        // heading the body keeps (VrToolBelt.BodyFrame), so the head looks around freely without moving them.
+        private static readonly Vector3 BodyAt = new Vector3(0.40f, -0.69f, -0.09f);
         private const float MuzzleForward = 25f;
         // Where the cutter's grip hangs on the back, in the same axes, within the zone over the right shoulder it is drawn
         // from (VrToolBelt: above -0.12 m, behind -0.05 m), and how far its muzzle points towards the left, in degrees.
@@ -79,23 +83,19 @@ namespace ShipbreakerVR
                 Hide();
                 return;
             }
-            var forward = vr.transform.localRotation * Vector3.forward;
-            forward.y = 0f;
-            if (forward.sqrMagnitude < 1e-4f) return;
-            var heading = Quaternion.LookRotation(forward, Vector3.up);
-            var head = vr.transform.localPosition;
+            if (!VrToolBelt.BodyFrame(out var neck, out var heading)) return;
 
             // The grapple: muzzle down along the leg and a little forward, the grip to the back, hung by its body.
             var gunModel = Gun(gun);
             var rest = GunRest(gun);
             var hanging = heading * Quaternion.Euler(-MuzzleForward, 0f, 0f) * Quaternion.LookRotation(Vector3.down, Vector3.forward);
             if (gunModel != null && rest != null && !VrLooseTools.IsLoose(EquipmentController.Equipment.GrappleHook)
-                && VrToolModels.TrackingToWorld(head + heading * BodyAt, hanging, out var at, out var rotation))
+                && VrToolModels.TrackingToWorld(neck + heading * (BodyAt - VrToolBelt.HipRef), hanging, out var at, out var rotation))
             {
                 var modelInGun = Quaternion.Inverse(gunModel.rotation) * model.rotation;
                 Hang(gunModel, rest, Shadow(gun), ShadowRest(gun), at, rotation * Quaternion.Inverse(modelInGun),
                     gunModel.InverseTransformPoint(body.TransformPoint(bodyCenter)));
-                if (logs++ % 2000 == 0 && gunModel.parent == rest) LogGrip(vr.transform, heading);
+                if (logs++ % 2000 == 0 && gunModel.parent == rest) LogGrip(vr.transform.parent, neck, heading);
             }
 
             // The cutter on the back, like a sword: its grip by the right shoulder, where it is drawn from (VrToolBelt), the
@@ -104,7 +104,7 @@ namespace ShipbreakerVR
             var cutterRest = cutter != null ? CutterRest(cutter) : null;
             var onBack = heading * Quaternion.Euler(0f, 0f, -CutterSlant) * Quaternion.LookRotation(Vector3.down, Vector3.back);
             if (cutterModel != null && cutterRest != null && !VrLooseTools.IsLoose(EquipmentController.Equipment.CuttingTool)
-                && VrToolModels.TrackingToWorld(head + heading * CutterGripAt, onBack, out var cutterAt, out var cutterRotation))
+                && VrToolModels.TrackingToWorld(neck + heading * (CutterGripAt - VrToolBelt.ShoulderRef), onBack, out var cutterAt, out var cutterRotation))
                 Hang(cutterModel, cutterRest, CutterShadow(cutter), CutterShadowRest(cutter), cutterAt, cutterRotation, Vector3.zero);
         }
 
@@ -124,13 +124,13 @@ namespace ShipbreakerVR
             Settle(shadow, shadowRest);
         }
 
-        // Where the grip hangs against the zone it is drawn from, in the head's heading as VrToolBelt measures.
-        private static void LogGrip(Transform head, Quaternion heading)
+        // Where the grip hangs against the zone it is drawn from, against the body as VrToolBelt measures the hip.
+        private static void LogGrip(Transform rig, Vector3 neck, Quaternion heading)
         {
-            var rig = head.parent;
             if (rig == null || grip == null) return;
-            var local = Quaternion.Inverse(heading) * (rig.InverseTransformPoint(grip.position) - head.localPosition);
-            Plugin.Log.LogInfo($"Belt grapple: its grip hangs at ({local.x:0.00}, {local.y:0.00}, {local.z:0.00}) m from the head, its zone around ({VrToolBelt.GripAt.x:0.00}, {VrToolBelt.GripAt.y:0.00}, {VrToolBelt.GripAt.z:0.00})");
+            var local = Quaternion.Inverse(heading) * (rig.InverseTransformPoint(grip.position) - neck) + VrToolBelt.HipRef;
+            Plugin.Log.LogInfo($"Belt grapple: its grip hangs at ({local.x:0.00}, {local.y:0.00}, {local.z:0.00}) m from the head (as when looking down at the hip; on the body, {(VrTorso.Upright ? "its own heading" : "the head's heading")}), "
+                + $"its zone around ({VrToolBelt.GripAt.x:0.00}, {VrToolBelt.GripAt.y:0.00}, {VrToolBelt.GripAt.z:0.00})");
         }
 
         // The grapple glides onto its rest point once it lies on it.

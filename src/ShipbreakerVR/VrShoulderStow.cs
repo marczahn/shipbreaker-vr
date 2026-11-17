@@ -81,7 +81,7 @@ namespace ShipbreakerVR
                 var wasOver = held.Thing == thing && held.Over;
                 held.Thing = thing;
                 held.Body = body;
-                held.Over = VrToolBelt.HeadLocal(hand, out var local) && VrToolBelt.OverLeftShoulder(local);
+                held.Over = VrToolBelt.ShoulderLocal(hand, out var local) && VrToolBelt.OverLeftShoulder(local);
                 if (held.Over && !wasOver)
                 {
                     held.OverSince = Time.time;
@@ -97,10 +97,10 @@ namespace ShipbreakerVR
             // Let go with the grip (not lost by tracking) while over the shoulder, and not still held by the other hand.
             if (was == null || hand.Grip.Down) return;
             if (wasBody != null && VrClimb.HeldBody(hand.IsLeft ? VrInput.Right : VrInput.Left) == wasBody) return;
-            var over = held.Over || (VrToolBelt.HeadLocal(hand, out var at) && VrToolBelt.OverLeftShoulder(at));
+            var over = held.Over || (VrToolBelt.ShoulderLocal(hand, out var at) && VrToolBelt.OverLeftShoulder(at));
             if (!over)
             {
-                if (logs < 30 && VrToolBelt.HeadLocal(hand, out var off) && off.z < 0.1f && off.y > -0.3f)
+                if (logs < 30 && VrToolBelt.ShoulderLocal(hand, out var off) && off.z < 0.1f && off.y > -0.3f)
                 {
                     logs++;
                     Plugin.Log.LogInfo($"Shoulder stow: '{was.name}' let go by the {hand.Name} hand at ({off.x:0.00}, {off.y:0.00}, {off.z:0.00}) m from the head, not over the left shoulder");

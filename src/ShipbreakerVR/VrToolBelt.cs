@@ -3,9 +3,13 @@ using UnityEngine;
 namespace ShipbreakerVR
 {
     // Picking the tools off the body instead of the flat game's wheel, as Marc wanted: reaching there with either hand and
-    // pressing the grip draws the tool (VrToolInput), letting go puts it back. The zones are measured from the head in
-    // tracking space (real meters), turned with the head's heading, so they stay at the body whichever way one looks or
-    // the playspace turns; they are the same for both hands. Entering a zone gives that hand a short buzz.
+    // pressing the grip draws the tool (VrToolInput), letting go puts it back. The zones are measured in tracking space
+    // (real meters); they are the same for both hands. Entering a zone gives that hand a short buzz.
+    // The zones at the helmet are measured from the head along its heading. Those at the hips and over the shoulder
+    // hang on the body (Raik, 2026-11-18: the body stays put, only the head looks around): from the neck along the
+    // heading the body keeps (VrTorso), so they neither turn with a look to the side nor move as the head nods (the eye
+    // goes 17 cm forward and 9 cm down against the neck when looking down at the hip). Their bounds are still written
+    // as from the head, for the pose they were found in: looking down at the hip (HipLook), upright for the shoulder.
     //   right hip            grapple
     //   left hip             demo charges (drawn across the body)
     //   over the right shoulder  cutter
@@ -24,7 +28,8 @@ namespace ShipbreakerVR
         // the zone around the hip reached far beyond the grapple. The grip hangs at GripAt, where Raik's hand reached for
         // it (12 grips, all within 9 cm); before, a copy hung at the body model's hip, 30 cm further back, and the hand took
         // it from here.
-        public static readonly Vector3 GripAt = new Vector3(0.30f, -0.72f, -0.08f);
+        // 7 cm further forward with the grapple itself (VrBeltGrapple, Raik 2026-11-18).
+        public static readonly Vector3 GripAt = new Vector3(0.30f, -0.72f, -0.01f);
         private const float GripReach = 0.13f;
         private const float HipForward = 0.1f;
         private const float HipBehind = -0.2f;
@@ -55,9 +60,9 @@ namespace ShipbreakerVR
             var zone = Find(hand, out var local);
             var index = hand.IsLeft ? 0 : 1;
             // A grip pressed near the hip grapple but outside its zone: where the hand was, to fit GripReach.
-            if (zone == Zone.None && !hand.IsLeft && hand.Grip.Pressed && missLogs < 30)
+            if (zone == Zone.None && !hand.IsLeft && hand.Grip.Pressed && missLogs < 30 && HipLocal(hand, out var atHip))
             {
-                var off = local - GripAt;
+                var off = atHip - GripAt;
                 if (off.magnitude < 0.4f)
                 {
                     missLogs++;
@@ -79,7 +84,7 @@ namespace ShipbreakerVR
         {
             if (!HeadLocal(controller, out local)) return Zone.None;
             // Experiment (VrLooseTools): a tool afloat is not at the body; its zone is around the tool itself.
-            var zone = VrLooseTools.Zone(controller, ZoneAt(local));
+            var zone = VrLooseTools.Zone(controller, ZoneOf(controller, local));
             return zone == Zone.Flashlight && !controller.IsLeft ? Zone.None : zone;
         }
 
@@ -99,6 +104,64 @@ namespace ShipbreakerVR
             if (forward.sqrMagnitude < 0.0001f) return false;
             local = Quaternion.Inverse(Quaternion.LookRotation(forward, Vector3.up)) * (hand - head.localPosition);
             return true;
+        }
+
+        // The pitch of the head, in degrees down, at which the places at the hip were found (Raik looking down at the
+        // grapple, VrBeltGrapple), and where the neck is from the eye then and with the head upright, along the heading.
+        private const float HipLook = 58f;
+        internal static Vector3 HipRef => Quaternion.Euler(HipLook, 0f, 0f) * VrTorso.NeckFromEye;
+        internal static Vector3 ShoulderRef => VrTorso.NeckFromEye;
+        // The demo charges' box at the left hip was found with no one pose of the head on record: taken half way between
+        // looking down and upright, it lies within 9 cm of where it was either way, well inside its 30 by 40 cm.
+        private static Vector3 ChargeRef => Quaternion.Euler(HipLook * 0.5f, 0f, 0f) * VrTorso.NeckFromEye;
+
+        // The body's frame in tracking space: its neck, below the tracked head, and the heading it keeps (VrTorso; the
+        // head's while the model is not upright). A place written as from the head, found in a pose with the neck at ref
+        // from the eye, is at neck + heading * (place - ref).
+        internal static bool BodyFrame(out Vector3 neck, out Quaternion heading)
+        {
+            neck = Vector3.zero;
+            heading = Quaternion.identity;
+            var vr = VrCamera.Instance;
+            if (vr == null) return false;
+            var head = vr.transform;
+            neck = head.localPosition + head.localRotation * VrTorso.NeckFromEye;
+            if (VrTorso.Upright)
+            {
+                heading = Quaternion.AngleAxis(VrTorso.Heading, Vector3.up);
+                return true;
+            }
+            var forward = head.localRotation * Vector3.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 0.01f) forward = head.localRotation * Vector3.up;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 0.0001f) return false;
+            heading = Quaternion.LookRotation(forward, Vector3.up);
+            return true;
+        }
+
+        // Where the controller is against the body, written as from the head in the pose the hip's places were found in
+        // (HipLocal) or with the head upright (ShoulderLocal), for ZoneAt.
+        internal static bool HipLocal(VrInput.Hand controller, out Vector3 local) => BodyLocal(controller, HipRef, out local);
+
+        internal static bool ShoulderLocal(VrInput.Hand controller, out Vector3 local) => BodyLocal(controller, ShoulderRef, out local);
+
+        private static bool BodyLocal(VrInput.Hand controller, Vector3 reference, out Vector3 local)
+        {
+            local = Vector3.zero;
+            if (!BodyFrame(out var neck, out var heading) || !controller.TryGetPosition(out var hand)) return false;
+            local = Quaternion.Inverse(heading) * (hand - neck) + reference;
+            return true;
+        }
+
+        // The zone of a hand: the helmet's from the head, the hips' and the shoulder's against the body.
+        private static Zone ZoneOf(VrInput.Hand controller, Vector3 head)
+        {
+            var zone = ZoneAt(head);
+            if (zone == Zone.Scanner || zone == Zone.Flashlight) return zone;
+            if (HipLocal(controller, out var hip) && ZoneAt(hip) == Zone.Grapple) return Zone.Grapple;
+            if (BodyLocal(controller, ChargeRef, out var charge) && ZoneAt(charge) == Zone.DemoCharge) return Zone.DemoCharge;
+            return ShoulderLocal(controller, out var shoulder) && ZoneAt(shoulder) == Zone.Cutter ? Zone.Cutter : Zone.None;
         }
 
         // Over the left shoulder, the mirror of the cutter's zone over the right one, with its inner edge at the middle
@@ -131,6 +194,15 @@ namespace ShipbreakerVR
 
         internal static bool Stows(Zone zone, Vector3 local) =>
             zone == Zone.Grapple ? (local - GripAt).magnitude < GripReach * StowWider : zone != Zone.None && ZoneAt(local) == zone;
+
+        // The same for a hand, measured as its zone is: at the hip, over the shoulder, or from the head.
+        internal static bool Stows(Zone zone, VrInput.Hand controller)
+        {
+            if (zone == Zone.Grapple) return HipLocal(controller, out var hip) && Stows(zone, hip);
+            if (zone == Zone.DemoCharge) return BodyLocal(controller, ChargeRef, out var charge) && Stows(zone, charge);
+            if (zone == Zone.Cutter) return ShoulderLocal(controller, out var shoulder) && Stows(zone, shoulder);
+            return HeadLocal(controller, out var head) && Stows(zone, head);
+        }
 
         public static void Reset() => announced[0] = announced[1] = Zone.None;
     }

@@ -99,9 +99,10 @@ namespace ShipbreakerVR
                 "Experiment: a free hand takes hold of the line of a tool afloat with the grip and pulls the tool in by it.");
             // Not GriffGreifhaken and GriffCutter, as in the third state: those were measured against the controller and
             // hold places up to 19 cm off (see Fit); under new names they are measured anew.
-            Grapple.GripEntry = VrSettings.Bind("Experimente", "GriffstelleGreifhaken", "",
+            // The defaults are the places measured with Raik's fit of the tools (VrToolFit's defaults), right hand.
+            Grapple.GripEntry = VrSettings.Bind("Experimente", "GriffstelleGreifhaken", "0.0313 -0.0675 0.3393",
                 "Experiment: where the hand holds the grapple on its model (x y z in the model's own axes), measured by the mod while it is held. Empty: not measured yet.");
-            Cutter.GripEntry = VrSettings.Bind("Experimente", "GriffstelleCutter", "",
+            Cutter.GripEntry = VrSettings.Bind("Experimente", "GriffstelleCutter", "0.0188 0.0654 -0.1185",
                 "Experiment: where the hand holds the cutter on its model (x y z in the model's own axes), measured by the mod while it is held. Empty: not measured yet.");
             foreach (var tool in Tools) Load(tool);
         }
@@ -187,6 +188,7 @@ namespace ShipbreakerVR
             public bool Pulled, Slipped;
             // Its speed before the physics step, for what a hit did to it (Hit).
             public Vector3 SpeedBefore;
+            public float HitAt;
 
             public Tool(EquipmentController.Equipment kind, VrToolBelt.Zone zone, int index, Vector3 hip)
             {
@@ -351,7 +353,7 @@ namespace ShipbreakerVR
             // Put away by the game with the grip still held (the scanner hides it, another tool takes its place).
             if (holder.Input.Grip.Down) return;
             if (!VrBeltGrapple.Parts(kind, out var model, out var rest, out _, out _) || model.parent != rest) return;
-            if ((VrToolBelt.HeadLocal(holder.Input, out var local) && VrToolBelt.Stows(tool.Zone, local)) || AtItsGripOnTheBody(tool, holder.Input, model, rest))
+            if (VrToolBelt.Stows(tool.Zone, holder.Input) || AtItsGripOnTheBody(tool, holder.Input, model, rest))
             {
                 if (logs++ < 80) Plugin.Log.LogInfo($"Loose tools: {kind} let go at its place on the body, put away");
                 return;
@@ -484,22 +486,28 @@ namespace ShipbreakerVR
         }
 
         private const float HardHit = 1.5f;
+        // The two tools meet piece by piece, each pair of pieces a hit of its own (some 30 lines for one touch in Raik's
+        // fourth test): one line for the two, from the grapple, and the next for a tool only after HitPause seconds.
+        private const float HitPause = 0.5f;
         private static int hitLogs;
 
         private static void Hit(Tool tool, Collision collision)
         {
             if (tool == null || tool.Rigid == null || hitLogs >= 150) return;
             var other = collision.rigidbody;
+            var otherTool = other == null ? null : Grapple.Loose && other == Grapple.Rigid ? Grapple : Cutter.Loose && other == Cutter.Rigid ? Cutter : null;
+            if (otherTool != null && tool != Grapple) return;
             var scale = VrCamera.WorldScale;
-            var player = VrToolCollide.Player();
             var meets = collision.relativeVelocity.magnitude / scale;
-            var otherTool = Owns(other);
-            if (!otherTool && meets < HardHit) return;
+            if (otherTool == null && meets < HardHit) return;
+            if (Time.unscaledTime - tool.HitAt < HitPause) return;
+            tool.HitAt = Time.unscaledTime;
             hitLogs++;
-            var now = tool.Rigid.velocity - (player != null ? player.velocity : Vector3.zero);
-            Plugin.Log.LogInfo($"Loose tools: {tool.Kind} hits {(otherTool ? "the other tool" : $"'{collision.collider.name}'")}"
-                + $"{(other != null ? $" ({other.mass:0.#} kg)" : " (fixed)")}, meeting at {meets:0.00} m/s, impulse {collision.impulse.magnitude / scale:0.0} kg m/s; "
-                + $"against the body it went {tool.SpeedBefore.magnitude / scale:0.00} m/s before and goes {now.magnitude / scale:0.00} m/s now, turning {tool.Rigid.angularVelocity.magnitude * Mathf.Rad2Deg:0}°/s"
+            var player = VrToolCollide.Player();
+            var carried = player != null ? player.velocity : Vector3.zero;
+            string Went(Tool each) => $"the {each.Kind} went {each.SpeedBefore.magnitude / scale:0.00} m/s before and goes {(each.Rigid.velocity - carried).magnitude / scale:0.00} m/s now, turning {each.Rigid.angularVelocity.magnitude * Mathf.Rad2Deg:0}\u00b0/s";
+            Plugin.Log.LogInfo($"Loose tools: {tool.Kind} hits {(otherTool != null ? $"the {otherTool.Kind}" : $"'{collision.collider.name}'{(other != null ? $" ({other.mass:0.#} kg)" : " (fixed)")}")}"
+                + $", meeting at {meets:0.00} m/s, impulse {collision.impulse.magnitude / scale:0.0} kg m/s; against the body {Went(tool)}{(otherTool != null ? $", {Went(otherTool)}" : "")}"
                 + $"{(VrHand.Left.State == HandState.Holding || VrHand.Right.State == HandState.Holding ? "; a hand holds on to something" : "")}");
         }
 
