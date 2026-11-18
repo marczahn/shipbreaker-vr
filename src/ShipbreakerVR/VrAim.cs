@@ -143,6 +143,8 @@ namespace ShipbreakerVR
 
         public static Transform CameraTransformFor(int family)
         {
+            // The demo charges put on by hand look from the charge itself (VrChargeByHand).
+            if (VrChargeByHand.Aims(out var charge)) return charge;
             var second = VrDualTools.Routes(family) && Active ? VrDualTools.AimCamera : null;
             return second != null ? second.transform : CameraTransform;
         }
@@ -159,6 +161,8 @@ namespace ShipbreakerVR
         // player's forward in the flat game). Placed charges are jointed to the ship, which drops that velocity.
         public static Transform ThrowOrigin(Transform offset)
         {
+            // Put on by hand, a charge let go starts where the hand has it (VrChargeByHand).
+            if (VrChargeByHand.ThrowFrom(out var held)) return held;
             if (!Aiming) return offset;
             if (throwOrigin == null)
             {
