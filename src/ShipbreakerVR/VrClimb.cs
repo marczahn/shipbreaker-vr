@@ -2005,6 +2005,14 @@ namespace ShipbreakerVR
             return false;
         }
 
+        // That hand lets go of what it holds, without a push: a demo charge it held is the game's tool in it from now on
+        // (VrChargeByHand, VrChargeDisarm).
+        internal static void Drop(VrInput.Hand input, string reason)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input && hand.Holding) LetGo(hand, false, reason);
+        }
+
         public static Rigidbody HeldBody(VrInput.Hand input)
         {
             foreach (var hand in Hands)

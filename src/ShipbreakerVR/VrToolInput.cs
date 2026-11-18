@@ -161,13 +161,20 @@ namespace ShipbreakerVR
                 VrTetherMode.End(XRNode.LeftHand);
                 VrTetherMode.End(XRNode.RightHand);
                 VrToolBelt.Reset();
+                chargesTo = null;
                 return;
             }
 
             // Grip pressed at the belt draws that tool into the hand, or takes it over from the other hand. While the tools
             // are being fitted the other hand's grip moves the tool instead (VrToolFit).
-            if (RightHand.GripPressed && !RightHand.Trigger && RightHand.Zone != VrToolBelt.Zone.None && !VrToolFit.Blocks(RightHand.Node)) Draw(RightHand);
-            if (LeftHand.GripPressed && !LeftHand.Trigger && LeftHand.Zone != VrToolBelt.Zone.None && !VrToolFit.Blocks(LeftHand.Node)) Draw(LeftHand);
+            if (RightHand.GripPressed && !RightHand.Trigger && RightHand.Zone != VrToolBelt.Zone.None && !VrToolFit.Blocks(RightHand.Node)) Draw(RightHand, RightHand.Zone);
+            if (LeftHand.GripPressed && !LeftHand.Trigger && LeftHand.Zone != VrToolBelt.Zone.None && !VrToolFit.Blocks(LeftHand.Node)) Draw(LeftHand, LeftHand.Zone);
+            // The charges come into a hand that closed round one (TakeCharges), once the game lets the tool change.
+            if (chargesTo != null)
+            {
+                if (!chargesTo.GripDown || Time.unscaledTime > chargesUntil) chargesTo = null;
+                else if (Draw(chargesTo, VrToolBelt.Zone.DemoCharge, true)) chargesTo = null;
+            }
             // Grip pressed right at the other hand's grip takes the tool out of that hand.
             foreach (var each in Hands)
                 if (each.GripPressed && !each.Trigger && each.Zone == VrToolBelt.Zone.None && !VrToolFit.Blocks(each.Node)) HandOver(each);
@@ -403,6 +410,13 @@ namespace ShipbreakerVR
                 chargeFire = false;
                 return false;
             }
+            // With the charges placed the game's way and extended tool physics: one charge stays afloat where the hand
+            // was, and the charges are put away at once.
+            if (was && !evenAtItsPlace && VrChargeByHand.LetGoAfloat(tool.Input))
+            {
+                if (logs++ < 60) Plugin.Log.LogInfo($"Tool control: {tool.Name} hand lets a demo charge go afloat, at {VrToolBelt.ChargePlace(tool.Input)}");
+                return false;
+            }
             if (was && VrChargeByHand.LetsGo(tool.Input, evenAtItsPlace))
             {
                 chargeLetGoAt = Time.unscaledTime;
@@ -416,28 +430,29 @@ namespace ShipbreakerVR
         // (EquipmentController.Update), which check whether the tool may change; a tool that is already out (in the other
         // hand) only changes hands. With the cutter or the grapple in the other hand, the other one of the two joins it
         // in this hand (VrDualTools).
-        private static void Draw(Hand hand)
+        // asTool: the demo charges as the game's tool, also with the charges put on by hand. False if the game does not let
+        // the tool change now.
+        private static bool Draw(Hand hand, VrToolBelt.Zone zone, bool asTool = false)
         {
-            if (hand.Zone == VrToolBelt.Zone.Flashlight)
+            if (zone == VrToolBelt.Zone.Flashlight)
             {
                 ToggleFlashlight(hand);
-                return;
+                return true;
             }
-            if (!FindEquipment()) return;
-            var zone = hand.Zone;
+            if (!FindEquipment()) return false;
             var tool = zone == VrToolBelt.Zone.Grapple ? EquipmentController.Equipment.GrappleHook
                 : zone == VrToolBelt.Zone.Cutter ? EquipmentController.Equipment.CuttingTool
                 : zone == VrToolBelt.Zone.DemoCharge || zone == VrToolBelt.Zone.Detonator ? EquipmentController.Equipment.DemoCharge
                 : EquipmentController.Equipment.Scanner;
-            if (!equipment.CanEquip(tool) || equipment.IsEquipmentBlocked(tool)) return;
+            if (!equipment.CanEquip(tool) || equipment.IsEquipmentBlocked(tool)) return false;
             // With the charges put on by hand, one comes out from behind the back as a thing of its own (VrChargeByHand).
-            if (zone == VrToolBelt.Zone.DemoCharge && VrChargeByHand.TakesOut(hand.Input)) return;
+            if (zone == VrToolBelt.Zone.DemoCharge && !asTool && VrChargeByHand.TakesOut(hand.Input)) return true;
             // The demo charges behind the back and their detonator at the hip are one tool of the game's, in two modes.
-            if (tool == EquipmentController.Equipment.DemoCharge && !VrChargeByHand.Draws(zone == VrToolBelt.Zone.Detonator)) return;
+            if (tool == EquipmentController.Equipment.DemoCharge && !VrChargeByHand.Draws(zone == VrToolBelt.Zone.Detonator)) return true;
             if (VrDualTools.Second == tool)
             {
                 VrDualTools.TakeOver(hand.Node);
-                return;
+                return true;
             }
             var current = equipment.IsNothingEquipped ? EquipmentController.Equipment.None : equipment.CurrentEquipment;
             var other = hand == LeftHand ? RightHand : LeftHand;
@@ -452,7 +467,7 @@ namespace ShipbreakerVR
                     VrHand.TakeGameTool(hand.Vr, tool);
                 }
                 holsterPulses = 0;
-                return;
+                return true;
             }
             // The scanner hides the other hand's tool until it is put away.
             if (tool == EquipmentController.Equipment.Scanner && otherHolds && VrDualTools.Second == EquipmentController.Equipment.None)
@@ -466,6 +481,21 @@ namespace ShipbreakerVR
             if (logs++ < 60) Plugin.Log.LogInfo($"Tool control: {hand.Name} hand {(taken ? "takes" : "draws")} the {tool}");
             VrHand.TakeGameTool(hand.Vr, tool);
             holsterPulses = 0;
+            return true;
+        }
+
+        // With the charges placed the game's way (Sprengsatzplatzierung = Automatisch): a hand that closed round a demo
+        // charge, taken out of the air or off a wall, has the charges as the game's tool from then on, with the preview
+        // and the trigger (Raik, 2026-11-18: a charge taken off a wall worked as with Manuell, without the preview).
+        // Drawn on the next Update, as a grip pressed behind the back draws them, while the grip stays closed; tried for
+        // a second, as the game blocks the tools while its ring is up.
+        private static Hand chargesTo;
+        private static float chargesUntil;
+
+        public static void TakeCharges(VrInput.Hand input)
+        {
+            chargesTo = input.IsLeft ? LeftHand : RightHand;
+            chargesUntil = Time.unscaledTime + 1f;
         }
 
         // The flashlight has no code of its own to call: an InputHandlerGameplay on the player runs it when its action is

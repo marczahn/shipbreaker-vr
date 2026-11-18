@@ -16,6 +16,11 @@ namespace ShipbreakerVR
     // place, afloat and in that hand, which holds it as any loose part. For NoStickTime it does not cling to the wall
     // again, near as it is. The game's own interaction is left out while a hand holds a charge on a wall (VrToolInput),
     // so its hand does not come. A ring that the game's prompt started gets its input from the button as well.
+    // The charge that came off glides into the hand's own hold of a charge (VrChargeByHand.HoldPose; Raik, 2026-11-18:
+    // "the hold one has automatically with disarmed mines") within GlideTime, and the hand takes hold of it there.
+    // With the charges placed the game's way (Sprengsatzplatzierung = Automatisch) there is no charge of its own: the
+    // one that came off stays in the stock, and the hand gets the charges as the game's tool, with the preview and the
+    // trigger (VrToolInput.TakeCharges).
     internal static class VrChargeDisarm
     {
         // The ring: one that starts within this of a charge's interaction is the charge's, and the button counts only
@@ -26,8 +31,13 @@ namespace ShipbreakerVR
         // does not cling to a wall for NoStickTime (seconds).
         private const float TakeWithin = 0.8f;
         private const float NoStickTime = 1.5f;
-        // The charge's mesh lies this far in front of its back (PRF_Demo_Charge).
-        private const float BackOfMesh = 0.03f;
+        // The charge that came off is in the hand's hold after GlideTime (seconds), at MostGlide (m/s) and MostGlideTurn
+        // (rad/s) at most; within GlideNear (m) and GlideTurnNear (degrees) of it, it is there.
+        private const float GlideTime = 0.18f;
+        private const float MostGlide = 4f;
+        private const float MostGlideTurn = 20f;
+        private const float GlideNear = 0.01f;
+        private const float GlideTurnNear = 3f;
 
         private static readonly AccessTools.FieldRef<GolfSwingController, bool> InSafeZone =
             AccessTools.FieldRefAccess<GolfSwingController, bool>("mInSafeZone");
@@ -62,6 +72,8 @@ namespace ShipbreakerVR
         private static VrInput.Hand looseHand;
         private static float looseAt;
         private static bool looseTaken;
+        private static bool looseGlides;
+        private static float glideUntil;
         private static Entity stickyOn;
         private static LayerMask stickyMask;
         private static bool stickyOff;
@@ -122,8 +134,15 @@ namespace ShipbreakerVR
             if (charge == null || charge != ringCharge) return;
             ringCharge = null;
             var hand = ringHand;
-            var fresh = VrChargeByHand.LetGoFromStock(ringPlace, ringTurn);
             hand.Buzz(0.8f, 0.12f);
+            if (!VrChargeByHand.Manual)
+            {
+                VrClimb.Drop(hand, "the demo charge came off");
+                VrToolInput.TakeCharges(hand);
+                if (logs++ < 30) Plugin.Log.LogInfo($"Charge disarm: taken off by the {hand.Name} hand, back in the stock; the hand gets the charges as the game's tool");
+                return;
+            }
+            var fresh = VrChargeByHand.LetGoFromStock(ringPlace, ringTurn);
             if (fresh == null)
             {
                 if (logs++ < 30) Plugin.Log.LogInfo($"Charge disarm: taken off by the {hand.Name} hand, back in the stock (no charge to hold could be made)");
@@ -133,6 +152,8 @@ namespace ShipbreakerVR
             looseHand = hand;
             looseAt = Time.unscaledTime;
             looseTaken = false;
+            looseGlides = true;
+            glideUntil = -1f;
             stickyOff = false;
             if (logs++ < 30) Plugin.Log.LogInfo($"Charge disarm: taken off by the {hand.Name} hand, which holds it now");
         }
@@ -144,7 +165,44 @@ namespace ShipbreakerVR
             looseHand = hand;
             looseAt = Time.unscaledTime;
             looseTaken = false;
+            looseGlides = false;
             stickyOff = false;
+        }
+
+        // The charge that came off, on its way into the hand's hold: true while it still glides there, by its speed, so
+        // it meets what is in its way. Then the hand takes hold of it.
+        private static bool Glides(Rigidbody body)
+        {
+            if (!looseGlides) return false;
+            if (glideUntil < 0f) glideUntil = Time.unscaledTime + GlideTime;
+            var left = glideUntil - Time.unscaledTime;
+            var player = VrToolCollide.Player();
+            var along = player != null ? player.velocity : Vector3.zero;
+            var origin = Vector3.zero;
+            var turned = Quaternion.identity;
+            var gliding = left > 0f && VrChargeByHand.HoldPose(looseHand, out origin, out turned);
+            if (gliding)
+            {
+                var part = loose.transform;
+                var scale = VrCamera.WorldScale;
+                var way = origin - part.position;
+                (turned * Quaternion.Inverse(part.rotation)).ToAngleAxis(out var angle, out var axis);
+                if (angle > 180f) angle -= 360f;
+                gliding = way.magnitude > GlideNear * scale || Mathf.Abs(angle) > GlideTurnNear;
+                if (gliding)
+                {
+                    var step = Mathf.Max(left, Time.fixedDeltaTime);
+                    body.velocity = along + Vector3.ClampMagnitude(way / step, MostGlide * scale);
+                    body.angularVelocity = float.IsInfinity(axis.x) || float.IsNaN(axis.x)
+                        ? Vector3.zero
+                        : Vector3.ClampMagnitude(axis * (angle * Mathf.Deg2Rad / step), MostGlideTurn);
+                    return true;
+                }
+            }
+            looseGlides = false;
+            body.velocity = along;
+            body.angularVelocity = Vector3.zero;
+            return false;
         }
 
         // The charge that came off, each frame: into the hand, and no clinging for a while.
@@ -156,7 +214,7 @@ namespace ShipbreakerVR
             {
                 var body = loose.GetComponentInParent<Rigidbody>();
                 var collider = loose.GetComponent<Collider>();
-                if (body != null && !body.isKinematic && collider != null) looseTaken = VrClimb.HoldOn(looseHand, collider);
+                if (body != null && !body.isKinematic && collider != null && !Glides(body)) looseTaken = VrClimb.HoldOn(looseHand, collider);
             }
             // The game makes a charge afloat cling to what it touches once its automatic deploying is unlocked (Sticky on
             // what the charge hangs on): taken away for the time, then given back.

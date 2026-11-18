@@ -86,7 +86,7 @@ namespace ShipbreakerVR
             if (bound || VrSettings.File == null) return;
             bound = true;
             enabled = VrSettings.Bind("Experimente", "WerkzeugeLoslassen", true,
-                "Experiment: the cutter and the grapple stay afloat, on a line to the hip, when their grip is let go away from their place on the body.");
+                "Experiment: with extended tool physics, the cutter and the grapple stay afloat, on a line to the hip, when their grip is let go away from their place on the body.");
             exact = VrSettings.Bind("Experimente", "WerkzeugformGenau", true,
                 "Experiment: with extended tool physics, the tool in the hand meets things with the shape of its model instead of boxes around its parts.");
             lineInHand = VrSettings.Bind("Experimente", "LeineInDerHand", true,
@@ -126,7 +126,9 @@ namespace ShipbreakerVR
             if (tool.GripEntry.Value != text) tool.GripEntry.Value = text;
         }
 
-        public static bool On { get { Bind(); return enabled != null && enabled.Value && !closing; } }
+        // Raik, 2026-11-18: letting tools go afloat belongs to the extended tool physics (VR options); without it a tool
+        // let go is back at its place on the body, as before.
+        public static bool On { get { Bind(); return enabled != null && enabled.Value && !closing && VrSettings.ToolPhysics != null && VrSettings.ToolPhysics.Value; } }
         public static bool Exact { get { Bind(); return exact != null && exact.Value; } }
         public static bool LineInHand { get { Bind(); return lineInHand == null || lineInHand.Value; } }
         public static float Length { get { Bind(); return lineLength != null ? lineLength.Value : 5f; } }

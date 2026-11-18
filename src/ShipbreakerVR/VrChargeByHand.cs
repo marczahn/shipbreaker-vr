@@ -25,6 +25,11 @@ namespace ShipbreakerVR
     //   afloat, and then puts the charges away (VrToolInput.ChargeLetGo).
     // The game's waiting times before the charge appears (for its hand animations) are left out: the charge leaves the
     // hand at once. Off, the charges are aimed and thrown as before.
+    // What a charge let go does belongs to the extended tool physics instead (Steuerung/ErweiterteWerkzeugphysik; Raik,
+    // 2026-11-18), with either way of placing: with it the charge stays afloat where it was let go and is put back
+    // behind the back by hand; without it, it is back with the charges.
+    // With Automatisch a charge in a hand is always the game's tool: a hand that closes round a charge afloat, or takes
+    // one off a wall (VrChargeDisarm), gets the charges with the preview and the trigger (VrToolInput.TakeCharges).
     // The game's code asks for the camera through VrAim (AimPatch); inside DemoChargeController.Update it gets the placing
     // frame here instead.
     internal static class VrChargeByHand
@@ -85,6 +90,12 @@ namespace ShipbreakerVR
         public static bool Decoupled => On;
 
         private static bool On => VrSettings.ChargePlacing != null && VrSettings.ChargePlacing.Value == Placing.Manuell && VrAim.Active;
+
+        // The charges are put on by hand (Manuell), for VrChargeDisarm.
+        public static bool Manual => On;
+
+        // A charge let go stays afloat: with the extended tool physics.
+        private static bool Floats => VrSettings.ToolPhysics != null && VrSettings.ToolPhysics.Value;
 
         // The charge in the hand, as the game's hand holds it (moved over to the left hand by VrHands).
         private static bool FindMesh()
@@ -201,12 +212,12 @@ namespace ShipbreakerVR
 
         // For VrChargeDisarm: one charge from the stock let go at that place and turn, at rest against the player's body;
         // what the game does for a thrown charge (ThrowDemoCharge), without its fling. Null if it could not.
-        public static StructurePart LetGoFromStock(Vector3 at, Quaternion turned)
+        public static StructurePart LetGoFromStock(Vector3 at, Quaternion turned, Vector3 motion = default)
         {
             var instance = controller != null ? controller : Object.FindObjectOfType<DemoChargeController>();
             if (instance == null || Instantiate == null) return null;
             var player = VrToolCollide.Player();
-            launch = player != null ? player.velocity : Vector3.zero;
+            launch = (player != null ? player.velocity : Vector3.zero) + motion;
             launchUntil = Time.unscaledTime + 2f;
             var part = Instantiate.Invoke(instance, new object[] { at, turned }) as StructurePart;
             if (part == null) return null;
@@ -264,6 +275,22 @@ namespace ShipbreakerVR
             return evenAtItsPlace || !VrToolBelt.Stows(VrToolBelt.Zone.DemoCharge, hand);
         }
 
+        // From VrToolInput.ChargeLetGo: with the charges placed the game's way (Automatisch) and extended tool physics, the
+        // hand that holds them opens its grip away from their place on the body. One charge from the stock stays afloat
+        // where the charge in the hand was, turned as it was, with the hand's motion; VrToolInput puts the charges away.
+        // False if there was none to let go.
+        public static bool LetGoAfloat(VrInput.Hand hand)
+        {
+            if (On || !Floats || !VrAim.Active || controller == null || !FindMesh() || !ChargesInHand()) return false;
+            if (State(controller) != DemoChargeState.Placement) return false;
+            if (meshRenderer != null && (!meshRenderer.enabled || !meshRenderer.gameObject.activeInHierarchy)) return false;
+            if (VrToolBelt.Stows(VrToolBelt.Zone.DemoCharge, hand)) return false;
+            if (!(AnyCharges?.Invoke(controller, null) is bool any) || !any) return false;
+            var scale = VrCamera.WorldScale;
+            var motion = VrClimb.LetGoMotion(hand, Drift * scale, TurnDrift, out var speed, out _) ? Vector3.ClampMagnitude(speed, MostThrow * scale) : Vector3.zero;
+            return LetGoFromStock(mesh.position - mesh.forward * (BackOfMesh * scale), mesh.rotation, motion) != null;
+        }
+
         // From VrToolInput.Draw: the grip pressed behind the lower back (the charges) or at the hip (their detonator). The
         // two are one tool of the game's in two modes, which it changes between Placement and Detonation only, and to the
         // charges only while there are some. False when there is nothing to draw.
@@ -293,32 +320,58 @@ namespace ShipbreakerVR
         // over, a thing of its own from then on, was the most pleasant to work with: it meets the wall, goes on when let
         // go, and is turned in the hand as one likes; so it is that from the start). True if that was done, or there is
         // none to take; false to draw the game's tool.
-        // It comes into the hand as Raik held it in his screenshot of 2026-11-18 10:52, "as I want it when the mine is
-        // drawn": upright like a slab gripped at its lower end, its face with the orange sign (the mesh's +z) turned
-        // inwards, to the other hand, its back outwards, its top rim up, and so the line of its cut along the hand. Its
-        // middle at TakeOutAt from the grip, in the controller's axes (x to the outside of that hand).
-        private static readonly Vector3 TakeOutAt = new Vector3(0f, 0.05f, 0.10f);
+        // It comes into the hand as the game's own hand holds the charges (Raik, 2026-11-18, of his screenshots with
+        // Automatisch: "even more pleasant" than the upright slab before, and how a charge taken off a wall is to lie in
+        // the hand as well): its back outwards and a little down, its face with the orange sign (the mesh's +z) inwards,
+        // to the other hand, its top rim up and tipped outwards. Measured on the game's hand with the hand's fit as it
+        // comes (VrToolFit, SprengsatzRechts 0 0 0 / 0 0 6), in the controller's axes (x right, y up, z along its aim):
+        // where the back and the top point, and the charge's middle from the grip. The left hand's is the mirror image.
+        private static readonly Vector3 HeldBack = new Vector3(0.89f, -0.42f, 0.17f);
+        private static readonly Vector3 HeldTop = new Vector3(0.44f, 0.87f, -0.20f);
+        private static readonly Vector3 TakeOutAt = new Vector3(-0.01f, 0.09f, 0.14f);
 
         // How the charge is turned in that hand, against the hand's or the controller's axes.
-        internal static Quaternion InHand(bool left) => Quaternion.Euler(0f, left ? 90f : -90f, 0f);
+        internal static Quaternion InHand(bool left)
+        {
+            var back = HeldBack;
+            var top = HeldTop;
+            if (left)
+            {
+                back.x = -back.x;
+                top.x = -top.x;
+            }
+            return Quaternion.LookRotation(-back, top);
+        }
+
+        // Where a charge lies in that hand, in the world: its own origin (the middle of its back) and its turn. False
+        // without the controller's pose.
+        public static bool HoldPose(VrInput.Hand hand, out Vector3 origin, out Quaternion turned)
+        {
+            origin = Vector3.zero;
+            turned = Quaternion.identity;
+            var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+            if (rig == null || !hand.TryGetPosition(out var gripLocal) || !hand.TryGetAimRotation(out var aimLocal)) return false;
+            var scale = VrCamera.WorldScale;
+            var aim = rig.rotation * aimLocal;
+            var at = TakeOutAt;
+            if (hand.IsLeft) at.x = -at.x;
+            turned = aim * InHand(hand.IsLeft);
+            origin = rig.TransformPoint(gripLocal) + aim * (at * scale) - turned * Vector3.forward * (BackOfMesh * scale);
+            return true;
+        }
 
         public static bool TakesOut(VrInput.Hand hand)
         {
             if (!On) return false;
             var instance = controller != null ? controller : Object.FindObjectOfType<DemoChargeController>();
-            var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
-            if (instance == null || rig == null || !hand.TryGetPosition(out var gripLocal) || !hand.TryGetAimRotation(out var aimLocal)) return false;
+            if (instance == null || !HoldPose(hand, out var origin, out var turned)) return false;
             controller = instance;
             if (!(AnyCharges?.Invoke(instance, null) is bool any) || !any)
             {
                 if (logs++ < 40) Plugin.Log.LogInfo("Charge by hand: no demo charges left behind the back");
                 return true;
             }
-            var scale = VrCamera.WorldScale;
-            var aim = rig.rotation * aimLocal;
-            var turned = aim * InHand(hand.IsLeft);
-            var middle = rig.TransformPoint(gripLocal) + aim * (TakeOutAt * scale);
-            var part = LetGoFromStock(middle - turned * Vector3.forward * (BackOfMesh * scale), turned);
+            var part = LetGoFromStock(origin, turned);
             if (part == null) return false;
             VrChargeDisarm.Give(part, hand);
             hand.Buzz(0.4f, 0.05f);
@@ -434,7 +487,7 @@ namespace ShipbreakerVR
             held.Near = held.Shown = false;
             if (!near || held.Target == null || controller == null || Instantiate == null)
             {
-                if (logs++ < 60) Plugin.Log.LogInfo($"Charge by hand: a charge afloat let go by the {hand.Name} hand with no wall within {Reach * 100f:0} cm of its back: it floats");
+                if (logs++ < 60) Plugin.Log.LogInfo($"Charge by hand: a charge afloat let go by the {hand.Name} hand with no wall within {Reach * 100f:0} cm of its back");
                 return false;
             }
             charge.OnSuccess();
@@ -520,6 +573,19 @@ namespace ShipbreakerVR
                     if (held.Charge != null && Deployed(held.Charge)) held.Charge = null;
                 }
                 if (held.Charge == null) return;
+                // Placed the game's way, a charge in a hand is the game's tool: this one goes back to the stock, and the
+                // charges come into the hand that closed round it.
+                if (!On && VrAim.Active)
+                {
+                    var taken = held.Charge;
+                    held.Charge = null;
+                    VrClimb.Drop(hand, "a demo charge afloat becomes the charges in the hand");
+                    taken.OnSuccess();
+                    VrToolInput.TakeCharges(hand);
+                    hand.Buzz(0.4f, 0.05f);
+                    if (logs++ < 60) Plugin.Log.LogInfo($"Charge by hand: a charge afloat taken by the {hand.Name} hand goes back to the stock, the hand gets the charges as the game's tool");
+                    return;
+                }
                 Unstick(held);
                 Aim(held);
                 var at = VrToolBelt.Stows(VrToolBelt.Zone.DemoCharge, hand);
@@ -541,23 +607,30 @@ namespace ShipbreakerVR
                 Restick(held);
                 return;
             }
-            if (!wasAt && !VrToolBelt.Stows(VrToolBelt.Zone.DemoCharge, hand))
+            var away = !wasAt && !VrToolBelt.Stows(VrToolBelt.Zone.DemoCharge, hand);
+            if (away)
             {
                 if (PutOn(hand, held, was))
                 {
                     held.StickyOff = false;
                     return;
                 }
-                Restick(held);
-                if (logs++ < 40) Plugin.Log.LogInfo($"Charge by hand: a charge afloat let go by the {hand.Name} hand at {VrToolBelt.ChargePlace(hand)}, not behind the back");
-                return;
+                if (Floats)
+                {
+                    Restick(held);
+                    if (logs++ < 40) Plugin.Log.LogInfo($"Charge by hand: a charge afloat let go by the {hand.Name} hand at {VrToolBelt.ChargePlace(hand)}, not behind the back: it floats");
+                    return;
+                }
             }
             if (held.Shown && !ChargesInHand()) Preview()?.Deactivate();
             held.Near = held.Shown = false;
             held.StickyOff = false;
             was.OnSuccess();
             hand.Buzz(1f, 0.15f);
-            if (logs++ < 40) Plugin.Log.LogInfo($"Charge by hand: a charge afloat put back behind the back by the {hand.Name} hand");
+            if (logs++ < 40)
+                Plugin.Log.LogInfo(away
+                    ? $"Charge by hand: a charge let go by the {hand.Name} hand away from a wall is back with the charges (no extended tool physics)"
+                    : $"Charge by hand: a charge afloat put back behind the back by the {hand.Name} hand");
         }
 
         // How far a point in the world is from the charge showing in the hand (its middle); MaxValue without one. Whether
