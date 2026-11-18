@@ -330,15 +330,17 @@ def main():
               f'<rect x="24" y="26" width="28" height="36" rx="8" fill="{PART}" stroke="{ACCENT}" stroke-width="2"/>'
               f'<circle cx="56" cy="20" r="4" fill="{ACCENT}"/><circle cx="58" cy="34" r="4" fill="{ACCENT}"/>'
               f'<circle cx="52" cy="58" r="4" fill="{ACCENT}"/><circle cx="24" cy="58" r="4" fill="{ACCENT}"/>',
-              "Where the tools are", "Hips, slightly behind: right grapple, left demo charges",
+              "Where the tools are", "Hips: right grapple, left detonator · behind the back charges",
               "Over the right shoulder cutter · right of the helmet scanner"),
              (grip(), "Flashlight", "Left hand at the left of the helmet: squeeze the grip.",
               "Switches it on or off."),
              (two_tools(),
               "Two tools at once", "Take a second tool with the other hand.",
               "Cutter, grapple, demo charges; each hand works its own."),
-             (hands_swap(), "Hand a tool over", "Reach for the tool in one hand with the other one",
-              "and squeeze the grip: that hand takes it over."),
+             (hands_swap(), "Hand a tool over", "Squeeze the other hand's grip right at the tool's grip:",
+              "that hand takes it over."),
+             (holding(), "Let a tool go", "Extended tool physics: let go away from its place.",
+              "It floats on a line to your hip; take it by its grip again."),
              (scanner(), "Scan", "Take the scanner: the other hand's tool hides.",
               "Keep that hand's grip squeezed and it comes back after the scan."),
              (holding(), "Hold on and climb", "Grip with an empty hand within 15 cm of anything holds on.",
@@ -349,6 +351,8 @@ def main():
               "Switches can be held with the grip too."),
              (two_buttons("X", "Y"), "Left hand", "A tool in the left hand: X works as A, Y as B.",
               "Flying pauses until you let go; the right stick still turns."),
+             (two_tools(), "Both hands on a tool", "Extended tool physics: hold it with the free hand too.",
+              "The grapple gets quicker, the cutter steadier."),
          ], footer="The suit's hands follow your controllers and close with the grip.")
 
     page("tools.svg", "ShipbreakerVR tool buttons", "Tool buttons",
@@ -364,7 +368,7 @@ def main():
              (button("A"), "Push", "Grapple holding nothing: A pushes things away.",
               "Hold A to charge. It goes where the grapple points."),
              (button("B"), "Tool mode", "B: switch the tool's mode.",
-              "Demo charges: detonator. Grapple: tethers (see below)."),
+              "Cutter: Splitsaw or Stinger. Grapple: tethers (see below)."),
              (trigger_and("B"), "Reel in", "Trigger held + B: reel in what the grapple holds.",
               "While B is held."),
              (wrist(), "Turn the cutter's line", "A: horizontal or vertical cuts.",
@@ -390,19 +394,23 @@ def main():
          ])
 
     page("charges.svg", "ShipbreakerVR demo charges", "Demo charges",
-         "At the left hip, slightly behind you. The charge sits in your hand, without a laser.", [
-             (charge(), "Place a charge", "Trigger while pointing at a surface.",
-              "The game's marker shows where it sticks."),
-             (charge(thrown=True), "Throw a charge", "Trigger while pointing at nothing.",
-              "It flies where your hand points."),
-             (button("B"), "Detonator", "B: take the detonator, B again: back to charges.",
-              "Back only while charges are left."),
+         "Charges behind your lower back, the detonator at the left hip. VR tab: Demo charge placing, Automatic or Manual.", [
+             (grip(), "Take a charge", "Squeeze the grip behind your lower back.",
+              "Either hand. The detonator hangs at the left hip."),
+             (charge(), "Automatic: place or throw", "Trigger: onto the surface you point at.",
+              "The preview shows where; at nothing, it is thrown."),
+             (charge(), "Manual: place by hand", "Bring the charge's back to the surface, let go.",
+              "The line on the charge is the cut. No preview."),
+             (charge(thrown=True), "Let a charge go", "Let go away from a surface.",
+              "It floats (Extended tool physics) or goes back by itself."),
+             (button("A"), "Take a charge off", "Hold it, press A; A again in the ring's safe zone.",
+              "Manual: it comes off into that hand."),
              (detonator(), "Detonate", "Trigger with the detonator in the hand.",
-              "Blows all placed charges."),
+              "Two fingers press its lever; all placed charges go off."),
              (two_tools(), "Charges and another tool", "Take the cutter or grapple with the other hand.",
               "Each hand's trigger and buttons work its own tool."),
-             (two_buttons("X", "Y"), "Left hand", "Charges in the left hand: X works as A, Y as B.",
-              "Flying pauses until you let go."),
+             (button("Y"), "Left hand", "With a charge or the detonator in the left hand",
+              "Y brakes, as with an empty hand."),
          ])
 
     page("grapple.svg", "ShipbreakerVR grapple and tethers", "Grapple and tethers",

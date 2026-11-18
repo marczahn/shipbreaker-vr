@@ -59,25 +59,34 @@ where you pressed it, its surface full thrust, the small inner globe the deadzon
 ### Tools in the hand
 ![Hands](images/hands.svg)
 
+![Tools on your suit](images/body.svg)
+
 ![Tool buttons](images/tools.svg)
 
 With the row "Aim with the hand" in the VR options on (the default), the tools aim where the controller that holds them
 points, from the tool's muzzle. A thin laser shows where; the crosshair in the middle of the view is hidden meanwhile.
 With an empty hand there is no laser: A uses what is in the middle of your view, marked by the game's dot, as in the
 flat game.
-- Squeeze the grip at your body to take a tool: grapple at the right hip, demo charges at the left hip, cutter over the
-  right shoulder, scanner at the right side of the helmet. The controller buzzes when it is in such a spot. The left
-  hand at the left side of the helmet switches the flashlight on or off with the grip. Keep the
-  grip squeezed to hold the tool; let go to put it away.
+- Squeeze the grip at your body to take a tool: grapple at the right hip, the demo charges' detonator at the left hip,
+  the demo charges behind your lower back (with either hand), cutter over the right shoulder, scanner at the right side
+  of the helmet. The controller buzzes when it is in such a spot. The grapple and the detonator hang where you can see
+  them. The left hand at the left side of the helmet switches the flashlight on or off with the grip. Keep the
+  grip squeezed to hold the tool; let go to put it away. The row "Handedness" in the VR options mirrors all these places
+  and the backpack for the left-handed.
+- With the row "Extended tool physics" on, a tool is put away by letting go at its place. Let go of the cutter, the
+  grapple or the detonator anywhere else and it stays afloat, with the shape of its model, on a 5 m line to your hip:
+  take it again by its grip, or take the line with a free hand and pull the tool in. A free hand can also take hold of
+  the cutter or the grapple in the other hand: the grapple follows more quickly then, the cutter gets steadier.
 - Each hand can hold a tool, so two of the cutter, the grapple and the demo charges can be out at once; each hand's
-  trigger and buttons work its own tool. Every tool exists only once: reaching for the tool in one hand with the other
-  one hands it over. The scanner hides the other hand's tool while you scan; keep that hand's grip squeezed and its tool
+  trigger and buttons work its own tool. Every tool exists only once: the grip of the other hand squeezed right at the tool's
+  grip hands it over. The scanner hides the other hand's tool while you scan; keep that hand's grip squeezed and its tool
   comes back when you let go of the scanner. The row "Two tools at once" in the VR options switches this off, so a tool taken
   with one hand replaces the one in the other hand.
 - On the controller that holds the tool: trigger = use the tool (cut, grapple, place or detonate demo charges), A =
   use what you point at (A or X works from either hand, also an empty one), trigger + A = throw, B = switch the tool's
   mode, trigger + B = reel in. In the left hand X and Y stand for A and B, and controller flying pauses until you let
-  go; the right stick still turns. The grapple's tethers are below.
+  go; the right stick still turns. With a demo charge or the detonator in the left hand Y brakes instead. The grapple's
+  tethers are below.
 - The cutter's line starts out horizontal. A on the cutter switches between horizontal and vertical cuts (the right
   mouse button in the flat game), and the line also turns with your wrist. That hand's A then does not use things;
   the other hand's A or X does.
@@ -85,9 +94,11 @@ flat game.
 - The flat game never showed the cutter's right side, which is coarse and plain. The mod copies the detailed left side
   onto it, mirrored (small print there reads backwards). `CutterSpiegeln = false` under `[Bild]` in the config file
   switches this off.
-- If the cutter or the grapple does not sit right in your hand, switch on "Fit tools in the hand" in the VR options. While
-  one hand holds the tool, squeeze the grip of the other hand at the tool to grab it, then move and turn it into place;
-  letting go stores it, separately for each tool and hand. Switch the row off again when you are done (while it is on,
+- If the cutter, the grapple or the detonator does not sit right in your hand, switch on "Fit tools in the hand" in the
+  VR options. While one hand holds the tool, squeeze the grip of the other hand at the tool to grab it, then move and
+  turn it into place; letting go stores it, separately for each tool and hand (the detonator once, mirrored for the
+  other hand). A demo charge placed by hand is passed from hand to hand until it lies right; when the other hand lets
+  go, that hold is stored. Switch the row off again when you are done (while it is on,
   the other hand does not take tools from the body). The values are in `BepInEx\config\de.marczahn.shipbreakervr.cfg`
   under `[Justierung]`; delete one to get its default back.
 
@@ -99,9 +110,16 @@ flat game.
 - Cutter: the trigger cuts, A switches the Splitsaw between horizontal and vertical cuts (the line also turns with your
   wrist), B switches between the Splitsaw (a line) and the Stinger (the point the laser shows). A bright dot marks
   where the laser hits; with the Splitsaw, small dots on the parts show where the cut goes.
-- Demo charges: the trigger places a charge where you point, or throws it where your hand points if you point at
-  nothing. B takes the detonator (and goes back to the charges while you have some left); with the detonator the
-  trigger detonates.
+- Demo charges: they are behind your lower back, their detonator hangs at the left hip. The row "Demo charge placing"
+  in the VR options chooses how a charge goes on. *Automatic* (the default): the trigger places a charge where you
+  point, with the game's preview, or throws it where your hand points if you point at nothing. *Manual*: the charge
+  comes into your hand as a thing of its own; bring its back to the surface and let go, and it goes on as you hold it.
+  The line on the charge is the cut, there is no preview. Let go away from a surface it floats (with "Extended tool
+  physics", else it goes back by itself); take it again, hand it to the other hand or put it back behind your back.
+- To take a charge off a wall, hold on to it with a hand and press A or X: the game's ring comes up. Press the button
+  again while the ring is in its safe zone. With *Manual* the charge comes off into that hand.
+- With the detonator in your hand the trigger detonates: two fingers press its lever. The visor shows how many charges
+  are left while you hold a charge or the detonator.
 
 ### Grapple and tethers
 ![Grapple and tethers](images/grapple.svg)
