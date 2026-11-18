@@ -246,6 +246,11 @@ namespace ShipbreakerVR
         // beside their box, a charge was let go afloat each time and the charges could not be put back).
         private const float ChargeStowWider = 0.15f;
         private const float BackStowWider = 0.08f;
+        // The cutter goes back within a larger space than it is drawn from (Raik, 2026-11-18: "sometimes a little hard
+        // to put away; larger, and above all further forward"): this much further forward, lower and to the inside.
+        private const float CutterStowForward = 0.18f;
+        private const float CutterStowLower = 0.10f;
+        private const float CutterStowInside = 0.08f;
 
         // Where a hand is as the demo charges' place behind the back is measured, for the log.
         internal static string ChargePlace(VrInput.Hand controller) =>
@@ -257,7 +262,10 @@ namespace ShipbreakerVR
             if (zone == Zone.Grapple) return HipLocal(controller, out var hip) && Stows(zone, hip);
             if (zone == Zone.Detonator) return BodyLocal(controller, ChargeRef, out var box) && ChargeBox(box, ChargeStowWider);
             if (zone == Zone.DemoCharge) return ShoulderLocal(controller, out var back) && LowerBack(back, BackStowWider);
-            if (zone == Zone.Cutter) return (HeadLocal(controller, out var from) && ZoneAt(from) == Zone.Cutter) || OverRightShoulderOfBody(controller);
+            if (zone == Zone.Cutter)
+                return (HeadLocal(controller, out var from) && ZoneAt(from) == Zone.Cutter) || OverRightShoulderOfBody(controller)
+                    || (ShoulderLocal(controller, out var wide) && wide.y > CutterAbove - CutterStowLower
+                        && wide.z < CutterBehindBody + CutterStowForward && wide.x > CutterInside - CutterStowInside);
             return HeadLocal(controller, out var head) && Stows(zone, head);
         }
 

@@ -6,8 +6,9 @@ namespace ShipbreakerVR
     // The free hand takes hold of the cutter or the grapple in the other hand, as Raik asked: anywhere on it, by pressing
     // its grip within Reach of the tool's shape (VrToolCollide.Distance). The hand then stays where it took hold, turning
     // and moving with the tool instead of its controller (VrHands.Pose), and its fingers close until they touch the tool
-    // (VrHands.Wrap). The tool is steadied by it: its own weight lags 80% less, a part on the grapple 60% less
-    // (VrToolWeight). Letting go of the grip, or the tool leaving the other hand, lets go. The tool keeps aiming with the
+    // (VrHands.Wrap). The grapple is quicker with it: its own weight lags 80% less, a part on it 60% less
+    // (VrToolWeight). The cutter keeps its weight and is steadied more instead, for precise cuts (VrToolSteady; Raik,
+    // 2026-11-18). Letting go of the grip, or the tool leaving the other hand, lets go. The tool keeps aiming with the
     // hand that works it. While a hand holds the tool, or is about to, it does not hold on to anything else (VrHand.Free).
     internal static class VrToolSupport
     {

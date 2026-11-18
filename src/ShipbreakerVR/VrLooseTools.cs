@@ -70,6 +70,8 @@ namespace ShipbreakerVR
         // Raik's third test (2026-11-17): 10 cm was too tight, 20 cm it is, and wider still for laying the tool back.
         private const float GripBall = 0.20f;
         private const float StowBall = 0.25f;
+        // The cutter hangs on the back, unseen: it goes back within this of where its grip hangs there.
+        private const float CutterStowBall = 0.32f;
         // A grip pressed within this of a tool's grip but outside its ball is logged, to fit the ball.
         private const float MissWithin = 0.5f;
         // A tool this far beyond its line's length (the player was moved, a respawn) goes back onto the body.
@@ -586,6 +588,10 @@ namespace ShipbreakerVR
                 if (logs++ < 80) Plugin.Log.LogInfo($"Loose tools: {kind} let go at its place on the body, put away");
                 return;
             }
+            // Where the hand was, to fit the places the tools go back to.
+            if (awayLogs++ < 60 && VrToolBelt.ShoulderLocal(holder.Input, out var where))
+                Plugin.Log.LogInfo($"Loose tools: {kind} let go away from its place: the hand at ({where.x:0.00}, {where.y:0.00}, {where.z:0.00}) m as the shoulder is measured"
+                    + (TryGetHung(tool, holder.Input, model, rest, out var off) ? $", {off / VrCamera.WorldScale * 100f:0} cm from where its grip hangs" : ""));
             LetGo(tool, model, holder);
         }
 
@@ -1159,13 +1165,22 @@ namespace ShipbreakerVR
 
         // Whether the hand that lets a tool go is where the tool's grip hangs on the body (the grapple's, at the belt):
         // the tool has just been laid on its rest point, which is at the hip already (VrBeltGrapple).
-        private static bool AtItsGripOnTheBody(Tool tool, VrInput.Hand controller, Transform model, Transform rest)
+        private static bool AtItsGripOnTheBody(Tool tool, VrInput.Hand controller, Transform model, Transform rest) =>
+            TryGetHung(tool, controller, model, rest, out var off) && off < (tool == Cutter ? CutterStowBall : StowBall) * VrCamera.WorldScale;
+
+        private static int awayLogs;
+
+        // How far that hand is from where the tool's grip hangs on the body (the grapple's at the hip, the cutter's on
+        // the back), in the world's units; false while the hand's place on the tool is not known.
+        private static bool TryGetHung(Tool tool, VrInput.Hand controller, Transform model, Transform rest, out float off)
         {
-            if (tool != Grapple || !tool.HandKnown) return false;
+            off = 0f;
+            if (tool.Prop || !tool.HandKnown || model == null || rest == null) return false;
             var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
             if (rig == null || !controller.TryGetPosition(out var local)) return false;
             var hung = rest.TransformPoint(Vector3.Scale(model.localScale, tool.HandOn));
-            return (rig.TransformPoint(local) - hung).magnitude < StowBall * VrCamera.WorldScale;
+            off = (rig.TransformPoint(local) - hung).magnitude;
+            return true;
         }
 
         // For the F8 dump.

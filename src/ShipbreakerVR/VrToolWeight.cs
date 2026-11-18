@@ -56,7 +56,8 @@ namespace ShipbreakerVR
                 load = Mathf.Min(LoadPerDoubling * Mathf.Log(1f + grapple.GrappledRigidbody.mass / LoadBase, 2f), LoadMost);
             if (VrToolSupport.Supported(hand))
             {
-                own *= VrToolSupport.ToolLeft;
+                // The grapple is quicker with two hands; the cutter keeps its weight and is steadied more (VrToolSteady).
+                if (tool != EquipmentController.Equipment.CuttingTool) own *= VrToolSupport.ToolLeft;
                 load *= VrToolSupport.LoadLeft;
             }
             return own + load;
