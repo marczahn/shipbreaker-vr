@@ -214,6 +214,7 @@ namespace ShipbreakerVR
         public static void StateSet(DemoChargeController instance, DemoChargeState state)
         {
             if (state == DemoChargeState.Cooldown) OutAt = Time.unscaledTime;
+            if (state == DemoChargeState.Detonating && State(instance) == state && VrAim.Active) QuietHand(instance);
             if (!inside || (state != DemoChargeState.Placing && state != DemoChargeState.Throwing) || State(instance) != state || Timer == null) return;
             // No wait for the game's hand animation: the charge leaves the hand on the next frame.
             var timer = Timer.GetValue(instance);
@@ -222,6 +223,26 @@ namespace ShipbreakerVR
             delay.SetValue(timer, 0f);
             Timer.SetValue(instance, timer);
             if (logs++ < 40) Plugin.Log.LogInfo($"Charge by hand: {(state == DemoChargeState.Placing ? "onto the wall" : "let go afloat")}");
+        }
+
+        // As placed charges go off, the game closes the whole hand round the detonator (its hand animator's trigger
+        // DetonatorDetonateParameter, set as the controller goes on to Detonating). In VR the fingers on the lever press
+        // it with the controller's trigger (VrHands.PressDetonator), and the game's squeeze came on top of that (Raik,
+        // 2026-11-18: "a double animation, that seems to be an old one, take it out"). The trigger is taken back
+        // before the animator sees it. The detonator's own lights and a failed detonation's animation stay.
+        private static readonly AccessTools.FieldRef<DemoChargeController, Animator> HandAnimator =
+            AccessTools.FieldRefAccess<DemoChargeController, Animator>("m_HandAnimatorController");
+        private static bool quietLogged;
+
+        private static void QuietHand(DemoChargeController instance)
+        {
+            var animator = HandAnimator(instance);
+            var trigger = instance.AnimationParamters.DetonatorDetonateParameter;
+            if (animator == null || string.IsNullOrEmpty(trigger)) return;
+            animator.ResetTrigger(trigger);
+            if (quietLogged) return;
+            quietLogged = true;
+            Plugin.Log.LogInfo($"Charge by hand: the game's hand animation for detonating ('{trigger}') is left out, the fingers press the lever instead");
         }
 
         // For VrChargeDisarm: one charge from the stock let go at that place and turn, at rest against the player's body;

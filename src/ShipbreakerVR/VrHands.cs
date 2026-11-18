@@ -620,9 +620,10 @@ namespace ShipbreakerVR
             if (Frame(arm, out _, out var frame))
             {
                 // Towards the palm, about the hand's thumb-side axis, as Curl bends them; straighter by LeverReach.
+                // The index and the middle finger only: those two lie on the lever, the other two round the grip.
                 var across = frame * Vector3.up;
                 var side = left ? 1f : -1f;
-                for (var i = 0; i < arm.Joints.Length; i++)
+                for (var i = 0; i < arm.Joints.Length && i < 6; i++)
                 {
                     var joint = arm.Joints[i];
                     var bend = SqueezeBend[i % 3] * pulled - LeverReach[i % 3];
