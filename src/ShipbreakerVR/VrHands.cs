@@ -540,6 +540,10 @@ namespace ShipbreakerVR
         private const float HeadRadius = 0.013f;
         // Degrees more at the knuckle, the middle and the last joint of each finger, with the trigger pulled through.
         private static readonly float[] SqueezeBend = { 3f, 10f, 7f };
+        // The game's own hold has the finger tips in the lever (Raik's screenshot of 2026-11-18 18:32, "from the start,
+        // nothing to do with you"): with the detonator in the hand the fingers are that much straighter, in degrees at
+        // the knuckle, the middle and the last joint, so their tips lie on the lever's front.
+        private static readonly float[] LeverReach = { 0f, 6f, 12f };
         private static Transform leverPart;
         // In the lever's own axes: its hinge and the axis it turns about (towards the grip for a positive angle).
         private static Vector3 leverHinge, leverAxis;
@@ -613,22 +617,23 @@ namespace ShipbreakerVR
             var left = VrHand.GameToolHand.IsLeft;
             var arm = left ? LeftArm : RightArm;
             var pulled = Mathf.Clamp01(arm.Input.TriggerValue);
-            if (pulled <= 0.01f) return;
             if (Frame(arm, out _, out var frame))
             {
-                // Towards the palm, about the hand's thumb-side axis, as Curl bends them.
+                // Towards the palm, about the hand's thumb-side axis, as Curl bends them; straighter by LeverReach.
                 var across = frame * Vector3.up;
                 var side = left ? 1f : -1f;
                 for (var i = 0; i < arm.Joints.Length; i++)
                 {
                     var joint = arm.Joints[i];
-                    if (joint == null) continue;
+                    var bend = SqueezeBend[i % 3] * pulled - LeverReach[i % 3];
+                    if (joint == null || Mathf.Abs(bend) < 0.01f) continue;
                     // Not set this frame (the game's own pose): that pose is its base from here.
                     if (joint.localRotation != arm.Set[i]) arm.Base[i] = joint.localRotation;
-                    joint.rotation = Quaternion.AngleAxis(side * SqueezeBend[i % 3] * pulled, across) * joint.rotation;
+                    joint.rotation = Quaternion.AngleAxis(side * bend, across) * joint.rotation;
                     arm.Set[i] = joint.localRotation;
                 }
             }
+            if (pulled <= 0.01f) return;
             if (!leverLooked)
             {
                 leverLooked = true;
