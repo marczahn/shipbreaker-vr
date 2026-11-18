@@ -260,6 +260,10 @@ namespace ShipbreakerVR
             var weight = 0f;
             if (charge && !ChargeInLeftHand) weight = 1f;
             else if (stowingSince >= 0f && Time.time - stowingSince < StowBlend) weight = 1f - (Time.time - stowingSince) / StowBlend;
+            // With the charges put on by hand the right hand follows its controller like the left one (VrHands), also
+            // after letting go: blending back into the game's stow animation swung the arm round in a wide circle and
+            // knocked the charge away (Raik, 2026-11-18).
+            if (VrChargeByHand.Decoupled) weight = 0f;
             PosesRightArm = weight > 0f;
             if (weight <= 0f || vr == null || hand == null || !rigKnown) return;
             var camera = vr.GameCamera;

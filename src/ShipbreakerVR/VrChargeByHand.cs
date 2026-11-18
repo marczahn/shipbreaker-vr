@@ -77,6 +77,12 @@ namespace ShipbreakerVR
         // When a charge last left the hand (the controller went on to its cooldown), in unscaled time.
         public static float OutAt { get; private set; } = -10f;
 
+        // With the charges put on by hand, the charge does not ride on the game's animated hand: the hands follow their
+        // controllers as with any tool, and the charge is set in front of the controller that holds it, its back where the
+        // controller points and its top up (VrHands.ChargeInHand). Raik, 2026-11-18: on the animated hand the charge's back
+        // pointed 79 degrees to the side; turning the hand to straighten it turned the hand and the detonator by as much.
+        public static bool Decoupled => On;
+
         private static bool On
         {
             get

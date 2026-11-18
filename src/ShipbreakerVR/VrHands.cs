@@ -498,12 +498,13 @@ namespace ShipbreakerVR
             Drive(LeftArm, active && (Idle(grab.LeftHand) || leftControl));
             var rightBusy = VrToolModels.PosesRightArm;
             Drive(RightArm, active && !rightBusy && (Idle(grab.RightHand) || rightControl
-                || (grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped && (equipment != EquipmentController.Equipment.DemoCharge || chargeLeft))));
+                || (grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped
+                    && (equipment != EquipmentController.Equipment.DemoCharge || chargeLeft || VrChargeByHand.Decoupled))));
             // The demo charge's arm is bent there; another bend on top would fight it.
             if (rightBusy) RightArm.Weight = 0f;
             Fingers(LeftArm, leftWasDriven);
             Fingers(RightArm, rightWasDriven);
-            Pose(LeftArm, active && chargeLeft && Mirrored(out var hold) ? ChargeLeftTurn * hold : Quaternion.identity);
+            Pose(LeftArm, active && chargeLeft && !VrChargeByHand.Decoupled && Mirrored(out var hold) ? hold : Quaternion.identity);
             Pose(RightArm, Quaternion.identity);
             AtControl(LeftArm);
             AtControl(RightArm);
@@ -515,6 +516,46 @@ namespace ShipbreakerVR
             KeepTips(RightArm);
             MirrorChargeFingers();
             Charges(active && chargeLeft);
+            ChargeInHand(active && VrChargeByHand.Decoupled && equipment == EquipmentController.Equipment.DemoCharge
+                && grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped);
+        }
+
+        // With the charges put on by hand (VrChargeByHand.Decoupled): the charge itself ('PRF_Demo_Charge' on the game's
+        // right hand) is set in front of the controller of the hand that holds the charges, its back (the mesh's -z)
+        // where the controller points and its top up, its middle at ChargeAt from the grip in the controller's axes, in
+        // meters at world scale 1. Its own pose under the hand comes back when it is no longer set, if nothing has set it
+        // since. The detonator stays on the hand.
+        private static readonly Vector3 ChargeAt = new Vector3(0f, 0.03f, 0.09f);
+        private const string ChargeProp = "PRF_Demo_Charge";
+        private static Transform chargeProp, chargeMesh;
+        private static Moved chargeMoved;
+        private static bool chargeSet;
+
+        private static bool IsChargeProp(Transform piece) => piece != null && piece.name.StartsWith(ChargeProp, System.StringComparison.Ordinal);
+
+        private static void ChargeInHand(bool on)
+        {
+            if (chargeProp == null && RightArm.Wrist != null)
+            {
+                foreach (Transform child in RightArm.Wrist)
+                    if (IsChargeProp(child)) chargeProp = child;
+                var filter = chargeProp != null ? chargeProp.GetComponentInChildren<MeshFilter>(true) : null;
+                chargeMesh = filter != null ? filter.transform : null;
+            }
+            if (chargeProp == null || chargeMesh == null) return;
+            if (chargeSet && chargeProp.localPosition == chargeMoved.SetPosition && chargeProp.localRotation == chargeMoved.SetRotation)
+                SetLocal(chargeProp, chargeMoved.Position, chargeMoved.Rotation);
+            chargeSet = false;
+            var input = VrHand.GameToolHand.Input;
+            if (!on || !input.TryGetPosition(out var gripLocal) || !input.TryGetAimRotation(out var aimLocal)
+                || !VrToolModels.TrackingToWorld(gripLocal, aimLocal, out var grip, out var aim)) return;
+            var original = new Moved { Position = chargeProp.localPosition, Rotation = chargeProp.localRotation };
+            chargeProp.rotation = aim * Quaternion.Euler(0f, 180f, 0f) * Quaternion.Inverse(chargeMesh.localRotation);
+            chargeProp.position += grip + aim * (ChargeAt * VrCamera.WorldScale) - chargeMesh.position;
+            original.SetPosition = chargeProp.localPosition;
+            original.SetRotation = chargeProp.localRotation;
+            chargeMoved = original;
+            chargeSet = true;
         }
 
         // A hand working a control is the game's, which reaches for the control's HandTarget from where its body is. In VR the
@@ -2678,11 +2719,6 @@ namespace ShipbreakerVR
         // relative to the controller as the right hand is to the eye, as VrToolModels.PoseArm holds it in the right hand.
         // So the charge sits in the left hand as in the right one, and the hand moves with the charge's animations,
         // throwing included. Read before the right arm is posed, in the hand's own axes (Frame), and mirrored there.
-        // Measured with Raik, 2026-11-18: mirrored alone, the charge's back pointed 64 degrees to the left and 27 degrees
-        // down of the left controller's aim (the right hand's fit, VrToolFit, does not reach the left one). With this turn
-        // it points where the controller points, its top up, as in the right hand.
-        private static readonly Quaternion ChargeLeftTurn = Quaternion.Euler(11.4f, 65.9f, -34.4f);
-
         private static bool Mirrored(out Quaternion hold)
         {
             hold = Quaternion.identity;
@@ -2974,6 +3010,16 @@ namespace ShipbreakerVR
             foreach (var piece in chargePieces)
             {
                 if (piece == null) continue;
+                // The charge itself is set in front of the controller instead (ChargeInHand).
+                if (VrChargeByHand.Decoupled && IsChargeProp(piece))
+                {
+                    if (moved.TryGetValue(piece, out var set))
+                    {
+                        if (piece.localPosition == set.SetPosition && piece.localRotation == set.SetRotation) SetLocal(piece, set.Position, set.Rotation);
+                        moved.Remove(piece);
+                    }
+                    continue;
+                }
                 if (moved.TryGetValue(piece, out var last) && piece.localPosition == last.SetPosition && piece.localRotation == last.SetRotation)
                     SetLocal(piece, last.Position, last.Rotation);
                 var original = new Moved { Position = piece.localPosition, Rotation = piece.localRotation };

@@ -42,12 +42,11 @@ namespace ShipbreakerVR
         // The demo charge hangs on the game's right hand: its fit moves that hand (its wrist) against the controller.
         // Turned 6 degrees anticlockwise as seen from behind (Raik, 2026-11-13: the hand was turned 5 to 7 degrees too far
         // clockwise against the empty hand).
-        // Measured with Raik, 2026-11-18: with "0 0 0 / 0 0 6" the charge's back pointed 79 degrees to the right and 25
-        // degrees down of the controller's aim, turned about its length besides; with this turn it points where the
-        // controller points, its top up, so the charge is put on a wall by pointing the controller at it.
-        // The turn swings the charge about the wrist, 20 cm to the left and 9 cm behind the grip (measured); the mount
-        // brings it back in front of the controller.
-        private static readonly Fit ChargeRight = new Fit("SprengsatzRechts", "20 0 18 / 11.6 -80.0 33.3");
+        // Measured with Raik, 2026-11-18: with this fit the charge's back points 79 degrees to the right and 25 degrees
+        // down of the controller's aim. A fit that straightens the charge ("20 0 18 / 11.6 -80.0 33.3") turned the hand
+        // and the detonator by as much, so with the charges put on by hand the charge is set by itself instead
+        // (VrChargeByHand.Decoupled) and this fit only counts with that off.
+        private static readonly Fit ChargeRight = new Fit("SprengsatzRechts", "0 0 0 / 0 0 6");
 
         public static ConfigEntry<bool> Adjusting;
 
