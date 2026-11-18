@@ -303,9 +303,16 @@ namespace ShipbreakerVR
         // From VrToolInput.Draw: the grip pressed behind the lower back with the charges put on by hand. A charge from the
         // stock comes into that hand as a thing of its own, held as any loose part (Raik, 2026-11-18: a charge handed
         // over, a thing of its own from then on, was the most pleasant to work with: it meets the wall, goes on when let
-        // go, and is turned in the hand as one likes; so it is that from the start). In front of the controller, its back
-        // where the controller points. True if that was done, or there is none to take; false to draw the game's tool.
-        private static readonly Vector3 TakeOutAt = new Vector3(0f, 0.02f, 0.12f);
+        // go, and is turned in the hand as one likes; so it is that from the start). True if that was done, or there is
+        // none to take; false to draw the game's tool.
+        // It comes into the hand as Raik held it in his screenshot of 2026-11-18 10:52, "as I want it when the mine is
+        // drawn": upright like a slab gripped at its lower end, its face with the orange sign (the mesh's +z) turned
+        // inwards, to the other hand, its back outwards, its top rim up, and so the line of its cut along the hand. Its
+        // middle at TakeOutAt from the grip, in the controller's axes (x to the outside of that hand).
+        private static readonly Vector3 TakeOutAt = new Vector3(0f, 0.05f, 0.10f);
+
+        // How the charge is turned in that hand, against the hand's or the controller's axes.
+        internal static Quaternion InHand(bool left) => Quaternion.Euler(0f, left ? 90f : -90f, 0f);
 
         public static bool TakesOut(VrInput.Hand hand)
         {
@@ -321,7 +328,7 @@ namespace ShipbreakerVR
             }
             var scale = VrCamera.WorldScale;
             var aim = rig.rotation * aimLocal;
-            var turned = aim * Quaternion.Euler(0f, 180f, 0f);
+            var turned = aim * InHand(hand.IsLeft);
             var middle = rig.TransformPoint(gripLocal) + aim * (TakeOutAt * scale);
             var part = LetGoFromStock(middle - turned * Vector3.forward * (BackOfMesh * scale), turned);
             if (part == null) return false;
