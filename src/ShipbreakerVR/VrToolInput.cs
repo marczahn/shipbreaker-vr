@@ -430,6 +430,8 @@ namespace ShipbreakerVR
                 : zone == VrToolBelt.Zone.DemoCharge || zone == VrToolBelt.Zone.Detonator ? EquipmentController.Equipment.DemoCharge
                 : EquipmentController.Equipment.Scanner;
             if (!equipment.CanEquip(tool) || equipment.IsEquipmentBlocked(tool)) return;
+            // With the charges put on by hand, one comes out from behind the back as a thing of its own (VrChargeByHand).
+            if (zone == VrToolBelt.Zone.DemoCharge && VrChargeByHand.TakesOut(hand.Input)) return;
             // The demo charges behind the back and their detonator at the hip are one tool of the game's, in two modes.
             if (tool == EquipmentController.Equipment.DemoCharge && !VrChargeByHand.Draws(zone == VrToolBelt.Zone.Detonator)) return;
             if (VrDualTools.Second == tool)

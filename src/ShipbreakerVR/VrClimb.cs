@@ -1995,7 +1995,11 @@ namespace ShipbreakerVR
                 if (hand.Holding) LetGo(hand, false, "takes the thing that came off");
                 var at = HandWorld(hand);
                 var surface = Closest(collider, at, Reach * VrCamera.WorldScale);
+                // Also at a place on the body where the grip draws a tool (a charge taken out from behind the back).
+                var zone = hand.Vr.Zone;
+                hand.Vr.Zone = VrToolBelt.Zone.None;
                 Take(hand, collider, at, surface, (surface - at).sqrMagnitude, null, Vector3.zero);
+                hand.Vr.Zone = zone;
                 return hand.Holding;
             }
             return false;

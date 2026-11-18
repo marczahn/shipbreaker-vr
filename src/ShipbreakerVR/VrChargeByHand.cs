@@ -125,10 +125,34 @@ namespace ShipbreakerVR
 
         // ---- Around DemoChargeController.Update (ChargeByHandPatch) ----
 
+        // The game's preview of where the charge would go on (a ghost of it on the wall) is not shown with the charges
+        // put on by hand (Raik, 2026-11-18): the line on the charge in the hand tells how it cuts, and once it is on, the
+        // game shows the cut through the charge itself. The preview still runs unseen: it tells whether the place is
+        // blocked, and sounds as the charge comes within reach.
+        private static DemoChargePreview previewOf;
+        private static Renderer[] previewParts;
+        private static bool previewHidden;
+
+        private static void HidePreview(bool hide)
+        {
+            var preview = Preview();
+            if (preview != previewOf)
+            {
+                previewOf = preview;
+                previewParts = preview != null ? preview.GetComponentsInChildren<Renderer>(true) : null;
+                previewHidden = false;
+            }
+            if (previewParts == null || hide == previewHidden) return;
+            previewHidden = hide;
+            foreach (var part in previewParts)
+                if (part != null) part.enabled = !hide;
+        }
+
         public static void Enter(DemoChargeController instance)
         {
             controller = instance;
             inside = false;
+            HidePreview(On);
             if (!On || !FindMesh() || !ChargesInHand()) return;
             if (frame == null) frame = new GameObject("ShipbreakerVR Charge frame").transform;
             var scale = VrCamera.WorldScale;
@@ -273,6 +297,37 @@ namespace ShipbreakerVR
                 return false;
             }
             instance.SetMode(DemoChargeMode.Placement);
+            return true;
+        }
+
+        // From VrToolInput.Draw: the grip pressed behind the lower back with the charges put on by hand. A charge from the
+        // stock comes into that hand as a thing of its own, held as any loose part (Raik, 2026-11-18: a charge handed
+        // over, a thing of its own from then on, was the most pleasant to work with: it meets the wall, goes on when let
+        // go, and is turned in the hand as one likes; so it is that from the start). In front of the controller, its back
+        // where the controller points. True if that was done, or there is none to take; false to draw the game's tool.
+        private static readonly Vector3 TakeOutAt = new Vector3(0f, 0.02f, 0.12f);
+
+        public static bool TakesOut(VrInput.Hand hand)
+        {
+            if (!On) return false;
+            var instance = controller != null ? controller : Object.FindObjectOfType<DemoChargeController>();
+            var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+            if (instance == null || rig == null || !hand.TryGetPosition(out var gripLocal) || !hand.TryGetAimRotation(out var aimLocal)) return false;
+            controller = instance;
+            if (!(AnyCharges?.Invoke(instance, null) is bool any) || !any)
+            {
+                if (logs++ < 40) Plugin.Log.LogInfo("Charge by hand: no demo charges left behind the back");
+                return true;
+            }
+            var scale = VrCamera.WorldScale;
+            var aim = rig.rotation * aimLocal;
+            var turned = aim * Quaternion.Euler(0f, 180f, 0f);
+            var middle = rig.TransformPoint(gripLocal) + aim * (TakeOutAt * scale);
+            var part = LetGoFromStock(middle - turned * Vector3.forward * (BackOfMesh * scale), turned);
+            if (part == null) return false;
+            VrChargeDisarm.Give(part, hand);
+            hand.Buzz(0.4f, 0.05f);
+            if (logs++ < 40) Plugin.Log.LogInfo($"Charge by hand: {hand.Name} hand takes a charge out from behind the back, as a thing of its own");
             return true;
         }
 
@@ -526,6 +581,9 @@ namespace ShipbreakerVR
         public static void Release()
         {
             inside = false;
+            HidePreview(false);
+            previewOf = null;
+            previewParts = null;
             if (frame != null) Object.Destroy(frame.gameObject);
             if (throwFrame != null) Object.Destroy(throwFrame.gameObject);
             frame = throwFrame = null;
