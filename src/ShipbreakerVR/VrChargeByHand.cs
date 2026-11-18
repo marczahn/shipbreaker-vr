@@ -322,13 +322,19 @@ namespace ShipbreakerVR
         // none to take; false to draw the game's tool.
         // It comes into the hand as the game's own hand holds the charges (Raik, 2026-11-18, of his screenshots with
         // Automatisch: "even more pleasant" than the upright slab before, and how a charge taken off a wall is to lie in
-        // the hand as well): its back outwards and a little down, its face with the orange sign (the mesh's +z) inwards,
-        // to the other hand, its top rim up and tipped outwards. Measured on the game's hand with the hand's fit as it
-        // comes (VrToolFit, SprengsatzRechts 0 0 0 / 0 0 6), in the controller's axes (x right, y up, z along its aim):
-        // where the back and the top point, and the charge's middle from the grip. The left hand's is the mirror image.
-        private static readonly Vector3 HeldBack = new Vector3(0.89f, -0.42f, 0.17f);
-        private static readonly Vector3 HeldTop = new Vector3(0.44f, 0.87f, -0.20f);
-        private static readonly Vector3 TakeOutAt = new Vector3(-0.01f, 0.09f, 0.14f);
+        // the hand as well): as the game's prefab has the charge on the hand ('PRF_Demo_Charge' on rig_right_hand),
+        // taken against a hand that follows the controller: upright in the hand, its top rim up and a little forward,
+        // its back outwards and a little forward, its face with the orange sign (the mesh's +z) inwards, to the other
+        // hand, and the hand at its outer edge. Measured in the controller's axes (x right, y up, z along its aim) on
+        // the frame the charges are drawn, while the mod still drives the right hand: where the back and the top point,
+        // and the charge's middle from the grip. The left hand's is the mirror image.
+        // Not as it lies against the controller once the game's own arm has the charge (back (0.89, -0.42, 0.17), top
+        // (0.44, 0.87, -0.20), middle (-1, 9, 14) cm): that arm is turned against the controller by the hand's fit
+        // (VrToolFit), and on a hand that follows the controller the charge was tipped outwards by 27 degrees (Raik's
+        // screenshots of 12:52, "the starting hold now" against "the hold I want").
+        private static readonly Vector3 HeldBack = new Vector3(0.95f, -0.07f, 0.32f);
+        private static readonly Vector3 HeldTop = new Vector3(0f, 0.98f, 0.22f);
+        private static readonly Vector3 TakeOutAt = new Vector3(-0.07f, -0.02f, 0.12f);
 
         // How the charge is turned in that hand, against the hand's or the controller's axes.
         internal static Quaternion InHand(bool left)
@@ -373,7 +379,7 @@ namespace ShipbreakerVR
             }
             var part = LetGoFromStock(origin, turned);
             if (part == null) return false;
-            VrChargeDisarm.Give(part, hand);
+            VrChargeDisarm.Give(part, hand, true);
             hand.Buzz(0.4f, 0.05f);
             if (logs++ < 40) Plugin.Log.LogInfo($"Charge by hand: {hand.Name} hand takes a charge out from behind the back, as a thing of its own");
             return true;
@@ -500,6 +506,29 @@ namespace ShipbreakerVR
             return true;
         }
 
+        // How a charge afloat lies in the hand that holds it, for the log, once a second: as HeldBack, HeldTop and
+        // TakeOutAt are given, so a hold Raik likes can be read off and made the one a charge comes into the hand with.
+        private static float nextHeldMeasure;
+        private static int heldMeasures;
+
+        private static void MeasureHeld(VrInput.Hand hand, Afloat held)
+        {
+            if (heldMeasures >= 80 || Time.unscaledTime < nextHeldMeasure) return;
+            var part = held.Charge.DemoCharge;
+            var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+            if (part == null || rig == null || !hand.TryGetAimRotation(out var aimLocal) || !hand.TryGetPosition(out var gripLocal)) return;
+            nextHeldMeasure = Time.unscaledTime + 1f;
+            heldMeasures++;
+            var scale = VrCamera.WorldScale;
+            var frame = part.transform;
+            var toController = Quaternion.Inverse(rig.rotation * aimLocal);
+            var back = toController * -frame.forward;
+            var top = toController * frame.up;
+            var middle = toController * (frame.position + frame.forward * (BackOfMesh * scale) - rig.TransformPoint(gripLocal)) / scale * 100f;
+            Plugin.Log.LogInfo($"Charge by hand: held in the {hand.Name} hand: back ({back.x:0.00} {back.y:0.00} {back.z:0.00}), top ({top.x:0.00} {top.y:0.00} {top.z:0.00}), "
+                + $"middle ({middle.x:0} {middle.y:0} {middle.z:0}) cm from the grip, in the controller's axes");
+        }
+
         private static readonly Afloat[] afloat = { new Afloat(), new Afloat() };
         private static StructurePart fresh;
         private static float freshUntil;
@@ -588,6 +617,7 @@ namespace ShipbreakerVR
                 }
                 Unstick(held);
                 Aim(held);
+                MeasureHeld(hand, held);
                 var at = VrToolBelt.Stows(VrToolBelt.Zone.DemoCharge, hand);
                 if (at && !held.AtPlace) hand.Buzz(0.25f, 0.04f);
                 held.AtPlace = at;

@@ -73,6 +73,7 @@ namespace ShipbreakerVR
         private static float looseAt;
         private static bool looseTaken;
         private static bool looseGlides;
+        private static bool looseSets;
         private static float glideUntil;
         private static Entity stickyOn;
         private static LayerMask stickyMask;
@@ -153,20 +154,43 @@ namespace ShipbreakerVR
             looseAt = Time.unscaledTime;
             looseTaken = false;
             looseGlides = true;
+            looseSets = false;
             glideUntil = -1f;
             stickyOff = false;
             if (logs++ < 30) Plugin.Log.LogInfo($"Charge disarm: taken off by the {hand.Name} hand, which holds it now");
         }
 
-        // For VrChargeByHand.HandTo: that charge, just made, goes into that hand the same way.
-        public static void Give(StructurePart part, VrInput.Hand hand)
+        // For VrChargeByHand: that charge, just made, goes into that hand the same way. intoHold: as the hand takes hold
+        // of it, it is set into the hand's own hold of a charge (a charge taken out from behind the back: made in that
+        // hold, the hand had moved on by the time the charge had its body, some frames later, and held it askew). Not a
+        // charge handed over: that one stays as the hand took hold of it.
+        public static void Give(StructurePart part, VrInput.Hand hand, bool intoHold = false)
         {
             loose = part;
             looseHand = hand;
             looseAt = Time.unscaledTime;
             looseTaken = false;
             looseGlides = false;
+            looseSets = intoHold;
             stickyOff = false;
+        }
+
+        // The charge just made is set where that hand holds a charge now, at rest against the player's body.
+        private static void SetIntoHold(Rigidbody body)
+        {
+            if (!looseSets || !VrChargeByHand.HoldPose(looseHand, out var origin, out var turned)) return;
+            looseSets = false;
+            var part = loose.transform;
+            var turn = turned * Quaternion.Inverse(part.rotation);
+            var rotation = turn * body.rotation;
+            var position = origin + turn * (body.position - part.position);
+            body.transform.SetPositionAndRotation(position, rotation);
+            body.position = position;
+            body.rotation = rotation;
+            Physics.SyncTransforms();
+            var player = VrToolCollide.Player();
+            body.velocity = player != null ? player.velocity : Vector3.zero;
+            body.angularVelocity = Vector3.zero;
         }
 
         // The charge that came off, on its way into the hand's hold: true while it still glides there, by its speed, so
@@ -214,7 +238,11 @@ namespace ShipbreakerVR
             {
                 var body = loose.GetComponentInParent<Rigidbody>();
                 var collider = loose.GetComponent<Collider>();
-                if (body != null && !body.isKinematic && collider != null && !Glides(body)) looseTaken = VrClimb.HoldOn(looseHand, collider);
+                if (body != null && !body.isKinematic && collider != null && !Glides(body))
+                {
+                    SetIntoHold(body);
+                    looseTaken = VrClimb.HoldOn(looseHand, collider);
+                }
             }
             // The game makes a charge afloat cling to what it touches once its automatic deploying is unlocked (Sticky on
             // what the charge hangs on): taken away for the time, then given back.
