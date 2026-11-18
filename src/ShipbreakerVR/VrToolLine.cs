@@ -78,7 +78,15 @@ namespace ShipbreakerVR
             public int Asked;
         }
 
-        private static readonly Shown[] Lines = { new Shown(), new Shown() };
+        // One per tool that can be let go (VrLooseTools: the grapple, the cutter, the charges' detonator).
+        private static readonly Shown[] Lines = { new Shown(), new Shown(), new Shown() };
+
+        private static bool AnyOut()
+        {
+            foreach (var line in Lines)
+                if (line.Out) return true;
+            return false;
+        }
         private static readonly List<Vector3> Vertices = new List<Vector3>();
         private static readonly List<Color> Colors = new List<Color>();
         private static readonly List<int> Triangles = new List<int>();
@@ -302,7 +310,7 @@ namespace ShipbreakerVR
             var eye = vr.transform.position;
             var half = Width * 0.5f * VrCamera.WorldScale;
             var toSun = Vector3.zero;
-            var shaded = VrLooseTools.Shaded && (Lines[0].Out || Lines[1].Out) && TryGetSun(out toSun);
+            var shaded = VrLooseTools.Shaded && AnyOut() && TryGetSun(out toSun);
             var edgeTo = Mathf.Cos(EdgeTurn * Mathf.Deg2Rad);
             var edgeOut = Mathf.Sin(EdgeTurn * Mathf.Deg2Rad);
             foreach (var line in Lines)
@@ -392,7 +400,7 @@ namespace ShipbreakerVR
         public static void Draw(CustomPassContext context, Camera vrCamera)
         {
             if (vrCamera == null || context.hdCamera.camera != vrCamera) return;
-            if (!Lines[0].Out && !Lines[1].Out) return;
+            if (!AnyOut()) return;
             if (material == null) material = VrUtil.DepthTestedMaterial(LineColor);
             VrUi.GetEye(context.hdCamera, out var view, out var proj);
             var cmd = context.cmd;

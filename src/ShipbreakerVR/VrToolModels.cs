@@ -272,7 +272,8 @@ namespace ShipbreakerVR
             if (handLocal)
             {
                 // The hand with the charge sits as fitted (VrToolFit, dragged by the other hand while adjusting).
-                VrToolFit.Adjust(EquipmentController.Equipment.DemoCharge, false, wristLocal, aimLocal);
+                // Not dragged while the detonator shows: that is fitted by itself (VrToolFit.Detonator).
+                if (!VrChargeByHand.DetonatorOut) VrToolFit.Adjust(EquipmentController.Equipment.DemoCharge, false, wristLocal, aimLocal);
                 if (VrToolFit.TryGet(EquipmentController.Equipment.DemoCharge, false, out var fitOffset, out var fitTurn))
                 {
                     wristLocal += aimLocal * (fitOffset / VrCamera.WorldScale);

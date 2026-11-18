@@ -94,6 +94,17 @@ namespace ShipbreakerVR
         // The charges are put on by hand (Manuell), for VrChargeDisarm.
         public static bool Manual => On;
 
+        // The game's charges are out in their other mode: the hand shows their detonator (VrLooseTools, VrToolFit).
+        public static bool DetonatorOut
+        {
+            get
+            {
+                if (controller == null || !ChargesInHand()) return false;
+                var state = State(controller);
+                return state == DemoChargeState.Detonation || state == DemoChargeState.Detonating || state == DemoChargeState.DetonationFailed;
+            }
+        }
+
         // A charge let go stays afloat: with the extended tool physics.
         private static bool Floats => VrSettings.ToolPhysics != null && VrSettings.ToolPhysics.Value;
 
@@ -341,17 +352,39 @@ namespace ShipbreakerVR
         private static readonly Vector3 HeldTop = new Vector3(-0.03f, 0.98f, 0.21f);
         private static readonly Vector3 TakeOutAt = new Vector3(-0.145f, -0.01f, 0.095f);
 
+        // The hold as it counts: the one stored while fitting the tools (VrToolFit.ChargeHold, SprengsatzHaltung), else
+        // the mod's own. As in the right hand: the middle from the grip and the turn, in the controller's axes.
+        private static void Hold(out Vector3 middle, out Quaternion turn)
+        {
+            if (VrToolFit.ChargeHold.TryGet(out middle, out turn)) return;
+            middle = TakeOutAt;
+            turn = Quaternion.LookRotation(-HeldBack, HeldTop);
+        }
+
         // How the charge is turned in that hand, against the hand's or the controller's axes.
         internal static Quaternion InHand(bool left)
         {
-            var back = HeldBack;
-            var top = HeldTop;
-            if (left)
-            {
-                back.x = -back.x;
-                top.x = -top.x;
-            }
-            return Quaternion.LookRotation(-back, top);
+            Hold(out var middle, out var turn);
+            if (left) VrToolFit.Mirror(ref middle, ref turn);
+            return turn;
+        }
+
+        // While the tools are fitted (VrToolFit): a charge handed from hand to hand lies in the hand that keeps it as
+        // the user wants it, once the other hand has let go. That hold is stored, and charges come into the hand so.
+        private static void StoreHold(VrInput.Hand hand, Afloat held)
+        {
+            var part = held.Charge != null ? held.Charge.DemoCharge : null;
+            var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+            if (part == null || rig == null || !hand.TryGetAimRotation(out var aimLocal) || !hand.TryGetPosition(out var gripLocal)) return;
+            var scale = VrCamera.WorldScale;
+            var frame = part.transform;
+            var toController = Quaternion.Inverse(rig.rotation * aimLocal);
+            var turn = toController * frame.rotation;
+            var middle = toController * (frame.position + frame.forward * (BackOfMesh * scale) - rig.TransformPoint(gripLocal)) / scale;
+            if (hand.IsLeft) VrToolFit.Mirror(ref middle, ref turn);
+            VrToolFit.ChargeHold.Store(middle, turn);
+            hand.Buzz(0.5f, 0.08f);
+            Plugin.Log.LogInfo($"Charge by hand: the hold of the {hand.Name} hand is the one charges come into the hand with from now on");
         }
 
         // Where a charge lies in that hand, in the world: its own origin (the middle of its back) and its turn. False
@@ -364,9 +397,9 @@ namespace ShipbreakerVR
             if (rig == null || !hand.TryGetPosition(out var gripLocal) || !hand.TryGetAimRotation(out var aimLocal)) return false;
             var scale = VrCamera.WorldScale;
             var aim = rig.rotation * aimLocal;
-            var at = TakeOutAt;
-            if (hand.IsLeft) at.x = -at.x;
-            turned = aim * InHand(hand.IsLeft);
+            Hold(out var at, out var turn);
+            if (hand.IsLeft) VrToolFit.Mirror(ref at, ref turn);
+            turned = aim * turn;
             origin = rig.TransformPoint(gripLocal) + aim * (at * scale) - turned * Vector3.forward * (BackOfMesh * scale);
             return true;
         }
@@ -407,6 +440,8 @@ namespace ShipbreakerVR
             public StructurePart Target;
             public Vector3 Point;
             public Quaternion Turn;
+            // The other hand holds it as well (VrToolFit: once that hand lets go, the hold is stored).
+            public bool Shared;
             // How far the wall is from the charge's back, in meters at world scale 1 (MaxValue without one in reach).
             public float Reach = float.MaxValue;
         }
@@ -602,6 +637,7 @@ namespace ShipbreakerVR
                     Restick(held);
                     held.Body = body;
                     held.AtPlace = false;
+                    held.Shared = false;
                     held.Near = held.Shown = false;
                     held.Charge = body.mass <= HeaviestCharge ? body.GetComponentInChildren<DemoChargeRetrievalController>(true) : null;
                     if (held.Charge != null && Deployed(held.Charge)) held.Charge = null;
@@ -623,6 +659,9 @@ namespace ShipbreakerVR
                 Unstick(held);
                 Aim(held);
                 MeasureHeld(hand, held);
+                var shared = VrClimb.HeldBody(hand.IsLeft ? VrInput.Right : VrInput.Left) == body;
+                if (held.Shared && !shared && VrToolFit.On) StoreHold(hand, held);
+                held.Shared = shared;
                 var at = VrToolBelt.Stows(VrToolBelt.Zone.DemoCharge, hand);
                 if (at && !held.AtPlace) hand.Buzz(0.25f, 0.04f);
                 held.AtPlace = at;

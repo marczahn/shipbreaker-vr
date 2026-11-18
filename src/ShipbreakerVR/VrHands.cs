@@ -515,9 +515,54 @@ namespace ShipbreakerVR
             KeepTips(LeftArm);
             KeepTips(RightArm);
             MirrorChargeFingers();
+            RestoreDetonator();
             Charges(active && chargeLeft);
             ChargeInHand(active && VrChargeByHand.Decoupled && equipment == EquipmentController.Equipment.DemoCharge
                 && grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped);
+            FitDetonator(active && equipment == EquipmentController.Equipment.DemoCharge
+                && grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped && VrChargeByHand.DetonatorOut);
+        }
+
+        // The charges' detonator ('PRF_Tool_ExplosiveChargeDetonator' on the game's right hand, moved to the left hand
+        // by Charges) sits in the hand that holds it as it is fitted (VrToolFit.Detonator: dragged by the other hand
+        // while the tools are fitted, kept in ZuenderHaltung), in that hand's own axes (Frame). Set after Charges each
+        // frame and taken back before it the next, so Charges finds the piece as it left it.
+        private const string DetonatorProp = "PRF_Tool_ExplosiveChargeDetonator";
+        private static Transform detonatorProp;
+        private static Moved detonatorMoved;
+        private static bool detonatorSet;
+
+        private static void RestoreDetonator()
+        {
+            if (!detonatorSet) return;
+            detonatorSet = false;
+            if (detonatorProp != null && detonatorProp.localPosition == detonatorMoved.SetPosition && detonatorProp.localRotation == detonatorMoved.SetRotation)
+                SetLocal(detonatorProp, detonatorMoved.Position, detonatorMoved.Rotation);
+        }
+
+        private static void FitDetonator(bool on)
+        {
+            if (detonatorProp == null && RightArm.Wrist != null)
+                foreach (Transform child in RightArm.Wrist)
+                    if (child.name.StartsWith(DetonatorProp, System.StringComparison.Ordinal)) detonatorProp = child;
+            var left = VrHand.GameToolHand.IsLeft;
+            if (!on || detonatorProp == null || !Frame(left ? LeftArm : RightArm, out var wrist, out var frame))
+            {
+                VrToolFit.DetonatorIdle();
+                return;
+            }
+            var scale = VrCamera.WorldScale;
+            var at = Quaternion.Inverse(frame) * (detonatorProp.position - wrist) / scale;
+            var turn = Quaternion.Inverse(frame) * detonatorProp.rotation;
+            if (left) VrToolFit.Mirror(ref at, ref turn);
+            if (!VrToolFit.Detonator(left, wrist, frame, ref at, ref turn)) return;
+            if (left) VrToolFit.Mirror(ref at, ref turn);
+            var original = new Moved { Position = detonatorProp.localPosition, Rotation = detonatorProp.localRotation };
+            detonatorProp.SetPositionAndRotation(wrist + frame * (at * scale), frame * turn);
+            original.SetPosition = detonatorProp.localPosition;
+            original.SetRotation = detonatorProp.localRotation;
+            detonatorMoved = original;
+            detonatorSet = true;
         }
 
         // With the charges put on by hand (VrChargeByHand.Decoupled): the charge itself ('PRF_Demo_Charge' on the game's
