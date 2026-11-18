@@ -40,10 +40,15 @@ namespace ShipbreakerVR
         private static readonly Vector3 CutterGripAt = new Vector3(0.15f, -0.08f, -0.22f);
         private const float CutterSlant = 20f;
 
-        // Where the hand that would hold the detonator at the hip has its wrist, in the grapple's axes (mirrored with
-        // the tools for the left-handed).
-        private static readonly Vector3 DetonatorAt = new Vector3(-0.30f, -0.69f, -0.12f);
+        // Where the detonator's middle hangs, in the axes its zone is measured in (VrToolBelt.ChargeRef; mirrored with
+        // the tools for the left-handed). Raik, 2026-11-18: "into the middle of the grip's field, or at least a little
+        // closer to the body and a little further back"; it hung by a wrist placed in the grapple's axes before. The
+        // zone's middle lies 20 cm to the side, 65 cm down and 11 cm back; the detonator hangs 3 cm further out than
+        // that, so it does not sit in the suit's hip.
+        private static readonly Vector3 DetonatorAt = new Vector3(-0.23f, -0.65f, -0.11f);
         private static GameObject detonatorShown;
+        // The middle of its parts, in its own axes.
+        private static Vector3 detonatorMiddle;
         private static Transform detonatorOf;
         private static float nextDetonator;
 
@@ -133,7 +138,7 @@ namespace ShipbreakerVR
             var shows = prop != null && equipment != null && equipment.CanEquip(EquipmentController.Equipment.DemoCharge)
                 && !VrLooseTools.DetonatorShowsInHand && !VrLooseTools.DetonatorLoose
                 && VrHands.DetonatorRest(out inHandAt, out inHandTurn)
-                && VrToolModels.TrackingToWorld(neck + heading * (VrToolBelt.Sided(DetonatorAt) - VrToolBelt.HipRef), heading, out wrist, out frame);
+                && VrToolModels.TrackingToWorld(neck + heading * (VrToolBelt.Sided(DetonatorAt) - VrToolBelt.ChargeRef), heading, out wrist, out frame);
             if (shows && (detonatorShown == null || detonatorOf != prop) && Time.unscaledTime >= nextDetonator)
             {
                 nextDetonator = Time.unscaledTime + 2f;
@@ -144,7 +149,9 @@ namespace ShipbreakerVR
                 if (detonatorShown != null && detonatorShown.activeSelf) detonatorShown.SetActive(false);
                 return;
             }
-            detonatorShown.transform.SetPositionAndRotation(wrist + frame * (inHandAt * VrCamera.WorldScale), frame * inHandTurn);
+            // Turned as in a hand there, its middle at the place.
+            var turned = frame * inHandTurn;
+            detonatorShown.transform.SetPositionAndRotation(wrist - turned * detonatorMiddle, turned);
             if (!detonatorShown.activeSelf) detonatorShown.SetActive(true);
         }
 
@@ -156,6 +163,7 @@ namespace ShipbreakerVR
             var root = new GameObject("ShipbreakerVR detonator at the hip");
             root.transform.SetPositionAndRotation(prop.position, prop.rotation);
             var parts = 0;
+            var middle = Vector3.zero;
             foreach (var filter in prop.GetComponentsInChildren<MeshFilter>(true))
             {
                 var source = filter.GetComponent<MeshRenderer>();
@@ -169,6 +177,7 @@ namespace ShipbreakerVR
                 shown.sharedMaterials = source.sharedMaterials;
                 shown.shadowCastingMode = source.shadowCastingMode;
                 shown.receiveShadows = source.receiveShadows;
+                middle += copy.transform.TransformPoint(filter.sharedMesh.bounds.center);
                 parts++;
             }
             if (parts == 0)
@@ -176,10 +185,12 @@ namespace ShipbreakerVR
                 Object.Destroy(root);
                 return;
             }
+            detonatorMiddle = root.transform.InverseTransformPoint(middle / parts);
             root.SetActive(false);
             detonatorShown = root;
             detonatorOf = prop;
-            Plugin.Log.LogInfo($"Belt grapple: the detonator shows at the hip, {parts} part(s) copied from '{prop.name}'");
+            Plugin.Log.LogInfo($"Belt grapple: the detonator shows at the hip, {parts} part(s) copied from '{prop.name}', its middle {detonatorMiddle.magnitude / VrCamera.WorldScale * 100f:0} cm from its origin, "
+                + $"hung at ({DetonatorAt.x:0.00}, {DetonatorAt.y:0.00}, {DetonatorAt.z:0.00}) m as its zone is measured");
         }
 
         // Moves a tool's rest points so that the tool, once it lies on them, has its anchor (in its own axes) at the point

@@ -132,7 +132,7 @@ namespace ShipbreakerVR
         internal static Vector3 ShoulderRef => VrTorso.NeckFromEye;
         // The demo charges' box at the left hip was found with no one pose of the head on record: taken half way between
         // looking down and upright, it lies within 9 cm of where it was either way, well inside its 30 by 40 cm.
-        private static Vector3 ChargeRef => Quaternion.Euler(HipLook * 0.5f, 0f, 0f) * VrTorso.NeckFromEye;
+        internal static Vector3 ChargeRef => Quaternion.Euler(HipLook * 0.5f, 0f, 0f) * VrTorso.NeckFromEye;
 
         // The body's frame in tracking space: its neck, below the tracked head, and the heading it keeps (VrTorso; the
         // head's while the model is not upright). A place written as from the head, found in a pose with the neck at ref
