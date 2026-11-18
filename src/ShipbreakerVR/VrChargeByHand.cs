@@ -94,6 +94,9 @@ namespace ShipbreakerVR
         // The charges are put on by hand (Manuell), for VrChargeDisarm.
         public static bool Manual => On;
 
+        // Whether that hand holds a charge afloat, as a thing of its own (VrControls: Y brakes then).
+        public static bool Holds(VrInput.Hand hand) => afloat[hand.IsLeft ? 0 : 1].Charge != null;
+
         // The game's charges are out in their other mode: the hand shows their detonator (VrLooseTools, VrToolFit).
         public static bool DetonatorOut
         {

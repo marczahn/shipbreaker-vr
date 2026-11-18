@@ -301,6 +301,15 @@ namespace ShipbreakerVR
             }
 
             var b = hand.Input.Secondary.Down;
+            // The demo charges and their detonator are drawn at places of their own (behind the back, at the hip), so
+            // B no longer changes between them, nor works the tethers from here (Raik, 2026-11-18); in the left hand Y
+            // brakes instead (VrControls).
+            if (held == EquipmentController.Equipment.DemoCharge)
+            {
+                hand.BDown = b;
+                hand.BLong = hand.BTether = hand.BReels = false;
+                return;
+            }
             if (b && !hand.BDown)
             {
                 hand.BDownAt = Time.unscaledTime;

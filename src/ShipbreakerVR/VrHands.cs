@@ -540,11 +540,31 @@ namespace ShipbreakerVR
                 SetLocal(detonatorProp, detonatorMoved.Position, detonatorMoved.Rotation);
         }
 
+        // Where the detonator lies in the game's right hand as the game has it, in that hand's own axes from the wrist
+        // (meters at world scale 1): for VrBeltGrapple, which shows it at the hip turned as a hand there would hold it.
+        private static Vector3 detonatorRestAt;
+        private static Quaternion detonatorRestTurn = Quaternion.identity;
+        private static bool detonatorRestKnown;
+
+        internal static bool DetonatorRest(out Vector3 at, out Quaternion turn)
+        {
+            at = detonatorRestAt;
+            turn = detonatorRestTurn;
+            return detonatorRestKnown;
+        }
+
         private static void FitDetonator(bool on)
         {
             if (detonatorProp == null && RightArm.Wrist != null)
                 foreach (Transform child in RightArm.Wrist)
                     if (child.name.StartsWith(DetonatorProp, System.StringComparison.Ordinal)) detonatorProp = child;
+            // Read while nothing has moved it (not out, so neither on the left hand nor fitted).
+            if (!detonatorRestKnown && !on && detonatorProp != null && moved.Count == 0 && Frame(RightArm, out var restWrist, out var restFrame))
+            {
+                detonatorRestAt = Quaternion.Inverse(restFrame) * (detonatorProp.position - restWrist) / VrCamera.WorldScale;
+                detonatorRestTurn = Quaternion.Inverse(restFrame) * detonatorProp.rotation;
+                detonatorRestKnown = true;
+            }
             var left = VrHand.GameToolHand.IsLeft;
             if (!on || detonatorProp == null || !Frame(left ? LeftArm : RightArm, out var wrist, out var frame))
             {

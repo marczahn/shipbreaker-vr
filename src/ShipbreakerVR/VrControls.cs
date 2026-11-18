@@ -14,6 +14,9 @@ namespace ShipbreakerVR
     // the right stick turns (left/right; smoothly or in snap steps, see Turning) and pitches (up/down), faster the further
     // it is pushed, and Y brakes. The grips stay free for holding on (VrClimb). While the left hand holds a tool its controller works
     // the tool (VrToolInput), so there is no flying and no braking then; the right stick still turns.
+    // With the demo charges or their detonator in the left hand Y brakes as with an empty hand (Raik, 2026-11-18): the
+    // two have places of their own on the body now, so the button no longer changes between them (VrToolInput), and a
+    // charge held as a thing of its own has no use for it either.
     // Shooter, the other scheme (Steuerung/Controllersteuerung), as in VR shooters (Raik): the left stick thrusts forward,
     // back, left and right, as strongly as it is pushed, along the left controller: forward is where it points, so tilted
     // up or down it thrusts up or down. With the left trigger held, the stick's left and right roll instead of moving
@@ -113,7 +116,8 @@ namespace ShipbreakerVR
             // Outside gameplay the sticks and buttons work the menus as a gamepad; turning there would swing the menus.
             if (GameSession.CurrentGameState == GameSession.GameState.Gameplay)
             {
-                if (!tool) braking = left.Secondary.Down;
+                var charges = (VrHand.Left.HoldsTool && VrHand.Left.Tool == EquipmentController.Equipment.DemoCharge) || VrChargeByHand.Holds(left);
+                if (!tool || charges) braking = left.Secondary.Down;
                 if (VrInput.Right.Valid) TurnFromStick(VrInput.Right.Stick, playspace);
                 turn = VrFlightComfort.AlignStep(playspace, Time.deltaTime) * turn;
             }

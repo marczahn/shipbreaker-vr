@@ -38,8 +38,8 @@ namespace ShipbreakerVR
     // in their other mode, shown as a prop on the hand ('PRF_Tool_ExplosiveChargeDetonator'), with no model that hangs
     // on the body. So its floating body carries copies of the prop's meshes to show it afloat; letting go is told from
     // the grip of the hand that held it opening (the game then puts the charges away as always); and it is taken out of
-    // the air by its grip, which draws the charges in that mode as the grip at the hip does. Put away it shows nowhere,
-    // as before: its place is at the hip opposite the tools', where its line ends.
+    // the air by its grip, which draws the charges in that mode as the grip at the hip does. Put away it shows at the
+    // hip opposite the tools', where its line ends (VrBeltGrapple).
     internal static class VrLooseTools
     {
         static VrLooseTools() => VrSession.OnUnload("loose tools", Release);
@@ -50,6 +50,9 @@ namespace ShipbreakerVR
         private const string DetonatorName = "PRF_Tool_ExplosiveChargeDetonator";
         // A grip that opens this long after the hand last had the detonator lets it go (seconds).
         private const float PropLetGoWithin = 0.15f;
+        // Taken out of the air, the detonator glides into the hand this long (seconds), as the cutter and the grapple
+        // do (VrToolModels).
+        private const float HandOverTime = 0.18f;
         private const float Drag = 0.05f;
         private const float TurnDrag = 0.2f;
         // A tool let go inside something is pushed out of it no faster than this.
@@ -167,10 +170,17 @@ namespace ShipbreakerVR
             public readonly float Mass;
             // The charges' detonator: a prop on the hand, no model on the body, at the hip opposite the tools'.
             public readonly bool Prop;
+            // For the log: the detonator is the charges' equipment to the game.
+            public string Name => Prop ? "detonator" : Kind.ToString();
             // Where the prop was in the hand the frame before, against the rig (the detonator).
             public Vector3 PropAt;
             public Quaternion PropTurn;
             public bool PropKnown;
+            // Taken out of the air and on its way into the hand: since when, and from where against the rig.
+            public bool Handing;
+            public float HandAt;
+            public Vector3 FromAt;
+            public Quaternion FromTurn;
             // The hand that last held it by its grip, until the game puts it away.
             public VrHand Holder;
             public float HeldAt;
@@ -259,6 +269,99 @@ namespace ShipbreakerVR
                     break;
                 }
             return detonatorProp;
+        }
+
+        // For VrBeltGrapple, which shows the detonator at the hip while it is neither in a hand nor afloat.
+        internal static Transform DetonatorModel => DetonatorProp();
+        public static bool DetonatorLoose => Detonator.Loose;
+
+        // Whether the prop shows on a hand now (the game shows it some frames after the charges are drawn).
+        private static MeshRenderer[] propParts;
+        private static Transform propPartsOf;
+
+        public static bool DetonatorShowsInHand
+        {
+            get
+            {
+                var prop = DetonatorProp();
+                if (prop == null) return false;
+                if (propPartsOf != prop)
+                {
+                    propPartsOf = prop;
+                    propParts = prop.GetComponentsInChildren<MeshRenderer>(true);
+                }
+                foreach (var part in propParts)
+                    if (part != null && part.enabled && part.gameObject.activeInHierarchy) return true;
+                return false;
+            }
+        }
+
+        // ---- The detonator taken out of the air ----
+
+        // Raik, 2026-11-18: taken out of the air the detonator was gone for two or three frames and then in the hand:
+        // its floating body ended as the charges were drawn, and the game shows the prop on the hand a little later.
+        // Now the floating body glides into the hand first, over HandOverTime, the prop hidden meanwhile, and only then
+        // gives way to the prop.
+        private static readonly List<Renderer> PropHidden = new List<Renderer>();
+
+        private static void BeginHandOver(Tool tool, Transform rig)
+        {
+            if (rig == null || tool.Rigid == null)
+            {
+                End(tool, "taken");
+                return;
+            }
+            var body = tool.Body.transform;
+            tool.Handing = true;
+            tool.HandAt = Time.unscaledTime;
+            tool.FromAt = rig.InverseTransformPoint(body.position);
+            tool.FromTurn = Quaternion.Inverse(rig.rotation) * body.rotation;
+            tool.Rigid.detectCollisions = false;
+            tool.Taut = tool.Pulled = false;
+            if (logs++ < 80) Plugin.Log.LogInfo($"Loose tools: the detonator taken out of the air, gliding into the hand over {HandOverTime:0.00} s");
+        }
+
+        private static void HandOver(Tool tool, Transform model, bool taken, Transform rig, Rigidbody player)
+        {
+            var carried = player != null ? player.velocity : Vector3.zero;
+            if (!taken || rig == null)
+            {
+                // The hand opened on the way: it floats on from where it is.
+                ShowProp();
+                tool.Handing = false;
+                tool.Rigid.detectCollisions = true;
+                tool.Rigid.velocity = carried;
+                tool.Rigid.angularVelocity = Vector3.zero;
+                return;
+            }
+            var t = Mathf.Clamp01((Time.unscaledTime - tool.HandAt) / HandOverTime);
+            if (t >= 1f)
+            {
+                End(tool, "taken");
+                return;
+            }
+            foreach (var part in model.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!part.enabled) continue;
+                part.enabled = false;
+                if (!PropHidden.Contains(part)) PropHidden.Add(part);
+            }
+            var eased = t * t * (3f - 2f * t);
+            var at = Vector3.Lerp(rig.TransformPoint(tool.FromAt), model.position, eased);
+            var turn = Quaternion.Slerp(rig.rotation * tool.FromTurn, model.rotation, eased);
+            tool.Body.transform.SetPositionAndRotation(at, turn);
+            tool.Rigid.position = at;
+            tool.Rigid.rotation = turn;
+            tool.Rigid.velocity = carried;
+            tool.Rigid.angularVelocity = Vector3.zero;
+        }
+
+        // What the glide hid of the prop shows again; the game and VrToolModels hide it themselves when it is put away.
+        private static void ShowProp()
+        {
+            foreach (var part in PropHidden)
+                if (part != null) part.enabled = true;
+            PropHidden.Clear();
         }
 
         // Whether that hand has the tool out.
@@ -399,7 +502,7 @@ namespace ShipbreakerVR
                 hand.Input.Buzz(0.3f, 0.04f);
                 VrToolLine.Outer(tool.Index, out _, out var rest);
                 if (logs++ < 200)
-                    Plugin.Log.LogInfo($"Loose tools: the {hand.Name} hand takes the {tool.Kind}'s line{(tool.Hauls[1 - h] ? " as well" : "")}"
+                    Plugin.Log.LogInfo($"Loose tools: the {hand.Name} hand takes the {tool.Name}'s line{(tool.Hauls[1 - h] ? " as well" : "")}"
                         + $"{(tool.Loose ? "" : " (the tool is in the other hand)")}, {rest / VrCamera.WorldScale:0.00} m of it from the last hand to the tool");
             }
         }
@@ -415,7 +518,7 @@ namespace ShipbreakerVR
         {
             if (!tool.Hauls[h]) return;
             var hand = VrHand.Both[h];
-            if (why != null && logs++ < 200) Plugin.Log.LogInfo($"Loose tools: the {hand.Name} hand no longer holds the {tool.Kind}'s line ({why})");
+            if (why != null && logs++ < 200) Plugin.Log.LogInfo($"Loose tools: the {hand.Name} hand no longer holds the {tool.Name}'s line ({why})");
             if (tool.Slipped && tool.Outer == h)
             {
                 hand.Input.Buzz(0.5f, 0.08f);
@@ -532,7 +635,7 @@ namespace ShipbreakerVR
             tool.Taut = false;
             Hang(tool);
             holder.Input.Buzz(0.2f, 0.03f);
-            Plugin.Log.LogInfo($"Loose tools: {tool.Kind} let go by the {holder.Name} hand, afloat at {moved.magnitude:0.00} m/s against the body"
+            Plugin.Log.LogInfo($"Loose tools: {tool.Name} let go by the {holder.Name} hand, afloat at {moved.magnitude:0.00} m/s against the body"
                 + $" (turning {spin.magnitude * Mathf.Rad2Deg:0}°/s), {tool.Pieces.Count} piece(s), layer {LayerMask.LayerToName(tool.Body.layer)}"
                 + $", line's end {(tool.EndKnown && tool.HandModel == model ? "on the model under the hand" : "under the grip target")}, {(tool.End - tool.Grip).magnitude / scale * 100f:0} cm from the grip");
         }
@@ -553,7 +656,7 @@ namespace ShipbreakerVR
             if (tool.Body != null) Object.Destroy(tool.Body);
             var watch = System.Diagnostics.Stopwatch.StartNew();
             var layer = ShipLayer();
-            var body = new GameObject($"ShipbreakerVR loose {tool.Kind}") { layer = layer };
+            var body = new GameObject($"ShipbreakerVR loose {tool.Name}") { layer = layer };
             body.SetActive(false);
             body.transform.SetPositionAndRotation(model.position, model.rotation);
             var rigid = body.AddComponent<Rigidbody>();
@@ -599,7 +702,7 @@ namespace ShipbreakerVR
             tool.BuiltSize = size;
             tool.BuiltAt = Time.unscaledTime;
             Measure(tool, model);
-            Plugin.Log.LogInfo($"Loose tools: body for the {tool.Kind} from {Filters.Count} part(s) of '{model.name}' in {tool.Pieces.Count} piece(s), "
+            Plugin.Log.LogInfo($"Loose tools: body for the {tool.Name} from {Filters.Count} part(s) of '{model.name}' in {tool.Pieces.Count} piece(s), "
                 + $"size {model.lossyScale.x:0.00}, layer {LayerMask.LayerToName(layer)} ({layer}), built in {watch.ElapsedMilliseconds} ms");
             return tool.Pieces.Count > 0;
         }
@@ -650,8 +753,8 @@ namespace ShipbreakerVR
             hitLogs++;
             var player = VrToolCollide.Player();
             var carried = player != null ? player.velocity : Vector3.zero;
-            string Went(Tool each) => $"the {each.Kind} went {each.SpeedBefore.magnitude / scale:0.00} m/s before and goes {(each.Rigid.velocity - carried).magnitude / scale:0.00} m/s now, turning {each.Rigid.angularVelocity.magnitude * Mathf.Rad2Deg:0}\u00b0/s";
-            Plugin.Log.LogInfo($"Loose tools: {tool.Kind} hits {(otherTool != null ? $"the {otherTool.Kind}" : $"'{collision.collider.name}'{(other != null ? $" ({other.mass:0.#} kg)" : " (fixed)")}")}"
+            string Went(Tool each) => $"the {each.Name} went {each.SpeedBefore.magnitude / scale:0.00} m/s before and goes {(each.Rigid.velocity - carried).magnitude / scale:0.00} m/s now, turning {each.Rigid.angularVelocity.magnitude * Mathf.Rad2Deg:0}\u00b0/s";
+            Plugin.Log.LogInfo($"Loose tools: {tool.Name} hits {(otherTool != null ? $"the {otherTool.Name}" : $"'{collision.collider.name}'{(other != null ? $" ({other.mass:0.#} kg)" : " (fixed)")}")}"
                 + $", meeting at {meets:0.00} m/s, impulse {collision.impulse.magnitude / scale:0.0} kg m/s; against the body {Went(tool)}{(otherTool != null ? $", {Went(otherTool)}" : "")}"
                 + $"{(VrHand.Left.State == HandState.Holding || VrHand.Right.State == HandState.Holding ? "; a hand holds on to something" : "")}");
         }
@@ -708,8 +811,14 @@ namespace ShipbreakerVR
             tool.Loose = false;
             tool.Taut = false;
             tool.Pulled = tool.Slipped = false;
+            if (tool.Prop)
+            {
+                ShowProp();
+                tool.Handing = false;
+                if (tool.Rigid != null) tool.Rigid.detectCollisions = true;
+            }
             if (tool.Body != null) tool.Body.SetActive(false);
-            if (logs++ < 80) Plugin.Log.LogInfo($"Loose tools: {tool.Kind} no longer afloat ({why}) after {Time.unscaledTime - tool.LooseSince:0.0} s");
+            if (logs++ < 80) Plugin.Log.LogInfo($"Loose tools: {tool.Name} no longer afloat ({why}) after {Time.unscaledTime - tool.LooseSince:0.0} s");
         }
 
         // ---- Each frame, once the rig is placed and the tools are in the hands, before VrBeltGrapple (VrFrame) ----
@@ -734,6 +843,8 @@ namespace ShipbreakerVR
                 {
                     if (!usable) End(tool, "no shift in VR");
                     else if (tool.Body == null || !known) End(tool, "gone");
+                    else if (tool.Handing) HandOver(tool, model, taken, rig, player);
+                    else if (taken && tool.Prop) BeginHandOver(tool, rig);
                     else if (taken) End(tool, "taken");
                     else Hang(tool);
                 }
@@ -837,7 +948,7 @@ namespace ShipbreakerVR
             tool.EndFor = tool.HandOn;
             tool.EndShape = tool.Signature;
             if (!tool.EndKnown && logs++ < 160)
-                Plugin.Log.LogInfo($"Loose tools: the {tool.Kind}'s line ends on its model {(lowest > 0f ? $"{lowest * size / VrCamera.WorldScale * 100f:0} cm under" : $"{Mathf.Sqrt(nearest) * size / VrCamera.WorldScale * 100f:0} cm beside")} the {hand.Name} hand"
+                Plugin.Log.LogInfo($"Loose tools: the {tool.Name}'s line ends on its model {(lowest > 0f ? $"{lowest * size / VrCamera.WorldScale * 100f:0} cm under" : $"{Mathf.Sqrt(nearest) * size / VrCamera.WorldScale * 100f:0} cm beside")} the {hand.Name} hand"
                     + $" (hand at {tool.HandOn * (size / VrCamera.WorldScale * 100f):F0} cm on the model, {tool.HandOn.x:0.0000} {tool.HandOn.y:0.0000} {tool.HandOn.z:0.0000} in its axes)");
             tool.EndKnown = true;
         }
@@ -919,13 +1030,13 @@ namespace ShipbreakerVR
             var most = Length * scale;
             foreach (var tool in Tools)
             {
-                if (!tool.Loose || tool.Rigid == null || !tool.HipKnown || !tool.Body.activeInHierarchy) continue;
+                if (!tool.Loose || tool.Handing || tool.Rigid == null || !tool.HipKnown || !tool.Body.activeInHierarchy) continue;
                 tool.SpeedBefore = tool.Rigid.velocity - player.velocity;
                 var held = VrHand.Left.State == HandState.Holding || VrHand.Right.State == HandState.Holding;
                 var bodyShare = player.isKinematic || held ? 0f : 1f / VrClimb.BodyWeight;
                 var taut = Tighten(tool, player, player.position + tool.HipFromBody, player.velocity, most, bodyShare, out var far, out var apart, out var impulse);
                 if (taut && !tool.Taut && logs++ < 120)
-                    Plugin.Log.LogInfo($"Loose tools: {tool.Kind}'s line taut at {far / scale:0.00} m, moving apart at {apart:0.00} m/s, impulse {impulse:0.0} kg m/s"
+                    Plugin.Log.LogInfo($"Loose tools: {tool.Name}'s line taut at {far / scale:0.00} m, moving apart at {apart:0.00} m/s, impulse {impulse:0.0} kg m/s"
                         + $" (body {(bodyShare > 0f ? $"{1f / bodyShare:0} kg" : "held")})");
                 tool.Taut = taut;
                 var outer = tool.Outer;
@@ -933,7 +1044,7 @@ namespace ShipbreakerVR
                 // The line in a hand: the same between the tool and the hand nearest to it, over the line between them.
                 var pulled = Tighten(tool, player, player.position + tool.PullFromBody[outer], player.velocity + tool.PullSpeed[outer], tool.Rest, bodyShare, out far, out apart, out impulse);
                 if (pulled && !tool.Pulled && logs++ < 200)
-                    Plugin.Log.LogInfo($"Loose tools: {tool.Kind} pulled by its line, {far / scale:0.00} m from the {VrHand.Both[outer].Name} hand, hand at {tool.PullSpeed[outer].magnitude:0.00} m/s, moving apart at {apart:0.00} m/s, impulse {impulse:0.0} kg m/s");
+                    Plugin.Log.LogInfo($"Loose tools: {tool.Name} pulled by its line, {far / scale:0.00} m from the {VrHand.Both[outer].Name} hand, hand at {tool.PullSpeed[outer].magnitude:0.00} m/s, moving apart at {apart:0.00} m/s, impulse {impulse:0.0} kg m/s");
                 tool.Pulled = pulled;
                 if (pulled && far - tool.Rest > Slip * scale) tool.Slipped = true;
             }
@@ -1017,7 +1128,7 @@ namespace ShipbreakerVR
             }
             if (found != VrToolBelt.Zone.None) return found;
             if (zone == VrToolBelt.Zone.None && missed != null && controller.Grip.Pressed && missedBy < MissWithin * scale && missLogs++ < 60)
-                Plugin.Log.LogInfo($"Loose tools: {controller.Name} grip pressed {missedBy / scale:0.00} m from the grip of the {missed.Kind} {(missed.Loose ? "afloat" : "at the belt")}, outside its {GripBall:0.00} m");
+                Plugin.Log.LogInfo($"Loose tools: {controller.Name} grip pressed {missedBy / scale:0.00} m from the grip of the {missed.Name} {(missed.Loose ? "afloat" : "at the belt")}, outside its {GripBall:0.00} m");
             return zone;
         }
 
@@ -1048,7 +1159,7 @@ namespace ShipbreakerVR
         {
             var text = $"loose tools: {(On ? "on" : "off")}, line {Length:0.#} m";
             foreach (var tool in Tools)
-                text += $", {tool.Kind} {(tool.Loose ? $"afloat{(tool.Taut ? " (line taut)" : "")}" : "not afloat")}{(tool.Hauls[0] || tool.Hauls[1] ? $" (line in {(tool.Hauls[0] && tool.Hauls[1] ? "both hands" : tool.Hauls[0] ? "the left hand" : "the right hand")})" : "")}"
+                text += $", {tool.Name} {(tool.Loose ? $"afloat{(tool.Taut ? " (line taut)" : "")}" : "not afloat")}{(tool.Hauls[0] || tool.Hauls[1] ? $" (line in {(tool.Hauls[0] && tool.Hauls[1] ? "both hands" : tool.Hauls[0] ? "the left hand" : "the right hand")})" : "")}"
                     + (tool.EndKnown ? "" : ", line's end not yet on the model") + (tool.HandKnown ? "" : ", grip not yet measured");
             return text;
         }

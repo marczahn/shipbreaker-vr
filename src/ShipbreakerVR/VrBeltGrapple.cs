@@ -12,6 +12,10 @@ namespace ShipbreakerVR
     // view, so in VR the grapple and the cutter lay at one's feet, with a copy of the grapple at the hip besides (Raik,
     // 2026-11-08). Now the grapple's rest points are moved to the hip each frame: it is the one grapple, put away it glides
     // to the hip, and drawn it leaves from there. The cutter's rest points go onto the back the same way.
+    // The demo charges' detonator shows at the other hip, where it is drawn from (Raik, 2026-11-18: "like the grapple,
+    // only on the left side, on the belt, to be seen"). The game has no model of it but the prop on the hand, hidden
+    // while the charges are put away: copies of that prop's meshes show it, upright, turned as a hand there with its
+    // forearm forward would hold it, while it is neither in a hand nor afloat (VrLooseTools).
     internal static class VrBeltGrapple
     {
         static VrBeltGrapple() => VrSession.OnUnload("belt grapple", Release);
@@ -35,6 +39,13 @@ namespace ShipbreakerVR
         // from (VrToolBelt: above -0.12 m, behind -0.05 m), and how far its muzzle points towards the left, in degrees.
         private static readonly Vector3 CutterGripAt = new Vector3(0.15f, -0.08f, -0.22f);
         private const float CutterSlant = 20f;
+
+        // Where the hand that would hold the detonator at the hip has its wrist, in the grapple's axes (mirrored with
+        // the tools for the left-handed).
+        private static readonly Vector3 DetonatorAt = new Vector3(-0.30f, -0.69f, -0.12f);
+        private static GameObject detonatorShown;
+        private static Transform detonatorOf;
+        private static float nextDetonator;
 
         // How fast the grapple glides onto its rest point, per second, as the game's spring may only run while it is held.
         private const float Glide = 10f;
@@ -106,6 +117,69 @@ namespace ShipbreakerVR
             if (cutterModel != null && cutterRest != null && !VrLooseTools.IsLoose(EquipmentController.Equipment.CuttingTool)
                 && VrToolModels.TrackingToWorld(neck + heading * (VrToolBelt.Sided(CutterGripAt) - VrToolBelt.ShoulderRef), onBack, out var cutterAt, out var cutterRotation))
                 Hang(cutterModel, cutterRest, CutterShadow(cutter), CutterShadowRest(cutter), cutterAt, cutterRotation, Vector3.zero);
+
+            HangDetonator(neck, heading);
+        }
+
+        // The detonator's copy at the hip, while the player has the charges and the detonator is put away.
+        private static void HangDetonator(Vector3 neck, Quaternion heading)
+        {
+            var prop = VrLooseTools.DetonatorModel;
+            var equipment = GameRefs.Equipment;
+            var inHandAt = Vector3.zero;
+            var inHandTurn = Quaternion.identity;
+            var wrist = Vector3.zero;
+            var frame = Quaternion.identity;
+            var shows = prop != null && equipment != null && equipment.CanEquip(EquipmentController.Equipment.DemoCharge)
+                && !VrLooseTools.DetonatorShowsInHand && !VrLooseTools.DetonatorLoose
+                && VrHands.DetonatorRest(out inHandAt, out inHandTurn)
+                && VrToolModels.TrackingToWorld(neck + heading * (VrToolBelt.Sided(DetonatorAt) - VrToolBelt.HipRef), heading, out wrist, out frame);
+            if (shows && (detonatorShown == null || detonatorOf != prop) && Time.unscaledTime >= nextDetonator)
+            {
+                nextDetonator = Time.unscaledTime + 2f;
+                BuildDetonator(prop);
+            }
+            if (!shows || detonatorShown == null)
+            {
+                if (detonatorShown != null && detonatorShown.activeSelf) detonatorShown.SetActive(false);
+                return;
+            }
+            detonatorShown.transform.SetPositionAndRotation(wrist + frame * (inHandAt * VrCamera.WorldScale), frame * inHandTurn);
+            if (!detonatorShown.activeSelf) detonatorShown.SetActive(true);
+        }
+
+        private static void BuildDetonator(Transform prop)
+        {
+            if (detonatorShown != null) Object.Destroy(detonatorShown);
+            detonatorShown = null;
+            detonatorOf = null;
+            var root = new GameObject("ShipbreakerVR detonator at the hip");
+            root.transform.SetPositionAndRotation(prop.position, prop.rotation);
+            var parts = 0;
+            foreach (var filter in prop.GetComponentsInChildren<MeshFilter>(true))
+            {
+                var source = filter.GetComponent<MeshRenderer>();
+                if (source == null || filter.sharedMesh == null) continue;
+                var copy = new GameObject(filter.name) { layer = filter.gameObject.layer };
+                copy.transform.SetParent(root.transform, false);
+                copy.transform.SetPositionAndRotation(filter.transform.position, filter.transform.rotation);
+                copy.transform.localScale = filter.transform.lossyScale;
+                copy.AddComponent<MeshFilter>().sharedMesh = filter.sharedMesh;
+                var shown = copy.AddComponent<MeshRenderer>();
+                shown.sharedMaterials = source.sharedMaterials;
+                shown.shadowCastingMode = source.shadowCastingMode;
+                shown.receiveShadows = source.receiveShadows;
+                parts++;
+            }
+            if (parts == 0)
+            {
+                Object.Destroy(root);
+                return;
+            }
+            root.SetActive(false);
+            detonatorShown = root;
+            detonatorOf = prop;
+            Plugin.Log.LogInfo($"Belt grapple: the detonator shows at the hip, {parts} part(s) copied from '{prop.name}'");
         }
 
         // Moves a tool's rest points so that the tool, once it lies on them, has its anchor (in its own axes) at the point
@@ -209,6 +283,7 @@ namespace ShipbreakerVR
         // longer runs.
         public static void Hide()
         {
+            if (detonatorShown != null && detonatorShown.activeSelf) detonatorShown.SetActive(false);
             // A tool afloat keeps its rest points where it floats (VrLooseTools); they go back once it is on the body again.
             foreach (var m in moved)
                 if (m.Point != null && !VrLooseTools.Holds(m.Point))
@@ -222,6 +297,9 @@ namespace ShipbreakerVR
         private static void Release()
         {
             Hide();
+            if (detonatorShown != null) Object.Destroy(detonatorShown);
+            detonatorShown = null;
+            detonatorOf = null;
             gun = null;
             cutter = null;
             model = null;
