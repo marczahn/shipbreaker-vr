@@ -413,7 +413,14 @@ namespace ShipbreakerVR
             if (tool.Loose || !Usable() || Time.unscaledTime - tool.HeldAt > PropLetGoWithin) return;
             var model = DetonatorProp();
             if (model == null) return;
-            if (VrToolBelt.Stows(tool.Zone, holder.Input))
+            // Put back where its grip hangs at the hip, as the grapple (within StowBall); by the box at the hip while
+            // that place is not known yet.
+            var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+            bool stows;
+            if (tool.HandKnown && rig != null && holder.Input.TryGetPosition(out var local) && VrBeltGrapple.DetonatorAtHip(tool.HandOn, out var hung, out _))
+                stows = (rig.TransformPoint(local) - hung).magnitude < StowBall * VrCamera.WorldScale;
+            else stows = VrToolBelt.Stows(tool.Zone, holder.Input);
+            if (stows)
             {
                 if (logs++ < 80) Plugin.Log.LogInfo("Loose tools: the detonator let go at its place on the body, put away");
                 return;
@@ -1100,6 +1107,9 @@ namespace ShipbreakerVR
             var reach = GripBall * scale;
             foreach (var tool in Tools)
                 if (tool.Loose && zone == tool.Zone) zone = VrToolBelt.Zone.None;
+            // The detonator at the hip is taken by its grip as the grapple is (Raik, 2026-11-18: "that works really
+            // well, take it over"): once its grip is known, the box at the hip no longer counts.
+            if (zone == VrToolBelt.Zone.Detonator && TryGetGripOnBody(Detonator, out _)) zone = VrToolBelt.Zone.None;
             var found = VrToolBelt.Zone.None;
             var nearest = float.MaxValue;
             Tool missed = null;
@@ -1112,7 +1122,7 @@ namespace ShipbreakerVR
                     if (tool.Body == null || !tool.Body.activeInHierarchy) continue;
                     grip = tool.Body.transform.TransformPoint(tool.Grip);
                 }
-                else if (tool != Grapple || !TryGetGripOnBody(tool, out grip)) continue;
+                else if ((tool != Grapple && !tool.Prop) || !TryGetGripOnBody(tool, out grip)) continue;
                 var off = (hand - grip).magnitude;
                 if (off < reach)
                 {
@@ -1137,6 +1147,8 @@ namespace ShipbreakerVR
         private static bool TryGetGripOnBody(Tool tool, out Vector3 grip)
         {
             grip = Vector3.zero;
+            // The detonator: on its copy at the hip (VrBeltGrapple), while that shows.
+            if (tool.Prop) return tool.HandKnown && VrBeltGrapple.DetonatorAtHip(tool.HandOn, out grip, out var shown) && shown;
             if (!tool.HandKnown || !VrBeltGrapple.Parts(tool.Kind, out var model, out var rest, out _, out _) || model.parent != rest) return false;
             if (!model.gameObject.activeInHierarchy) return false;
             grip = model.TransformPoint(tool.HandOn);

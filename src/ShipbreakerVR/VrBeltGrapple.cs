@@ -51,8 +51,10 @@ namespace ShipbreakerVR
         // as the grapple's body on the other side) and 55 cm below the neck.
         private static readonly Vector3 DetonatorAt = new Vector3(-0.26f, -0.72f, 0f);
         private static GameObject detonatorShown;
-        // The middle of its parts, in its own axes.
+        // The middle of its parts, in its own axes; the prop's size, which the copy's own frame does not have.
         private static Vector3 detonatorMiddle;
+        private static Vector3 detonatorSize = Vector3.one;
+        private static bool detonatorPlaced;
         private static Transform detonatorOf;
         private static float nextDetonator;
 
@@ -139,16 +141,18 @@ namespace ShipbreakerVR
             var inHandTurn = Quaternion.identity;
             var wrist = Vector3.zero;
             var frame = Quaternion.identity;
-            var shows = prop != null && equipment != null && equipment.CanEquip(EquipmentController.Equipment.DemoCharge)
-                && !VrLooseTools.DetonatorShowsInHand && !VrLooseTools.DetonatorLoose
+            // Its place is kept also while it does not show (in a hand, afloat): where it is put back (DetonatorAtHip).
+            var placed = prop != null && equipment != null && equipment.CanEquip(EquipmentController.Equipment.DemoCharge)
                 && VrHands.DetonatorRest(out inHandAt, out inHandTurn)
                 && VrToolModels.TrackingToWorld(neck + heading * (VrToolBelt.Sided(DetonatorAt) - VrToolBelt.ChargeRef), heading, out wrist, out frame);
-            if (shows && (detonatorShown == null || detonatorOf != prop) && Time.unscaledTime >= nextDetonator)
+            var shows = placed && !VrLooseTools.DetonatorShowsInHand && !VrLooseTools.DetonatorLoose;
+            if (placed && (detonatorShown == null || detonatorOf != prop) && Time.unscaledTime >= nextDetonator)
             {
                 nextDetonator = Time.unscaledTime + 2f;
                 BuildDetonator(prop);
             }
-            if (!shows || detonatorShown == null)
+            detonatorPlaced = placed && detonatorShown != null;
+            if (!detonatorPlaced)
             {
                 if (detonatorShown != null && detonatorShown.activeSelf) detonatorShown.SetActive(false);
                 return;
@@ -156,7 +160,19 @@ namespace ShipbreakerVR
             // Turned as in a hand there, its middle at the place.
             var turned = frame * inHandTurn;
             detonatorShown.transform.SetPositionAndRotation(wrist - turned * detonatorMiddle, turned);
-            if (!detonatorShown.activeSelf) detonatorShown.SetActive(true);
+            if (detonatorShown.activeSelf != shows) detonatorShown.SetActive(shows);
+        }
+
+        // For VrLooseTools: where a point of the detonator's model (in the prop's own axes) is on the copy at the hip,
+        // in the world; shown: whether the copy shows there now. False while it has no place at the hip.
+        internal static bool DetonatorAtHip(Vector3 inModel, out Vector3 at, out bool shown)
+        {
+            at = Vector3.zero;
+            shown = false;
+            if (!detonatorPlaced || detonatorShown == null) return false;
+            at = detonatorShown.transform.TransformPoint(Vector3.Scale(detonatorSize, inModel));
+            shown = detonatorShown.activeSelf;
+            return true;
         }
 
         private static void BuildDetonator(Transform prop)
@@ -190,6 +206,7 @@ namespace ShipbreakerVR
                 return;
             }
             detonatorMiddle = root.transform.InverseTransformPoint(middle / parts);
+            detonatorSize = prop.lossyScale;
             root.SetActive(false);
             detonatorShown = root;
             detonatorOf = prop;
@@ -299,6 +316,7 @@ namespace ShipbreakerVR
         public static void Hide()
         {
             if (detonatorShown != null && detonatorShown.activeSelf) detonatorShown.SetActive(false);
+            detonatorPlaced = false;
             // A tool afloat keeps its rest points where it floats (VrLooseTools); they go back once it is on the body again.
             foreach (var m in moved)
                 if (m.Point != null && !VrLooseTools.Holds(m.Point))
