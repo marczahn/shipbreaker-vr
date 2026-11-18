@@ -238,12 +238,12 @@ namespace ShipbreakerVR
 
         // Whether opening that hand's grip now lets a charge go rather than only putting the charges away: put on by
         // hand, a charge ready in the hand, and the hand not at the charges' place on the body.
-        public static bool LetsGo(VrInput.Hand hand)
+        public static bool LetsGo(VrInput.Hand hand, bool evenAtItsPlace = false)
         {
             if (!On || controller == null || !FindMesh() || !ChargesInHand()) return false;
             if (State(controller) != DemoChargeState.Placement) return false;
             if (meshRenderer != null && (!meshRenderer.enabled || !meshRenderer.gameObject.activeInHierarchy)) return false;
-            return !VrToolBelt.Stows(VrToolBelt.Zone.DemoCharge, hand);
+            return evenAtItsPlace || !VrToolBelt.Stows(VrToolBelt.Zone.DemoCharge, hand);
         }
 
         // From VrToolInput.Draw: the grip pressed behind the lower back (the charges) or at the hip (their detonator). The
@@ -282,12 +282,39 @@ namespace ShipbreakerVR
         private static readonly Afloat[] afloat = { new Afloat(), new Afloat() };
         private static StructurePart fresh;
         private static float freshUntil;
+        // The charge made last, for the hands to pass through while it has no body yet.
+        private static StructurePart newest;
+        private static float newestAt = -10f;
+        // The hand the next charge made goes into (HandTo).
+        private static VrInput.Hand giveTo;
+        private static float giveUntil;
 
         // From ChargeFreshPatch: the game has just made that charge. Its body comes with its jointing, a moment later.
         public static void Fresh(StructurePart part)
         {
             fresh = part;
             freshUntil = Time.unscaledTime + 1f;
+            newest = part;
+            newestAt = Time.unscaledTime;
+            if (giveTo != null && Time.unscaledTime <= giveUntil) VrChargeDisarm.Give(part, giveTo);
+            giveTo = null;
+        }
+
+        // From VrToolInput: the charges held with both hands, the first hand lets go. The charge let go now goes into
+        // that hand as the thing it is, held where that hand took hold of it (Raik, 2026-11-18: handed over as the
+        // game's tool it jumped into the hand's fit).
+        public static void HandTo(VrInput.Hand hand)
+        {
+            giveTo = hand;
+            giveUntil = Time.unscaledTime + 1f;
+        }
+
+        // Whether the hands pass through that collider: of the charge just made, or of a part the arms spare.
+        public static bool LeftAlone(Collider collider)
+        {
+            if (collider == null) return false;
+            if (newest != null && Time.unscaledTime - newestAt < 1f && collider.transform.IsChildOf(newest.transform)) return true;
+            return VrArmPush.Spares(collider.attachedRigidbody);
         }
 
         // From VrFrame, once a frame after the hands held on or let go (VrClimb).

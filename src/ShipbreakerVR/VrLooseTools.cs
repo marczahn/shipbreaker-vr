@@ -221,6 +221,11 @@ namespace ShipbreakerVR
             return body != null && ((Grapple.Loose && body == Grapple.Rigid) || (Cutter.Loose && body == Cutter.Rigid));
         }
 
+        // What the hands do not stop at: a tool afloat, and a part just let go that is still in the hand (a demo charge
+        // as it leaves the hand, VrChargeByHand; any part a hand let go, VrArmPush.Spare). Raik, 2026-11-18: letting a
+        // charge go, the hand jumped away from it.
+        public static bool HandsPass(Collider collider) => Owns(collider) || VrChargeByHand.LeftAlone(collider);
+
         public static bool Owns(Rigidbody body) =>
             body != null && ((Grapple.Loose && body == Grapple.Rigid) || (Cutter.Loose && body == Cutter.Rigid));
 

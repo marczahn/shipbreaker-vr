@@ -137,6 +137,16 @@ namespace ShipbreakerVR
             if (logs++ < 30) Plugin.Log.LogInfo($"Charge disarm: taken off by the {hand.Name} hand, which holds it now");
         }
 
+        // For VrChargeByHand.HandTo: that charge, just made, goes into that hand the same way.
+        public static void Give(StructurePart part, VrInput.Hand hand)
+        {
+            loose = part;
+            looseHand = hand;
+            looseAt = Time.unscaledTime;
+            looseTaken = false;
+            stickyOff = false;
+        }
+
         // The charge that came off, each frame: into the hand, and no clinging for a while.
         private static void Loose()
         {

@@ -104,6 +104,15 @@ namespace ShipbreakerVR
             entry.TouchedAt = Time.time;
         }
 
+        // Whether that part is spared now (for the hands, VrLooseTools.HandsPass); asking does not keep it so.
+        public static bool Spares(Rigidbody body)
+        {
+            if (body == null) return false;
+            foreach (var each in spared)
+                if (each.Body == body) return true;
+            return false;
+        }
+
         // Asked for a part an arm touches: touching it keeps it spared.
         private static bool IsSpared(Rigidbody body)
         {

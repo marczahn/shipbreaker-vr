@@ -177,16 +177,28 @@ namespace ShipbreakerVR
             var hidden = Of(VrHand.HiddenHand);
             if (hidden != null && !hidden.GripDown) VrDualTools.Forget();
             var tool = Of(VrHand.GameToolHand);
-            // The demo charges held with both hands (VrToolSupport): the hand that had them opens, the other one has them.
+            // The demo charges held with both hands (VrToolSupport): the hand that had them opens. With the charges put on
+            // by hand the charge leaves it as a thing of its own and the other hand holds it where it took hold
+            // (VrChargeByHand.HandTo); else the other hand has the charges as the game's tool.
+            var handedOver = false;
             if (!tool.GripDown && tool.Vr.Tool == EquipmentController.Equipment.DemoCharge
                 && VrToolSupport.Supporter(tool.Input) is VrHand keeper && keeper.Input.Grip.Down)
             {
-                if (logs++ < 60) Plugin.Log.LogInfo($"Tool control: {tool.Name} hand lets go of the demo charges, the {keeper.Name} hand has them");
-                VrHand.TakeGameTool(keeper, EquipmentController.Equipment.DemoCharge);
-                holsterPulses = 0;
-                tool = Of(VrHand.GameToolHand);
+                if (chargeGripDown && VrChargeByHand.LetsGo(tool.Input, true))
+                {
+                    if (logs++ < 60) Plugin.Log.LogInfo($"Tool control: {tool.Name} hand lets go of the demo charge, the {keeper.Name} hand holds it");
+                    VrChargeByHand.HandTo(keeper.Input);
+                    handedOver = true;
+                }
+                else if (chargeLetGoAt < 0f)
+                {
+                    if (logs++ < 60) Plugin.Log.LogInfo($"Tool control: {tool.Name} hand lets go of the demo charges, the {keeper.Name} hand has them");
+                    VrHand.TakeGameTool(keeper, EquipmentController.Equipment.DemoCharge);
+                    holsterPulses = 0;
+                    tool = Of(VrHand.GameToolHand);
+                }
             }
-            var lettingGo = ChargeLetGo(tool);
+            var lettingGo = ChargeLetGo(tool, handedOver);
             if (tool.GripPressed) holsterPulses = 0;
             else if (!tool.GripDown && !lettingGo) Holster();
 
@@ -380,7 +392,7 @@ namespace ShipbreakerVR
         private static bool chargeFire;
         private static float chargeLetGoAt = -10f;
 
-        private static bool ChargeLetGo(Hand tool)
+        private static bool ChargeLetGo(Hand tool, bool evenAtItsPlace)
         {
             var down = tool.GripDown;
             var was = chargeGripDown;
@@ -391,7 +403,7 @@ namespace ShipbreakerVR
                 chargeFire = false;
                 return false;
             }
-            if (was && VrChargeByHand.LetsGo(tool.Input))
+            if (was && VrChargeByHand.LetsGo(tool.Input, evenAtItsPlace))
             {
                 chargeLetGoAt = Time.unscaledTime;
                 chargeFire = true;
