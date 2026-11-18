@@ -196,6 +196,15 @@ namespace ShipbreakerVR
             return !VrToolBelt.Stows(VrToolBelt.Zone.DemoCharge, hand);
         }
 
+        // How far a point in the world is from the charge showing in the hand (its middle); MaxValue without one. Whether
+        // or not the charges are put on by hand.
+        public static float Distance(Vector3 point)
+        {
+            if (!FindMesh() || !ChargesInHand()) return float.MaxValue;
+            if (meshRenderer != null && (!meshRenderer.enabled || !meshRenderer.gameObject.activeInHierarchy)) return float.MaxValue;
+            return (point - mesh.position).magnitude;
+        }
+
         // On unload (hot reload).
         public static void Release()
         {

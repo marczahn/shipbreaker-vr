@@ -333,6 +333,10 @@ namespace ShipbreakerVR
         // other hand takes the tool over; further along the tool it only takes hold of it as before (VrToolSupport). The
         // grips are the two controllers', HandOverReach apart at most, in real meters: two hands side by side on one grip.
         private const float HandOverReach = 0.11f;
+        // The demo charges have no grip: the hand takes them by the charge itself, this near its middle (Raik, 2026-11-18,
+        // as a charge afloat goes from hand to hand).
+        private const float ChargeReach = 0.16f;
+        private static int handOverMisses;
 
         private static void HandOver(Hand hand)
         {
@@ -347,7 +351,17 @@ namespace ShipbreakerVR
                 && held != EquipmentController.Equipment.DemoCharge) return;
             if (!hand.Input.TryGetPosition(out var at) || !other.Input.TryGetPosition(out var grip)) return;
             var apart = (at - grip).magnitude;
-            if (apart > HandOverReach) return;
+            var onCharge = float.MaxValue;
+            var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+            if (held == EquipmentController.Equipment.DemoCharge && rig != null)
+                onCharge = VrChargeByHand.Distance(rig.TransformPoint(at)) / VrCamera.WorldScale;
+            if (apart > HandOverReach && onCharge > ChargeReach)
+            {
+                if (apart < 0.5f && handOverMisses++ < 30)
+                    Plugin.Log.LogInfo($"Tool control: {hand.Name} grip pressed {apart * 100f:0} cm from the grip of the {held} in the other hand"
+                        + (onCharge < float.MaxValue ? $", {onCharge * 100f:0} cm from the charge" : "") + ": too far to take it over");
+                return;
+            }
             if (second) VrDualTools.TakeOver(hand.Node);
             else VrHand.TakeGameTool(hand.Vr, held);
             holsterPulses = 0;
@@ -378,7 +392,7 @@ namespace ShipbreakerVR
             {
                 chargeLetGoAt = Time.unscaledTime;
                 chargeFire = true;
-                if (logs++ < 60) Plugin.Log.LogInfo($"Tool control: {tool.Name} hand lets a demo charge go");
+                if (logs++ < 60) Plugin.Log.LogInfo($"Tool control: {tool.Name} hand lets a demo charge go, at {VrToolBelt.ChargePlace(tool.Input)}");
             }
             return Time.unscaledTime - chargeLetGoAt < ChargeOutTime && VrChargeByHand.OutAt < chargeLetGoAt;
         }
