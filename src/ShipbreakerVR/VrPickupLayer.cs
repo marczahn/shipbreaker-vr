@@ -10,6 +10,10 @@ namespace ShipbreakerVR
     // went through them. In VR, the solid ones near the head are put on a layer both tools aim at (in the grapple's valid
     // and base masks and the cutter's ray and surface masks); their 'Interaction' trigger stays where it is, so taking
     // them still works as before. Off VR, each goes back to its own layer.
+    // A part a hand holds has its own layer for as long (Raik, 2026-11-18: a demo charge taken out from behind the back
+    // sat right at the controller on Ignore Raycast, and 6 cm further off, the hand drawn after it, from the moment it
+    // was put on the tools' layer: the two layers collide alike with all but one layer, and something of that one, at
+    // the hand, pushed the charge away). In the hand neither tool has to find it.
     internal static class VrPickupLayer
     {
         static VrPickupLayer() => VrSession.OnUnload("pickup layer", RestoreAll);
@@ -38,6 +42,9 @@ namespace ShipbreakerVR
                 if (Moved.Count > 0) RestoreAll();
                 return;
             }
+            var left = VrClimb.HeldBody(VrInput.Left);
+            var right = VrClimb.HeldBody(VrInput.Right);
+            if (left != null || right != null) KeepHeld(left, right);
             if (Time.unscaledTime < next) return;
             next = Time.unscaledTime + Every;
             if (layer < 0 && !FindLayer()) return;
@@ -50,6 +57,7 @@ namespace ShipbreakerVR
             {
                 var collider = Found[i];
                 if (collider.isTrigger || collider.attachedRigidbody == null || collider.name.StartsWith("PRF_")) continue;
+                if (collider.attachedRigidbody == left || collider.attachedRigidbody == right) continue;
                 var part = collider.GetComponentInParent<StructurePart>();
                 if (part == null) continue;
                 Moved[collider] = collider.gameObject.layer;
@@ -99,6 +107,23 @@ namespace ShipbreakerVR
             if (logs++ < 20) Plugin.Log.LogInfo("Pickup layer: no layer that both the grapple and the cutter aim at");
             layer = int.MaxValue;
             return false;
+        }
+
+        // What a hand holds goes back to its own layer; let go, the next look around puts it on the tools' layer again.
+        private static void KeepHeld(Rigidbody left, Rigidbody right)
+        {
+            Gone.Clear();
+            foreach (var pair in Moved)
+            {
+                var collider = pair.Key;
+                if (collider == null) continue;
+                var body = collider.attachedRigidbody;
+                if (body == null || (body != left && body != right)) continue;
+                collider.gameObject.layer = pair.Value;
+                Gone.Add(collider);
+                if (logs++ < 30) Plugin.Log.LogInfo($"Pickup layer: '{collider.name}' back on layer {pair.Value} '{LayerMask.LayerToName(pair.Value)}' while a hand holds it");
+            }
+            foreach (var collider in Gone) Moved.Remove(collider);
         }
 
         private static void Forget()
