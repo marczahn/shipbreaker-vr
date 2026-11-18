@@ -45,7 +45,11 @@ namespace ShipbreakerVR
         // closer to the body and a little further back"; it hung by a wrist placed in the grapple's axes before. The
         // zone's middle lies 20 cm to the side, 65 cm down and 11 cm back; the detonator hangs 3 cm further out than
         // that, so it does not sit in the suit's hip.
-        private static readonly Vector3 DetonatorAt = new Vector3(-0.23f, -0.65f, -0.11f);
+        // There it was out of sight (Raik, the same day): at the neck's line beside the body, 11 cm higher and some
+        // 10 cm further back than where he had seen it before. The zone went 10 cm forward (VrToolBelt), and the
+        // detonator hangs near its middle again: 26 cm to the side, 10 cm in front of the neck's line (as far forward
+        // as the grapple's body on the other side) and 55 cm below the neck.
+        private static readonly Vector3 DetonatorAt = new Vector3(-0.26f, -0.72f, 0f);
         private static GameObject detonatorShown;
         // The middle of its parts, in its own axes.
         private static Vector3 detonatorMiddle;

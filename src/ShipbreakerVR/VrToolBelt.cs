@@ -44,8 +44,10 @@ namespace ShipbreakerVR
         // 7 cm further forward with the grapple itself (VrBeltGrapple, Raik 2026-11-18).
         public static readonly Vector3 GripAt = new Vector3(0.30f, -0.72f, -0.01f);
         private const float GripReach = 0.13f;
-        private const float HipForward = 0.1f;
-        private const float HipBehind = -0.2f;
+        // The detonator's box, 10 cm further forward than the demo charges' was (Raik, 2026-11-18: the detonator, hung
+        // in its middle, was out of sight beside the body; zone and detonator forward, so it can be seen).
+        private const float HipForward = 0.2f;
+        private const float HipBehind = -0.1f;
         // The hip zones are turned this far around the head towards the back, in degrees, so a hand reaching out to the
         // side to hold on does not draw a tool.
         private const float HipTurn = 15f;

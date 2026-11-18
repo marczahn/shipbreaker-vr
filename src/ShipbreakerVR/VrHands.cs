@@ -527,22 +527,84 @@ namespace ShipbreakerVR
         }
 
         // The detonator's red lever gives way under the trigger (Raik, 2026-11-18: "pressed in a few millimeters or a
-        // centimeter, to see the detonating"): the lever (the prop's part '..._Trigger') moves towards the grip (its part
-        // '..._Body') by up to LeverDepth, as far as the trigger of the hand that holds it is pulled, and that hand's
-        // fingers, which lie round the lever, close a little with it. The lever is put back before the next frame's
-        // posing if nothing has set it since; the fingers through their own bookkeeping (Base, Set).
-        private const float LeverDepth = 0.008f;
+        // centimeter, to see the detonating"): the lever (the prop's part '..._Trigger') swings towards the grip (its
+        // part '..._Body') as far as the trigger of the hand that holds it is pulled, and that hand's fingers, which lie
+        // round the lever, close with it. It turns about its round head at the top, its hinge (Raik, of his pictures
+        // before and after: moved as a whole, the head went into the grip too): by up to LeverTurn degrees, the far
+        // end into the grip. The hinge is the middle of the lever's head, found once from the mesh: the end of the
+        // lever towards the body's middle, as wide across as the lever is there. The lever is put back before the
+        // next frame's posing if nothing has set it since; the fingers through their own bookkeeping (Base, Set).
+        private const float LeverTurn = 12f;
+        // The head is looked for within HeadSlice of the lever's end; HeadRadius if the mesh cannot be read (meters).
+        private const float HeadSlice = 0.02f;
+        private const float HeadRadius = 0.013f;
         // Degrees more at the knuckle, the middle and the last joint of each finger, with the trigger pulled through.
-        private static readonly float[] SqueezeBend = { 2f, 6f, 4f };
+        private static readonly float[] SqueezeBend = { 3f, 10f, 7f };
         private static Transform leverPart;
-        private static Vector3 leverWay, leverRest, leverSetAt;
+        // In the lever's own axes: its hinge and the axis it turns about (towards the grip for a positive angle).
+        private static Vector3 leverHinge, leverAxis;
+        private static Vector3 leverRest, leverSetAt;
+        private static Quaternion leverRestTurn, leverSetTurn;
         private static bool leverLooked, leverSet;
 
         private static void RestoreLever()
         {
             if (!leverSet) return;
             leverSet = false;
-            if (leverPart != null && leverPart.localPosition == leverSetAt) leverPart.localPosition = leverRest;
+            if (leverPart != null && leverPart.localPosition == leverSetAt && leverPart.localRotation == leverSetTurn)
+                SetLocal(leverPart, leverRest, leverRestTurn);
+        }
+
+        // The lever's hinge and axis from its mesh, in the lever's own axes; way: towards the grip, in the world.
+        private static void FindHinge(MeshFilter lever, MeshFilter body, Vector3 way)
+        {
+            var frame = lever.transform;
+            var bounds = lever.sharedMesh.bounds;
+            var size = bounds.size;
+            var length = size.x >= size.y && size.x >= size.z ? Vector3.right : size.y >= size.z ? Vector3.up : Vector3.forward;
+            // The head is at the end towards the body's middle (the body's box sits above the grip).
+            var toBody = frame.InverseTransformPoint(body.transform.TransformPoint(body.sharedMesh.bounds.center)) - bounds.center;
+            var head = Vector3.Dot(toBody, length) >= 0f ? length : -length;
+            var toGrip = frame.InverseTransformDirection(way).normalized;
+            var flat = Vector3.Cross(head, toGrip).normalized;
+            var meters = Mathf.Max(Mathf.Abs(frame.lossyScale.x), 1e-4f) / VrCamera.WorldScale;
+            var top = Vector3.Dot(bounds.center, head) + Mathf.Abs(Vector3.Dot(bounds.extents, length));
+            var radius = HeadRadius / meters;
+            var across = Vector3.Dot(bounds.center, toGrip);
+            var read = 0;
+            try
+            {
+                var points = lever.sharedMesh.vertices;
+                if (points != null && points.Length > 0)
+                {
+                    top = float.MinValue;
+                    foreach (var point in points) top = Mathf.Max(top, Vector3.Dot(point, head));
+                    float least = float.MaxValue, most = float.MinValue;
+                    foreach (var point in points)
+                    {
+                        if (Vector3.Dot(point, head) < top - HeadSlice / meters) continue;
+                        var at = Vector3.Dot(point, toGrip);
+                        least = Mathf.Min(least, at);
+                        most = Mathf.Max(most, at);
+                        read++;
+                    }
+                    if (read > 0 && most > least)
+                    {
+                        radius = (most - least) * 0.5f;
+                        across = (most + least) * 0.5f;
+                    }
+                }
+            }
+            catch (System.Exception)
+            {
+                read = 0;
+            }
+            leverHinge = head * (top - radius) + toGrip * across + flat * Vector3.Dot(bounds.center, flat);
+            // From the hinge down the lever, turned towards the grip.
+            leverAxis = Vector3.Cross(-head, toGrip).normalized;
+            Plugin.Log.LogInfo($"Hands: the detonator's lever '{lever.name}' turns about its head under the trigger, up to {LeverTurn:0}°: hinge {radius * meters * 1000f:0} mm below its end "
+                + $"({(read > 0 ? $"the head {radius * meters * 2000f:0} mm across, from {read} points of the mesh" : "the mesh not readable, a head of the usual size")}), "
+                + $"the lever {Mathf.Abs(Vector3.Dot(size, length)) * meters * 100f:0.0} cm long, axis ({leverAxis.x:0.00}, {leverAxis.y:0.00}, {leverAxis.z:0.00}) in its own axes");
         }
 
         private static void PressDetonator(bool on)
@@ -584,26 +646,26 @@ namespace ShipbreakerVR
                     var length = size.x >= size.y && size.x >= size.z ? Vector3.right : size.y >= size.z ? Vector3.up : Vector3.forward;
                     var along = lever.transform.TransformDirection(length).normalized;
                     var way = body.transform.TransformPoint(body.sharedMesh.bounds.center) - lever.transform.TransformPoint(lever.sharedMesh.bounds.center);
-                    var apart = way.magnitude;
                     way -= Vector3.Project(way, along);
                     if (way.sqrMagnitude > 1e-8f)
                     {
                         leverPart = lever.transform;
-                        leverWay = leverPart.parent.InverseTransformDirection(way.normalized);
-                        var inProp = detonatorProp.InverseTransformDirection(way.normalized);
-                        Plugin.Log.LogInfo($"Hands: the detonator's lever '{lever.name}' gives way under the trigger, up to {LeverDepth * 1000f:0} mm towards '{body.name}' "
-                            + $"(their middles {apart / VrCamera.WorldScale * 100f:0.0} cm apart, {way.magnitude / VrCamera.WorldScale * 100f:0.0} cm of it across the lever; way ({inProp.x:0.00}, {inProp.y:0.00}, {inProp.z:0.00}) in the prop's axes)");
+                        FindHinge(lever, body, way);
                     }
                 }
                 if (leverPart == null)
                     Plugin.Log.LogInfo($"Hands: no lever to press found on the detonator ({(lever == null ? "no part '..._Trigger'" : body == null ? "no part '..._Body'" : "the two lie in line")})");
             }
             if (leverPart == null || leverPart.parent == null) return;
-            var rest = leverPart.localPosition;
-            var size1 = Mathf.Max(Mathf.Abs(leverPart.parent.lossyScale.x), 1e-4f);
-            leverPart.localPosition = rest + leverWay * (LeverDepth * pulled * VrCamera.WorldScale / size1);
-            leverRest = rest;
+            leverRest = leverPart.localPosition;
+            leverRestTurn = leverPart.localRotation;
+            // About the hinge, which stays where it is.
+            var hinge = leverPart.TransformPoint(leverHinge);
+            var axis = leverPart.TransformDirection(leverAxis);
+            var turn = Quaternion.AngleAxis(LeverTurn * pulled, axis);
+            leverPart.SetPositionAndRotation(hinge + turn * (leverPart.position - hinge), turn * leverPart.rotation);
             leverSetAt = leverPart.localPosition;
+            leverSetTurn = leverPart.localRotation;
             leverSet = true;
         }
 
