@@ -45,7 +45,9 @@ namespace ShipbreakerVR
         // Measured with Raik, 2026-11-18: with "0 0 0 / 0 0 6" the charge's back pointed 79 degrees to the right and 25
         // degrees down of the controller's aim, turned about its length besides; with this turn it points where the
         // controller points, its top up, so the charge is put on a wall by pointing the controller at it.
-        private static readonly Fit ChargeRight = new Fit("SprengsatzRechts", "0 0 0 / 11.6 -80.0 33.3");
+        // The turn swings the charge about the wrist, 20 cm to the left and 9 cm behind the grip (measured); the mount
+        // brings it back in front of the controller.
+        private static readonly Fit ChargeRight = new Fit("SprengsatzRechts", "20 0 18 / 11.6 -80.0 33.3");
 
         public static ConfigEntry<bool> Adjusting;
 
