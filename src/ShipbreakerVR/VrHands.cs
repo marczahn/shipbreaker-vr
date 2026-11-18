@@ -833,6 +833,16 @@ namespace ShipbreakerVR
         {
             RestoreFold(arm);
             var hand = arm == LeftArm ? VrHand.Left : VrHand.Right;
+            // The right hand with the game's charges or their detonator keeps the fingers as the game's animation has
+            // them round it, which is the hold the left hand takes over mirrored (MirrorChargeFingers). With the charges
+            // put on by hand the right hand follows its controller, and its grip closed it to the empty hand's fist
+            // instead (Raik, 2026-11-18: the right hand held the detonator in another shape than the left).
+            if (arm == RightArm && hand.HoldsTool && hand.Tool == EquipmentController.Equipment.DemoCharge)
+            {
+                arm.Closed = arm.Flat = arm.Claw = arm.Straight = 0f;
+                Open(arm);
+                return;
+            }
             var tool = hand.HoldsTool && hand.Tool != EquipmentController.Equipment.DemoCharge;
             var grip = arm.Input.Grip.Down && hand.State != HandState.HiddenTool;
             var held = grip && VrClimb.HoldsFlat(arm.Input);
