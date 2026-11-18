@@ -31,7 +31,7 @@ namespace ShipbreakerVR
         static VrChargeByHand() => VrSession.OnUnload("charge by hand", Release);
 
         // How far beyond the charge's back a wall may be, in meters at world scale 1.
-        private const float Reach = 0.15f;
+        private const float Reach = 0.20f;
         // The mesh's origin lies this far in front of its back (SM_Props_Demo_Charge sits at z 0.03 in its prefab), and the
         // ray starts this far in front of the origin, so a charge pressed into the wall still finds it.
         private const float BackOfMesh = 0.03f;
@@ -355,6 +355,8 @@ namespace ShipbreakerVR
             public StructurePart Target;
             public Vector3 Point;
             public Quaternion Turn;
+            // How far the wall is from the charge's back, in meters at world scale 1 (MaxValue without one in reach).
+            public float Reach = float.MaxValue;
         }
 
         private static readonly RaycastHit[] Hits = new RaycastHit[16];
@@ -430,35 +432,30 @@ namespace ShipbreakerVR
                     held.Turn = MathUtility.GetLookRotation(hit.normal, frame.up);
                 }
                 held.Near = wall != null;
-                // The game's own preview, unless the charges from the stock are in the other hand and use it.
-                var preview = held.Near && !ChargesInHand() ? Preview() : null;
-                if (preview != null)
-                {
-                    if (JointSetup != null && JointSetup.GetValue(controller) == null) CacheJointSetup?.Invoke(controller, null);
-                    preview.Activate();
-                    preview.SetTargetData(held.Point, held.Turn, wall, mask, held.Target, JointSetup?.GetValue(controller) as JointSetupAsset);
-                    held.Shown = true;
-                }
+                // The game's preview is not asked here (Raik, 2026-11-18: no preview with the charges put on by hand): it
+                // called the place blocked by the very charge that is held to it, and the charge did not go on.
+                held.Reach = wall != null ? nearest / scale - Lead - BackOfMesh : float.MaxValue;
             }
-            if (was && !held.Shown && !ChargesInHand()) Preview()?.Deactivate();
+            if (was && !ChargesInHand()) Preview()?.Deactivate();
         }
 
         // Let go at the wall its preview showed: on it goes.
         private static bool PutOn(VrInput.Hand hand, Afloat held, DemoChargeRetrievalController charge)
         {
-            var preview = Preview();
-            var blocked = held.Shown && preview != null && preview.IsBlocked;
-            if (held.Shown && preview != null) preview.Deactivate();
             var near = held.Near;
             held.Near = held.Shown = false;
-            if (!near || blocked || held.Target == null || controller == null || Instantiate == null) return false;
+            if (!near || held.Target == null || controller == null || Instantiate == null)
+            {
+                if (logs++ < 60) Plugin.Log.LogInfo($"Charge by hand: a charge afloat let go by the {hand.Name} hand with no wall within {Reach * 100f:0} cm of its back: it floats");
+                return false;
+            }
             charge.OnSuccess();
             var part = Instantiate.Invoke(controller, new object[] { held.Point, held.Turn }) as StructurePart;
             if (part == null) return true;
             JointingService.Instance.JointStructureParts(part, held.Target);
             ModifyCount?.Invoke(controller, new object[] { -1, false, false });
             hand.Buzz(0.6f, 0.08f);
-            if (logs++ < 40) Plugin.Log.LogInfo($"Charge by hand: a charge afloat let go by the {hand.Name} hand at a wall, put on it");
+            if (logs++ < 60) Plugin.Log.LogInfo($"Charge by hand: a charge afloat let go by the {hand.Name} hand {held.Reach * 100f:0} cm from a wall, put on it");
             return true;
         }
 
