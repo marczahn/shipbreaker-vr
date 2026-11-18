@@ -41,10 +41,15 @@ namespace ShipbreakerVR
         private const float ShoulderAbove = -0.12f;
         private const float ShoulderBehind = -0.05f;
         private const float ShoulderInside = -0.1f;
-        // The cutter's zone over the right shoulder reaches a little lower and further in than that (Raik, 2026-11-17: it
-        // may be a touch larger); the zone over the left shoulder for stowing (OverLeftShoulder) stays as it was.
-        private const float CutterAbove = -0.17f;
+        // The cutter's zone over the right shoulder reaches lower and further in than that (Raik, 2026-11-17: it may be
+        // a touch larger; 2026-11-18: one cannot see the cutter there, so the zone is to be large, whatever its grip);
+        // the zone over the left shoulder for stowing (OverLeftShoulder) stays as it was.
+        // It counts from the head as before and against the body as well (ZoneOf): hung on the body alone, the hand had
+        // to go 8 to 14 cm further back than Raik was used to, behind the neck instead of behind the head, which leans
+        // forward with the reach. Against the body it begins CutterBehindBody from the neck's line.
+        private const float CutterAbove = -0.20f;
         private const float CutterInside = -0.15f;
+        private const float CutterBehindBody = -0.02f;
         private const float HelmetReach = 0.22f;
         private const float HelmetSide = 0.06f;
 
@@ -161,12 +166,18 @@ namespace ShipbreakerVR
             if (zone == Zone.Scanner || zone == Zone.Flashlight) return zone;
             if (HipLocal(controller, out var hip) && ZoneAt(hip) == Zone.Grapple) return Zone.Grapple;
             if (BodyLocal(controller, ChargeRef, out var charge) && ZoneAt(charge) == Zone.DemoCharge) return Zone.DemoCharge;
-            return ShoulderLocal(controller, out var shoulder) && ZoneAt(shoulder) == Zone.Cutter ? Zone.Cutter : Zone.None;
+            return zone == Zone.Cutter || OverRightShoulderOfBody(controller) ? Zone.Cutter : Zone.None;
         }
+
+        private static bool OverRightShoulderOfBody(VrInput.Hand controller) =>
+            ShoulderLocal(controller, out var shoulder) && OverRightShoulder(shoulder, CutterBehindBody);
 
         // Over the left shoulder, the mirror of the cutter's zone over the right one, with its inner edge at the middle
         // of the head (the cutter's reaches 10 cm past it), for stowing what a hand holds (VrShoulderStow).
         internal static bool OverLeftShoulder(Vector3 local) => local.y > ShoulderAbove && local.z < ShoulderBehind && local.x < 0f;
+
+        // Over the right shoulder, where the cutter is drawn from: from behind (z, forward) on.
+        private static bool OverRightShoulder(Vector3 local, float behind) => local.y > CutterAbove && local.z < behind && local.x > CutterInside;
 
         // The zone at a hand position relative to the head, in meters along the head's heading (x right, y up, z forward).
         // The grapple's zone is a ball of GripReach around its grip at the right hip, the demo charges' the box at the left.
@@ -184,7 +195,7 @@ namespace ShipbreakerVR
             }
             if (local.magnitude < HelmetReach && local.x > HelmetSide && local.z > ShoulderBehind) return Zone.Scanner;
             if (local.magnitude < HelmetReach && local.x < -HelmetSide && local.z > ShoulderBehind) return Zone.Flashlight;
-            if (local.y > CutterAbove && local.z < ShoulderBehind && local.x > CutterInside) return Zone.Cutter;
+            if (OverRightShoulder(local, ShoulderBehind)) return Zone.Cutter;
             return Zone.None;
         }
 
@@ -200,7 +211,7 @@ namespace ShipbreakerVR
         {
             if (zone == Zone.Grapple) return HipLocal(controller, out var hip) && Stows(zone, hip);
             if (zone == Zone.DemoCharge) return BodyLocal(controller, ChargeRef, out var charge) && Stows(zone, charge);
-            if (zone == Zone.Cutter) return ShoulderLocal(controller, out var shoulder) && Stows(zone, shoulder);
+            if (zone == Zone.Cutter) return (HeadLocal(controller, out var from) && ZoneAt(from) == Zone.Cutter) || OverRightShoulderOfBody(controller);
             return HeadLocal(controller, out var head) && Stows(zone, head);
         }
 
