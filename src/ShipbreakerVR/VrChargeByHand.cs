@@ -332,9 +332,14 @@ namespace ShipbreakerVR
         // (0.44, 0.87, -0.20), middle (-1, 9, 14) cm): that arm is turned against the controller by the hand's fit
         // (VrToolFit), and on a hand that follows the controller the charge was tipped outwards by 27 degrees (Raik's
         // screenshots of 12:52, "the starting hold now" against "the hold I want").
-        private static readonly Vector3 HeldBack = new Vector3(0.95f, -0.07f, 0.32f);
-        private static readonly Vector3 HeldTop = new Vector3(0f, 0.98f, 0.22f);
-        private static readonly Vector3 TakeOutAt = new Vector3(-0.07f, -0.02f, 0.12f);
+        // Nor quite the prefab's pose (back (0.95, -0.07, 0.32), top (0, 0.98, 0.22), middle (-7, -2, 12) cm; Raik at
+        // 13:00: "nearly there"): he took the charge from hand to hand until it lay as he wants it, twice, and the log
+        // had it both times (MeasureHeld: back (0.79, -0.06, 0.61) and (0.79, -0.15, 0.60), top (-0.07, 0.98, 0.19) and
+        // (0.01, 0.97, 0.22), middle (-14, -1, 9) and (-15, -1, 10) cm). The mean of the two: the face turned 20 degrees
+        // further to him, the charge 8 cm further inwards.
+        private static readonly Vector3 HeldBack = new Vector3(0.79f, -0.10f, 0.61f);
+        private static readonly Vector3 HeldTop = new Vector3(-0.03f, 0.98f, 0.21f);
+        private static readonly Vector3 TakeOutAt = new Vector3(-0.145f, -0.01f, 0.095f);
 
         // How the charge is turned in that hand, against the hand's or the controller's axes.
         internal static Quaternion InHand(bool left)
