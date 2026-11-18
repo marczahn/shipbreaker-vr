@@ -49,6 +49,13 @@ namespace ShipbreakerVR
         private static readonly MethodInfo ToggleCut = AccessTools.Method(typeof(DemoChargeController), "ToggleCutRotation");
         private static readonly FieldInfo Timer = AccessTools.Field(typeof(DemoChargeController), "mTimerInfo");
         private static readonly MethodInfo AnyCharges = AccessTools.PropertyGetter(typeof(DemoChargeController), "AnyDemoCharges");
+        private static readonly MethodInfo Instantiate =
+            AccessTools.Method(typeof(DemoChargeController), "InstantiateDemoCharge", new[] { typeof(Vector3), typeof(Quaternion) });
+        private static readonly MethodInfo ModifyCount = AccessTools.Method(typeof(DemoChargeController), "ModifyDemoChargeCount");
+        // The hand's fit is measured for the log every so often while a charge is held (Raik, 2026-11-18: the hand and the
+        // charge are turned against the controller).
+        private static float nextMeasure;
+        private static int measures;
         private static readonly AccessTools.FieldRef<DemoChargeRetrievalController, bool> Deployed =
             AccessTools.FieldRefAccess<DemoChargeRetrievalController, bool>("mIsDeployed");
         // A charge afloat with what it hangs on weighs 1.6 kg; a part of the ship with a charge on it is not taken for one.
@@ -121,12 +128,34 @@ namespace ShipbreakerVR
             var scale = VrCamera.WorldScale;
             // Looking through the charge's back, with the charge's up.
             frame.SetPositionAndRotation(mesh.position + mesh.forward * (Lead * scale), Quaternion.LookRotation(-mesh.forward, mesh.up));
+            Measure();
             // The line on the charge is the cut: the toggle stays on its first setting.
             if (!Horizontal(instance) && ToggleCut != null) ToggleCut.Invoke(instance, null);
             inside = true;
         }
 
         public static void Leave() => inside = false;
+
+        // How the charge in the hand lies against the controller, for the log: where its back and its top point in the
+        // controller's own axes (x right, y up, z along its aim), and the back's turn off the aim. From that the hand's
+        // fit (VrToolFit, SprengsatzRechts) can be set so the back points where the controller does.
+        private static void Measure()
+        {
+            if (measures >= 40 || Time.unscaledTime < nextMeasure) return;
+            var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+            var hand = VrHand.GameToolHand;
+            if (rig == null || !hand.Input.TryGetAimRotation(out var aimLocal) || !hand.Input.TryGetPosition(out var gripLocal)) return;
+            nextMeasure = Time.unscaledTime + 1.5f;
+            measures++;
+            var toController = Quaternion.Inverse(rig.rotation * aimLocal);
+            var back = toController * -mesh.forward;
+            var top = toController * mesh.up;
+            var off = toController * (mesh.position - rig.TransformPoint(gripLocal)) / VrCamera.WorldScale * 100f;
+            var yaw = Mathf.Atan2(back.x, back.z) * Mathf.Rad2Deg;
+            var pitch = Mathf.Asin(Mathf.Clamp(back.y, -1f, 1f)) * Mathf.Rad2Deg;
+            Plugin.Log.LogInfo($"Charge by hand: fit in the {hand.Name} hand: the charge's back points {yaw:0}° to the right and {pitch:0}° up of the controller's aim "
+                + $"(back {back:F2}, top {top:F2} in the controller's axes), its middle at {off:F0} cm from the grip");
+        }
 
         // From VrAim.CameraTransformFor: what the charges' code gets as the camera.
         public static bool Aims(out Transform from)
@@ -150,6 +179,22 @@ namespace ShipbreakerVR
             delay.SetValue(timer, 0f);
             Timer.SetValue(instance, timer);
             if (logs++ < 40) Plugin.Log.LogInfo($"Charge by hand: {(state == DemoChargeState.Placing ? "onto the wall" : "let go afloat")}");
+        }
+
+        // For VrChargeDisarm: one charge from the stock let go at that place and turn, at rest against the player's body;
+        // what the game does for a thrown charge (ThrowDemoCharge), without its fling. Null if it could not.
+        public static StructurePart LetGoFromStock(Vector3 at, Quaternion turned)
+        {
+            var instance = controller != null ? controller : Object.FindObjectOfType<DemoChargeController>();
+            if (instance == null || Instantiate == null) return null;
+            var player = VrToolCollide.Player();
+            launch = player != null ? player.velocity : Vector3.zero;
+            launchUntil = Time.unscaledTime + 2f;
+            var part = Instantiate.Invoke(instance, new object[] { at, turned }) as StructurePart;
+            if (part == null) return null;
+            JointingService.Instance.JointStructureParts(part);
+            ModifyCount?.Invoke(instance, new object[] { -1, false, false });
+            return part;
         }
 
         // From VrAim.ThrowOrigin (DemoChargeController.ThrowDemoCharge): a charge let go starts where the hand has it, as

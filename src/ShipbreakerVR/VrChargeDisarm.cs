@@ -1,19 +1,34 @@
 using BBI.Unity.Game;
 using HarmonyLib;
+using Unity.Entities;
 using UnityEngine;
 
 namespace ShipbreakerVR
 {
-    // A demo charge on a wall is taken off through a little game of timing (DemoChargeRetrievalController.OnInteractStart
-    // starts a GolfSwingController: a ring fills, and the input has to come inside its safe zone; outside it the charge
-    // goes off). In VR that input never came, so the charge could not be disarmed (Raik, 2026-11-18). As he asked, the
-    // interact button (A or X) pressed once more takes the charge off, wherever the ring stands: the game's own way out
-    // through its success. Only for a ring that a demo charge started; and not within a moment of its start, so the
-    // press that started it does not end it.
+    // Taking a demo charge off a wall. The game does it through its own interaction: the prompt's button sends the game's
+    // right hand to the charge and starts a little game of timing (DemoChargeRetrievalController.OnInteractStart, a
+    // GolfSwingController: a ring fills, and the input has to come inside its safe zone), and then the charge is gone,
+    // back in the stock. In VR that input never came (Raik, 2026-11-18), and the hand that came was not his.
+    // As he asked: the hand that holds on to the charge (either one, VrClimb) takes it off itself. The interact button
+    // (A or X) of that hand makes it ready, the button once more takes it off: the charge on the wall goes back to the
+    // stock the game's way and one from the stock is let go in its place, afloat and in that hand, which holds it as any
+    // loose part. For NoStickTime it does not cling to the wall again, near as it is. The game's own interaction is left
+    // out while a hand holds a charge on a wall (VrToolInput), so its hand does not come.
+    // Should the game's ring come up all the same (the prompt's button without holding the charge), the interact button
+    // once more takes the charge off through the ring's own success, wherever it stands.
     internal static class VrChargeDisarm
     {
+        // The ring: one that starts within this of a charge's interaction is the charge's, and the button counts only
+        // this long after its start, so the press that started it does not end it.
         private const float StartsWithin = 1f;
         private const float NotBefore = 0.25f;
+        // By hand: the second press within this of the first, the new charge is taken hold of within TakeWithin, and it
+        // does not cling to a wall for NoStickTime (seconds).
+        private const float ReadyFor = 6f;
+        private const float TakeWithin = 0.8f;
+        private const float NoStickTime = 1.5f;
+        // The charge's mesh lies this far in front of its back (PRF_Demo_Charge).
+        private const float BackOfMesh = 0.03f;
 
         private static readonly AccessTools.FieldRef<GolfSwingController, bool> InSafeZone =
             AccessTools.FieldRefAccess<GolfSwingController, bool>("mInSafeZone");
@@ -21,11 +36,140 @@ namespace ShipbreakerVR
             AccessTools.FieldRefAccess<GolfSwingController, float>("mCurrentDelayTime");
         private static readonly AccessTools.FieldRef<GolfSwingController, float> DelayAmount =
             AccessTools.FieldRefAccess<GolfSwingController, float>("mStartDelayAmount");
+        private static readonly AccessTools.FieldRef<DemoChargeRetrievalController, bool> Deployed =
+            AccessTools.FieldRefAccess<DemoChargeRetrievalController, bool>("mIsDeployed");
 
         private static float chargeAt = -10f;
         private static float ringAt;
         private static bool mine;
         private static int logs;
+
+        private sealed class Held
+        {
+            public Collider Collider;
+            public DemoChargeRetrievalController Charge;
+            public float ReadyAt = -100f;
+        }
+
+        private static readonly Held[] held = { new Held(), new Held() };
+
+        // The charge that came off: taken hold of by that hand once its body is there, and kept from clinging.
+        private static StructurePart loose;
+        private static VrInput.Hand looseHand;
+        private static float looseAt;
+        private static bool looseTaken;
+        private static Entity stickyOn;
+        private static LayerMask stickyMask;
+        private static bool stickyOff;
+
+        // True while a hand holds on to a charge on a wall: the game's interaction stays out (VrToolInput).
+        public static bool Holds { get; private set; }
+
+        // From VrFrame, once a frame after the hands held on or let go (VrClimb).
+        public static void Track()
+        {
+            Holds = false;
+            if (VrXr.IsRunning)
+            {
+                Check(VrInput.Left, held[0]);
+                Check(VrInput.Right, held[1]);
+            }
+            Loose();
+        }
+
+        private static void Check(VrInput.Hand hand, Held state)
+        {
+            var collider = VrClimb.HeldCollider(hand);
+            if (collider != state.Collider)
+            {
+                state.Collider = collider;
+                state.ReadyAt = -100f;
+                state.Charge = null;
+                var part = collider != null ? collider.GetComponentInParent<StructurePart>() : null;
+                var charge = part != null ? part.GetComponentInChildren<DemoChargeRetrievalController>(true) : null;
+                if (charge != null && charge.DemoCharge == part) state.Charge = charge;
+            }
+            var on = state.Charge;
+            // Only one on a wall that the game lets be taken off (its own object is on then, the removable grip unlocked).
+            if (on == null || !Deployed(on) || !on.gameObject.activeInHierarchy) return;
+            Holds = true;
+            if (!hand.Primary.Pressed) return;
+            if (Time.unscaledTime - state.ReadyAt > ReadyFor)
+            {
+                state.ReadyAt = Time.unscaledTime;
+                hand.Buzz(0.3f, 0.05f);
+                if (logs++ < 30) Plugin.Log.LogInfo($"Charge disarm: {hand.Name} hand on a charge on the wall, ready; the button once more takes it off");
+                return;
+            }
+            state.ReadyAt = -100f;
+            TakeOff(hand, on);
+        }
+
+        private static void TakeOff(VrInput.Hand hand, DemoChargeRetrievalController charge)
+        {
+            var part = charge.DemoCharge;
+            if (part == null) return;
+            var frame = part.transform;
+            // Made at its mesh's place, the new charge's back is a mesh's depth (BackOfMesh) off the wall.
+            var at = frame.position;
+            var turned = frame.rotation;
+            charge.OnSuccess();
+            var fresh = VrChargeByHand.LetGoFromStock(at, turned);
+            hand.Buzz(0.8f, 0.12f);
+            if (fresh == null)
+            {
+                if (logs++ < 30) Plugin.Log.LogInfo($"Charge disarm: taken off by the {hand.Name} hand, back in the stock (no charge to hold could be made)");
+                return;
+            }
+            loose = fresh;
+            looseHand = hand;
+            looseAt = Time.unscaledTime;
+            looseTaken = false;
+            stickyOff = false;
+            if (logs++ < 30) Plugin.Log.LogInfo($"Charge disarm: taken off by the {hand.Name} hand, which holds it now");
+        }
+
+        // The charge that came off, each frame: into the hand, and no clinging for a while.
+        private static void Loose()
+        {
+            if (loose == null) return;
+            var since = Time.unscaledTime - looseAt;
+            if (!looseTaken && since <= TakeWithin && looseHand.Grip.Down)
+            {
+                var body = loose.GetComponentInParent<Rigidbody>();
+                var collider = loose.GetComponent<Collider>();
+                if (body != null && !body.isKinematic && collider != null) looseTaken = VrClimb.HoldOn(looseHand, collider);
+            }
+            // The game makes a charge afloat cling to what it touches once its automatic deploying is unlocked (Sticky on
+            // what the charge hangs on): taken away for the time, then given back.
+            if (EntityBlueprintComponent.IsValid(loose.EntityBlueprintComponent))
+            {
+                var manager = loose.EntityBlueprintComponent.EntityManager;
+                var entity = loose.EntityBlueprintComponent.Entity;
+                if (since < NoStickTime)
+                {
+                    if (manager.Exists(entity) && manager.HasComponent<HierarchyMember>(entity))
+                    {
+                        var parent = manager.GetComponentData<HierarchyMember>(entity).Parent;
+                        if (manager.Exists(parent) && manager.HasComponent<Sticky>(parent))
+                        {
+                            stickyMask = manager.GetComponentData<Sticky>(parent).LayerMask;
+                            stickyOn = parent;
+                            stickyOff = true;
+                            manager.RemoveComponent<Sticky>(parent);
+                        }
+                    }
+                    return;
+                }
+                if (stickyOff && manager.Exists(stickyOn) && !manager.HasComponent<Sticky>(stickyOn))
+                    manager.AddComponentData(stickyOn, new Sticky { LayerMask = stickyMask });
+            }
+            else if (since < NoStickTime) return;
+            loose = null;
+            stickyOff = false;
+        }
+
+        // ---- The game's ring, should it come up ----
 
         // A demo charge is being interacted with: a ring that starts right after is its own.
         public static void ChargeStarts() => chargeAt = Time.unscaledTime;
@@ -34,7 +178,7 @@ namespace ShipbreakerVR
         {
             mine = VrXr.IsRunning && Time.unscaledTime - chargeAt < StartsWithin;
             ringAt = Time.unscaledTime;
-            if (mine && logs++ < 20) Plugin.Log.LogInfo("Charge disarm: the ring is up, the interact button once more takes the charge off");
+            if (mine && logs++ < 30) Plugin.Log.LogInfo("Charge disarm: the ring is up, the interact button once more takes the charge off");
         }
 
         public static void RingEnds() => mine = false;
@@ -47,7 +191,7 @@ namespace ShipbreakerVR
             // The game's own input, counted as in time whatever the ring shows, also during its starting delay.
             DelayTime(ring) = DelayAmount(ring);
             InSafeZone(ring) = true;
-            if (logs++ < 20) Plugin.Log.LogInfo("Charge disarm: taken off with the interact button");
+            if (logs++ < 30) Plugin.Log.LogInfo("Charge disarm: taken off with the interact button, through the ring");
             ring.OnInput();
         }
     }

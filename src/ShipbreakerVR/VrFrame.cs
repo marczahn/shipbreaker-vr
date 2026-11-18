@@ -50,6 +50,7 @@ namespace ShipbreakerVR
             ("lamp shadows", VrLampShadows.Update),
             ("shoulder stow", VrShoulderStow.Update),
             ("charges afloat", VrChargeByHand.Track),
+            ("charge disarm", VrChargeDisarm.Track),
             ("pickup layer", VrPickupLayer.Update),
             ("vr options entry", VrOptionsMenu.Update),
             ("vr options tab", VrOptionsTab.Update),

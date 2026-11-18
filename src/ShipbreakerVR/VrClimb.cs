@@ -1984,6 +1984,23 @@ namespace ShipbreakerVR
         }
 
         // The rigidbody that hand holds on to, if any (VrArmPush leaves it alone).
+        // That hand lets go of what it holds and takes hold of that collider instead, where the hand is: a demo charge
+        // taken off a wall is a new thing in the place of the old one (VrChargeDisarm). False if it could not.
+        internal static bool HoldOn(VrInput.Hand input, Collider collider)
+        {
+            if (collider == null || player == null || VrCamera.Instance == null) return false;
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input) continue;
+                if (hand.Holding) LetGo(hand, false, "takes the thing that came off");
+                var at = HandWorld(hand);
+                var surface = Closest(collider, at, Reach * VrCamera.WorldScale);
+                Take(hand, collider, at, surface, (surface - at).sqrMagnitude, null, Vector3.zero);
+                return hand.Holding;
+            }
+            return false;
+        }
+
         public static Rigidbody HeldBody(VrInput.Hand input)
         {
             foreach (var hand in Hands)
