@@ -69,6 +69,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> Climbing;
         public static ConfigEntry<bool> ShoulderStow;
         public static ConfigEntry<bool> UprightBody;
+        public static ConfigEntry<VrToolBelt.Handed> Handedness;
         public static ConfigEntry<bool> Diagnostics;
         public static ConfigEntry<bool> TestMode;
         public static ConfigEntry<bool> MockRuntime;
@@ -187,6 +188,10 @@ namespace ShipbreakerVR
                     "Sammelteile (Kabel, Platinen, Datenkassetten und Ähnliches) sammelst du ein, indem du sie über die linke Schulter hältst und dort loslässt, wie in einen Rucksack: ein leichtes Vibrieren zeigt, dass du dort bist, ein kurzes Rasseln und ein Vibrieren bestätigen es. Aus: nur mit A oder X, während du sie hältst."),
                 "Needs Festhalten.");
 
+            Handedness = Bind("Steuerung", "Haendigkeit", VrToolBelt.Handed.Rechts,
+                ("Where the tools and the backpack sit on your body. Right-handed: grapple at the right hip, cutter over the right shoulder, detonator at the left hip, backpack over the left shoulder, scanner at the right and flashlight at the left of the helmet. Left-handed: all of it mirrored. The demo charges are behind the lower back either way.",
+                    "Wo Werkzeuge und Rucksack am Körper sitzen. Rechtshänder: Greifer an der rechten Hüfte, Cutter über der rechten Schulter, Zünder an der linken Hüfte, Rucksack über der linken Schulter, Scanner rechts und Lampe links am Helm. Linkshänder: alles gespiegelt. Die Sprengsätze sitzen in beiden Fällen hinter dem unteren Rücken."),
+                (new[] { "Right-handed", "Left-handed" }, new[] { "Rechtshänder", "Linkshänder" }));
             UprightBody = Bind("Steuerung", "OberkoerperAufrecht", true,
                 ("Your body stays upright and faces your hands while you look around, and follows your head when you lean, so the hands reach the controllers the same way wherever you look. Off: the body turns with every look and stays put when you lean, as before.",
                     "Dein Körper bleibt aufrecht und zu deinen Händen gewandt, während du dich umschaust, und geht mit, wenn du dich vorbeugst: Die Hände reichen gleich weit, egal wohin du schaust. Aus: Der Körper dreht sich wie bisher mit jedem Blick mit und bleibt stehen, wenn du dich vorbeugst."));

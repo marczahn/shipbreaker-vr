@@ -48,6 +48,11 @@ namespace ShipbreakerVR
             AccessTools.FieldRefAccess<DemoChargeController, bool>("mHorizontalCutNext");
         private static readonly MethodInfo ToggleCut = AccessTools.Method(typeof(DemoChargeController), "ToggleCutRotation");
         private static readonly FieldInfo Timer = AccessTools.Field(typeof(DemoChargeController), "mTimerInfo");
+        private static readonly MethodInfo AnyCharges = AccessTools.PropertyGetter(typeof(DemoChargeController), "AnyDemoCharges");
+        private static readonly AccessTools.FieldRef<DemoChargeRetrievalController, bool> Deployed =
+            AccessTools.FieldRefAccess<DemoChargeRetrievalController, bool>("mIsDeployed");
+        // A charge afloat with what it hangs on weighs 1.6 kg; a part of the ship with a charge on it is not taken for one.
+        private const float HeaviestCharge = 5f;
 
         private static ConfigEntry<bool> enabled;
         private static bool bound;
@@ -196,6 +201,107 @@ namespace ShipbreakerVR
             return !VrToolBelt.Stows(VrToolBelt.Zone.DemoCharge, hand);
         }
 
+        // From VrToolInput.Draw: the grip pressed behind the lower back (the charges) or at the hip (their detonator). The
+        // two are one tool of the game's in two modes, which it changes between Placement and Detonation only, and to the
+        // charges only while there are some. False when there is nothing to draw.
+        public static bool Draws(bool detonator)
+        {
+            var instance = controller != null ? controller : Object.FindObjectOfType<DemoChargeController>();
+            if (instance == null) return true;
+            controller = instance;
+            var state = State(instance);
+            if (detonator)
+            {
+                if (state == DemoChargeState.Placement) instance.SetMode(DemoChargeMode.Detonation);
+                return true;
+            }
+            if (state != DemoChargeState.Detonation) return true;
+            if (!(AnyCharges?.Invoke(instance, null) is bool any) || !any)
+            {
+                if (logs++ < 40) Plugin.Log.LogInfo("Charge by hand: no demo charges left behind the back");
+                return false;
+            }
+            instance.SetMode(DemoChargeMode.Placement);
+            return true;
+        }
+
+        // ---- A charge afloat: left alone by the arm that let it go, and put back behind the back ----
+
+        private sealed class Afloat
+        {
+            public Rigidbody Body;
+            public DemoChargeRetrievalController Charge;
+            public bool AtPlace;
+        }
+
+        private static readonly Afloat[] afloat = { new Afloat(), new Afloat() };
+        private static StructurePart fresh;
+        private static float freshUntil;
+
+        // From ChargeFreshPatch: the game has just made that charge. Its body comes with its jointing, a moment later.
+        public static void Fresh(StructurePart part)
+        {
+            fresh = part;
+            freshUntil = Time.unscaledTime + 1f;
+        }
+
+        // From VrFrame, once a frame after the hands held on or let go (VrClimb).
+        public static void Track()
+        {
+            if (fresh != null)
+            {
+                var body = fresh.GetComponentInParent<Rigidbody>();
+                if (body != null && !body.isKinematic)
+                {
+                    VrArmPush.Spare(body);
+                    fresh = null;
+                }
+                else if (Time.unscaledTime > freshUntil) fresh = null;
+            }
+            Check(VrInput.Left, afloat[0]);
+            Check(VrInput.Right, afloat[1]);
+        }
+
+        // A charge afloat that a hand holds (as any loose part, VrClimb) and lets go where the charges are drawn from goes
+        // back to them: the game's own way of taking a charge back (DemoChargeRetrievalController.OnSuccess: one more
+        // charge, this one removed). A light buzz tells the hand is there.
+        private static void Check(VrInput.Hand hand, Afloat held)
+        {
+            var body = VrXr.IsRunning ? VrClimb.HeldBody(hand) : null;
+            if (body != null && !body.isKinematic)
+            {
+                if (body != held.Body)
+                {
+                    held.Body = body;
+                    held.AtPlace = false;
+                    held.Charge = body.mass <= HeaviestCharge ? body.GetComponentInChildren<DemoChargeRetrievalController>(true) : null;
+                    if (held.Charge != null && Deployed(held.Charge)) held.Charge = null;
+                }
+                if (held.Charge == null) return;
+                var at = VrToolBelt.Stows(VrToolBelt.Zone.DemoCharge, hand);
+                if (at && !held.AtPlace) hand.Buzz(0.25f, 0.04f);
+                held.AtPlace = at;
+                return;
+            }
+            var was = held.Charge;
+            var wasBody = held.Body;
+            var wasAt = held.AtPlace;
+            held.Charge = null;
+            held.Body = null;
+            held.AtPlace = false;
+            // Let go with the grip (not lost by tracking), and not still held by the other hand.
+            if (was == null || hand.Grip.Down) return;
+            if (wasBody != null && VrClimb.HeldBody(hand.IsLeft ? VrInput.Right : VrInput.Left) == wasBody) return;
+            if (!wasAt && !VrToolBelt.Stows(VrToolBelt.Zone.DemoCharge, hand))
+            {
+                if (logs++ < 40) Plugin.Log.LogInfo($"Charge by hand: a charge afloat let go by the {hand.Name} hand at {VrToolBelt.ChargePlace(hand)}, not behind the back");
+                return;
+            }
+            was.OnSuccess();
+            hand.Buzz(1f, 0.15f);
+            if (logs++ < 40) Plugin.Log.LogInfo($"Charge by hand: a charge afloat put back behind the back by the {hand.Name} hand");
+        }
+
         // How far a point in the world is from the charge showing in the hand (its middle); MaxValue without one. Whether
         // or not the charges are put on by hand.
         public static float Distance(Vector3 point)
@@ -242,6 +348,15 @@ namespace ShipbreakerVR
     internal static class ChargeStatePatch
     {
         private static void Postfix(DemoChargeController __instance, DemoChargeState newState) => VrChargeByHand.StateSet(__instance, newState);
+    }
+
+    [HarmonyPatch(typeof(DemoChargeController), "InstantiateDemoCharge", new[] { typeof(Vector3), typeof(Quaternion), typeof(Entity) })]
+    internal static class ChargeFreshPatch
+    {
+        private static void Postfix(StructurePart __result)
+        {
+            if (__result != null) VrChargeByHand.Fresh(__result);
+        }
     }
 
     [HarmonyPatch(typeof(DemoChargeAsset), nameof(DemoChargeAsset.SetComponentData))]

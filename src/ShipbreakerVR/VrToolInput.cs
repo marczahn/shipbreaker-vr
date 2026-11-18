@@ -177,6 +177,15 @@ namespace ShipbreakerVR
             var hidden = Of(VrHand.HiddenHand);
             if (hidden != null && !hidden.GripDown) VrDualTools.Forget();
             var tool = Of(VrHand.GameToolHand);
+            // The demo charges held with both hands (VrToolSupport): the hand that had them opens, the other one has them.
+            if (!tool.GripDown && tool.Vr.Tool == EquipmentController.Equipment.DemoCharge
+                && VrToolSupport.Supporter(tool.Input) is VrHand keeper && keeper.Input.Grip.Down)
+            {
+                if (logs++ < 60) Plugin.Log.LogInfo($"Tool control: {tool.Name} hand lets go of the demo charges, the {keeper.Name} hand has them");
+                VrHand.TakeGameTool(keeper, EquipmentController.Equipment.DemoCharge);
+                holsterPulses = 0;
+                tool = Of(VrHand.GameToolHand);
+            }
             var lettingGo = ChargeLetGo(tool);
             if (tool.GripPressed) holsterPulses = 0;
             else if (!tool.GripDown && !lettingGo) Holster();
@@ -329,13 +338,11 @@ namespace ShipbreakerVR
             if (active) hand.Vr.Zone = VrToolBelt.Update(hand.Input, hand.Trigger);
         }
 
-        // Raik, 2026-11-18: a hand that grips right at the grip of the cutter, the grapple or the demo charges in the
-        // other hand takes the tool over; further along the tool it only takes hold of it as before (VrToolSupport). The
-        // grips are the two controllers', HandOverReach apart at most, in real meters: two hands side by side on one grip.
+        // Raik, 2026-11-18: a hand that grips right at the grip of the cutter or the grapple in the other hand takes the
+        // tool over; further along the tool it only takes hold of it as before (VrToolSupport). The grips are the two
+        // controllers', HandOverReach apart at most, in real meters: two hands side by side on one grip.
+        // Not the demo charges: they are held with both hands, and go over when the first hand lets go (VrToolSupport).
         private const float HandOverReach = 0.11f;
-        // The demo charges have no grip: the hand takes them by the charge itself, this near its middle (Raik, 2026-11-18,
-        // as a charge afloat goes from hand to hand).
-        private const float ChargeReach = 0.16f;
         private static int handOverMisses;
 
         private static void HandOver(Hand hand)
@@ -347,19 +354,13 @@ namespace ShipbreakerVR
             if (second) held = VrDualTools.Second;
             else if (other.Vr == VrHand.GameToolHand && !equipment.IsNothingEquipped) held = equipment.CurrentEquipment;
             else return;
-            if (held != EquipmentController.Equipment.CuttingTool && held != EquipmentController.Equipment.GrappleHook
-                && held != EquipmentController.Equipment.DemoCharge) return;
+            if (held != EquipmentController.Equipment.CuttingTool && held != EquipmentController.Equipment.GrappleHook) return;
             if (!hand.Input.TryGetPosition(out var at) || !other.Input.TryGetPosition(out var grip)) return;
             var apart = (at - grip).magnitude;
-            var onCharge = float.MaxValue;
-            var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
-            if (held == EquipmentController.Equipment.DemoCharge && rig != null)
-                onCharge = VrChargeByHand.Distance(rig.TransformPoint(at)) / VrCamera.WorldScale;
-            if (apart > HandOverReach && onCharge > ChargeReach)
+            if (apart > HandOverReach)
             {
                 if (apart < 0.5f && handOverMisses++ < 30)
-                    Plugin.Log.LogInfo($"Tool control: {hand.Name} grip pressed {apart * 100f:0} cm from the grip of the {held} in the other hand"
-                        + (onCharge < float.MaxValue ? $", {onCharge * 100f:0} cm from the charge" : "") + ": too far to take it over");
+                    Plugin.Log.LogInfo($"Tool control: {hand.Name} grip pressed {apart * 100f:0} cm from the grip of the {held} in the other hand: too far to take it over");
                 return;
             }
             if (second) VrDualTools.TakeOver(hand.Node);
@@ -412,9 +413,11 @@ namespace ShipbreakerVR
             var zone = hand.Zone;
             var tool = zone == VrToolBelt.Zone.Grapple ? EquipmentController.Equipment.GrappleHook
                 : zone == VrToolBelt.Zone.Cutter ? EquipmentController.Equipment.CuttingTool
-                : zone == VrToolBelt.Zone.DemoCharge ? EquipmentController.Equipment.DemoCharge
+                : zone == VrToolBelt.Zone.DemoCharge || zone == VrToolBelt.Zone.Detonator ? EquipmentController.Equipment.DemoCharge
                 : EquipmentController.Equipment.Scanner;
             if (!equipment.CanEquip(tool) || equipment.IsEquipmentBlocked(tool)) return;
+            // The demo charges behind the back and their detonator at the hip are one tool of the game's, in two modes.
+            if (tool == EquipmentController.Equipment.DemoCharge && !VrChargeByHand.Draws(zone == VrToolBelt.Zone.Detonator)) return;
             if (VrDualTools.Second == tool)
             {
                 VrDualTools.TakeOver(hand.Node);
@@ -442,7 +445,7 @@ namespace ShipbreakerVR
             if (!taken)
                 now[(int)(zone == VrToolBelt.Zone.Grapple ? Action.Grapple
                     : zone == VrToolBelt.Zone.Cutter ? Action.Cutter
-                    : zone == VrToolBelt.Zone.DemoCharge ? Action.DemoCharge
+                    : zone == VrToolBelt.Zone.DemoCharge || zone == VrToolBelt.Zone.Detonator ? Action.DemoCharge
                     : Action.Scanner)] = true;
             if (logs++ < 60) Plugin.Log.LogInfo($"Tool control: {hand.Name} hand {(taken ? "takes" : "draws")} the {tool}");
             VrHand.TakeGameTool(hand.Vr, tool);

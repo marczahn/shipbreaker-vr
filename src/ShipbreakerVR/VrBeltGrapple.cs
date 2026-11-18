@@ -90,7 +90,7 @@ namespace ShipbreakerVR
             var rest = GunRest(gun);
             var hanging = heading * Quaternion.Euler(-MuzzleForward, 0f, 0f) * Quaternion.LookRotation(Vector3.down, Vector3.forward);
             if (gunModel != null && rest != null && !VrLooseTools.IsLoose(EquipmentController.Equipment.GrappleHook)
-                && VrToolModels.TrackingToWorld(neck + heading * (BodyAt - VrToolBelt.HipRef), hanging, out var at, out var rotation))
+                && VrToolModels.TrackingToWorld(neck + heading * (VrToolBelt.Sided(BodyAt) - VrToolBelt.HipRef), hanging, out var at, out var rotation))
             {
                 var modelInGun = Quaternion.Inverse(gunModel.rotation) * model.rotation;
                 Hang(gunModel, rest, Shadow(gun), ShadowRest(gun), at, rotation * Quaternion.Inverse(modelInGun),
@@ -102,9 +102,9 @@ namespace ShipbreakerVR
             // muzzle down towards the left hip, its top away from the back. Hung by its pivot, where the hand holds it.
             var cutterModel = cutter != null ? Cutter(cutter) : null;
             var cutterRest = cutter != null ? CutterRest(cutter) : null;
-            var onBack = heading * Quaternion.Euler(0f, 0f, -CutterSlant) * Quaternion.LookRotation(Vector3.down, Vector3.back);
+            var onBack = heading * Quaternion.Euler(0f, 0f, VrToolBelt.LeftHanded ? CutterSlant : -CutterSlant) * Quaternion.LookRotation(Vector3.down, Vector3.back);
             if (cutterModel != null && cutterRest != null && !VrLooseTools.IsLoose(EquipmentController.Equipment.CuttingTool)
-                && VrToolModels.TrackingToWorld(neck + heading * (CutterGripAt - VrToolBelt.ShoulderRef), onBack, out var cutterAt, out var cutterRotation))
+                && VrToolModels.TrackingToWorld(neck + heading * (VrToolBelt.Sided(CutterGripAt) - VrToolBelt.ShoulderRef), onBack, out var cutterAt, out var cutterRotation))
                 Hang(cutterModel, cutterRest, CutterShadow(cutter), CutterShadowRest(cutter), cutterAt, cutterRotation, Vector3.zero);
         }
 

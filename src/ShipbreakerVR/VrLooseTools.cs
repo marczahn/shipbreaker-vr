@@ -744,7 +744,9 @@ namespace ShipbreakerVR
                     right.Normalize();
                     up = Vector3.ProjectOnPlane(up, right).normalized;
                     var forward = Vector3.Cross(right, up);
-                    hip = rightHip.position + (right * tool.Hip.x + up * tool.Hip.y + forward * tool.Hip.z) * scale;
+                    // On the hip of the side the tools hang on (VrToolBelt.LeftHanded).
+                    var mirrored = VrToolBelt.LeftHanded;
+                    hip = (mirrored ? leftHip : rightHip).position + (right * (mirrored ? -tool.Hip.x : tool.Hip.x) + up * tool.Hip.y + forward * tool.Hip.z) * scale;
                     return true;
                 }
             }
@@ -755,7 +757,7 @@ namespace ShipbreakerVR
             var ahead = vr.transform.localRotation * Vector3.forward;
             ahead.y = 0f;
             if (ahead.sqrMagnitude < 1e-4f) return false;
-            hip = rig.TransformPoint(vr.transform.localPosition + Quaternion.LookRotation(ahead, Vector3.up) * new Vector3(0.2f + tool.Hip.x, -0.72f, tool.Hip.z));
+            hip = rig.TransformPoint(vr.transform.localPosition + Quaternion.LookRotation(ahead, Vector3.up) * VrToolBelt.Sided(new Vector3(0.2f + tool.Hip.x, -0.72f, tool.Hip.z)));
             return true;
         }
 

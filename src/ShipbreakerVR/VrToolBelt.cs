@@ -11,13 +11,26 @@ namespace ShipbreakerVR
     // goes 17 cm forward and 9 cm down against the neck when looking down at the hip). Their bounds are still written
     // as from the head, for the pose they were found in: looking down at the hip (HipLook), upright for the shoulder.
     //   right hip            grapple
-    //   left hip             demo charges (drawn across the body)
+    //   left hip             the demo charges' detonator
+    //   behind the lower back    demo charges, for either hand
     //   over the right shoulder  cutter
+    //   over the left shoulder   nothing to draw: there things are let go into the backpack (VrShoulderStow)
     //   right side of the helmet scanner
     //   left side of the helmet  flashlight on or off, left hand only
+    // Each place has one use (Raik, 2026-11-18): the demo charges were at the left hip with their detonator a mode of
+    // theirs; now the detonator has the hip and the charges the lower back. For left-handers all of it is mirrored
+    // (Steuerung/Haendigkeit): the hand's place is mirrored before it is looked up, and what hangs on the body is hung
+    // on the other side (Sided).
     internal static class VrToolBelt
     {
-        public enum Zone { None, Grapple, Cutter, DemoCharge, Scanner, Flashlight }
+        public enum Zone { None, Grapple, Cutter, DemoCharge, Scanner, Flashlight, Detonator }
+
+        public enum Handed { Rechts, Links }
+
+        public static bool LeftHanded => VrSettings.Handedness != null && VrSettings.Handedness.Value == Handed.Links;
+
+        // A place on the body written for right-handers (x right), on the side it has for this player.
+        internal static Vector3 Sided(Vector3 place) => LeftHanded ? new Vector3(-place.x, place.y, place.z) : place;
 
         // Head-relative bounds in meters: x right, y up, z forward.
         private const float HipBelow = -0.45f;
@@ -90,7 +103,8 @@ namespace ShipbreakerVR
             if (!HeadLocal(controller, out local)) return Zone.None;
             // Experiment (VrLooseTools): a tool afloat is not at the body; its zone is around the tool itself.
             var zone = VrLooseTools.Zone(controller, ZoneOf(controller, local));
-            return zone == Zone.Flashlight && !controller.IsLeft ? Zone.None : zone;
+            // The flashlight's hand is the one on its side of the helmet.
+            return zone == Zone.Flashlight && controller.IsLeft == LeftHanded ? Zone.None : zone;
         }
 
         // Where the controller is relative to the head, in meters along the head's heading (x right, y up, z forward), as
@@ -107,7 +121,7 @@ namespace ShipbreakerVR
             if (forward.sqrMagnitude < 0.01f) forward = head.localRotation * Vector3.up;
             forward.y = 0f;
             if (forward.sqrMagnitude < 0.0001f) return false;
-            local = Quaternion.Inverse(Quaternion.LookRotation(forward, Vector3.up)) * (hand - head.localPosition);
+            local = Sided(Quaternion.Inverse(Quaternion.LookRotation(forward, Vector3.up)) * (hand - head.localPosition));
             return true;
         }
 
@@ -155,7 +169,7 @@ namespace ShipbreakerVR
         {
             local = Vector3.zero;
             if (!BodyFrame(out var neck, out var heading) || !controller.TryGetPosition(out var hand)) return false;
-            local = Quaternion.Inverse(heading) * (hand - neck) + reference;
+            local = Sided(Quaternion.Inverse(heading) * (hand - neck) + reference);
             return true;
         }
 
@@ -165,9 +179,23 @@ namespace ShipbreakerVR
             var zone = ZoneAt(head);
             if (zone == Zone.Scanner || zone == Zone.Flashlight) return zone;
             if (HipLocal(controller, out var hip) && ZoneAt(hip) == Zone.Grapple) return Zone.Grapple;
-            if (BodyLocal(controller, ChargeRef, out var charge) && ZoneAt(charge) == Zone.DemoCharge) return Zone.DemoCharge;
-            return zone == Zone.Cutter || OverRightShoulderOfBody(controller) ? Zone.Cutter : Zone.None;
+            if (BodyLocal(controller, ChargeRef, out var box) && ChargeBox(box, 0f)) return Zone.Detonator;
+            if (zone == Zone.Cutter || OverRightShoulderOfBody(controller)) return Zone.Cutter;
+            return ShoulderLocal(controller, out var back) && LowerBack(back, 0f) ? Zone.DemoCharge : Zone.None;
         }
+
+        // Behind the lower back, where the demo charges are drawn from (Raik, 2026-11-18): for either hand, and large, as
+        // the hand finds it unseen. Measured against the body as the shoulder is (upright, y from the eye's height): from
+        // BackFront behind the neck's line, where a hand hanging at the side is not yet, down from the middle of the back.
+        private const float BackTop = -0.35f;
+        private const float BackBottom = -1.0f;
+        private const float BackFront = -0.12f;
+        private const float BackDeep = -0.7f;
+        private const float BackSide = 0.28f;
+
+        private static bool LowerBack(Vector3 local, float wider) =>
+            local.y < BackTop + wider && local.y > BackBottom - wider && local.z < BackFront + wider && local.z > BackDeep - wider
+            && Mathf.Abs(local.x) < BackSide + wider;
 
         private static bool OverRightShoulderOfBody(VrInput.Hand controller) =>
             ShoulderLocal(controller, out var shoulder) && OverRightShoulder(shoulder, CutterBehindBody);
@@ -179,7 +207,7 @@ namespace ShipbreakerVR
         // Over the right shoulder, where the cutter is drawn from: from behind (z, forward) on.
         private static bool OverRightShoulder(Vector3 local, float behind) => local.y > CutterAbove && local.z < behind && local.x > CutterInside;
 
-        // The demo charges' box at the left hip, that much wider all round.
+        // The detonator's box at the left hip (the demo charges' until 2026-11-18), that much wider all round.
         private static bool ChargeBox(Vector3 local, float wider)
         {
             if (local.y >= HipBelow + wider || local.y <= HipDeepest - wider) return false;
@@ -192,11 +220,13 @@ namespace ShipbreakerVR
         }
 
         // The zone at a hand position relative to the head, in meters along the head's heading (x right, y up, z forward).
-        // The grapple's zone is a ball of GripReach around its grip at the right hip, the demo charges' the box at the left.
+        // The grapple's zone is a ball of GripReach around its grip at the right hip, the detonator's the box at the left,
+        // the demo charges' the space behind the lower back.
         internal static Zone ZoneAt(Vector3 local)
         {
             if ((local - GripAt).magnitude < GripReach) return Zone.Grapple;
-            if (ChargeBox(local, 0f)) return Zone.DemoCharge;
+            if (ChargeBox(local, 0f)) return Zone.Detonator;
+            if (LowerBack(local, 0f)) return Zone.DemoCharge;
             if (local.magnitude < HelmetReach && local.x > HelmetSide && local.z > ShoulderBehind) return Zone.Scanner;
             if (local.magnitude < HelmetReach && local.x < -HelmetSide && local.z > ShoulderBehind) return Zone.Flashlight;
             if (OverRightShoulder(local, ShoulderBehind)) return Zone.Cutter;
@@ -210,19 +240,21 @@ namespace ShipbreakerVR
         internal static bool Stows(Zone zone, Vector3 local) =>
             zone == Zone.Grapple ? (local - GripAt).magnitude < GripReach * StowWider : zone != Zone.None && ZoneAt(local) == zone;
 
-        // The demo charges go back within this much around their box (Raik, 2026-11-18: let go just beside it, a charge
-        // was let go afloat each time and the charges could not be put back).
+        // The detonator and the demo charges go back within this much around their places (Raik, 2026-11-18: let go just
+        // beside their box, a charge was let go afloat each time and the charges could not be put back).
         private const float ChargeStowWider = 0.15f;
+        private const float BackStowWider = 0.08f;
 
-        // Where a hand is as the demo charges' box is measured, for the log.
+        // Where a hand is as the demo charges' place behind the back is measured, for the log.
         internal static string ChargePlace(VrInput.Hand controller) =>
-            BodyLocal(controller, ChargeRef, out var at) ? $"({at.x:0.00}, {at.y:0.00}, {at.z:0.00}) m as the charges' box is measured" : "untracked";
+            ShoulderLocal(controller, out var at) ? $"({at.x:0.00}, {at.y:0.00}, {at.z:0.00}) m as the place behind the back is measured" : "untracked";
 
         // The same for a hand, measured as its zone is: at the hip, over the shoulder, or from the head.
         internal static bool Stows(Zone zone, VrInput.Hand controller)
         {
             if (zone == Zone.Grapple) return HipLocal(controller, out var hip) && Stows(zone, hip);
-            if (zone == Zone.DemoCharge) return BodyLocal(controller, ChargeRef, out var charge) && ChargeBox(charge, ChargeStowWider);
+            if (zone == Zone.Detonator) return BodyLocal(controller, ChargeRef, out var box) && ChargeBox(box, ChargeStowWider);
+            if (zone == Zone.DemoCharge) return ShoulderLocal(controller, out var back) && LowerBack(back, BackStowWider);
             if (zone == Zone.Cutter) return (HeadLocal(controller, out var from) && ZoneAt(from) == Zone.Cutter) || OverRightShoulderOfBody(controller);
             return HeadLocal(controller, out var head) && Stows(zone, head);
         }

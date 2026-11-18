@@ -77,6 +77,45 @@ namespace ShipbreakerVR
         private static readonly Vector3[] Speed = new Vector3[4];
         private static int logs;
 
+        // A part just let go is still in the hand and along the arm: the arms leave it alone until it has been clear of
+        // both for ClearTime, at most SpareTime (Raik, 2026-11-18: a demo charge let go flew off, knocked on by the forearm
+        // and the upper arm in turn, by up to 1.6 m/s a knock).
+        private const float ClearTime = 0.25f;
+        private const float SpareTime = 3f;
+
+        private sealed class Spared
+        {
+            public Rigidbody Body;
+            public float Until;
+            public float TouchedAt;
+        }
+
+        private static readonly System.Collections.Generic.List<Spared> spared = new System.Collections.Generic.List<Spared>();
+
+        // From VrClimb as a hand lets go of a part that moves, and for a demo charge as it leaves the hand (VrChargeByHand).
+        public static void Spare(Rigidbody body)
+        {
+            if (body == null) return;
+            Spared entry = null;
+            foreach (var each in spared)
+                if (each.Body == body) entry = each;
+            if (entry == null) spared.Add(entry = new Spared { Body = body });
+            entry.Until = Time.time + SpareTime;
+            entry.TouchedAt = Time.time;
+        }
+
+        // Asked for a part an arm touches: touching it keeps it spared.
+        private static bool IsSpared(Rigidbody body)
+        {
+            foreach (var each in spared)
+            {
+                if (each.Body != body) continue;
+                each.TouchedAt = Time.time;
+                return true;
+            }
+            return false;
+        }
+
         // From VrFrame, after the arms are posed.
         public static void LateUpdate()
         {
@@ -87,6 +126,7 @@ namespace ShipbreakerVR
             var heldLeft = VrClimb.HeldBody(VrInput.Left);
             var heldRight = VrClimb.HeldBody(VrInput.Right);
             pushed = 0;
+            spared.RemoveAll(each => each.Body == null || Time.time > each.Until || Time.time - each.TouchedAt > ClearTime);
             for (var i = 0; i < 2; i++)
             {
                 var arm = Arms[i];
@@ -156,7 +196,8 @@ namespace ShipbreakerVR
         // Not a tool afloat (VrLooseTools): let go, it is still in the hand and along the forearm, and the arm knocked it
         // away at up to 4.7 m/s (the log, 2026-11-17: the cutter above all, which lies along the forearm).
         private static bool Pushable(Rigidbody body, Rigidbody player, Rigidbody heldLeft, Rigidbody heldRight) =>
-            body != null && body != player && body != heldLeft && body != heldRight && !body.isKinematic && body.mass > 0f && !VrLooseTools.Owns(body);
+            body != null && body != player && body != heldLeft && body != heldRight && !body.isKinematic && body.mass > 0f && !VrLooseTools.Owns(body)
+            && !IsSpared(body);
 
         // A light part gets the speed it is to have along the push: the body's flight, and a share of the arm's own swing.
         private static void Knock(Rigidbody player, Collider collider, Rigidbody body, Vector3 contact, Vector3 outward, Vector3 swing, string piece)

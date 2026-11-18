@@ -66,15 +66,20 @@ namespace ShipbreakerVR.Tests
 
         [Theory]
         [InlineData(0.2f, -0.6f, 0f, (int)Zone.None)]
-        [InlineData(-0.2f, -0.6f, 0f, (int)Zone.DemoCharge)]
+        [InlineData(-0.2f, -0.6f, 0f, (int)Zone.Detonator)]
         [InlineData(0f, -0.6f, 0f, (int)Zone.None)]
         [InlineData(0.2f, -0.6f, 0.4f, (int)Zone.None)]
         [InlineData(0.3f, -0.6f, 0.2f, (int)Zone.None)]
         [InlineData(-0.3f, -0.6f, 0.2f, (int)Zone.None)]
         [InlineData(0.25f, -0.6f, -0.1f, (int)Zone.None)]
-        [InlineData(-0.25f, -0.6f, -0.1f, (int)Zone.DemoCharge)]
+        [InlineData(-0.25f, -0.6f, -0.1f, (int)Zone.Detonator)]
         [InlineData(0.45f, -0.6f, -0.1f, (int)Zone.None)]
-        [InlineData(0.2f, -0.6f, -0.55f, (int)Zone.None)]
+        // Behind the lower back: the demo charges, for either hand; not where a hand hangs at the side.
+        [InlineData(0.2f, -0.6f, -0.55f, (int)Zone.DemoCharge)]
+        [InlineData(0f, -0.6f, -0.3f, (int)Zone.DemoCharge)]
+        [InlineData(-0.2f, -0.8f, -0.3f, (int)Zone.DemoCharge)]
+        [InlineData(0.3f, -0.45f, -0.05f, (int)Zone.None)]
+        [InlineData(0.4f, -0.6f, -0.3f, (int)Zone.None)]
         [InlineData(0.2f, -0.95f, 0f, (int)Zone.None)]
         [InlineData(0.1f, 0.1f, -0.3f, (int)Zone.Cutter)]
         [InlineData(0.15f, 0f, 0.05f, (int)Zone.Scanner)]
@@ -92,9 +97,9 @@ namespace ShipbreakerVR.Tests
         [Theory]
         [InlineData(0.30f, -0.72f, -0.08f, (int)Zone.Grapple)]
         [InlineData(0.33f, -0.67f, -0.01f, (int)Zone.Grapple)]
-        [InlineData(0.20f, -0.62f, -0.37f, (int)Zone.None)]
+        [InlineData(0.20f, -0.62f, -0.37f, (int)Zone.DemoCharge)]
         [InlineData(0.20f, -0.50f, 0.10f, (int)Zone.None)]
-        [InlineData(-0.25f, -0.6f, -0.1f, (int)Zone.DemoCharge)]
+        [InlineData(-0.25f, -0.6f, -0.1f, (int)Zone.Detonator)]
         public void WithTheGrappleAtTheHipOnlyItsGripDrawsIt(float x, float y, float z, int zone) =>
             Assert.Equal((Zone)zone, VrToolBelt.ZoneAt(new Vector3(x, y, z)));
     }

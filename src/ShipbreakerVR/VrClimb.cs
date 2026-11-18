@@ -2355,6 +2355,8 @@ namespace ShipbreakerVR
             var body = hand.Body;
             if (firm) Unfirm(hand);
             if (firm && push && body != null && !Held(body)) Throw(hand, body);
+            // The arm that let it go leaves it alone until it is clear of it (VrArmPush.Spare).
+            if (movable && body != null && !Held(body)) VrArmPush.Spare(body);
             hand.Anchor = null;
             hand.Collider = null;
             hand.Body = null;

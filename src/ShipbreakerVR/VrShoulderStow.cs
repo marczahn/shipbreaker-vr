@@ -110,8 +110,9 @@ namespace ShipbreakerVR
             Stow(hand, was);
         }
 
+        // Not a demo charge afloat: it goes back to the charges behind the back (VrChargeByHand), each place has one use.
         private static bool Collectable(InteractableObject thing) =>
-            thing != null && thing.isActiveAndEnabled && thing.DestroyOnComplete;
+            thing != null && thing.isActiveAndEnabled && thing.DestroyOnComplete && thing.GetComponent<DemoChargeRetrievalController>() == null;
 
         private static void Stow(VrInput.Hand hand, InteractableObject thing)
         {
