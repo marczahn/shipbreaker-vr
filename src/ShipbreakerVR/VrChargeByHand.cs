@@ -277,6 +277,121 @@ namespace ShipbreakerVR
             public Rigidbody Body;
             public DemoChargeRetrievalController Charge;
             public bool AtPlace;
+            // What the game makes a charge afloat cling with (Sticky on what it hangs on), taken away while it is held.
+            public Entity StickyOn;
+            public LayerMask StickyMask;
+            public bool StickyOff;
+            // The wall within reach of its back: where it goes on when let go.
+            public bool Near;
+            public bool Shown;
+            public StructurePart Target;
+            public Vector3 Point;
+            public Quaternion Turn;
+        }
+
+        private static readonly RaycastHit[] Hits = new RaycastHit[16];
+        private static readonly FieldInfo PreviewField = AccessTools.Field(typeof(DemoChargeController), "m_Preview");
+        private static readonly FieldInfo DataField = AccessTools.Field(typeof(DemoChargeController), "mData");
+        private static readonly FieldInfo JointSetup = AccessTools.Field(typeof(DemoChargeController), "mCachedJSA");
+        private static readonly MethodInfo CacheJointSetup = AccessTools.Method(typeof(DemoChargeController), "CacheJointSetupAsset");
+
+        // A charge afloat in a hand behaves as the charge from the stock does (Raik, 2026-11-18: taken out of the air or
+        // handed over, it clung to any wall the hand came near): held, it does not cling by itself; near a wall the game's
+        // preview shows where and how it would go on; let go there, it goes on (the charge afloat goes back to the stock
+        // the game's way and one from the stock is put on the wall, as the game places one).
+        private static void Unstick(Afloat held)
+        {
+            var part = held.Charge.DemoCharge;
+            if (part == null || !EntityBlueprintComponent.IsValid(part.EntityBlueprintComponent)) return;
+            var manager = part.EntityBlueprintComponent.EntityManager;
+            var entity = part.EntityBlueprintComponent.Entity;
+            if (!manager.Exists(entity) || !manager.HasComponent<HierarchyMember>(entity)) return;
+            var parent = manager.GetComponentData<HierarchyMember>(entity).Parent;
+            if (!manager.Exists(parent) || !manager.HasComponent<Sticky>(parent)) return;
+            held.StickyMask = manager.GetComponentData<Sticky>(parent).LayerMask;
+            held.StickyOn = parent;
+            held.StickyOff = true;
+            manager.RemoveComponent<Sticky>(parent);
+            if (logs++ < 40) Plugin.Log.LogInfo("Charge by hand: a charge afloat in a hand does not cling by itself");
+        }
+
+        private static void Restick(Afloat held)
+        {
+            if (!held.StickyOff) return;
+            held.StickyOff = false;
+            var world = World.DefaultGameObjectInjectionWorld;
+            if (world == null) return;
+            var manager = world.EntityManager;
+            if (manager.Exists(held.StickyOn) && !manager.HasComponent<Sticky>(held.StickyOn))
+                manager.AddComponentData(held.StickyOn, new Sticky { LayerMask = held.StickyMask });
+        }
+
+        private static DemoChargePreview Preview() => controller != null && PreviewField != null ? PreviewField.GetValue(controller) as DemoChargePreview : null;
+
+        private static LayerMask WallMask()
+        {
+            var data = controller != null && DataField != null ? DataField.GetValue(controller) : null;
+            var mask = data != null ? Traverse.Create(data).Property("RaycastLayerMask").GetValue() : null;
+            return mask is LayerMask layers ? layers : (LayerMask)Physics.DefaultRaycastLayers;
+        }
+
+        // The wall within reach of the back of the charge that hand holds, with the game's preview on it.
+        private static void Aim(Afloat held)
+        {
+            var was = held.Shown;
+            held.Near = held.Shown = false;
+            var part = held.Charge.DemoCharge;
+            if (part != null && controller != null)
+            {
+                var frame = part.transform;
+                var scale = VrCamera.WorldScale;
+                var mask = WallMask();
+                var count = Physics.RaycastNonAlloc(frame.position + frame.forward * (Lead * scale), -frame.forward, Hits, (Lead + BackOfMesh + Reach) * scale, mask, QueryTriggerInteraction.Ignore);
+                var nearest = float.MaxValue;
+                Collider wall = null;
+                for (var i = 0; i < count; i++)
+                {
+                    var hit = Hits[i];
+                    if (hit.distance >= nearest || hit.collider.attachedRigidbody == held.Body || hit.collider.transform.IsChildOf(frame)) continue;
+                    var target = hit.collider.GetComponent<StructurePart>();
+                    if (target == null || target == part || !EntityBlueprintComponent.IsValid(target.EntityBlueprintComponent)) continue;
+                    nearest = hit.distance;
+                    wall = hit.collider;
+                    held.Target = target;
+                    held.Point = hit.point;
+                    held.Turn = MathUtility.GetLookRotation(hit.normal, frame.up);
+                }
+                held.Near = wall != null;
+                // The game's own preview, unless the charges from the stock are in the other hand and use it.
+                var preview = held.Near && !ChargesInHand() ? Preview() : null;
+                if (preview != null)
+                {
+                    if (JointSetup != null && JointSetup.GetValue(controller) == null) CacheJointSetup?.Invoke(controller, null);
+                    preview.Activate();
+                    preview.SetTargetData(held.Point, held.Turn, wall, mask, held.Target, JointSetup?.GetValue(controller) as JointSetupAsset);
+                    held.Shown = true;
+                }
+            }
+            if (was && !held.Shown && !ChargesInHand()) Preview()?.Deactivate();
+        }
+
+        // Let go at the wall its preview showed: on it goes.
+        private static bool PutOn(VrInput.Hand hand, Afloat held, DemoChargeRetrievalController charge)
+        {
+            var preview = Preview();
+            var blocked = held.Shown && preview != null && preview.IsBlocked;
+            if (held.Shown && preview != null) preview.Deactivate();
+            var near = held.Near;
+            held.Near = held.Shown = false;
+            if (!near || blocked || held.Target == null || controller == null || Instantiate == null) return false;
+            charge.OnSuccess();
+            var part = Instantiate.Invoke(controller, new object[] { held.Point, held.Turn }) as StructurePart;
+            if (part == null) return true;
+            JointingService.Instance.JointStructureParts(part, held.Target);
+            ModifyCount?.Invoke(controller, new object[] { -1, false, false });
+            hand.Buzz(0.6f, 0.08f);
+            if (logs++ < 40) Plugin.Log.LogInfo($"Charge by hand: a charge afloat let go by the {hand.Name} hand at a wall, put on it");
+            return true;
         }
 
         private static readonly Afloat[] afloat = { new Afloat(), new Afloat() };
@@ -344,12 +459,16 @@ namespace ShipbreakerVR
             {
                 if (body != held.Body)
                 {
+                    Restick(held);
                     held.Body = body;
                     held.AtPlace = false;
+                    held.Near = held.Shown = false;
                     held.Charge = body.mass <= HeaviestCharge ? body.GetComponentInChildren<DemoChargeRetrievalController>(true) : null;
                     if (held.Charge != null && Deployed(held.Charge)) held.Charge = null;
                 }
                 if (held.Charge == null) return;
+                Unstick(held);
+                Aim(held);
                 var at = VrToolBelt.Stows(VrToolBelt.Zone.DemoCharge, hand);
                 if (at && !held.AtPlace) hand.Buzz(0.25f, 0.04f);
                 held.AtPlace = at;
@@ -362,13 +481,27 @@ namespace ShipbreakerVR
             held.Body = null;
             held.AtPlace = false;
             // Let go with the grip (not lost by tracking), and not still held by the other hand.
-            if (was == null || hand.Grip.Down) return;
-            if (wasBody != null && VrClimb.HeldBody(hand.IsLeft ? VrInput.Right : VrInput.Left) == wasBody) return;
+            if (was == null || hand.Grip.Down || (wasBody != null && VrClimb.HeldBody(hand.IsLeft ? VrInput.Right : VrInput.Left) == wasBody))
+            {
+                if (held.Shown && !ChargesInHand()) Preview()?.Deactivate();
+                held.Near = held.Shown = false;
+                Restick(held);
+                return;
+            }
             if (!wasAt && !VrToolBelt.Stows(VrToolBelt.Zone.DemoCharge, hand))
             {
+                if (PutOn(hand, held, was))
+                {
+                    held.StickyOff = false;
+                    return;
+                }
+                Restick(held);
                 if (logs++ < 40) Plugin.Log.LogInfo($"Charge by hand: a charge afloat let go by the {hand.Name} hand at {VrToolBelt.ChargePlace(hand)}, not behind the back");
                 return;
             }
+            if (held.Shown && !ChargesInHand()) Preview()?.Deactivate();
+            held.Near = held.Shown = false;
+            held.StickyOff = false;
             was.OnSuccess();
             hand.Buzz(1f, 0.15f);
             if (logs++ < 40) Plugin.Log.LogInfo($"Charge by hand: a charge afloat put back behind the back by the {hand.Name} hand");
