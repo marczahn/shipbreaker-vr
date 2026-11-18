@@ -503,7 +503,7 @@ namespace ShipbreakerVR
             if (rightBusy) RightArm.Weight = 0f;
             Fingers(LeftArm, leftWasDriven);
             Fingers(RightArm, rightWasDriven);
-            Pose(LeftArm, active && chargeLeft && Mirrored(out var hold) ? hold : Quaternion.identity);
+            Pose(LeftArm, active && chargeLeft && Mirrored(out var hold) ? ChargeLeftTurn * hold : Quaternion.identity);
             Pose(RightArm, Quaternion.identity);
             AtControl(LeftArm);
             AtControl(RightArm);
@@ -2678,6 +2678,11 @@ namespace ShipbreakerVR
         // relative to the controller as the right hand is to the eye, as VrToolModels.PoseArm holds it in the right hand.
         // So the charge sits in the left hand as in the right one, and the hand moves with the charge's animations,
         // throwing included. Read before the right arm is posed, in the hand's own axes (Frame), and mirrored there.
+        // Measured with Raik, 2026-11-18: mirrored alone, the charge's back pointed 64 degrees to the left and 27 degrees
+        // down of the left controller's aim (the right hand's fit, VrToolFit, does not reach the left one). With this turn
+        // it points where the controller points, its top up, as in the right hand.
+        private static readonly Quaternion ChargeLeftTurn = Quaternion.Euler(11.4f, 65.9f, -34.4f);
+
         private static bool Mirrored(out Quaternion hold)
         {
             hold = Quaternion.identity;
