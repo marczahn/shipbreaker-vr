@@ -77,7 +77,9 @@ namespace ShipbreakerVR
             public bool TryGetPosition(out Vector3 position)
             {
                 position = Vector3.zero;
-                return Get() && Device.TryGetFeatureValue(CommonUsages.devicePosition, out position);
+                if (!Get() || !Device.TryGetFeatureValue(CommonUsages.devicePosition, out position)) return false;
+                Steady(ref position);
+                return true;
             }
 
             // The grip pose in tracking space, read now.
@@ -85,8 +87,10 @@ namespace ShipbreakerVR
             {
                 rotation = Quaternion.identity;
                 position = Vector3.zero;
-                return Get() && Device.TryGetFeatureValue(CommonUsages.devicePosition, out position)
-                    && Device.TryGetFeatureValue(CommonUsages.deviceRotation, out rotation);
+                if (!Get() || !Device.TryGetFeatureValue(CommonUsages.devicePosition, out position)
+                    || !Device.TryGetFeatureValue(CommonUsages.deviceRotation, out rotation)) return false;
+                Steady(ref position, ref rotation);
+                return true;
             }
 
             // The aim pose (or the grip pose without one) of a tracked controller in tracking space, read now.
@@ -98,7 +102,8 @@ namespace ShipbreakerVR
                 if (!Get()) return false;
                 if (Device.TryGetFeatureValue(CommonUsages.isTracked, out var tracked) && !tracked) return false;
                 pointer = Device.TryGetFeatureValue(PointerPosition, out position) && Device.TryGetFeatureValue(PointerRotation, out rotation);
-                if (!pointer && !TryGetGripPose(out position, out rotation)) return false;
+                if (pointer) Steady(ref position, ref rotation);
+                else if (!TryGetGripPose(out position, out rotation)) return false;
                 rotation *= Tilt;
                 return true;
             }
@@ -107,9 +112,67 @@ namespace ShipbreakerVR
             public bool TryGetAimRotation(out Quaternion rotation)
             {
                 rotation = Quaternion.identity;
-                if (!(Get() && Device.TryGetFeatureValue(PointerRotation, out rotation)) && !TryGetGripPose(out _, out rotation)) return false;
+                if (Get() && Device.TryGetFeatureValue(PointerRotation, out rotation))
+                {
+                    var unused = Vector3.zero;
+                    Steady(ref unused, ref rotation, false);
+                }
+                else if (!TryGetGripPose(out _, out rotation)) return false;
                 rotation *= Tilt;
                 return true;
+            }
+
+            // A hand that holds a demo charge or the charges' detonator is steadied (Raik, 2026-11-18: "smooth the
+            // movement very slightly, it trembles a little too much with the hand's natural unrest"): the controller's
+            // pose is filtered, the tremor within SteadyWithin and SteadyAngle taken out and the rest followed with a
+            // short lag (as VrToolSteady does for the turn of the cutter and the grapple). Worked out once a frame from
+            // the grip pose; every pose read in that frame (grip, aim) is moved rigidly by the same step, so hand,
+            // charge and aim stay together.
+            private const float SteadyWithin = 0.004f;
+            private const float SteadyAngle = 1.2f;
+            private const float SteadyLag = 0.05f;
+            private int steadyFrame = -1;
+            private bool steadied;
+            private Vector3 steadyRaw, steadyAt;
+            private Quaternion steadyTurn = Quaternion.identity, steadyBy = Quaternion.identity;
+
+            private void Steady(ref Vector3 position)
+            {
+                var none = Quaternion.identity;
+                Steady(ref position, ref none);
+            }
+
+            private void Steady(ref Vector3 position, ref Quaternion rotation, bool place = true)
+            {
+                if (steadyFrame != Time.frameCount)
+                {
+                    steadyFrame = Time.frameCount;
+                    var at = Vector3.zero;
+                    var turn = Quaternion.identity;
+                    var wanted = VrXr.IsRunning && VrChargeByHand.Steadies(this)
+                        && Device.TryGetFeatureValue(CommonUsages.devicePosition, out at) && Device.TryGetFeatureValue(CommonUsages.deviceRotation, out turn);
+                    if (!wanted) steadied = false;
+                    else
+                    {
+                        if (!steadied)
+                        {
+                            steadyAt = at;
+                            steadyTurn = turn;
+                        }
+                        else
+                        {
+                            var follow = 1f - Mathf.Exp(-Time.unscaledDeltaTime / SteadyLag);
+                            steadyAt = Vector3.Lerp(steadyAt, at, VrToolSteady.Share((at - steadyAt).magnitude, SteadyWithin) * follow);
+                            steadyTurn = Quaternion.Slerp(steadyTurn, turn, VrToolSteady.Share(Quaternion.Angle(steadyTurn, turn), SteadyAngle) * follow);
+                        }
+                        steadied = true;
+                        steadyRaw = at;
+                        steadyBy = steadyTurn * Quaternion.Inverse(turn);
+                    }
+                }
+                if (!steadied) return;
+                if (place) position = steadyAt + steadyBy * (position - steadyRaw);
+                rotation = steadyBy * rotation;
             }
 
             // Steuerung/HandNeigung: hands, tools and beams tipped forward (positive) or back against the controller.

@@ -198,8 +198,10 @@ namespace ShipbreakerVR
                     "Where the tool sits in that hand: its mount relative to the wrist in centimeters (x right, y up, z forward along the controller), then its turn in degrees (pitch, yaw, roll), as \"x y z / pitch yaw roll\".");
             ChargeHold.Entry = VrSettings.Bind("Justierung", "SprengsatzHaltung", "",
                 "How a demo charge placed by hand lies in the right hand (the left hand's is the mirror image): its middle from the grip in centimeters (x right, y up, z forward along the controller), then its turn in degrees, as \"x y z / pitch yaw roll\". Stored while fitting the tools; empty for the mod's own hold.");
-            DetonatorHold.Entry = VrSettings.Bind("Justierung", "ZuenderHaltung", "",
-                "Where the charges' detonator sits in the right hand (the left hand's is the mirror image): from the wrist in centimeters in the hand's own axes (x to the palm's side, y to the thumb's side, z along the knuckles), then its turn in degrees, as \"x y z / pitch yaw roll\". Stored while fitting the tools; empty for the game's own place.");
+            // As Raik fitted it in the headset on 2026-11-18, the standard for new installs as he asked; before, empty
+            // (the game's own place), which stays for whoever has that stored.
+            DetonatorHold.Entry = VrSettings.Bind("Justierung", "ZuenderHaltung", "-1.8 -13.0 -3.3 / 15.7 -20.5 -5.5",
+                "Where the charges' detonator sits in the right hand (the left hand's is the mirror image): from the wrist in centimeters in the hand's own axes (x to the palm's side, y to the thumb's side, z along the knuckles), then its turn in degrees, as \"x y z / pitch yaw roll\". Stored while fitting the tools; empty for the game's own place, delete the entry for the mod's.");
         }
 
         // The fit of the tool in the hand, in world units relative to the wrist and the aim pose; false for tools without a

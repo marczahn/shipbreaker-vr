@@ -97,6 +97,15 @@ namespace ShipbreakerVR
         // Whether that hand holds a charge afloat, as a thing of its own (VrControls: Y brakes then).
         public static bool Holds(VrInput.Hand hand) => afloat[hand.IsLeft ? 0 : 1].Charge != null;
 
+        // Whether that hand's controller is steadied (VrInput): it holds a charge afloat, or the game's charges or
+        // their detonator.
+        public static bool Steadies(VrInput.Hand hand)
+        {
+            if (Holds(hand)) return true;
+            var held = hand.IsLeft ? VrHand.Left : VrHand.Right;
+            return held.HoldsTool && held.Tool == EquipmentController.Equipment.DemoCharge;
+        }
+
         // The game's charges are out in their other mode: the hand shows their detonator (VrLooseTools, VrToolFit).
         public static bool DetonatorOut
         {

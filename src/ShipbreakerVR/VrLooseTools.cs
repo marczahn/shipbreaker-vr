@@ -46,7 +46,8 @@ namespace ShipbreakerVR
 
         // The line's length, the tool's mass and how it floats, in meters, kilograms and per second at world scale 1.
         private const float Mass = 5f;
-        private const float DetonatorMass = 0.8f;
+        // Raik, 2026-11-18: 1.5 kg, for what it does to other things; a demo charge afloat has the game's own 1.6 kg.
+        private const float DetonatorMass = 1.5f;
         private const string DetonatorName = "PRF_Tool_ExplosiveChargeDetonator";
         // A grip that opens this long after the hand last had the detonator lets it go (seconds).
         private const float PropLetGoWithin = 0.15f;
@@ -114,7 +115,8 @@ namespace ShipbreakerVR
             // Not GriffGreifhaken and GriffCutter, as in the third state: those were measured against the controller and
             // hold places up to 19 cm off (see Fit); under new names they are measured anew.
             // The defaults are the places measured with Raik's fit of the tools (VrToolFit's defaults), right hand.
-            Detonator.GripEntry = VrSettings.Bind("Experimente", "GriffstelleZuender", "",
+            // The place measured with Raik's fit of the detonator (VrToolFit, ZuenderHaltung), right hand.
+            Detonator.GripEntry = VrSettings.Bind("Experimente", "GriffstelleZuender", "-0.043 0.1568 0.0601",
                 "Experiment: where the hand holds the charges' detonator on its model (x y z in the model's own axes), measured by the mod while it is held. Empty: not measured yet.");
             Grapple.GripEntry = VrSettings.Bind("Experimente", "GriffstelleGreifhaken", "0.0313 -0.0675 0.3393",
                 "Experiment: where the hand holds the grapple on its model (x y z in the model's own axes), measured by the mod while it is held. Empty: not measured yet.");
