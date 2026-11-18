@@ -70,6 +70,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> ShoulderStow;
         public static ConfigEntry<bool> UprightBody;
         public static ConfigEntry<VrToolBelt.Handed> Handedness;
+        public static ConfigEntry<VrChargeByHand.Placing> ChargePlacing;
         public static ConfigEntry<bool> Diagnostics;
         public static ConfigEntry<bool> TestMode;
         public static ConfigEntry<bool> MockRuntime;
@@ -188,6 +189,10 @@ namespace ShipbreakerVR
                     "Sammelteile (Kabel, Platinen, Datenkassetten und Ähnliches) sammelst du ein, indem du sie über die linke Schulter hältst und dort loslässt, wie in einen Rucksack: ein leichtes Vibrieren zeigt, dass du dort bist, ein kurzes Rasseln und ein Vibrieren bestätigen es. Aus: nur mit A oder X, während du sie hältst."),
                 "Needs Festhalten.");
 
+            ChargePlacing = Bind("Steuerung", "Sprengsatzplatzierung", VrChargeByHand.Placing.Automatisch,
+                ("How demo charges are put on. Automatic: as in the game, the trigger puts the charge on the wall you point at, with a preview of where it goes, or throws it. Manual: you take a charge from behind your back into your hand as a thing of its own, bring it to the wall and let go; it goes on as you hold it, the line on it shows the cut, and there is no preview. Let go away from a wall it floats.",
+                    "Wie Sprengsätze angebracht werden. Automatisch: wie im Spiel, der Trigger setzt den Sprengsatz an die Wand, auf die du zeigst, mit einer Vorschau, oder wirft ihn. Manuell: Du nimmst einen Sprengsatz hinter dem Rücken als eigenes Objekt in die Hand, führst ihn an die Wand und lässt los; er wird so gesetzt, wie du ihn hältst, die Linie darauf zeigt den Schnitt, eine Vorschau gibt es nicht. Fern einer Wand losgelassen schwebt er."),
+                (new[] { "Automatic", "Manual" }, new[] { "Automatisch", "Manuell" }));
             Handedness = Bind("Steuerung", "Haendigkeit", VrToolBelt.Handed.Rechts,
                 ("Where the tools and the backpack sit on your body. Right-handed: grapple at the right hip, cutter over the right shoulder, detonator at the left hip, backpack over the left shoulder, scanner at the right and flashlight at the left of the helmet. Left-handed: all of it mirrored. The demo charges are behind the lower back either way.",
                     "Wo Werkzeuge und Rucksack am Körper sitzen. Rechtshänder: Greifer an der rechten Hüfte, Cutter über der rechten Schulter, Zünder an der linken Hüfte, Rucksack über der linken Schulter, Scanner rechts und Lampe links am Helm. Linkshänder: alles gespiegelt. Die Sprengsätze sitzen in beiden Fällen hinter dem unteren Rücken."),

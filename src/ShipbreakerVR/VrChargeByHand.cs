@@ -8,7 +8,8 @@ using UnityEngine;
 
 namespace ShipbreakerVR
 {
-    // Experiment (Raik, 2026-11-18): demo charges are put on by hand instead of being aimed. The game finds the place for
+    // Steuerung/Sprengsatzplatzierung = Manuell (VR options, Gameplay; Raik, 2026-11-18): demo charges are put on by
+    // hand instead of being aimed. Automatisch is the game's way: the trigger places or throws, with the preview. The game finds the place for
     // a charge with a ray from the camera (DemoChargeController.TryGetNewTarget, some meters far; the hand's aim camera in
     // VR), turns it with the camera's up and the cut toggle, and throws it where the camera looks when the ray finds
     // nothing. With this on, for the extended way of working the tools:
@@ -61,8 +62,8 @@ namespace ShipbreakerVR
         // A charge afloat with what it hangs on weighs 1.6 kg; a part of the ship with a charge on it is not taken for one.
         private const float HeaviestCharge = 5f;
 
-        private static ConfigEntry<bool> enabled;
-        private static bool bound;
+        public enum Placing { Automatisch, Manuell }
+
         private static DemoChargeController controller;
         private static Transform mesh;
         private static Renderer meshRenderer;
@@ -83,20 +84,7 @@ namespace ShipbreakerVR
         // pointed 79 degrees to the side; turning the hand to straighten it turned the hand and the detonator by as much.
         public static bool Decoupled => On;
 
-        private static bool On
-        {
-            get
-            {
-                if (!bound && VrSettings.File != null)
-                {
-                    bound = true;
-                    enabled = VrSettings.Bind("Experimente", "SprengsatzVonHand", true,
-                        "Experiment: demo charges are put on by hand. The charge has to be brought to the wall, it goes on as it is held (the line on it shows the cut), "
-                        + "and away from a wall it is let go afloat instead of thrown. Off: aimed and thrown as before.");
-                }
-                return enabled != null && enabled.Value && VrAim.Active;
-            }
-        }
+        private static bool On => VrSettings.ChargePlacing != null && VrSettings.ChargePlacing.Value == Placing.Manuell && VrAim.Active;
 
         // The charge in the hand, as the game's hand holds it (moved over to the left hand by VrHands).
         private static bool FindMesh()
