@@ -516,11 +516,95 @@ namespace ShipbreakerVR
             KeepTips(RightArm);
             MirrorChargeFingers();
             RestoreDetonator();
+            RestoreLever();
             Charges(active && chargeLeft);
             ChargeInHand(active && VrChargeByHand.Decoupled && equipment == EquipmentController.Equipment.DemoCharge
                 && grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped);
-            FitDetonator(active && equipment == EquipmentController.Equipment.DemoCharge
-                && grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped && VrChargeByHand.DetonatorOut);
+            var detonator = active && equipment == EquipmentController.Equipment.DemoCharge
+                && grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped && VrChargeByHand.DetonatorOut;
+            FitDetonator(detonator);
+            PressDetonator(detonator);
+        }
+
+        // The detonator's red lever gives way under the trigger (Raik, 2026-11-18: "pressed in a few millimeters or a
+        // centimeter, to see the detonating"): the lever (the prop's part '..._Trigger') moves towards the grip (its part
+        // '..._Body') by up to LeverDepth, as far as the trigger of the hand that holds it is pulled, and that hand's
+        // fingers, which lie round the lever, close a little with it. The lever is put back before the next frame's
+        // posing if nothing has set it since; the fingers through their own bookkeeping (Base, Set).
+        private const float LeverDepth = 0.008f;
+        // Degrees more at the knuckle, the middle and the last joint of each finger, with the trigger pulled through.
+        private static readonly float[] SqueezeBend = { 2f, 6f, 4f };
+        private static Transform leverPart;
+        private static Vector3 leverWay, leverRest, leverSetAt;
+        private static bool leverLooked, leverSet;
+
+        private static void RestoreLever()
+        {
+            if (!leverSet) return;
+            leverSet = false;
+            if (leverPart != null && leverPart.localPosition == leverSetAt) leverPart.localPosition = leverRest;
+        }
+
+        private static void PressDetonator(bool on)
+        {
+            if (!on || detonatorProp == null) return;
+            var left = VrHand.GameToolHand.IsLeft;
+            var arm = left ? LeftArm : RightArm;
+            var pulled = Mathf.Clamp01(arm.Input.TriggerValue);
+            if (pulled <= 0.01f) return;
+            if (Frame(arm, out _, out var frame))
+            {
+                // Towards the palm, about the hand's thumb-side axis, as Curl bends them.
+                var across = frame * Vector3.up;
+                var side = left ? 1f : -1f;
+                for (var i = 0; i < arm.Joints.Length; i++)
+                {
+                    var joint = arm.Joints[i];
+                    if (joint == null) continue;
+                    // Not set this frame (the game's own pose): that pose is its base from here.
+                    if (joint.localRotation != arm.Set[i]) arm.Base[i] = joint.localRotation;
+                    joint.rotation = Quaternion.AngleAxis(side * SqueezeBend[i % 3] * pulled, across) * joint.rotation;
+                    arm.Set[i] = joint.localRotation;
+                }
+            }
+            if (!leverLooked)
+            {
+                leverLooked = true;
+                MeshFilter lever = null, body = null;
+                foreach (var filter in detonatorProp.GetComponentsInChildren<MeshFilter>(true))
+                {
+                    if (filter.sharedMesh == null) continue;
+                    if (filter.name.EndsWith("_Trigger", System.StringComparison.Ordinal)) lever = filter;
+                    else if (filter.name.EndsWith("_Body", System.StringComparison.Ordinal)) body = filter;
+                }
+                if (lever != null && body != null && lever.transform.parent != null)
+                {
+                    // Towards the body's middle, across the lever's own length.
+                    var size = lever.sharedMesh.bounds.size;
+                    var length = size.x >= size.y && size.x >= size.z ? Vector3.right : size.y >= size.z ? Vector3.up : Vector3.forward;
+                    var along = lever.transform.TransformDirection(length).normalized;
+                    var way = body.transform.TransformPoint(body.sharedMesh.bounds.center) - lever.transform.TransformPoint(lever.sharedMesh.bounds.center);
+                    var apart = way.magnitude;
+                    way -= Vector3.Project(way, along);
+                    if (way.sqrMagnitude > 1e-8f)
+                    {
+                        leverPart = lever.transform;
+                        leverWay = leverPart.parent.InverseTransformDirection(way.normalized);
+                        var inProp = detonatorProp.InverseTransformDirection(way.normalized);
+                        Plugin.Log.LogInfo($"Hands: the detonator's lever '{lever.name}' gives way under the trigger, up to {LeverDepth * 1000f:0} mm towards '{body.name}' "
+                            + $"(their middles {apart / VrCamera.WorldScale * 100f:0.0} cm apart, {way.magnitude / VrCamera.WorldScale * 100f:0.0} cm of it across the lever; way ({inProp.x:0.00}, {inProp.y:0.00}, {inProp.z:0.00}) in the prop's axes)");
+                    }
+                }
+                if (leverPart == null)
+                    Plugin.Log.LogInfo($"Hands: no lever to press found on the detonator ({(lever == null ? "no part '..._Trigger'" : body == null ? "no part '..._Body'" : "the two lie in line")})");
+            }
+            if (leverPart == null || leverPart.parent == null) return;
+            var rest = leverPart.localPosition;
+            var size1 = Mathf.Max(Mathf.Abs(leverPart.parent.lossyScale.x), 1e-4f);
+            leverPart.localPosition = rest + leverWay * (LeverDepth * pulled * VrCamera.WorldScale / size1);
+            leverRest = rest;
+            leverSetAt = leverPart.localPosition;
+            leverSet = true;
         }
 
         // The charges' detonator ('PRF_Tool_ExplosiveChargeDetonator' on the game's right hand, moved to the left hand
