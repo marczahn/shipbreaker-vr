@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draws the control overviews in docs/images (flying, hands, tool buttons, cutter, demo charges, grapple, station, menus) as SVG.
+"""Draws the control overviews in docs/images (flying, hands, the tools on the suit, tool buttons, cutter, demo charges, grapple, station, menus) as SVG.
 
 Run it after changing a control: python3 tools/control-images.py
 The texts here are the players' view of the controls; keep them in line with README.md and docs/INSTALL.md.
@@ -19,6 +19,7 @@ TEXT = "#e6edf3"
 MUTED = "#8b949e"
 LASER = "#8cf2ff"
 TETHER = "#ff9926"
+SUIT_EDGE = "#5b6b7f"
 FONT = "Segoe UI, Helvetica, Arial, sans-serif"
 
 WIDTH = 1200
@@ -203,7 +204,108 @@ def page(name, label, title, subtitle, cards, footer=None, heading=None):
     (OUT / name).write_text("".join(parts) + "\n", encoding="utf-8")
 
 
+def limb(points, width):
+    """A limb of the suit: a thick rounded line with an outline."""
+    d = "M" + " L".join(f"{x} {y}" for x, y in points)
+    return (f'<path d="{d}" stroke="{SUIT_EDGE}" stroke-width="{width + 5}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
+            f'<path d="{d}" stroke="{PART}" stroke-width="{width}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>')
+
+
+def zone(cx, cy, rx, ry=None):
+    """Where a hand reaches: a dashed ring."""
+    ry = rx if ry is None else ry
+    return (f'<ellipse cx="{cx}" cy="{cy}" rx="{rx}" ry="{ry}" fill="{ACCENT}" fill-opacity=".10" stroke="{ACCENT}" '
+            f'stroke-width="2" stroke-dasharray="6 5"/>')
+
+
+def callout(x, y, title, line, note, spot, right, via=None):
+    """A short text in a card with a line to its place on the suit."""
+    w, h = 330, 96
+    edge = x if right else x + w
+    path = f"M{edge} {y + h / 2}" + (f" L{via[0]} {via[1]}" if via else "") + f" L{spot[0]} {spot[1]}"
+    return (f'<path d="{path}" stroke="{ACCENT}" stroke-width="1.6" stroke-opacity=".75" fill="none"/>'
+            f'<circle cx="{spot[0]}" cy="{spot[1]}" r="4.5" fill="{ACCENT}"/>'
+            f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="12" fill="{CARD}" stroke="{CARD_EDGE}"/>'
+            + text(x + 20, y + 34, title, size=18, color=ACCENT, bold=True)
+            + text(x + 20, y + 58, line)
+            + text(x + 20, y + 78, note, color=MUTED))
+
+
+def body_page():
+    """The suit seen from behind, with where the tools hang and where the hands reach."""
+    height = 850
+    parts = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{height}" viewBox="0 0 {WIDTH} {height}" '
+             f'role="img" aria-label="ShipbreakerVR tools on the suit">',
+             f'<rect width="{WIDTH}" height="{height}" rx="12" fill="{BG}"/>',
+             '<defs><marker id="ah" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" '
+             f'orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="{ACCENT}"/></marker></defs>',
+             text(40, 52, "Tools on your suit", size=26, bold=True),
+             text(40, 78, "Seen from behind, so your left is on the left. Reach to a place and squeeze the grip; "
+                          "a short buzz tells you the hand is there.", size=14, color=MUTED)]
+
+    # The suit: legs, arms, torso, belt, helmet.
+    suit = [limb([(566, 520), (558, 640), (552, 745)], 50), limb([(634, 520), (642, 640), (648, 745)], 50),
+            f'<rect x="522" y="738" width="62" height="34" rx="12" fill="{PART}" stroke="{SUIT_EDGE}" stroke-width="2.5"/>',
+            f'<rect x="616" y="738" width="62" height="34" rx="12" fill="{PART}" stroke="{SUIT_EDGE}" stroke-width="2.5"/>',
+            limb([(503, 288), (452, 400), (436, 500)], 34), limb([(697, 288), (748, 400), (764, 500)], 34),
+            f'<circle cx="434" cy="518" r="19" fill="{PART}" stroke="{SUIT_EDGE}" stroke-width="2.5"/>',
+            f'<circle cx="766" cy="518" r="19" fill="{PART}" stroke="{SUIT_EDGE}" stroke-width="2.5"/>',
+            f'<path d="M520 258 Q600 238 680 258 Q702 263 703 292 L687 440 Q685 470 691 500 L691 528 L509 528 L509 500 '
+            f'Q515 470 513 440 L497 292 Q498 263 520 258 Z" fill="{PART}" stroke="{SUIT_EDGE}" stroke-width="2.5"/>',
+            f'<rect x="511" y="476" width="178" height="16" rx="5" fill="{PART_DARK}" stroke="{SUIT_EDGE}" stroke-width="1.5"/>',
+            f'<ellipse cx="600" cy="244" rx="40" ry="11" fill="{PART_DARK}" stroke="{SUIT_EDGE}" stroke-width="2"/>',
+            f'<circle cx="600" cy="186" r="54" fill="{PART}" stroke="{SUIT_EDGE}" stroke-width="2.5"/>',
+            f'<path d="M566 150 Q600 128 634 150" stroke="{PART_DARK}" stroke-width="5" stroke-linecap="round" fill="none"/>']
+    parts += suit
+
+    # The cutter on the back, its grip by the right shoulder.
+    parts.append(f'<g transform="rotate(24 620 318)"><rect x="609" y="233" width="22" height="170" rx="8" fill="{PART_DARK}" '
+                 f'stroke="{ACCENT}" stroke-width="2"/><rect x="609" y="233" width="22" height="52" rx="8" fill="{ACCENT}" '
+                 f'fill-opacity=".55" stroke="{ACCENT}" stroke-width="2"/></g>')
+    # The demo charges behind the lower back.
+    def octagon(cx, cy, r):
+        import math
+        return " ".join(f"{cx + r * math.cos(math.radians(22.5 + 45 * i)):.1f},{cy + r * math.sin(math.radians(22.5 + 45 * i)):.1f}"
+                        for i in range(8))
+    parts.append(f'<polygon points="{octagon(607, 440, 21)}" fill="{PART_DARK}" stroke="{ACCENT}" stroke-width="2" opacity=".6"/>'
+                 f'<polygon points="{octagon(597, 446, 21)}" fill="{PART_DARK}" stroke="{ACCENT}" stroke-width="2"/>'
+                 f'<path d="M583 446 H611" stroke="{ACCENT}" stroke-width="2.5"/>')
+    # The grapple at the right hip, the detonator at the left.
+    parts.append(f'<rect x="701" y="482" width="26" height="40" rx="7" fill="{PART_DARK}" stroke="{ACCENT}" stroke-width="2"/>'
+                 f'<rect x="708" y="520" width="12" height="20" rx="3" fill="{PART_DARK}" stroke="{ACCENT}" stroke-width="2"/>')
+    parts.append(f'<rect x="476" y="488" width="20" height="38" rx="6" fill="{PART_DARK}" stroke="{ACCENT}" stroke-width="2"/>'
+                 f'<circle cx="486" cy="486" r="5.5" fill="{ACCENT}"/>')
+
+    # Where the hands reach.
+    parts += [zone(524, 182, 27), zone(676, 182, 27), zone(538, 252, 30), zone(657, 240, 30),
+              zone(600, 444, 62, 36), zone(486, 506, 36), zone(714, 508, 36)]
+    parts.append(arrow("M538 238 V264", width=2.5))
+
+    left, right = 40, 830
+    parts += [
+        callout(left, 110, "Flashlight", "Left of the helmet.", "Squeeze the grip: on or off.", (524, 182), False),
+        callout(left, 226, "Backpack", "Behind the left shoulder.", "Let go of a part there: it is collected.", (511, 246), False),
+        callout(left, 440, "Detonator", "Left hip, on the belt.", "Trigger: blows all placed charges.", (486, 506), False),
+        callout(left, 596, "Demo charges", "Behind the lower back, either hand.", "One charge comes into the hand.",
+                (600, 462), False, via=(452, 644)),
+        callout(right, 110, "Scanner", "Right of the helmet.", "Scans while you hold the grip.", (676, 182), True),
+        callout(right, 226, "Cutter", "Over the right shoulder.", "Reach back and squeeze the grip.", (657, 240), True),
+        callout(right, 440, "Grapple", "Right hip, on the belt.", "Slightly in front, so you can see it.", (714, 508), True),
+    ]
+    # Putting a tool away: a card without a place.
+    parts.append(f'<rect x="{right}" y="596" width="330" height="96" rx="12" fill="{CARD}" stroke="{CARD_EDGE}"/>'
+                 + text(right + 20, 630, "Putting a tool away", size=18, color=ACCENT, bold=True)
+                 + text(right + 20, 654, "Let go of the grip at the tool's place.")
+                 + text(right + 20, 674, "Elsewhere it floats on its line (Extended tool physics).", color=MUTED, size=12.5))
+    parts.append(text(40, height - 28, "Left-handed (VR tab: Handedness): all places are mirrored. "
+                                       "The dashed rings are where the hand reaches; they are larger than they look.",
+                      size=14, color=MUTED))
+    parts.append("</svg>")
+    (OUT / "body.svg").write_text("".join(parts) + "\n", encoding="utf-8")
+
+
 def main():
+    body_page()
     page("flying.svg", "ShipbreakerVR flying controls", "Flying in VR",
          "Controller flying (VR tab: Controller flying). Left hand: thrust, roll and brake. Right stick: turn and pitch.", [
              (controller(ghost=True, dx=-8, dy=8) + controller(dx=8, dy=-6) + arrow("M24 60 L56 22"),
