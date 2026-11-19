@@ -62,7 +62,24 @@ namespace ShipbreakerVR
             public Quaternion FromRotation;
             public Vector3 HeldOn;
             public float FlyStart = -1f;
+            // The other parts of its group, which come off with it (Member).
+            public readonly List<Member> Members = new List<Member>();
         }
+
+        // A part of the same group as the part pulled (the large coolant tank: can, cap and valve, 'GRP_Collectible_Coolant_XL';
+        // Raik, 2026-11-19: each came off by itself, the others stayed on the wall). Hung on the part pulled while the
+        // hand is on it, so it tilts and comes off with it as one body; where it was, to go back.
+        private struct Member
+        {
+            public Transform Part;
+            public Transform Parent;
+            public Vector3 Position;
+            public Quaternion Rotation;
+        }
+
+        // The bodies made here for things pulled off: a part on one of them is no longer on the ship.
+        private static readonly HashSet<Rigidbody> Made = new HashSet<Rigidbody>();
+        private static readonly Collider[] Around = new Collider[64];
 
         private static readonly Pull Left = new Pull { Input = VrInput.Left };
         private static readonly Pull Right = new Pull { Input = VrInput.Right };
@@ -159,32 +176,10 @@ namespace ShipbreakerVR
             if (Usable(control)) return control;
             var part = collider != null ? collider.GetComponentInParent<StructurePart>() : null;
             if (part == null || !part.name.StartsWith(Collectible)) return null;
-            // Not one already off: its own body is the part.
-            if (collider.attachedRigidbody == null || collider.attachedRigidbody.transform == part.transform)
-            {
-                Describe(part, collider, collider.attachedRigidbody == null ? "it has no body at all" : "it is a body of its own already");
-                return null;
-            }
+            // Not one already off: its own body is the part, or it hangs on one made here with its group.
+            var body = collider.attachedRigidbody;
+            if (body == null || body.transform == part.transform || Made.Contains(body)) return null;
             return part;
-        }
-
-        // The large fuel and coolant tanks ('SM_Collectible_PlasmaFuel_XL', 'SM_Collectible_Coolant_XL_Can' in its group
-        // 'GRP_Collectible_Coolant_XL' with cap and valve) do not come off by hand (Raik, 2026-11-16); before making them,
-        // told once per part how the game holds it: why it stays, its body, size, group and joint.
-        private static readonly HashSet<StructurePart> Described = new HashSet<StructurePart>();
-
-        private static void Describe(StructurePart part, Collider collider, string why)
-        {
-            if (part == null || !Described.Add(part) || Described.Count > 40) return;
-            var body = collider != null ? collider.attachedRigidbody : null;
-            var group = part.GetComponentInParent<StructureGroup>();
-            var joint = part.GetComponent<BreakableJointComponent>();
-            var groupJoint = group != null ? group.GetComponent<BreakableJointComponent>() : null;
-            Plugin.Log.LogInfo($"Pull off: '{part.name}' stays, {why}; {Size(part.transform):0.00} m, body "
-                + $"'{(body != null ? body.name : "-")}' ({(body != null ? body.mass.ToString("0") + " kg" + (body.isKinematic ? ", kinematic" : "") : "-")}), "
-                + $"group '{(group != null ? group.name : "-")}' ({(group != null ? Size(group.transform).ToString("0.00") + " m" : "-")}), "
-                + $"breakable joint {(joint != null ? "on the part" : groupJoint != null ? "on the group" : "none")}, "
-                + $"parent '{(part.transform.parent != null ? part.transform.parent.name : "-")}'");
         }
 
         // A thing to use, fixed on the ship: removed when used, not a lever or switch, on no loose part.
@@ -198,10 +193,7 @@ namespace ShipbreakerVR
             if (root == null)
             {
                 Refused.Add(control);
-                var part = control.GetComponentInParent<StructurePart>();
-                if (part != null && part.name.StartsWith(Collectible))
-                    Describe(part, part.GetComponentInChildren<Collider>(), part.GetComponent<Rigidbody>() != null ? "it is a body of its own already" : $"larger than {Largest:0.0} m");
-                else if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{control.name}' has no part of its own smaller than {Largest:0.0} m, stays on the wall");
+                if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{control.name}' has no part of its own smaller than {Largest:0.0} m, stays on the wall");
                 return false;
             }
             if (!VrClimb.TryGetSurface(pull.Input, out var surface) || !VrClimb.TryGetGrip(pull.Input, out _, out var normal)) return false;
@@ -216,10 +208,55 @@ namespace ShipbreakerVR
             pull.Angle = 0f;
             pull.Braced = false;
             pull.Ship = control.GetComponentInParent<Rigidbody>();
+            if (pull.Ship != null && Made.Contains(pull.Ship)) return false;
+            Gather(pull);
             // The hand goes with it as it tilts; it holds free only while the other hand holds the ship.
             VrClimb.Reanchor(pull.Input, root);
-            if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: {pull.Input.Name} hand holds '{control.name}', its part '{root.name}' ({Size(root):0.00} m) on '{(root.parent != null ? root.parent.name : "-")}'");
+            if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: {pull.Input.Name} hand holds '{control.name}', its part '{root.name}' ({Size(root):0.00} m) on '{(root.parent != null ? root.parent.name : "-")}'"
+                + (pull.Members.Count > 0 ? $", with {pull.Members.Count} more of its group: {Names(pull)}" : ""));
             return true;
+        }
+
+        // The other parts of its group near it, on the same body of the ship, hung on it.
+        private static void Gather(Pull pull)
+        {
+            pull.Members.Clear();
+            var part = pull.Root.GetComponent<StructurePart>();
+            var group = part != null ? part.Group : null;
+            if (group == null) return;
+            var count = Physics.OverlapSphereNonAlloc(pull.Root.position, Mathf.Max(Size(pull.Root), 0.5f * VrCamera.WorldScale), Around,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (var i = 0; i < count; i++)
+            {
+                var other = Around[i] != null ? Around[i].GetComponentInParent<StructurePart>() : null;
+                if (other == null || other == part || other.transform.parent != pull.Parent || other.GetComponent<Rigidbody>() != null) continue;
+                if (other.Group != group) continue;
+                var known = false;
+                foreach (var member in pull.Members) if (member.Part == other.transform) known = true;
+                if (known) continue;
+                pull.Members.Add(new Member { Part = other.transform, Parent = other.transform.parent, Position = other.transform.localPosition, Rotation = other.transform.localRotation });
+            }
+            foreach (var member in pull.Members) member.Part.SetParent(pull.Root, true);
+        }
+
+        private static string Names(Pull pull)
+        {
+            var names = new List<string>();
+            foreach (var member in pull.Members) if (member.Part != null) names.Add($"'{member.Part.name}'");
+            return string.Join(", ", names);
+        }
+
+        // Let go before it came off: the group's other parts back where they were.
+        private static void PutBack(Pull pull)
+        {
+            foreach (var member in pull.Members)
+            {
+                if (member.Part == null || member.Parent == null) continue;
+                member.Part.SetParent(member.Parent, false);
+                member.Part.localPosition = member.Position;
+                member.Part.localRotation = member.Rotation;
+            }
+            pull.Members.Clear();
         }
 
         // The transform that is the thing: its part (StructurePart), within Largest, not the ship's body.
@@ -282,7 +319,12 @@ namespace ShipbreakerVR
             body.interpolation = RigidbodyInterpolation.Interpolate;
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
             body.velocity = shipSpeed;
+            Made.RemoveWhere(made => made == null);
+            Made.Add(body);
             pull.Body = body;
+            // The rest of its group comes along, as part of its body.
+            if (pull.Members.Count > 0 && logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{root.name}' takes {Names(pull)} along");
+            pull.Members.Clear();
             pull.FlyStart = Time.time;
             VrClimb.SetFree(pull.Input, true, false);
             pull.Input.Buzz(0.9f, 0.12f);
@@ -444,6 +486,7 @@ namespace ShipbreakerVR
             {
                 pull.Root.localPosition = pull.RestPosition;
                 pull.Root.localRotation = pull.RestRotation;
+                PutBack(pull);
                 if (pull.Angle > 0f && logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{pull.Thing.name}' let go after {pull.Pulled:0.0} s, back on the wall");
             }
             Clear(pull);
@@ -451,6 +494,7 @@ namespace ShipbreakerVR
 
         private static void Clear(Pull pull)
         {
+            PutBack(pull);
             pull.Thing = null;
             pull.Root = null;
             pull.Parent = null;

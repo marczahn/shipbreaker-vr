@@ -30,10 +30,12 @@ namespace ShipbreakerVR
             Shader.PropertyToID("_EmissiveColor"),
         };
 
-        // As bright as the game's own yellow (its luminance about 16).
-        private static readonly Color Yellow = new Color(47.937256f, 8.282353f, 0f, 0f);
-        private static readonly Color Green = new Color(1.5f, 21f, 2f, 0f);
-        private static readonly Color Red = new Color(60f, 1.5f, 0f, 0f);
+        // A third as bright as the game's own yellow (its luminance about 16): at full strength they glared and
+        // outshone everything around them (Raik, 2026-11-19: "the colors are very good, a little less bright").
+        private const float Brightness = 0.33f;
+        private static readonly Color Yellow = new Color(47.937256f, 8.282353f, 0f, 0f) * Brightness;
+        private static readonly Color Green = new Color(1.5f, 21f, 2f, 0f) * Brightness;
+        private static readonly Color Red = new Color(60f, 1.5f, 0f, 0f) * Brightness;
         // Blinking: this many times a second, and red at least this long once the trigger was pressed.
         private const float BlinkRate = 4f;
         private const float RedAtLeast = 1.5f;

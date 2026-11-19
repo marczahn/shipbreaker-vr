@@ -423,6 +423,22 @@ namespace ShipbreakerVR
             Plugin.Log.LogInfo($"Charge by hand: the hold of the {hand.Name} hand is the one charges come into the hand with from now on");
         }
 
+        // Where the charge's mesh (its middle, BackOfMesh before its origin) lies in that hand and how it is turned, in
+        // tracking space: the game's own charge in the hand (VrHands.ChargeInHand) as a charge taken out by hand lies
+        // (Raik, 2026-11-19: with Automatisch it sat off the hand, with Manuell right). False without the controller's pose.
+        internal static bool HoldInTracking(bool left, out Vector3 meshAt, out Quaternion turned)
+        {
+            meshAt = Vector3.zero;
+            turned = Quaternion.identity;
+            var hand = left ? VrInput.Left : VrInput.Right;
+            if (!hand.TryGetPosition(out var gripLocal) || !hand.TryGetAimRotation(out var aimLocal)) return false;
+            Hold(out var at, out var turn);
+            if (left) VrToolFit.Mirror(ref at, ref turn);
+            turned = aimLocal * turn;
+            meshAt = gripLocal + aimLocal * at;
+            return true;
+        }
+
         // Where a charge lies in that hand, in the world: its own origin (the middle of its back) and its turn. False
         // without the controller's pose.
         public static bool HoldPose(VrInput.Hand hand, out Vector3 origin, out Quaternion turned)
