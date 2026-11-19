@@ -53,6 +53,7 @@ namespace ShipbreakerVR
             ("charge disarm", VrChargeDisarm.Track),
             ("charge count", VrChargeCount.Update),
             ("pickup layer", VrPickupLayer.Update),
+            ("thumb skin", VrThumbSkin.Update),
             ("vr options entry", VrOptionsMenu.Update),
             ("vr options tab", VrOptionsTab.Update),
         };
