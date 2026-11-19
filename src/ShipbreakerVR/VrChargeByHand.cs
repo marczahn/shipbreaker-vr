@@ -384,17 +384,29 @@ namespace ShipbreakerVR
         // had it both times (MeasureHeld: back (0.79, -0.06, 0.61) and (0.79, -0.15, 0.60), top (-0.07, 0.98, 0.19) and
         // (0.01, 0.97, 0.22), middle (-14, -1, 9) and (-15, -1, 10) cm). The mean of the two: the face turned 20 degrees
         // further to him, the charge 8 cm further inwards.
-        private static readonly Vector3 HeldBack = new Vector3(0.79f, -0.10f, 0.61f);
-        private static readonly Vector3 HeldTop = new Vector3(-0.03f, 0.98f, 0.21f);
-        private static readonly Vector3 TakeOutAt = new Vector3(-0.145f, -0.01f, 0.095f);
+        // That was the mod's own hold until 0.32.0 (middle (-14.5, -1, 9.5) cm, back (0.79, -0.10, 0.61), top
+        // (-0.03, 0.98, 0.21)). Since then (Raik, 2026-11-19 23:05, with Automatisch, fitted by dragging the charge with the
+        // other hand, VrToolFit.Charge, and his screenshot "for the hold of the charge"): StandardHold, as
+        // SprengsatzHaltung writes it.
+        private const string StandardHold = "-10.3 -1.4 7.1 / 1.5 -140.2 -11.7";
+        private static bool standardParsed;
+        private static Vector3 standardAt;
+        private static Quaternion standardTurn = Quaternion.identity;
 
-        // The hold as it counts: the one stored while fitting the tools (VrToolFit.ChargeHold, SprengsatzHaltung), else
-        // the mod's own. As in the right hand: the middle from the grip and the turn, in the controller's axes.
+        // The hold as it counts: the one being dragged or stored while fitting the tools (VrToolFit.ChargeHold,
+        // SprengsatzHaltung), else the mod's own. As in the right hand: the middle from the grip and the turn, in the
+        // controller's axes.
         private static void Hold(out Vector3 middle, out Quaternion turn)
         {
             if (VrToolFit.ChargeDrag(out middle, out turn) || VrToolFit.ChargeHold.TryGet(out middle, out turn)) return;
-            middle = TakeOutAt;
-            turn = Quaternion.LookRotation(-HeldBack, HeldTop);
+            if (!standardParsed && VrToolFit.TryParse(StandardHold, out var at, out var angles))
+            {
+                standardParsed = true;
+                standardAt = at / 100f;
+                standardTurn = Quaternion.Euler(angles);
+            }
+            middle = standardAt;
+            turn = standardTurn;
         }
 
         // How the charge is turned in that hand, against the hand's or the controller's axes.
@@ -598,8 +610,8 @@ namespace ShipbreakerVR
             return true;
         }
 
-        // How a charge afloat lies in the hand that holds it, for the log, once a second: as HeldBack, HeldTop and
-        // TakeOutAt are given, so a hold Raik likes can be read off and made the one a charge comes into the hand with.
+        // How a charge afloat lies in the hand that holds it, for the log, once a second: as the hold before 0.32.0 was
+        // given, so a hold Raik likes can be read off and made the one a charge comes into the hand with (StandardHold).
         private static float nextHeldMeasure;
         private static int heldMeasures;
 
