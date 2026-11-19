@@ -1901,6 +1901,23 @@ namespace ShipbreakerVR
         private static Vector3 Hold(Hand hand) =>
             hand.PinAnchor != null ? hand.PinAnchor.TransformPoint(hand.Pin) : hand.Anchor.TransformPoint(hand.Point);
 
+        // While the tools are fitted (VrToolFit.Charge, a demo charge afloat): the part that hand holds firmly is to lie
+        // at this pose in the world (its body's). Its hold is set so: the turn against the controller, and the point on
+        // it at the hand, carried from that pose back onto the part as it lies now. MoveFirm takes it there.
+        public static void Refit(VrInput.Hand input, Vector3 position, Quaternion rotation)
+        {
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input || !hand.Holding || !hand.Firm || hand.Body == null || hand.Anchor == null || hand.PinAnchor != null) continue;
+                if (!hand.Input.TryGetAimRotation(out var aim)) return;
+                var body = hand.Body;
+                hand.FirmTurn = Quaternion.Inverse(VrCamera.Instance.transform.parent.rotation * aim) * rotation;
+                var onPart = body.position + body.rotation * (Quaternion.Inverse(rotation) * (HandWorld(hand) - position));
+                hand.Point = hand.Anchor.InverseTransformPoint(onPart);
+                return;
+            }
+        }
+
         // That hand works a heavy part while the other is braced on something that does not move.
         // With the other hand on a second part too heavy to grab instead, the two push each other apart through the body
         // (Braced false): what one hand gives its part, the body takes back, so the masses share it.

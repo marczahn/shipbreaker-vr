@@ -72,7 +72,8 @@ namespace ShipbreakerVR
             if (!running) return;
             foreach (var hand in VrHand.Both)
             {
-                if (!hand.Input.Grip.Pressed || !Near(hand)) continue;
+                // While the tools are fitted, a grip near the tool moves it instead (VrToolFit).
+                if (!hand.Input.Grip.Pressed || !Near(hand) || VrToolFit.Blocks(hand.Node)) continue;
                 var other = hand.Other;
                 if (!ToolFrame(other, out var grip, out var aim) || !hand.Input.TryGetPosition(out var at) || !hand.Input.TryGetAimRotation(out var pointing)) continue;
                 supporting = hand;

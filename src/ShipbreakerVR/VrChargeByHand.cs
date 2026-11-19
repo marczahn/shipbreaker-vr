@@ -392,7 +392,7 @@ namespace ShipbreakerVR
         // the mod's own. As in the right hand: the middle from the grip and the turn, in the controller's axes.
         private static void Hold(out Vector3 middle, out Quaternion turn)
         {
-            if (VrToolFit.ChargeHold.TryGet(out middle, out turn)) return;
+            if (VrToolFit.ChargeDrag(out middle, out turn) || VrToolFit.ChargeHold.TryGet(out middle, out turn)) return;
             middle = TakeOutAt;
             turn = Quaternion.LookRotation(-HeldBack, HeldTop);
         }
@@ -674,6 +674,29 @@ namespace ShipbreakerVR
             }
             Check(VrInput.Left, afloat[0]);
             Check(VrInput.Right, afloat[1]);
+            Fit();
+        }
+
+        // While the tools are fitted (VrToolFit.Charge): the charge in a hand, afloat or the game's, is dragged by the
+        // other hand. One afloat is held by its hand as the dragged hold has it.
+        private static void Fit()
+        {
+            var hand = !VrXr.IsRunning ? null : Holds(VrInput.Left) ? VrInput.Left : Holds(VrInput.Right) ? VrInput.Right : null;
+            var afloatHand = hand;
+            if (hand == null && VrXr.IsRunning && Decoupled && !DetonatorOut)
+            {
+                var tool = VrHand.GameToolHand;
+                if (tool != null && tool.HoldsTool && tool.Tool == EquipmentController.Equipment.DemoCharge) hand = tool.Input;
+            }
+            VrToolFit.Charge(hand);
+            if (afloatHand == null || !VrToolFit.ChargeDragged) return;
+            var held = afloat[afloatHand.IsLeft ? 0 : 1];
+            var part = held.Charge != null ? held.Charge.DemoCharge : null;
+            if (part == null || held.Body == null || !HoldPose(afloatHand, out var origin, out var turned)) return;
+            var frame = part.transform;
+            var body = held.Body;
+            var inverse = Quaternion.Inverse(frame.rotation);
+            VrClimb.Refit(afloatHand, origin + turned * (inverse * (body.position - frame.position)), turned * (inverse * body.rotation));
         }
 
         // A charge afloat that a hand holds (as any loose part, VrClimb) and lets go where the charges are drawn from goes
