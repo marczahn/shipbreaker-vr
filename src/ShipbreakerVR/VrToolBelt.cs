@@ -167,6 +167,24 @@ namespace ShipbreakerVR
 
         internal static bool ShoulderLocal(VrInput.Hand controller, out Vector3 local) => BodyLocal(controller, ShoulderRef, out local);
 
+        // A point in tracking space written as ShoulderLocal writes a controller, and the way back (VrShoulderStow: the
+        // thing held in the zone over the left shoulder, not only the hand).
+        internal static bool ShoulderLocalOf(Vector3 tracking, out Vector3 local)
+        {
+            local = Vector3.zero;
+            if (!BodyFrame(out var neck, out var heading)) return false;
+            local = Sided(Quaternion.Inverse(heading) * (tracking - neck) + ShoulderRef);
+            return true;
+        }
+
+        internal static bool ShoulderToTracking(Vector3 local, out Vector3 tracking)
+        {
+            tracking = Vector3.zero;
+            if (!BodyFrame(out var neck, out var heading)) return false;
+            tracking = neck + heading * (Sided(local) - ShoulderRef);
+            return true;
+        }
+
         private static bool BodyLocal(VrInput.Hand controller, Vector3 reference, out Vector3 local)
         {
             local = Vector3.zero;

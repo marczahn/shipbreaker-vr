@@ -81,7 +81,7 @@ namespace ShipbreakerVR
                 var wasOver = held.Thing == thing && held.Over;
                 held.Thing = thing;
                 held.Body = body;
-                held.Over = VrToolBelt.ShoulderLocal(hand, out var local) && VrToolBelt.OverLeftShoulder(local);
+                held.Over = Over(hand, body, thing);
                 if (held.Over && !wasOver)
                 {
                     held.OverSince = Time.time;
@@ -97,7 +97,7 @@ namespace ShipbreakerVR
             // Let go with the grip (not lost by tracking) while over the shoulder, and not still held by the other hand.
             if (was == null || hand.Grip.Down) return;
             if (wasBody != null && VrClimb.HeldBody(hand.IsLeft ? VrInput.Right : VrInput.Left) == wasBody) return;
-            var over = held.Over || (VrToolBelt.ShoulderLocal(hand, out var at) && VrToolBelt.OverLeftShoulder(at));
+            var over = held.Over || Over(hand, wasBody, was);
             if (!over)
             {
                 if (logs < 30 && VrToolBelt.ShoulderLocal(hand, out var off) && off.z < 0.1f && off.y > -0.3f)
@@ -108,6 +108,42 @@ namespace ShipbreakerVR
                 return;
             }
             Stow(hand, was);
+        }
+
+        // Over the shoulder: the hand, or the thing it holds touching the zone (Raik, 2026-11-19: the small fuel cans and
+        // the repair kits went in only with the hand right in the zone; the thing reaching into it is to be enough). Of
+        // the thing's own shapes (its structure part's, else its body's) the point nearest the middle of the zone counts,
+        // PackMiddle, behind the left shoulder.
+        private static readonly Vector3 PackMiddle = new Vector3(-0.15f, 0.05f, -0.25f);
+        private static readonly System.Collections.Generic.List<Collider> Shapes = new System.Collections.Generic.List<Collider>();
+
+        private static bool Over(VrInput.Hand hand, Rigidbody body, InteractableObject thing)
+        {
+            if (VrToolBelt.ShoulderLocal(hand, out var local) && VrToolBelt.OverLeftShoulder(local)) return true;
+            var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+            if (rig == null || !VrToolBelt.ShoulderToTracking(PackMiddle, out var middleLocal)) return false;
+            var middle = rig.TransformPoint(middleLocal);
+            var part = thing != null ? thing.GetComponentInParent<StructurePart>() : null;
+            var root = part != null ? part.transform : body != null ? body.transform : thing != null ? thing.transform : null;
+            if (root == null) return false;
+            root.GetComponentsInChildren(Shapes);
+            var found = false;
+            var nearest = Vector3.zero;
+            var best = float.MaxValue;
+            foreach (var shape in Shapes)
+            {
+                if (shape == null || !shape.enabled || shape.isTrigger) continue;
+                var point = shape is MeshCollider mesh && !mesh.convex
+                    ? shape.bounds.ClosestPoint(middle)
+                    : shape.ClosestPoint(middle);
+                var distance = (point - middle).sqrMagnitude;
+                if (distance >= best) continue;
+                best = distance;
+                nearest = point;
+                found = true;
+            }
+            Shapes.Clear();
+            return found && VrToolBelt.ShoulderLocalOf(rig.InverseTransformPoint(nearest), out var at) && VrToolBelt.OverLeftShoulder(at);
         }
 
         // Not a demo charge afloat: it goes back to the charges behind the back (VrChargeByHand), each place has one use.
