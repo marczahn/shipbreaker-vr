@@ -246,7 +246,9 @@ namespace ShipbreakerVR
             }
             heldBefore = holding;
             holdingAtHide = holding;
-            HideProps(aiming && hand != null && holding != EquipmentController.Equipment.DemoCharge && FindArm(hand));
+            // Also while the hands are the game's (the pause menu, Raik 2026-11-19: opening it, the hand suddenly held the
+            // charges): the game's arm is in view in VR then too, and the pieces it carries unheld would show.
+            HideProps(VrXr.IsRunning && hand != null && holding != EquipmentController.Equipment.DemoCharge && FindArm(hand));
 
             // The charge in the left hand: VrHands moves it over to that hand. The tool hand switches back to the right one
             // only once the charge is gone; a right hand that takes the charge over holds its grip.
