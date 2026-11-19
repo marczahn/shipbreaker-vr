@@ -88,6 +88,7 @@ namespace ShipbreakerVR
             ("tool models", VrToolModels.Place),
             ("loose tools", VrLooseTools.Place),
             ("belt grapple", VrBeltGrapple.Update),
+            ("detonator lights", VrDetonatorLights.Update),
         };
 
         // From the VR camera's Update, FixedUpdate and LateUpdate, and from FollowGameCamera once the rig is placed.

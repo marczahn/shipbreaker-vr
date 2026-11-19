@@ -87,7 +87,10 @@ namespace ShipbreakerVR
         // controllers as with any tool, and the charge is set in front of the controller that holds it, its back where the
         // controller points and its top up (VrHands.ChargeInHand). Raik, 2026-11-18: on the animated hand the charge's back
         // pointed 79 degrees to the side; turning the hand to straighten it turned the hand and the detonator by as much.
-        public static bool Decoupled => On;
+        // With either way of placing (Raik, 2026-11-19, testing 0.31.0 with Automatisch: the hand held the charge a little
+        // turned, and letting go it went through part of the game's stow animation): the charge lies in the hand as with
+        // Manuell, and the hand stays at its controller after letting go (VrToolModels.PoseArm bends the game's arm no more).
+        public static bool Decoupled => VrAim.Active;
 
         private static bool On => VrSettings.ChargePlacing != null && VrSettings.ChargePlacing.Value == Placing.Manuell && VrAim.Active;
 

@@ -163,6 +163,9 @@ namespace ShipbreakerVR
             if (detonatorShown.activeSelf != shows) detonatorShown.SetActive(shows);
         }
 
+        // For VrDetonatorLights: the copy at the hip, while there is one.
+        internal static Transform DetonatorCopy => detonatorShown != null ? detonatorShown.transform : null;
+
         // For VrLooseTools: where a point of the detonator's model (in the prop's own axes) is on the copy at the hip,
         // in the world; shown: whether the copy shows there now. False while it has no place at the hip.
         internal static bool DetonatorAtHip(Vector3 inModel, out Vector3 at, out bool shown)

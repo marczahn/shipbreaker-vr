@@ -158,10 +158,33 @@ namespace ShipbreakerVR
             control = VrClimb.PartInteractable(collider);
             if (Usable(control)) return control;
             var part = collider != null ? collider.GetComponentInParent<StructurePart>() : null;
+            if (part == null || !part.name.StartsWith(Collectible)) return null;
             // Not one already off: its own body is the part.
-            if (part == null || !part.name.StartsWith(Collectible) || collider.attachedRigidbody == null
-                || collider.attachedRigidbody.transform == part.transform) return null;
+            if (collider.attachedRigidbody == null || collider.attachedRigidbody.transform == part.transform)
+            {
+                Describe(part, collider, collider.attachedRigidbody == null ? "it has no body at all" : "it is a body of its own already");
+                return null;
+            }
             return part;
+        }
+
+        // The large fuel and coolant tanks ('SM_Collectible_PlasmaFuel_XL', 'SM_Collectible_Coolant_XL_Can' in its group
+        // 'GRP_Collectible_Coolant_XL' with cap and valve) do not come off by hand (Raik, 2026-11-16); before making them,
+        // told once per part how the game holds it: why it stays, its body, size, group and joint.
+        private static readonly HashSet<StructurePart> Described = new HashSet<StructurePart>();
+
+        private static void Describe(StructurePart part, Collider collider, string why)
+        {
+            if (part == null || !Described.Add(part) || Described.Count > 40) return;
+            var body = collider != null ? collider.attachedRigidbody : null;
+            var group = part.GetComponentInParent<StructureGroup>();
+            var joint = part.GetComponent<BreakableJointComponent>();
+            var groupJoint = group != null ? group.GetComponent<BreakableJointComponent>() : null;
+            Plugin.Log.LogInfo($"Pull off: '{part.name}' stays, {why}; {Size(part.transform):0.00} m, body "
+                + $"'{(body != null ? body.name : "-")}' ({(body != null ? body.mass.ToString("0") + " kg" + (body.isKinematic ? ", kinematic" : "") : "-")}), "
+                + $"group '{(group != null ? group.name : "-")}' ({(group != null ? Size(group.transform).ToString("0.00") + " m" : "-")}), "
+                + $"breakable joint {(joint != null ? "on the part" : groupJoint != null ? "on the group" : "none")}, "
+                + $"parent '{(part.transform.parent != null ? part.transform.parent.name : "-")}'");
         }
 
         // A thing to use, fixed on the ship: removed when used, not a lever or switch, on no loose part.
@@ -175,7 +198,10 @@ namespace ShipbreakerVR
             if (root == null)
             {
                 Refused.Add(control);
-                if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{control.name}' has no part of its own smaller than {Largest:0.0} m, stays on the wall");
+                var part = control.GetComponentInParent<StructurePart>();
+                if (part != null && part.name.StartsWith(Collectible))
+                    Describe(part, part.GetComponentInChildren<Collider>(), part.GetComponent<Rigidbody>() != null ? "it is a body of its own already" : $"larger than {Largest:0.0} m");
+                else if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{control.name}' has no part of its own smaller than {Largest:0.0} m, stays on the wall");
                 return false;
             }
             if (!VrClimb.TryGetSurface(pull.Input, out var surface) || !VrClimb.TryGetGrip(pull.Input, out _, out var normal)) return false;

@@ -278,6 +278,8 @@ namespace ShipbreakerVR
         // For VrBeltGrapple, which shows the detonator at the hip while it is neither in a hand nor afloat.
         internal static Transform DetonatorModel => DetonatorProp();
         public static bool DetonatorLoose => Detonator.Loose;
+        // For VrDetonatorLights: the detonator's own body afloat, while it has one.
+        internal static Transform DetonatorAfloat => Detonator.Body != null ? Detonator.Body.transform : null;
 
         // Whether the prop shows on a hand now (the game shows it some frames after the charges are drawn).
         private static MeshRenderer[] propParts;
