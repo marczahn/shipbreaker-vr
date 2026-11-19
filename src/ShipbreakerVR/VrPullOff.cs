@@ -196,6 +196,17 @@ namespace ShipbreakerVR
                 if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{control.name}' has no part of its own smaller than {Largest:0.0} m, stays on the wall");
                 return false;
             }
+            // Heavy things (the large coolant and fuel tanks, Raik 2026-11-19) come off with the grapple only, as in the
+            // game, with the game's own body and mass: the hand holds them as part of the wall.
+            var mass = GameMass(root);
+            if (mass > HandMost)
+            {
+                Refused.Add(control);
+                if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{root.name}' weighs {mass:0} kg, more than {HandMost:0} kg: only the grapple takes it off");
+                return false;
+            }
+            var ship = control.GetComponentInParent<Rigidbody>();
+            if (ship != null && Made.Contains(ship)) return false;
             if (!VrClimb.TryGetSurface(pull.Input, out var surface) || !VrClimb.TryGetGrip(pull.Input, out _, out var normal)) return false;
             pull.Thing = control;
             pull.Root = root;
@@ -207,12 +218,11 @@ namespace ShipbreakerVR
             pull.Pulled = 0f;
             pull.Angle = 0f;
             pull.Braced = false;
-            pull.Ship = control.GetComponentInParent<Rigidbody>();
-            if (pull.Ship != null && Made.Contains(pull.Ship)) return false;
+            pull.Ship = ship;
             Gather(pull);
             // The hand goes with it as it tilts; it holds free only while the other hand holds the ship.
             VrClimb.Reanchor(pull.Input, root);
-            if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: {pull.Input.Name} hand holds '{control.name}', its part '{root.name}' ({Size(root):0.00} m) on '{(root.parent != null ? root.parent.name : "-")}'"
+            if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: {pull.Input.Name} hand holds '{control.name}', its part '{root.name}' ({Size(root):0.00} m, {mass:0.0} kg) on '{(root.parent != null ? root.parent.name : "-")}'"
                 + (pull.Members.Count > 0 ? $", with {pull.Members.Count} more of its group: {Names(pull)}" : ""));
             return true;
         }
@@ -257,6 +267,21 @@ namespace ShipbreakerVR
                 member.Part.localRotation = member.Rotation;
             }
             pull.Members.Clear();
+        }
+
+        // The heaviest thing a hand pulls off, in kg (the game's own mass of the part or its group, GameMass). The large
+        // coolant tank weighs some 67 kg, the fuel tank more (Raik, 2026-11-19).
+        private const float HandMost = 20f;
+
+        // The game's mass of the part, or of its group if it is in one (StructurePartAsset is the group's then), as the
+        // game gives it a body (StructurePart.GetMassFromRigidbodyAsset); 0 where it has none.
+        private static float GameMass(Transform root)
+        {
+            var part = root.GetComponent<StructurePart>();
+            var data = part != null && part.StructurePartAsset != null ? part.StructurePartAsset.Data : null;
+            var body = data != null ? data.IRigidbodyAsset : null;
+            try { return body != null && body.Data != null ? body.Data.GetMass(part.gameObject) : 0f; }
+            catch (System.Exception) { return 0f; }
         }
 
         // The transform that is the thing: its part (StructurePart), within Largest, not the ship's body.
