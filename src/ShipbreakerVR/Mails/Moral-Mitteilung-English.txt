@@ -1,13 +1,13 @@
-Sender: LYNX Corp. – Employee Satisfaction & Morale Retention Dept.
+Sender: LYNX Corp. – Employee Satisfaction Dept.
 Subject: NOTICE: Morale Retention Measure 12-C – Personal wall decoration approved
 
-Dear Valued Employee,
+Dear Esteemed Employee,
 
 Congratulations on completing your first shift! Our measurements show that you survived it. We are very pleased, not least for insurance reasons.
 
-Maintaining employee morale is a key concern of LYNX Corporation. The latest satisfaction survey (response rate: 0.3%, result: "satisfied", as the field was pre-filled) has prompted a comprehensive measure:
+Maintaining employee morale is a key concern of LYNX Corporation. The latest satisfaction survey (response rate: 0.3%, result: "satisfied"; dissatisfied employees will be referred to a mandatory team-building seminar) has prompted a comprehensive measure:
 
-Effective immediately, all employees may hang their own posters in their quarters.
+Effective immediately, all employees may decorate their quarters with personal posters. All posters must first be reviewed and approved by a LYNX employee of the Department of Motivation & Aftercare.
 
 Please note:
 • Approved are images in PNG or JPG format, placed in the "ShipbreakerVR-Poster" directory. Other formats count as art and must be reported.
@@ -20,5 +20,5 @@ We expect this measure to raise your satisfaction by up to 4%. Should your satis
 Motivated regards,
 
 LYNX Corporation
-Employee Satisfaction & Morale Retention Dept.
+Employee Satisfaction Dept.
 "Happy employees are productive employees. Productive employees are happy. Please."
