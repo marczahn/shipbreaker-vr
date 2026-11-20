@@ -341,11 +341,10 @@ namespace ShipbreakerVR
         // the grip lets go instead of riding along through the stow animation. They come back when the charge is drawn.
         // Checked every frame while hidden: at the start no piece was showing yet when they were first hidden, and the
         // charge appeared in the hand later anyway.
-        // The charge alone (chargeOnly) while the tool is out as the detonator (Raik, 2026-11-20, with Automatisch: a
-        // charge let go by the hand that held the charges, the hand with the detonator beside them gets the game's
-        // detonator, VrSecondDetonator; a charge showed in that hand for a frame and then jumped to the other). The game
-        // switches between the two on the hand with its animation, a few frames after the mode changed, and the charge
-        // still showed meanwhile.
+        // The charge alone (chargeOnly) while the tool is out as the detonator (Raik, 2026-11-20: as the detonator came
+        // into a hand that held the charges a moment before, a charge showed in that hand for a frame and then jumped to
+        // the other). The game switches between the two on the hand with its animation, a few frames after the mode
+        // changed, and the charge still showed meanwhile.
         private static void HideProps(bool hide, bool chargeOnly = false)
         {
             if (!hide && !chargeOnly)

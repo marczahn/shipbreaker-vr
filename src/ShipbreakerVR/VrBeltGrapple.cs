@@ -145,8 +145,7 @@ namespace ShipbreakerVR
             var placed = prop != null && equipment != null && equipment.CanEquip(EquipmentController.Equipment.DemoCharge)
                 && VrHands.DetonatorRest(out inHandAt, out inHandTurn)
                 && VrToolModels.TrackingToWorld(neck + heading * (VrToolBelt.Sided(DetonatorAt) - VrToolBelt.ChargeRef), heading, out wrist, out frame);
-            // Not while the other hand holds a copy of it beside the charges (VrSecondDetonator).
-            var shows = placed && !VrLooseTools.DetonatorShowsInHand && !VrLooseTools.DetonatorLoose && !VrSecondDetonator.Active;
+            var shows = placed && !VrLooseTools.DetonatorShowsInHand && !VrLooseTools.DetonatorLoose;
             if (placed && (detonatorShown == null || detonatorOf != prop) && Time.unscaledTime >= nextDetonator)
             {
                 nextDetonator = Time.unscaledTime + 2f;
@@ -194,8 +193,8 @@ namespace ShipbreakerVR
                 + $"hung at ({DetonatorAt.x:0.00}, {DetonatorAt.y:0.00}, {DetonatorAt.z:0.00}) m as its zone is measured");
         }
 
-        // A copy of the detonator's meshes, its root at the prop's origin and turned as the prop (also for
-        // VrSecondDetonator); middle: the middle of its parts in the root's axes. Made inactive; null without parts.
+        // A copy of the detonator's meshes, its root at the prop's origin and turned as the prop; middle: the middle of
+        // its parts in the root's axes. Made inactive; null without parts.
         internal static GameObject CopyDetonator(Transform prop, string name, out int parts, out Vector3 middle)
         {
             var root = new GameObject(name);

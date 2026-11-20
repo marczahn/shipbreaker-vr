@@ -90,7 +90,6 @@ namespace ShipbreakerVR
             ("touch sound", VrTouchSound.Update),
             ("tool models", VrToolModels.Place),
             ("loose tools", VrLooseTools.Place),
-            ("second detonator", VrSecondDetonator.Update),
             ("belt grapple", VrBeltGrapple.Update),
             ("detonator lights", VrDetonatorLights.Update),
         };

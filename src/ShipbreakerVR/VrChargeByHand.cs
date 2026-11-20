@@ -116,7 +116,7 @@ namespace ShipbreakerVR
         // their detonator.
         public static bool Steadies(VrInput.Hand hand)
         {
-            if (Holds(hand) || VrSecondDetonator.Holds(hand)) return true;
+            if (Holds(hand)) return true;
             var held = hand.IsLeft ? VrHand.Left : VrHand.Right;
             return held.HoldsTool && held.Tool == EquipmentController.Equipment.DemoCharge;
         }
