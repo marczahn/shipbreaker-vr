@@ -110,14 +110,16 @@ flat game.
 - Cutter: the trigger cuts, A switches the Splitsaw between horizontal and vertical cuts (the line also turns with your
   wrist), B switches between the Splitsaw (a line) and the Stinger (the point the laser shows). A bright dot marks
   where the laser hits; with the Splitsaw, small dots on the parts show where the cut goes.
-- Demo charges: they are behind your lower back, their detonator hangs at the left hip. The row "Demo charge placing"
-  in the VR options chooses how a charge goes on. *Automatic* (the default): the trigger places a charge where you
-  point, with the game's preview, or throws it where your hand points if you point at nothing. *Manual*: the charge
-  comes into your hand as a thing of its own; bring its back to the surface and let go, and it goes on as you hold it.
-  The line on the charge is the cut, there is no preview. Let go away from a surface it floats (with "Extended tool
-  physics", else it goes back by itself); take it again, hand it to the other hand or put it back behind your back.
+- Demo charges: they are behind your lower back, their detonator hangs at the left hip. A charge comes into your hand
+  as a thing of its own; bring its back to the surface and let go, and it goes on as you hold it. The line on the
+  charge is the cut. Let go away from a surface it floats (with "Extended tool physics", else it goes back by itself);
+  take it again, hand it to the other hand or put it back behind your back. The detonator goes into the other hand.
+  The row "Demo charge placing" in the VR options adds the game's preview: *Automatic* (the default) shows where the
+  charge goes on, at the surface you hold it to, or else where you point the controller. The trigger puts it on there;
+  keep the grip squeezed and the next charge comes into your hand. A red preview means the place is taken: the charge
+  does not go on there. *Manual*: no preview, no trigger.
 - To take a charge off a wall, hold on to it with a hand and press A or X: the game's ring comes up. Press the button
-  again while the ring is in its safe zone. With *Manual* the charge comes off into that hand.
+  again while the ring is in its safe zone. The charge comes off into that hand.
 - With the detonator in your hand the trigger detonates: two fingers press its lever. The visor shows how many charges
   are left while you hold a charge or the detonator.
 
@@ -170,7 +172,7 @@ button prompts:
 - pressing the right stick = Start: in gameplay and in the station it opens the pause menu, on loading screens it
   cycles the tips. In the station it works where Esc does, not inside a terminal screen. In menus it is R3, since the
   game would read Start as "confirm".
-- holding the left stick in for 1.2 seconds recenters the view, like F4, everywhere; a short press straightens you up in flight. To center again, let go and hold it once more.
+- holding the left stick in for 1.2 seconds recenters the view, like F4, everywhere; a short press straightens you up in flight (with the thrust mode *Realistic* on the suit's fuel, like the maneuvering thrusters). To center again, let go and hold it once more.
 
 There is no View button and no D-pad; the left menu button stays with Virtual Desktop. In gameplay only the right
 stick press reaches the game.

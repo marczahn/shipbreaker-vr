@@ -15,3 +15,9 @@ The release ZIP bundles the following components. Their license texts are in `li
 | XR settings derived from ShipbreakerVR by Raicuparta | `BepInEx\plugins\ShipbreakerVR\AssetBundles\xrmanager` | MIT (`ShipbreakerVr-Raicuparta-MIT.txt`) | ShipbreakerVR by Raicuparta (2022) |
 
 UnityDoorstop is used unmodified as a separate library; its source is available at the link above.
+
+## Assets made for the mod
+
+| Asset | Files in the release | Origin |
+|---|---|---|
+| The new body (suit, helmet, visor and their textures) | `BepInEx\plugins\ShipbreakerVR\Anzug\*` | Model and textures made by Raik for this mod (generated in Meshy from a text prompt) and edited with the mod's own scripts. Its binding to the skeleton (weights and joints of its own) is computed from this model alone; it holds no mesh, weight or joint position from the game's files, only the game's bone names, by which the mod finds the bones at run time. |

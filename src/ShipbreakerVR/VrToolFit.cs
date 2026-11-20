@@ -146,6 +146,73 @@ namespace ShipbreakerVR
             DetonatorHold.Store(dragAt, dragTurn);
         }
 
+        // The demo charge in a hand, with either way of placing (Raik, 2026-11-19: while fitting, the other hand took the
+        // charge over or held it with both hands; fitting is to come first). As the detonator: the other hand's grip near
+        // it drags the charge against the hand that holds it, and letting go stores how it lies (SprengsatzHaltung).
+        // Placed the game's way the charge in the hand is drawn from that hold (VrChargeByHand.HoldInTracking); placed by
+        // hand, the hand's hold on the charge afloat is set to it (VrClimb.Refit).
+        private static VrInput.Hand chargeHolder;
+        private static bool chargeGripping, chargeDragged;
+        private static Vector3 chargeGrabAt, chargeDragAt;
+        private static Quaternion chargeGrabTurn, chargeDragTurn;
+
+        public static bool ChargeDragged => chargeDragged;
+
+        // The hold being dragged, as in the right hand; false while none is.
+        public static bool ChargeDrag(out Vector3 at, out Quaternion turn)
+        {
+            at = chargeDragAt;
+            turn = chargeDragTurn;
+            return chargeDragged;
+        }
+
+        // From VrChargeByHand once a frame, with the hand that holds a charge (null for none).
+        public static void Charge(VrInput.Hand holder)
+        {
+            if (holder != chargeHolder) ChargeIdle();
+            chargeHolder = holder;
+            if (holder == null || !On)
+            {
+                ChargeIdle();
+                return;
+            }
+            var other = holder.IsLeft ? VrInput.Right : VrInput.Left;
+            var down = other.Grip.Down;
+            var pressed = down && !chargeGripping;
+            chargeGripping = down;
+            if (!down)
+            {
+                ChargeIdle();
+                return;
+            }
+            if (!other.TryGetGripPose(out var handAt, out var handTurn) || !holder.TryGetPosition(out var gripAt)
+                || !holder.TryGetAimRotation(out var aim)) return;
+            if (pressed)
+            {
+                if (!NearTool(other.Node) || !VrChargeByHand.HoldInTracking(holder.IsLeft, out var meshAt, out var meshTurn)) return;
+                chargeGrabTurn = Quaternion.Inverse(handTurn) * meshTurn;
+                chargeGrabAt = Quaternion.Inverse(handTurn) * (meshAt - handAt);
+                chargeDragged = true;
+                Plugin.Log.LogInfo($"Tool fit: the demo charge in the {holder.Name} hand grabbed with the {other.Name} hand");
+            }
+            if (!chargeDragged) return;
+            var inverse = Quaternion.Inverse(aim);
+            var at = inverse * (handAt + handTurn * chargeGrabAt - gripAt);
+            var turn = inverse * (handTurn * chargeGrabTurn);
+            if (holder.IsLeft) Mirror(ref at, ref turn);
+            chargeDragAt = at;
+            chargeDragTurn = turn;
+        }
+
+        private static void ChargeIdle()
+        {
+            chargeGripping = false;
+            if (!chargeDragged) return;
+            chargeDragged = false;
+            ChargeHold.Store(chargeDragAt, chargeDragTurn);
+            (chargeHolder ?? VrInput.Right).Buzz(0.5f, 0.08f);
+        }
+
         private class Fit
         {
             public readonly string Key;
@@ -174,8 +241,8 @@ namespace ShipbreakerVR
         // clockwise against the empty hand).
         // Measured with Raik, 2026-11-18: with this fit the charge's back points 79 degrees to the right and 25 degrees
         // down of the controller's aim. A fit that straightens the charge ("20 0 18 / 11.6 -80.0 33.3") turned the hand
-        // and the detonator by as much, so with the charges put on by hand the charge is set by itself instead
-        // (VrChargeByHand.Decoupled) and this fit only counts with that off.
+        // and the detonator by as much, so the charge is set by itself instead (VrChargeByHand.Decoupled, since 0.31.5
+        // with both ways of placing) and this fit only counts with that off: aiming without the hands.
         private static readonly Fit ChargeRight = new Fit("SprengsatzRechts", "0 0 0 / 0 0 6");
 
         public static ConfigEntry<bool> Adjusting;
@@ -190,8 +257,8 @@ namespace ShipbreakerVR
         public static void Bind()
         {
             Adjusting = VrSettings.Bind("Justierung", "WerkzeugeJustieren", false,
-                ("While one hand holds the cutter, the grapple, the detonator or (right) a demo charge, squeeze the other hand's grip to grab the tool and move it until it sits in the hand; letting go stores the place for that tool and hand. A demo charge placed by hand (Demo charge placing: Manual) is handed from hand to hand until it lies right; when the other hand lets go, that hold is stored and charges come into the hand like that. Switch it off when they fit.",
-                    "Während eine Hand Cutter, Greifhaken, Zünder oder (rechts) einen Sprengsatz hält: Grip der anderen Hand greift das Werkzeug, bewege es, bis es in der Hand sitzt. Loslassen speichert die Lage für dieses Werkzeug und diese Hand. Einen von Hand gesetzten Sprengsatz (Sprengsatzplatzierung: Manuell) gibst du von Hand zu Hand, bis er richtig liegt; lässt die andere Hand los, wird diese Haltung gespeichert, und Sprengsätze kommen so in die Hand. Danach wieder ausschalten."),
+                ("While one hand holds the cutter, the grapple, the detonator or a demo charge, squeeze the other hand's grip near it to grab the tool and move it until it sits in the hand; letting go stores the place for that tool and hand. The other hand neither takes the tool over nor holds it with both hands meanwhile. A demo charge's hold counts for both hands (mirrored) and both ways of placing. Switch it off when they fit.",
+                    "Während eine Hand Cutter, Greifhaken, Zünder oder einen Sprengsatz hält: Grip der anderen Hand in der Nähe greift das Werkzeug, bewege es, bis es in der Hand sitzt. Loslassen speichert die Lage für dieses Werkzeug und diese Hand. Die andere Hand übernimmt das Werkzeug dabei nicht und hält es auch nicht mit. Die Haltung des Sprengsatzes gilt für beide Hände (gespiegelt) und beide Arten der Sprengsatzplatzierung. Danach wieder ausschalten."),
                 "The places are stored in the entries below; delete an entry to get its default back.");
             foreach (var fit in new[] { GrappleRight, GrappleLeft, CutterRight, CutterLeft, ChargeRight })
                 fit.Entry = VrSettings.Bind("Justierung", fit.Key, fit.Default,
@@ -221,8 +288,10 @@ namespace ShipbreakerVR
         // While adjusting: the other hand's grip blocks drawing from the belt and holding on with that hand, only while it
         // drags the tool or is near it (Raik, 2026-11-14: with a charge in the left hand the right one could not hold the
         // wall; that charge has no fit to adjust at all).
-        public static bool Blocks(XRNode node) => Adjusting != null && Adjusting.Value && node != VrHand.GameToolHand.Node && HoldsModel()
-            && (dragged != null || detonatorDragged || NearTool(node));
+        // A charge in a hand: the other hand's grip near it, or dragging it, moves it and holds nothing else.
+        public static bool Blocks(XRNode node) => Adjusting != null && Adjusting.Value
+            && ((node != VrHand.GameToolHand.Node && HoldsModel() && (dragged != null || detonatorDragged || NearTool(node)))
+                || (chargeHolder != null && node != chargeHolder.Node && (chargeDragged || NearTool(node))));
 
         // Within this of the tool hand's grip, the other hand's grip takes the tool to adjust it.
         private const float AdjustReach = 0.2f;
@@ -239,7 +308,7 @@ namespace ShipbreakerVR
         // other hand's grip drags the tool while adjusting.
         public static void Adjust(EquipmentController.Equipment tool, bool left, Vector3 wrist, Quaternion aim)
         {
-            var fit = Adjusting != null && Adjusting.Value ? Find(tool, left) : null;
+            var fit = Adjusting != null && Adjusting.Value ? Adjustable(tool, left) : null;
             var other = left ? VrInput.Right : VrInput.Left;
             var held = fit != null && other.Grip.Down;
             var pressed = held && !gripping;
@@ -273,7 +342,12 @@ namespace ShipbreakerVR
             fit.Offset = Quaternion.Inverse(aim) * (position - wrist) * scale;
         }
 
-        private static bool HoldsModel() => VrAim.Active && (Find(VrToolModels.Equipped, VrHand.GameToolHand.IsLeft) != null || VrChargeByHand.DetonatorOut);
+        private static bool HoldsModel() => VrAim.Active && (Adjustable(VrToolModels.Equipped, VrHand.GameToolHand.IsLeft) != null || VrChargeByHand.DetonatorOut);
+
+        // The fits the other hand drags: not the charge's on the game's hand while the charge lies in the hand by itself
+        // (VrChargeByHand.Decoupled), which then counts for nothing; that charge is dragged by Charge.
+        private static Fit Adjustable(EquipmentController.Equipment tool, bool left) =>
+            tool == EquipmentController.Equipment.DemoCharge && VrChargeByHand.Decoupled ? null : Find(tool, left);
 
         private static Fit Find(EquipmentController.Equipment tool, bool left)
         {

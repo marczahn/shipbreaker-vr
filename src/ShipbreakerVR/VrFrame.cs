@@ -46,6 +46,7 @@ namespace ShipbreakerVR
             ("frame statistics", VrPerformance.FrameStart),
             ("load trace", () => VrLoadTrace.EndFrame(VrCamera.Instance)),
             ("diagnostics", () => VrDiagnostics.Update(VrCamera.Instance)),
+            ("local suit", VrSuitLocal.Update),
             ("debris range", VrDebrisRange.Update),
             ("lamp shadows", VrLampShadows.Update),
             ("shoulder stow", VrShoulderStow.Update),
@@ -53,6 +54,7 @@ namespace ShipbreakerVR
             ("charge disarm", VrChargeDisarm.Track),
             ("charge count", VrChargeCount.Update),
             ("pickup layer", VrPickupLayer.Update),
+            ("thumb skin", VrThumbSkin.Update),
             ("vr options entry", VrOptionsMenu.Update),
             ("vr options tab", VrOptionsTab.Update),
         };
@@ -78,6 +80,7 @@ namespace ShipbreakerVR
             ("hands", VrHands.LateUpdate),
             ("arm push", VrArmPush.LateUpdate),
             ("crosshair", VrCrosshair.LateUpdate),
+            ("local suit joints", VrSuitLocal.LateUpdate),
         };
 
         private static readonly (string Name, System.Action Step)[] PlacedSteps =
@@ -88,6 +91,7 @@ namespace ShipbreakerVR
             ("tool models", VrToolModels.Place),
             ("loose tools", VrLooseTools.Place),
             ("belt grapple", VrBeltGrapple.Update),
+            ("detonator lights", VrDetonatorLights.Update),
         };
 
         // From the VR camera's Update, FixedUpdate and LateUpdate, and from FollowGameCamera once the rig is placed.

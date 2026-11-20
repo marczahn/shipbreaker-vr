@@ -509,6 +509,8 @@ namespace ShipbreakerVR
             AtControl(LeftArm);
             AtControl(RightArm);
             MirrorThumb(active && !VrHand.Right.HoldsTool);
+            var detonator = active && equipment == EquipmentController.Equipment.DemoCharge
+                && grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped && VrChargeByHand.DetonatorOut;
             ReadChargeFingers(active && chargeLeft);
             Curl(LeftArm);
             Curl(RightArm);
@@ -520,8 +522,6 @@ namespace ShipbreakerVR
             Charges(active && chargeLeft);
             ChargeInHand(active && VrChargeByHand.Decoupled && equipment == EquipmentController.Equipment.DemoCharge
                 && grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped);
-            var detonator = active && equipment == EquipmentController.Equipment.DemoCharge
-                && grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped && VrChargeByHand.DetonatorOut;
             FitDetonator(detonator);
             PressDetonator(detonator);
         }
@@ -611,29 +611,33 @@ namespace ShipbreakerVR
                 + $"the lever {Mathf.Abs(Vector3.Dot(size, length)) * meters * 100f:0.0} cm long, axis ({leverAxis.x:0.00}, {leverAxis.y:0.00}, {leverAxis.z:0.00}) in its own axes");
         }
 
+        // The index and the middle finger of the hand that holds the detonator, which lie on its lever: straighter by
+        // LeverReach, so their tips lie on its front, and closed with the trigger by SqueezeBend.
+        private static void Squeeze(Arm arm, bool left, float pulled)
+        {
+            if (!Frame(arm, out _, out var frame)) return;
+            // Towards the palm, about the hand's thumb-side axis, as Curl bends them; the other two fingers lie round the grip.
+            var across = frame * Vector3.up;
+            var side = left ? 1f : -1f;
+            for (var i = 0; i < arm.Joints.Length && i < 6; i++)
+            {
+                var joint = arm.Joints[i];
+                var bend = SqueezeBend[i % 3] * pulled - LeverReach[i % 3];
+                if (joint == null || Mathf.Abs(bend) < 0.01f) continue;
+                // Not set this frame (the game's own pose): that pose is its base from here.
+                if (joint.localRotation != arm.Set[i]) arm.Base[i] = joint.localRotation;
+                joint.rotation = Quaternion.AngleAxis(side * bend, across) * joint.rotation;
+                arm.Set[i] = joint.localRotation;
+            }
+        }
+
         private static void PressDetonator(bool on)
         {
             if (!on || detonatorProp == null) return;
             var left = VrHand.GameToolHand.IsLeft;
             var arm = left ? LeftArm : RightArm;
             var pulled = Mathf.Clamp01(arm.Input.TriggerValue);
-            if (Frame(arm, out _, out var frame))
-            {
-                // Towards the palm, about the hand's thumb-side axis, as Curl bends them; straighter by LeverReach.
-                // The index and the middle finger only: those two lie on the lever, the other two round the grip.
-                var across = frame * Vector3.up;
-                var side = left ? 1f : -1f;
-                for (var i = 0; i < arm.Joints.Length && i < 6; i++)
-                {
-                    var joint = arm.Joints[i];
-                    var bend = SqueezeBend[i % 3] * pulled - LeverReach[i % 3];
-                    if (joint == null || Mathf.Abs(bend) < 0.01f) continue;
-                    // Not set this frame (the game's own pose): that pose is its base from here.
-                    if (joint.localRotation != arm.Set[i]) arm.Base[i] = joint.localRotation;
-                    joint.rotation = Quaternion.AngleAxis(side * bend, across) * joint.rotation;
-                    arm.Set[i] = joint.localRotation;
-                }
-            }
+            Squeeze(arm, left, pulled);
             if (pulled <= 0.01f) return;
             if (!leverLooked)
             {
@@ -737,13 +741,11 @@ namespace ShipbreakerVR
             detonatorSet = true;
         }
 
-        // With the charges put on by hand (VrChargeByHand.Decoupled): the charge itself ('PRF_Demo_Charge' on the game's
-        // right hand) is set in the hand that holds the charges, in that hand's own axes as it is drawn (Frame), turned
-        // as a charge taken out of the stock comes into the hand (VrChargeByHand.InHand, Raik's screenshot of 2026-11-18:
-        // upright like a slab, its face inwards, its back outwards, its top to the thumb's side), its middle at ChargeAt
-        // from the wrist, in meters at world scale 1. Its own pose under the hand comes back when it is no longer set, if
-        // nothing has set it since. The detonator stays on the hand.
-        private static readonly Vector3 ChargeAt = new Vector3(0f, 0.05f, 0.16f);
+        // With the hands following their controllers (VrChargeByHand.Decoupled): the charge itself ('PRF_Demo_Charge' on
+        // the game's right hand) is set in the hand that holds the charges exactly as a charge taken out of the stock by
+        // hand lies against that controller (VrChargeByHand.HoldInTracking, Raik's screenshot of 2026-11-18: upright like
+        // a slab, its face inwards, its back outwards, its top to the thumb's side). Its own pose under the hand comes
+        // back when it is no longer set, if nothing has set it since. The detonator stays on the hand.
         private const string ChargeProp = "PRF_Demo_Charge";
         private static Transform chargeProp, chargeMesh;
         private static Moved chargeMoved;
@@ -765,10 +767,13 @@ namespace ShipbreakerVR
                 SetLocal(chargeProp, chargeMoved.Position, chargeMoved.Rotation);
             chargeSet = false;
             var left = VrHand.GameToolHand.IsLeft;
-            if (!on || !Frame(left ? LeftArm : RightArm, out var wrist, out var frame)) return;
+            // As a charge taken out by hand lies against its controller (VrChargeByHand.HoldInTracking; Raik, 2026-11-19:
+            // set against the drawn hand's wrist, it sat off the hand with Automatisch).
+            if (!on || !VrChargeByHand.HoldInTracking(left, out var meshLocal, out var turnLocal)
+                || !VrToolModels.TrackingToWorld(meshLocal, turnLocal, out var meshAt, out var meshTurn)) return;
             var original = new Moved { Position = chargeProp.localPosition, Rotation = chargeProp.localRotation };
-            chargeProp.rotation = frame * VrChargeByHand.InHand(left) * Quaternion.Inverse(chargeMesh.localRotation);
-            chargeProp.position += wrist + frame * (ChargeAt * VrCamera.WorldScale) - chargeMesh.position;
+            chargeProp.rotation = meshTurn * Quaternion.Inverse(Quaternion.Inverse(chargeProp.rotation) * chargeMesh.rotation);
+            chargeProp.position += meshAt - chargeMesh.position;
             original.SetPosition = chargeProp.localPosition;
             original.SetRotation = chargeProp.localRotation;
             chargeMoved = original;

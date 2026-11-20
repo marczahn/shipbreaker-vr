@@ -30,6 +30,19 @@ namespace ShipbreakerVR
                     if (each != null) each.convex = true;
                 Unconvexed.Clear();
             });
+            VrSession.OnUnload("kiosk platform", () =>
+            {
+                foreach (var (collider, shape, lowered) in Lowered)
+                {
+                    if (collider != null && collider.sharedMesh == lowered) collider.sharedMesh = shape;
+                    if (lowered != null) Object.Destroy(lowered);
+                }
+                Lowered.Clear();
+                foreach (var each in Added)
+                    if (each != null) Object.Destroy(each);
+                Added.Clear();
+                Fitted.Clear();
+            });
         }
 
         // Whether this interactable belongs to the kiosk.
@@ -91,10 +104,130 @@ namespace ShipbreakerVR
             return false;
         }
 
-        // The kiosk's convex housing made not convex, once.
+        // The platform the kiosk stands on (Raik, 2026-11-19, testing 0.31.5: the rails stop the hand where they are drawn,
+        // but over the floor it hovers): it collides as a shape of its own, 'SO_MasterJax_Antenna6_Collision' on
+        // 'SO_MasterJax_Antenna1', whose flat floors lie above the floors drawn (its mesh 'SO_MasterJax_Antenna4', the
+        // same object's, compared in the game's files): the two decks beside the kiosk 10 cm (6.07 m in the platform's own
+        // axes, drawn at 5.97), the kiosk's own deck 15 cm (5.375, drawn 5.23), the walkway above 11 to 12 cm (8.086 and
+        // 8.101, drawn 7.98), an edge 6 cm (6.03). Its slopes lie on the drawn ones within 2 cm.
+        // So once a hand comes near, those floors' points are put down where they are drawn, on a copy of the shape the
+        // collider takes instead: hands, rays and the body all meet the floor as drawn. Back as it was on unloading.
+        private const string PlatformShape = "SO_MasterJax_Antenna6_Collision";
+        private static readonly (float From, float To)[] PlatformFloors =
+        {
+            (6.07f, 5.97f), (6.03f, 5.965f), (8.086f, 7.98f), (8.101f, 7.98f), (5.375f, 5.23f),
+        };
+        private const float FloorMatch = 0.004f;
+        private static readonly List<(MeshCollider Collider, Mesh Shape, Mesh Lowered)> Lowered = new List<(MeshCollider, Mesh, Mesh)>();
+
+        private static void LowerPlatform(MeshCollider collider)
+        {
+            var shape = collider.sharedMesh;
+            if (shape == null || shape.name != PlatformShape || !Fitted.Add(collider.GetInstanceID())) return;
+            // On the MasterJack's kinematic body (Raik, 2026-11-20: both hands still above and below the floor; the log
+            // showed it left as it was since this was made, as any body counted as moving): only a body physics moves
+            // leaves it be.
+            var body = collider.attachedRigidbody;
+            if ((body != null && !body.isKinematic) || !shape.isReadable)
+            {
+                Plugin.Log.LogInfo($"Kiosk: platform '{Path(collider.transform)}' left as it is ({(shape.isReadable ? "it moves freely" : "its shape is not readable")})");
+                return;
+            }
+            var vertices = shape.vertices;
+            var moved = 0;
+            for (var i = 0; i < vertices.Length; i++)
+                foreach (var (from, to) in PlatformFloors)
+                    if (Mathf.Abs(vertices[i].y - from) < FloorMatch)
+                    {
+                        vertices[i].y = to;
+                        moved++;
+                        break;
+                    }
+            if (moved == 0)
+            {
+                Plugin.Log.LogInfo($"Kiosk: platform '{Path(collider.transform)}' has no floor at the heights known, left as it is");
+                return;
+            }
+            var lowered = Object.Instantiate(shape);
+            lowered.name = shape.name + " (ShipbreakerVR: floors as drawn)";
+            lowered.vertices = vertices;
+            lowered.RecalculateBounds();
+            lowered.RecalculateNormals();
+            collider.sharedMesh = lowered;
+            Lowered.Add((collider, shape, lowered));
+            var solids = AddFloors(collider);
+            Plugin.Log.LogInfo($"Kiosk: platform '{Path(collider.transform)}' collides with its floors where they are drawn ({moved} of {vertices.Length} points lowered 6 to 15 cm), {solids} solid floor(s) under them{(body != null ? " (on a kinematic body)" : "")}");
+        }
+
+        // Not convex, the platform is only a skin to physics (Raik, 2026-11-20, testing 0.31.5: the hand lay on the shape
+        // or went through it, even below the platform drawn). Under its floors, inside what is drawn, solid shapes a hand
+        // cannot go into (in the platform's own axes, from the meshes compared as above): the kiosk's deck, a slab 26 cm
+        // thick (drawn 4.97 to 5.23 m) with six corners; the two decks beside it and the walkway above, the tops of solid
+        // blocks (drawn at 5.97 and 7.98), 25 cm deep each.
+        private const float FloorDepth = 0.25f;
+        private static readonly (Vector3 Low, Vector3 High)[] FloorBlocks =
+        {
+            (new Vector3(-2.671f, 5.97f - FloorDepth, -9.058f), new Vector3(2.817f, 5.97f, -2.49f)),
+            (new Vector3(-2.671f, 5.97f - FloorDepth, 2.49f), new Vector3(2.817f, 5.97f, 9.058f)),
+            (new Vector3(-3.793f, 7.98f - FloorDepth, -2.442f), new Vector3(7.873f, 7.98f, 2.442f)),
+        };
+        private static readonly Vector2[] DeckCorners =
+        {
+            new Vector2(-12.416f, -1.169f), new Vector2(-7.72f, -3.88f), new Vector2(-5.695f, -2.711f),
+            new Vector2(-5.696f, 2.713f), new Vector2(-7.72f, 3.881f), new Vector2(-12.416f, 1.169f),
+        };
+        private const float DeckBottom = 4.97f, DeckTop = 5.23f;
+        private static readonly List<Object> Added = new List<Object>();
+
+        private static int AddFloors(MeshCollider platform)
+        {
+            var holder = new GameObject("ShipbreakerVR platform floors") { layer = platform.gameObject.layer };
+            holder.transform.SetParent(platform.transform, false);
+            Added.Add(holder);
+            foreach (var (low, high) in FloorBlocks)
+            {
+                var box = holder.AddComponent<BoxCollider>();
+                box.center = (low + high) * 0.5f;
+                box.size = high - low;
+                box.sharedMaterial = platform.sharedMaterial;
+            }
+            var count = DeckCorners.Length;
+            var points = new Vector3[count * 2];
+            for (var i = 0; i < count; i++)
+            {
+                points[i] = new Vector3(DeckCorners[i].x, DeckTop, DeckCorners[i].y);
+                points[count + i] = new Vector3(DeckCorners[i].x, DeckBottom, DeckCorners[i].y);
+            }
+            var triangles = new List<int>();
+            for (var i = 1; i + 1 < count; i++)
+            {
+                triangles.AddRange(new[] { 0, i + 1, i });
+                triangles.AddRange(new[] { count, count + i, count + i + 1 });
+            }
+            for (var i = 0; i < count; i++)
+            {
+                var j = (i + 1) % count;
+                triangles.AddRange(new[] { i, j, count + j, i, count + j, count + i });
+            }
+            var mesh = new Mesh { name = "ShipbreakerVR kiosk deck", vertices = points, triangles = triangles.ToArray() };
+            mesh.RecalculateBounds();
+            Added.Add(mesh);
+            var deck = holder.AddComponent<MeshCollider>();
+            deck.sharedMesh = mesh;
+            deck.convex = true;
+            deck.sharedMaterial = platform.sharedMaterial;
+            return FloorBlocks.Length + 1;
+        }
+
+        // The kiosk's convex housing made not convex, once; the platform's floors lowered (LowerPlatform).
         public static void Fit(Collider collider)
         {
-            if (!(collider is MeshCollider mesh) || !mesh.convex) return;
+            if (!(collider is MeshCollider mesh)) return;
+            if (!mesh.convex)
+            {
+                LowerPlatform(mesh);
+                return;
+            }
             if (!Fitted.Add(mesh.GetInstanceID())) return;
             if (!Within(mesh.transform)) return;
             var body = mesh.attachedRigidbody;

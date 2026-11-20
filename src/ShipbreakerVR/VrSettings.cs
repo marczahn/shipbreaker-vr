@@ -50,6 +50,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<float> HeadHeight;
         public static ConfigEntry<float> HeadSideways;
         public static ConfigEntry<VrPerformance.Occlusion> AmbientOcclusion;
+        public static ConfigEntry<VrSuitLocal.Quality> SuitQuality;
         public static ConfigEntry<bool> DebrisRange;
         public static ConfigEntry<bool> NearLampShadows;
         public static ConfigEntry<VrControls.Scheme> ControlScheme;
@@ -133,6 +134,11 @@ namespace ShipbreakerVR
                     "Schattierung in Ecken und Fugen. Niedrig sieht fast gleich aus und spart viel Leistung; der Spielstandard kann auf der Station ruckeln. Aus für die meiste Leistung."),
                 (new[] { "Low", "Off", "Game default" }, new[] { "Niedrig", "Aus", "Spielstandard" }),
                 "Low is half resolution and few steps, as the game uses it in the bay; the station asks for full resolution and 16 steps, which costs a lot of GPU time at VR resolution.");
+            SuitQuality = Bind("Bild", "Anzugqualitaet", VrSuitLocal.Quality.Originalarme,
+                ("The player's new body (prototype): the new suit with the game's own arms, or off for the game's own body.",
+                    "Der neue Körper des Spielers (Prototyp): der neue Anzug mit den Armen des Spiels, oder aus für den Körper des Spiels."),
+                (new[] { "Off", "New body (prototype)" }, new[] { "Aus", "Neuer Körper (Prototyp)" }),
+                "Files in BepInEx\\plugins\\ShipbreakerVR\\Anzug.");
 
             ControlScheme = Bind("Steuerung", "Controllersteuerung", VrControls.Scheme.Vtol,
                 ("VTOL: hold the left trigger, moving the controller thrusts that way, tilting it sideways rolls. Shooter: the left stick thrusts forward, back, left and right, as strongly as you push it; forward is where the left controller points, so tilt it up or down to thrust up or down; with the left trigger held, left and right roll. Both: right stick turns and pitches, Y brakes. Off if you fly with mouse and keyboard or a gamepad.",
@@ -190,8 +196,8 @@ namespace ShipbreakerVR
                 "Needs Festhalten.");
 
             ChargePlacing = Bind("Steuerung", "Sprengsatzplatzierung", VrChargeByHand.Placing.Automatisch,
-                ("How demo charges are put on. Automatic: as in the game, the trigger puts the charge on the wall you point at, with a preview of where it goes, or throws it. Manual: you take a charge from behind your back into your hand as a thing of its own, bring it to the wall and let go; it goes on as you hold it, the line on it shows the cut, and there is no preview. Let go away from a wall it floats with extended tool physics, and goes back behind your back without.",
-                    "Wie Sprengsätze angebracht werden. Automatisch: wie im Spiel, der Trigger setzt den Sprengsatz an die Wand, auf die du zeigst, mit einer Vorschau, oder wirft ihn. Manuell: Du nimmst einen Sprengsatz hinter dem Rücken als eigenes Objekt in die Hand, führst ihn an die Wand und lässt los; er wird so gesetzt, wie du ihn hältst, die Linie darauf zeigt den Schnitt, eine Vorschau gibt es nicht. Fern einer Wand losgelassen schwebt er mit erweiterter Werkzeugphysik, ohne sie kommt er zurück hinter den Rücken."),
+                ("How demo charges are put on. Either way you take a charge from behind your back into your hand as a thing of its own, and the detonator from your hip into the other hand; bring the charge to the wall and let go, and it goes on as you hold it, the line on it shows the cut. Automatic adds the game's preview: it shows where the charge goes on, at the wall you hold it to, or else where you point; the trigger puts it on there, and with the grip kept squeezed the next charge comes into your hand. A red preview means the place is taken. Manual: no preview, no trigger. Let go away from a wall, a charge floats with extended tool physics, and goes back behind your back without.",
+                    "Wie Sprengsätze angebracht werden. In beiden Fällen nimmst du einen Sprengsatz hinter dem Rücken als eigenes Objekt in die Hand und den Zünder von der Hüfte in die andere; du führst den Sprengsatz an die Wand und lässt los, er wird so gesetzt, wie du ihn hältst, die Linie darauf zeigt den Schnitt. Automatisch zeigt dazu die Vorschau des Spiels, wo er hinkommt: an der Wand, an die du ihn hältst, sonst dort, wohin du zeigst; der Trigger setzt ihn dort an, und hältst du den Grip weiter gedrückt, kommt der nächste Sprengsatz in die Hand. Eine rote Vorschau heißt: Der Platz ist belegt. Manuell: keine Vorschau, kein Trigger. Fern einer Wand losgelassen schwebt er mit erweiterter Werkzeugphysik, ohne sie kommt er zurück hinter den Rücken."),
                 (new[] { "Automatic", "Manual" }, new[] { "Automatisch", "Manuell" }));
             Handedness = Bind("Steuerung", "Haendigkeit", VrToolBelt.Handed.Rechts,
                 ("Where the tools and the backpack sit on your body. Right-handed: grapple at the right hip, cutter over the right shoulder, detonator at the left hip, backpack over the left shoulder, scanner at the right and flashlight at the left of the helmet. Left-handed: all of it mirrored. The demo charges are behind the lower back either way.",
@@ -249,8 +255,8 @@ namespace ShipbreakerVR
                 "While it is on, frame times are also logged every 30 s, as with Debug/Diagnose.");
             FlipUi = Bind("Anzeige", "UiSpiegeln", false, "Flip the UI vertically in case it is upside down.");
             ThrustMode = Bind("Steuerung", "Schubmodus", VrFlightComfort.Thrust.Standard,
-                ("What happens when you stop thrusting. Simple: thrust only lasts while you hold it, you brake to a stop by yourself at a third of the brake's strength and fuel, not while holding on or with the grapple. Standard: as in the game, its auto brake slows you to 1 m/s after 3 seconds. Realistic: no auto brake, you keep your speed.",
-                    "Was passiert, wenn du keinen Schub gibst. Einfach: Schub wirkt nur, solange du ihn hältst, du bremst von selbst bis zum Stillstand, mit einem Drittel der Bremskraft und des Treibstoffs, nicht beim Festhalten oder mit dem Grappler. Standard: wie im Spiel, seine automatische Bremse verlangsamt dich nach 3 Sekunden auf 1 m/s. Realistisch: keine automatische Bremse, du behältst dein Tempo."),
+                ("What happens when you stop thrusting. Simple: thrust only lasts while you hold it, you brake to a stop by yourself at a third of the brake's strength and fuel, not while holding on or with the grapple. Standard: as in the game, its auto brake slows you to 1 m/s after 3 seconds. Realistic: no auto brake, you keep your speed, and straightening up (left stick pressed in) costs fuel as the maneuvering thrusters do.",
+                    "Was passiert, wenn du keinen Schub gibst. Einfach: Schub wirkt nur, solange du ihn hältst, du bremst von selbst bis zum Stillstand, mit einem Drittel der Bremskraft und des Treibstoffs, nicht beim Festhalten oder mit dem Grappler. Standard: wie im Spiel, seine automatische Bremse verlangsamt dich nach 3 Sekunden auf 1 m/s. Realistisch: keine automatische Bremse, du behältst dein Tempo, und das Aufrichten (linken Stick drücken) kostet Treibstoff wie die Manöverdüsen."),
                 (new[] { "Simple", "Standard", "Realistic" }, new[] { "Einfach", "Standard", "Realistisch" }));
             // Test (Raik, 2026-11-14): whether twisting the arms at a large part turns the body, and from how far.
             ClimbTurning = Bind("Steuerung", "Hangeln", VrClimb.Turning.Einfach,

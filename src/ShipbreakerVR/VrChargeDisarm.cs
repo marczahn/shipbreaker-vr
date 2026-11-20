@@ -140,7 +140,7 @@ namespace ShipbreakerVR
             ringCharge = null;
             var hand = ringHand;
             hand.Buzz(0.8f, 0.12f);
-            if (!VrChargeByHand.Manual)
+            if (!VrChargeByHand.ByHand)
             {
                 VrClimb.Drop(hand, "the demo charge came off");
                 VrToolInput.TakeCharges(hand);
