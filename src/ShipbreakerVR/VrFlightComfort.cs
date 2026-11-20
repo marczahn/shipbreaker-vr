@@ -45,6 +45,18 @@ namespace ShipbreakerVR
                 aligning = false;
                 return GazeLevel(playspace);
             }
+            // Realistic: the suit's thrusters turn one upright, on its fuel (AlignFuelPatch); with the tank empty, not.
+            if (VrSettings.ThrustMode.Value == Thrust.Realistisch)
+            {
+                if (AlignFuelPatch.Empty)
+                {
+                    aligning = false;
+                    VrInput.Left.Buzz(0.2f, 0.15f);
+                    Plugin.Log.LogInfo($"Flight: no fuel left to straighten up, {angle:0.0} degrees off");
+                    return Quaternion.identity;
+                }
+                AlignFuelPatch.Turned += Mathf.Min(angle, AlignSpeed * dt) / AlignSpeed;
+            }
             return Quaternion.RotateTowards(Quaternion.identity, Quaternion.FromToRotation(up, Vector3.up), AlignSpeed * dt);
         }
     }
@@ -97,6 +109,47 @@ namespace ShipbreakerVR
     internal static class NoAutoBrakePatch
     {
         private static bool Prefix() => VrSettings.ThrustMode.Value != VrFlightComfort.Thrust.Realistisch;
+    }
+
+    // Raik (2026-11-20): with Realistic, straightening up costs fuel as the maneuvering thrusters do: while it turns, as
+    // much as thrusting sideways at full (the game's DrainPerSecond across), and the tank does not fill meanwhile. As the
+    // game, nothing while docked, with its drain switched off, or in the career before the tutorial is done. Taken
+    // through the game's own Charge, so the visor's gauge and its warnings follow.
+    [HarmonyPatch(typeof(ThrustController), "Update")]
+    internal static class AlignFuelPatch
+    {
+        // Seconds of turning at AlignSpeed since the game last took fuel; and whether the tank was empty then.
+        public static float Turned;
+        public static bool Empty;
+
+        private static readonly AccessTools.FieldRef<ThrustController, IThrusterData> Data =
+            AccessTools.FieldRefAccess<ThrustController, IThrusterData>("mData");
+        private static readonly AccessTools.FieldRef<ThrustController, Transform> Steering =
+            AccessTools.FieldRefAccess<ThrustController, Transform>("mSteeringOrientationTransform");
+        private static readonly AccessTools.FieldRef<ThrustController, bool> NoDrain =
+            AccessTools.FieldRefAccess<ThrustController, bool>("mIgnoreThrusterDrain");
+        private static readonly System.Reflection.MethodInfo SetCharge = AccessTools.PropertySetter(typeof(ThrustController), "Charge");
+        private static bool logged;
+
+        private static void Prefix(ThrustController __instance, out float __state) => __state = __instance.Charge;
+
+        private static void Postfix(ThrustController __instance, float __state)
+        {
+            Empty = __instance.Charge <= 0f;
+            var turned = Turned;
+            Turned = 0f;
+            if (turned <= 0f || VrSettings.ThrustMode.Value != VrFlightComfort.Thrust.Realistisch) return;
+            if (Steering(__instance) != null || NoDrain(__instance) || SetCharge == null) return;
+            if (GameSession.CurrentSessionType == GameSession.SessionType.Career
+                && (PlayerProfileService.Instance?.Profile == null || !PlayerProfileService.Instance.Profile.TutorialCompleted)) return;
+            var drain = Data(__instance).DrainPerSecond.PositiveX * turned;
+            var charge = Mathf.Max(Mathf.Min(__instance.Charge, __state) - drain, 0f);
+            SetCharge.Invoke(__instance, new object[] { charge });
+            Empty = charge <= 0f;
+            if (logged) return;
+            logged = true;
+            Plugin.Log.LogInfo($"Flight: straightening up takes fuel as thrusting sideways does, {Data(__instance).DrainPerSecond.PositiveX:0.##} per second of turning at {__instance.Charge:0.#} of {__instance.MaxCharge:0.#}");
+        }
     }
 
     // The game sees no thrust and no brake there and would fill the tank meanwhile, which would make braking pay.

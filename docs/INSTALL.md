@@ -170,7 +170,7 @@ button prompts:
 - pressing the right stick = Start: in gameplay and in the station it opens the pause menu, on loading screens it
   cycles the tips. In the station it works where Esc does, not inside a terminal screen. In menus it is R3, since the
   game would read Start as "confirm".
-- holding the left stick in for 1.2 seconds recenters the view, like F4, everywhere; a short press straightens you up in flight. To center again, let go and hold it once more.
+- holding the left stick in for 1.2 seconds recenters the view, like F4, everywhere; a short press straightens you up in flight (with the thrust mode *Realistic* on the suit's fuel, like the maneuvering thrusters). To center again, let go and hold it once more.
 
 There is no View button and no D-pad; the left menu button stays with Virtual Desktop. In gameplay only the right
 stick press reaches the game.
