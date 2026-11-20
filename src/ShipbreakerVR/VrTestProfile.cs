@@ -14,9 +14,13 @@ namespace ShipbreakerVR
     // 2.4 ms per frame in the bay, for every Update and LateUpdate of the game, its libraries and the mod. 'profile on'
     // (VrTestScript) puts a timestamp at the start and before every return of each Update, LateUpdate and FixedUpdate
     // that a loaded script class declares, with a transpiler, and the frame time line (VrPerformance, so name a stretch
-    // with 'stats') gets a "Script steps" line: the totals per message and the classes that take the most, in
+    // with 'stats') gets a "Script steps" line: the totals per message and the methods that take the most, in
     // milliseconds per frame with their calls per frame. 'profile off', the end of the script and unloading take the
     // timestamps out again.
+    // - 'profile on CLASS ...' also times every method of the named classes (the mod's by their short name, others by
+    //   their full name), to see where inside a step the time goes. Methods Mono inlined count for their caller.
+    // - The line is only logged for a stretch that was timed from its start to its end, so begin the stretch after
+    //   'profile on' and end it (the next 'stats') before or in the frame of 'profile off'.
     // - A class's time is its own: what it spends in another timed method it calls (a base class's Update, a manager
     //   that runs others) counts for that one.
     // - Only the method's body is timed. Unity's call into it is not (count on some tenths of a microsecond per call,
@@ -31,8 +35,11 @@ namespace ShipbreakerVR
         static VrTestProfile() => VrSession.OnUnload("script profile", Stop);
 
         private static readonly string[] Messages = { "Update", "LateUpdate", "FixedUpdate" };
-        private const BindingFlags Declared = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
-        private const int Shown = 30;
+        // The kinds the totals are given for: the three messages, then the methods of classes named with 'profile on'.
+        private static readonly string[] Kinds = { "Update", "LateUpdate", "FixedUpdate", "named classes" };
+        private const int Named = 3;
+        private const BindingFlags Declared = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+        private const int Shown = 40;
         private const double MinShownMs = 0.003;
         internal const int MaxDepth = 32;
         private static readonly double TickMs = 1000.0 / Stopwatch.Frequency;
@@ -50,20 +57,23 @@ namespace ShipbreakerVR
         private static readonly long[] RunningStart = new long[MaxDepth];
         private static readonly long[] RunningInner = new long[MaxDepth];
         private static int depth;
+        // The frames the timestamps went in and came out; the numbers are a stretch's only if it lies between them.
+        private static int startedFrame, stoppedFrame = -1;
 
         public static bool Running => harmony != null;
 
-        // From VrTestScript: profile on | off.
+        // From VrTestScript: profile on [CLASS ...] | off.
         public static void Execute(string[] words)
         {
             var what = words.Length > 1 ? words[1].ToLowerInvariant() : "";
-            if (what == "on") Start();
+            if (what == "on") Start(words);
             else if (what == "off") Stop();
             else Plugin.Log.LogWarning($"Test script: 'profile {what}' is neither on nor off");
         }
 
-        private static void Start()
+        private static void Start(string[] words)
         {
+            if (!Running) Forget();
             var types = new HashSet<Type>();
             foreach (var behaviour in Resources.FindObjectsOfTypeAll<MonoBehaviour>())
             {
@@ -77,12 +87,25 @@ namespace ShipbreakerVR
                 foreach (var message in Messages)
                 {
                     MethodInfo method;
-                    try { method = type.GetMethod(message, Declared, null, Type.EmptyTypes, null); }
+                    try { method = type.GetMethod(message, Declared & ~BindingFlags.Static, null, Type.EmptyTypes, null); }
                     catch (AmbiguousMatchException) { continue; }
                     if (method == null || method.IsAbstract || method.ReturnType != typeof(void) || Indexes.ContainsKey(method)) continue;
                     if (type.IsGenericType || method.GetMethodBody() == null) skipped.Add($"{type.Name}.{message}");
                     else found.Add(method);
                 }
+            var messages = found.Count;
+            for (var w = 2; w < words.Length; w++)
+            {
+                var type = typeof(Plugin).Assembly.GetType($"{typeof(Plugin).Namespace}.{words[w]}", false, true) ?? AccessTools.TypeByName(words[w]);
+                if (type == null)
+                {
+                    Plugin.Log.LogWarning($"Script profile: no class '{words[w]}'");
+                    continue;
+                }
+                var before = found.Count;
+                AddMethods(type, found);
+                Plugin.Log.LogInfo($"Script profile: {found.Count - before} methods of {type.FullName}");
+            }
 
             var first = names.Length;
             Array.Resize(ref names, first + found.Count);
@@ -97,7 +120,7 @@ namespace ShipbreakerVR
             {
                 var method = found[i];
                 names[first + i] = $"{method.DeclaringType.Name}.{method.Name}";
-                messageOf[first + i] = Array.IndexOf(Messages, method.Name);
+                messageOf[first + i] = i < messages ? Array.IndexOf(Messages, method.Name) : Named;
                 Indexes[method] = first + i;
                 try { harmony.Patch(method, transpiler: transpiler); }
                 catch (Exception e)
@@ -108,11 +131,14 @@ namespace ShipbreakerVR
             }
             depth = 0;
             Reset();
+            startedFrame = Time.frameCount;
+            stoppedFrame = -1;
             Plugin.Log.LogInfo($"Script profile: {found.Count - failed} methods of {types.Count} script classes timed ({Indexes.Count} in all, {failed} failed) " +
                 $"in {watch.ElapsedMilliseconds} ms, timing costs about {PairCost():0} ns per call" +
                 (skipped.Count > 0 ? $"; left out: {string.Join(", ", skipped.ToArray())}" : ""));
         }
 
+        // The numbers stay for the stretch that ends in this frame or the next (Describe).
         public static void Stop()
         {
             if (harmony == null) return;
@@ -120,27 +146,51 @@ namespace ShipbreakerVR
             harmony.UnpatchSelf();
             Indexes.Clear();
             harmony = null;
+            depth = 0;
+            stoppedFrame = Time.frameCount;
+            Plugin.Log.LogInfo($"Script profile: off, {count} methods as they were");
+        }
+
+        private static void Forget()
+        {
             names = new string[0];
             messageOf = new int[0];
             ticks = new long[0];
             calls = new int[0];
-            depth = 0;
-            Plugin.Log.LogInfo($"Script profile: off, {count} methods as they were");
+            stoppedFrame = -1;
         }
 
-        // The messages' totals per frame over the given number of frames, then the classes that took the most. Resets.
+        // Every method the class and the classes inside it declare, as far as it has a body of its own to time.
+        private static void AddMethods(Type type, List<MethodInfo> found)
+        {
+            if (type.IsGenericType) return;
+            foreach (var method in type.GetMethods(Declared))
+            {
+                if (method.IsAbstract || method.IsGenericMethod || Indexes.ContainsKey(method) || found.Contains(method)) continue;
+                if (method.GetMethodBody() != null) found.Add(method);
+            }
+            foreach (var inner in type.GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic)) AddMethods(inner, found);
+        }
+
+        // Whether there are numbers to reset (VrPerformance, while a stretch settles).
+        public static bool Holds => ticks.Length > 0;
+
+        // The kinds' totals per frame over the given number of frames, then the methods that took the most. Resets.
+        // Null for a stretch that was not timed from its start to its end.
         public static string Describe(int frames)
         {
-            if (!Running || frames <= 0) return null;
-            var text = Describe(frames, names, messageOf, ticks, calls, TickMs);
-            Reset();
+            if (frames <= 0 || ticks.Length == 0) return null;
+            var whole = Time.frameCount - startedFrame >= frames && (Running || Time.frameCount - stoppedFrame <= 1);
+            var text = whole ? Describe(frames, names, messageOf, ticks, calls, TickMs) : null;
+            if (Running) Reset();
+            else Forget();
             return text;
         }
 
         internal static string Describe(int frames, string[] names, int[] messageOf, long[] ticks, int[] calls, double tickMs)
         {
             var text = new StringBuilder();
-            for (var m = 0; m < Messages.Length; m++)
+            for (var m = 0; m < Kinds.Length; m++)
             {
                 var sum = 0L;
                 var count = 0L;
@@ -150,7 +200,8 @@ namespace ShipbreakerVR
                         sum += ticks[i];
                         count += calls[i];
                     }
-                text.Append(m > 0 ? ", " : "").Append($"{Messages[m]} {sum * tickMs / frames:0.00} ms in {(double)count / frames:0} calls");
+                if (m == Named && count == 0) continue;
+                text.Append(m > 0 ? ", " : "").Append($"{Kinds[m]} {sum * tickMs / frames:0.00} ms in {(double)count / frames:0} calls");
             }
             var order = new List<int>();
             for (var i = 0; i < names.Length; i++)

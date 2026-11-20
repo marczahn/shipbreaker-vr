@@ -356,7 +356,7 @@ namespace ShipbreakerVR
             gpuEyeCount = 0;
             VrFrameProfile.Reset();
             VrRenderProfile.Reset();
-            if (VrTestProfile.Running) VrTestProfile.Reset();
+            if (VrTestProfile.Running && VrTestProfile.Holds) VrTestProfile.Reset();
         }
 
         // Share of frames that took 1.4 to 4 intervals of the given refresh rate: missed by the GPU, which the runtime

@@ -83,5 +83,17 @@ namespace ShipbreakerVR.Tests
             Assert.True(line.IndexOf("Middle.Update") < line.IndexOf("Small.Update"));
             Assert.DoesNotContain("Tiny.FixedUpdate", line);
         }
+
+        [Fact]
+        public void MethodsOfNamedClassesHaveATotalOfTheirOwn()
+        {
+            var names = new[] { "Camera.LateUpdate", "VrHands.Curl", "VrHands.Pose" };
+            var messageOf = new[] { 1, 3, 3 };
+            var ticks = new long[] { 10, 30, 50 };
+            var calls = new[] { 10, 20, 20 };
+            var line = VrTestProfile.Describe(10, names, messageOf, ticks, calls, 1.0);
+            Assert.Contains(string.Format("LateUpdate {0:0.00} ms in 1 calls", 1.0), line);
+            Assert.Contains(string.Format("named classes {0:0.00} ms in 4 calls; most: VrHands.Pose", 8.0), line);
+        }
     }
 }
