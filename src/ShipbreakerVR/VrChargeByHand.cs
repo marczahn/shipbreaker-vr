@@ -400,7 +400,7 @@ namespace ShipbreakerVR
         // had it both times (MeasureHeld: back (0.79, -0.06, 0.61) and (0.79, -0.15, 0.60), top (-0.07, 0.98, 0.19) and
         // (0.01, 0.97, 0.22), middle (-14, -1, 9) and (-15, -1, 10) cm). The mean of the two: the face turned 20 degrees
         // further to him, the charge 8 cm further inwards.
-        // That was the mod's own hold until 0.32.0 (middle (-14.5, -1, 9.5) cm, back (0.79, -0.10, 0.61), top
+        // That was the mod's own hold until 0.31.5 (middle (-14.5, -1, 9.5) cm, back (0.79, -0.10, 0.61), top
         // (-0.03, 0.98, 0.21)). Since then (Raik, 2026-11-19 23:05, with Automatisch, fitted by dragging the charge with the
         // other hand, VrToolFit.Charge, and his screenshot "for the hold of the charge"): StandardHold, as
         // SprengsatzHaltung writes it.
@@ -870,7 +870,7 @@ namespace ShipbreakerVR
             return true;
         }
 
-        // How a charge afloat lies in the hand that holds it, for the log, once a second: as the hold before 0.32.0 was
+        // How a charge afloat lies in the hand that holds it, for the log, once a second: as the hold before 0.31.5 was
         // given, so a hold Raik likes can be read off and made the one a charge comes into the hand with (StandardHold).
         private static float nextHeldMeasure;
         private static int heldMeasures;

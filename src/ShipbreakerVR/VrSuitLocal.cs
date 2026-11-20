@@ -8,7 +8,7 @@ using UnityEngine.Rendering.HighDefinition;
 namespace ShipbreakerVR
 {
     // Raik's Meshy suit (Neuer Anzug mit Armen, T pose: its body with the game's own arms) as the player's body in a
-    // shift, the new body of 0.32.0, still a prototype (Raik, 2026-11-20). Its texture carries no LYNX logo; the earlier
+    // shift, the new body of 0.31.5, still a prototype (Raik, 2026-11-20). Its texture carries no LYNX logo; the earlier
     // suits that did are gone.
     //
     // Read from BepInEx\plugins\ShipbreakerVR\Anzug (the release), or from BepInEx\ShipbreakerVR-suit-local\Originalarme

@@ -241,7 +241,7 @@ namespace ShipbreakerVR
         // clockwise against the empty hand).
         // Measured with Raik, 2026-11-18: with this fit the charge's back points 79 degrees to the right and 25 degrees
         // down of the controller's aim. A fit that straightens the charge ("20 0 18 / 11.6 -80.0 33.3") turned the hand
-        // and the detonator by as much, so the charge is set by itself instead (VrChargeByHand.Decoupled, since 0.32.0
+        // and the detonator by as much, so the charge is set by itself instead (VrChargeByHand.Decoupled, since 0.31.5
         // with both ways of placing) and this fit only counts with that off: aiming without the hands.
         private static readonly Fit ChargeRight = new Fit("SprengsatzRechts", "0 0 0 / 0 0 6");
 

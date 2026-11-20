@@ -104,7 +104,7 @@ namespace ShipbreakerVR
             return false;
         }
 
-        // The platform the kiosk stands on (Raik, 2026-11-19, testing 0.32.0: the rails stop the hand where they are drawn,
+        // The platform the kiosk stands on (Raik, 2026-11-19, testing 0.31.5: the rails stop the hand where they are drawn,
         // but over the floor it hovers): it collides as a shape of its own, 'SO_MasterJax_Antenna6_Collision' on
         // 'SO_MasterJax_Antenna1', whose flat floors lie above the floors drawn (its mesh 'SO_MasterJax_Antenna4', the
         // same object's, compared in the game's files): the two decks beside the kiosk 10 cm (6.07 m in the platform's own
@@ -159,7 +159,7 @@ namespace ShipbreakerVR
             Plugin.Log.LogInfo($"Kiosk: platform '{Path(collider.transform)}' collides with its floors where they are drawn ({moved} of {vertices.Length} points lowered 6 to 15 cm), {solids} solid floor(s) under them{(body != null ? " (on a kinematic body)" : "")}");
         }
 
-        // Not convex, the platform is only a skin to physics (Raik, 2026-11-20, testing 0.32.0: the hand lay on the shape
+        // Not convex, the platform is only a skin to physics (Raik, 2026-11-20, testing 0.31.5: the hand lay on the shape
         // or went through it, even below the platform drawn). Under its floors, inside what is drawn, solid shapes a hand
         // cannot go into (in the platform's own axes, from the meshes compared as above): the kiosk's deck, a slab 26 cm
         // thick (drawn 4.97 to 5.23 m) with six corners; the two decks beside it and the walkway above, the tops of solid
