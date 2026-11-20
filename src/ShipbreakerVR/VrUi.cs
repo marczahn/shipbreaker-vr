@@ -404,10 +404,12 @@ namespace ShipbreakerVR
             }
             cmd.SetViewProjectionMatrices(view, proj);
             var look = onMonitor && VrSettings.MonitorLook.Value && shadeMaterial != null;
-            if (look) cmd.DrawMesh(quad, glowMatrix, glowMaterial, 0, 0);
-            cmd.DrawMesh(quad, screenMatrix, material, 0, 0);
-            if (!menuMode) VrFlightGlobe.Draw(cmd, screenMatrix);
-            if (look)
+            // A test script can hide the HUD for trailer recordings (VrTestScript, hud off); menus stay.
+            var hud = menuMode || !VrTestScript.HideHud;
+            if (hud && look) cmd.DrawMesh(quad, glowMatrix, glowMaterial, 0, 0);
+            if (hud) cmd.DrawMesh(quad, screenMatrix, material, 0, 0);
+            if (hud && !menuMode) VrFlightGlobe.Draw(cmd, screenMatrix);
+            if (hud && look)
             {
                 cmd.DrawMesh(quad, screenMatrix, shadeMaterial, 0, 0);
                 cmd.DrawMesh(quad, screenMatrix, glareMaterial, 0, 0);
@@ -609,8 +611,11 @@ namespace ShipbreakerVR
             try
             {
                 if (VrUi.Instance == null) return;
-                VrAim.Draw(ctx, VrCamera.Instance != null ? VrCamera.Instance.Camera : null);
-                VrToolLine.Draw(ctx, VrCamera.Instance != null ? VrCamera.Instance.Camera : null);
+                if (!VrTestScript.HideLasers)
+                {
+                    VrAim.Draw(ctx, VrCamera.Instance != null ? VrCamera.Instance.Camera : null);
+                    VrToolLine.Draw(ctx, VrCamera.Instance != null ? VrCamera.Instance.Camera : null);
+                }
                 VrUi.Instance.Draw(ctx);
                 VrUi.Instance.DrawFade(ctx);
             }

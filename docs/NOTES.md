@@ -1119,6 +1119,27 @@ headset: test scripts move the head and the controllers, press buttons, save scr
 - **Images**: with the mock runtime the game window shows little of what the eyes see, so `screenshot` saves each
   eye's last image from alternate eyes (`VrAlternateEyes.EyeImage`), flipped upright, beside the window and the UI
   texture.
+- **Trailer recordings**: scripted takes need head and hands to move at the same time and on smooth paths, so
+  `move ... async` and `track ... end` (keyframes with times, `VrTestTrack`) run beside the following lines, and
+  `waitmoves` waits for them. Two keys glide with an easing; more keys follow a Catmull-Rom spline with tangents from
+  the neighbors' times, zero at the ends, so a camera move eases in and out and passes the middle keys without
+  stopping; rotations are interpolated component-wise on sign-aligned quaternions and normalized. The math avoids
+  engine calls (`Quaternion.Slerp` is native) so it runs in the tests. `capturefps N` sets `Time.captureFramerate`:
+  the game, its physics and the script's own clock advance exactly 1/N s per frame however long the frame takes, so
+  a take is identical each time and `record` (the game window as numbered PNGs through `ScreenCapture`, one per
+  frame) gives a stutter-free video at N fps, even when saving the PNGs slows the game down. A screen recorder
+  running in real time only stays smooth if the game keeps up with N. `hud off`, `lasers off` and `hide TEXT`
+  (renderers by object path) clean up the picture; all of them end with the script. `renderers [R] [TEXT]` lists
+  what is drawn near the view, to find names for `hide`. In the first take the black, unlit shapes that flicker right
+  in front of the camera were the suit's arms (`.../unit_player/geo_arms`, a skinned mesh with 1.9 m bounds);
+  `hide geo_arms` removes them for a take, the cause in the mod is still open. `waitlog VR camera attached to` missed
+  the shift there: the line is written once, when the camera changes, which can be before the script reaches the
+  `waitlog`; `waitgame` checks the state instead (main camera followed, no load screen, not in the Hab).
+  `reloadshift` calls `SceneLoader.TearDownAndReloadCurrentSceneAsync`, which loads the current level again with the
+  same ship preview, so the next take starts fresh at the start position without the menus (about a minute instead
+  of four). It refuses outside free play (`GameSession.SessionType.FreeMode`) so no career save is involved.
+  `timescale X` sets `Time.timeScale` for slow motion; the script's clock is unscaled (1/capturefps per frame), so
+  head and hands keep their speed and the view can sweep through a slowed cut.
 - **Several hooks on `xrGetInstanceProcAddr`**: alternate eyes and the test input both chain it. Under Mono,
   `Marshal.GetDelegateForFunctionPointer` on a pointer that came from a managed delegate returns that very delegate,
   and casting it to another delegate type throws `InvalidCastException`. So every feature uses the one delegate type
