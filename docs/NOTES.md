@@ -1267,9 +1267,26 @@ with both eyes, 63 fps and 24 % missed alternating; HDRP's main thread time 7.4 
 draw calls. No visible problems in a first look; the runtime got no depth for the views, so the old pose is all it
 reprojects with. Game logic (about 9 ms busy) is now the larger part.
 
-The mod's own main thread cost is small (estimated 0.2-0.5 ms per frame). The largest item was `VrCanvases` scanning
+The mod's own main thread cost was estimated at 0.2-0.5 ms per frame; the largest item then was `VrCanvases` scanning
 every canvas including prefabs (`Resources.FindObjectsOfTypeAll`) twice a second and allocating an array per inactive
 canvas; it now scans scene objects only and walks the parents.
+
+Measured (0.32.0, mock runtime, both hands empty, in the bay; `Mod steps` and the per-method times of the script
+profile, PR #104): the mod's steps take 1.6 ms of a 15.3 ms frame, and `VrHands.LateUpdate` 1.1 ms of that, more than
+any script of the game (its largest, `Main.Update`, 0.16 ms). The game's own `LateUpdate`s are under 0.1 ms; the 1.5 ms
+of `ScriptRunBehaviourLateUpdate` are the mod. Inside the hands:
+- `PalmInArm` 0.39 ms: how deep the palm's boxes lie in the other arm, 27 points per box against two tapered capsules,
+  once per `PalmOut` and up to 50 more times while a palm is kept on its side of the other arm (which the test pose
+  did every frame for the right hand, so in play with the hands apart this was about 0.07 ms). A box whose middle is
+  further outside the arm than its corners reach, plus the difference of the arm's radii, has no point in it
+  (`VrHandShape.BoxClearOfArm`), which one distance tells.
+- `LogFingers` 0.10 ms and the `FingerDepth` it called 0.05 ms: the line for a finger bent back too far was put
+  together every frame, with every finger's depth, and thrown away. The bends are now looked at first. `ThumbInLine`
+  built its line the same way (0.045 ms with its work).
+- `FingerWay` and `FingerIn` 0.10 ms each, `ThumbOut` 0.03 ms: with nothing near the hand (no collider, tool or
+  arm from `VrHandShape.Gather`) every capsule's depth is 0, but each call first read the bones' world positions,
+  each a walk up the skeleton. They now ask `VrHandShape.NothingNear` first.
+None of this changes what the hands do. Not measured in the game after the change yet.
 
 Ideas not done yet, for after the measurements:
 - HDRP's software dynamic resolution (`DynamicResolutionHandler`, XR-aware in 10.9, upscaling with CAS or Catmull-Rom)
