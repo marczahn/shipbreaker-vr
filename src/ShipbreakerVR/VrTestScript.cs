@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using BBI.Unity.Game;
 using BepInEx;
 using BepInEx.Logging;
 using UnityEngine;
@@ -36,7 +37,10 @@ namespace ShipbreakerVR
     //   ipd METERS                         distance between the eyes (default 0.064)
     //   reset                              everything from the runtime again
     //   wait T | frames N                  waits
-    //   waitlog TEXT [T]                   waits until a log line contains TEXT, at most T seconds (default 60)
+    //   waitlog TEXT [T]                   waits until a log line contains TEXT, at most T seconds (default 60); only
+    //                                      lines written after this command count
+    //   waitgame [T]                       waits until the player is in a shift: no load screen, not in the Hab, and the
+    //                                      VR camera follows the game's main camera; at most T seconds (default 180)
     //   vr on|off                          starts or stops VR (F3)
     //   recenter                           centers the view (F4)
     //   config SECTION/KEY VALUE           changes a setting, e.g. config Steuerung/Klettern false
@@ -53,8 +57,12 @@ namespace ShipbreakerVR
     //   record stop                        stops saving
     //   hud on|off                         the HUD visor in front of the eyes (menus stay)
     //   lasers on|off                      the aiming lasers and tool lines
-    //   hide TEXT                          switches off every renderer whose object path contains TEXT (see dump for
-    //                                      names), e.g. tutorial holograms; hide off shows them all again
+    //   hide TEXT                          switches off every renderer whose object path contains TEXT, e.g. geo_arms
+    //                                      (the suit's arms); objects that appear later are not hidden; hide off shows
+    //                                      them all again
+    //   renderers [R] [TEXT]               logs the paths of the visible renderers within R meters of the view
+    //                                      (default 5), nearest first, optionally only those containing TEXT; to find
+    //                                      names for hide
     // capturefps, record, hud, lasers and hide end with the script.
     internal static class VrTestScript
     {
@@ -73,6 +81,8 @@ namespace ShipbreakerVR
         private static volatile bool logSeen;
         private static readonly List<VrTestTrack> Tracks = new List<VrTestTrack>();
         private static bool waitForTracks;
+        private static Func<bool> waitCondition;
+        private static string waitConditionName;
         // The script's clock: real time, or 1/capturefps per frame while that is set.
         private static float clock;
         private static int captureFps;
@@ -121,6 +131,15 @@ namespace ShipbreakerVR
 
         private static bool Ready(float now)
         {
+            if (waitCondition != null)
+            {
+                var met = waitCondition();
+                if (!met && now < waitUntil) return false;
+                if (met) Plugin.Log.LogInfo($"Test {name}: {waitConditionName} after {now:0.0} s script time, game state {GameSession.CurrentGameState}");
+                else Plugin.Log.LogWarning($"Test {name}: {waitConditionName} not reached in time, game state {GameSession.CurrentGameState}");
+                waitCondition = null;
+                waitUntil = now;
+            }
             if (waitForTracks)
             {
                 if (Tracks.Count > 0) return false;
@@ -169,6 +188,7 @@ namespace ShipbreakerVR
             waitFrames = 0;
             waitForLog = null;
             waitForTracks = false;
+            waitCondition = null;
             clock = 0f;
             listener = new Listener(Path.Combine(results, "log.txt"));
             BepInEx.Logging.Logger.Listeners.Add(listener);
@@ -277,6 +297,18 @@ namespace ShipbreakerVR
                         keys.Add(keys[0]);
                     }
                     Start(new VrTestTrack(device, now, times.ToArray(), keys.ToArray()), async, now);
+                    return;
+                }
+                case "waitgame":
+                    waitCondition = InShift;
+                    waitConditionName = "in the shift";
+                    waitUntil = now + (words.Length > 1 ? Number(words[1]) : 180f);
+                    return;
+                case "renderers":
+                {
+                    var radius = words.Length > 1 && IsNumber(words[1]) ? Number(words[1]) : 5f;
+                    var skip = words.Length > 1 && IsNumber(words[1]) ? 2 : 1;
+                    ListRenderers(radius, words.Length > skip ? string.Join(" ", words.Skip(skip)) : null);
                     return;
                 }
                 case "waitmoves":
@@ -438,6 +470,33 @@ namespace ShipbreakerVR
                 if (count <= 20) Plugin.Log.LogInfo($"Test {name}: hidden {VrUtil.Path(renderer.transform)}");
             }
             Plugin.Log.LogInfo($"Test {name}: {count} renderers with '{text}' hidden");
+        }
+
+        // In a shift: the game's main camera exists and the VR camera follows it, outside the Hab and any load screen.
+        private static bool InShift()
+        {
+            var main = LynxCameraController.MainCamera;
+            var vr = VrCamera.Instance;
+            var loading = SceneLoader.Instance != null && SceneLoader.Instance.LoadScreenVisible;
+            return main != null && vr != null && vr.GameCamera == main && !vr.FollowsHab && VrHab.Camera == null && !loading;
+        }
+
+        private static void ListRenderers(float radius, string text)
+        {
+            var vr = VrCamera.Instance;
+            var eye = vr != null && vr.Camera != null ? vr.Camera.transform.position : Camera.main != null ? Camera.main.transform.position : Vector3.zero;
+            var found = new List<(float Distance, string Line)>();
+            foreach (var renderer in UnityEngine.Object.FindObjectsOfType<Renderer>())
+            {
+                if (!renderer.enabled || !renderer.gameObject.activeInHierarchy) continue;
+                var distance = Mathf.Sqrt(renderer.bounds.SqrDistance(eye));
+                if (distance > radius) continue;
+                var path = VrUtil.Path(renderer.transform);
+                if (text != null && path.IndexOf(text, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                found.Add((distance, $"{distance:0.00} m {renderer.GetType().Name} layer {renderer.gameObject.layer} {path}"));
+            }
+            Plugin.Log.LogInfo($"Test {name}: {found.Count} renderers within {radius} m{(text != null ? $" with '{text}'" : "")}");
+            foreach (var entry in found.OrderBy(f => f.Distance).Take(80)) Plugin.Log.LogInfo($"  {entry.Line}");
         }
 
         private static void ShowHidden()

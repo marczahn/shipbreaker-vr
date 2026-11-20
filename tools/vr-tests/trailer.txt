@@ -1,5 +1,7 @@
 # Trailer take: head and right hand move together on smooth paths, at a fixed 60 fps game time, without HUD.
 # Start it in a shift, standing where the take begins (Test/Testmodus on, ideally Test/MockRuntime).
+# renderers 3 logs what is near the view, to find names for hide (e.g. a tutorial hologram).
+waitgame 10
 head 0 1.7 0 0 0 0
 left -0.25 1.25 0.3 0 0 0
 right 0.25 1.25 0.3 0 0 0
@@ -7,7 +9,8 @@ wait 1
 recenter
 wait 1
 hud off
-hide Hologram
+hide geo_arms
+renderers 3
 capturefps 60
 record take1
 # The head looks around on a spline while the hand rises and aims; both start at once.

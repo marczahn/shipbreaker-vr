@@ -1129,7 +1129,12 @@ headset: test scripts move the head and the controllers, press buttons, save scr
   a take is identical each time and `record` (the game window as numbered PNGs through `ScreenCapture`, one per
   frame) gives a stutter-free video at N fps, even when saving the PNGs slows the game down. A screen recorder
   running in real time only stays smooth if the game keeps up with N. `hud off`, `lasers off` and `hide TEXT`
-  (renderers by object path, for tutorial holograms) clean up the picture; all of them end with the script.
+  (renderers by object path) clean up the picture; all of them end with the script. `renderers [R] [TEXT]` lists
+  what is drawn near the view, to find names for `hide`. In the first take the black, unlit shapes that flicker right
+  in front of the camera were the suit's arms (`.../unit_player/geo_arms`, a skinned mesh with 1.9 m bounds);
+  `hide geo_arms` removes them for a take, the cause in the mod is still open. `waitlog VR camera attached to` missed
+  the shift there: the line is written once, when the camera changes, which can be before the script reaches the
+  `waitlog`; `waitgame` checks the state instead (main camera followed, no load screen, not in the Hab).
 - **Several hooks on `xrGetInstanceProcAddr`**: alternate eyes and the test input both chain it. Under Mono,
   `Marshal.GetDelegateForFunctionPointer` on a pointer that came from a managed delegate returns that very delegate,
   and casting it to another delegate type throws `InvalidCastException`. So every feature uses the one delegate type
