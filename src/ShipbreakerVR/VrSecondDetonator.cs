@@ -76,7 +76,7 @@ namespace ShipbreakerVR
         // From VrToolInput.Draw: the grip pressed at the detonator's place. True if the copy came into that hand.
         public static bool Take(VrInput.Hand hand)
         {
-            if (!VrXr.IsRunning || !VrAim.Active || VrChargeByHand.Manual || holder != null) return false;
+            if (!VrXr.IsRunning || !VrAim.Active || VrChargeByHand.ByHand || holder != null) return false;
             var me = Of(hand);
             var other = me.Other;
             if (me.State != HandState.Empty || VrHand.GameToolHand != other || !Charges(other)) return false;
@@ -98,7 +98,7 @@ namespace ShipbreakerVR
         // From VrToolInput.Draw: the other hand takes the charges while this one holds the game's detonator.
         public static void Keep(VrInput.Hand hand)
         {
-            if (!VrXr.IsRunning || !VrAim.Active || VrChargeByHand.Manual || holder != null) return;
+            if (!VrXr.IsRunning || !VrAim.Active || VrChargeByHand.ByHand || holder != null) return;
             keeping = hand;
             keepingUntil = Time.unscaledTime + HandOverTime;
             if (logs++ < 40) Plugin.Log.LogInfo($"Second detonator: the {hand.Name} hand keeps the detonator while the other takes the charges");

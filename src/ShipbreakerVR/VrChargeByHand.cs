@@ -9,7 +9,10 @@ using UnityEngine;
 namespace ShipbreakerVR
 {
     // Steuerung/Sprengsatzplatzierung = Manuell (VR options, Gameplay; Raik, 2026-11-18): demo charges are put on by
-    // hand instead of being aimed. Automatisch is the game's way: the trigger places or throws, with the preview. The game finds the place for
+    // hand instead of being aimed. Since 2026-11-20 Automatisch is Manuell with the game's preview and the trigger (Auto,
+    // below); the rest of this note is about the game's tool with the charges in the hand, which neither way of placing
+    // gives any more (it stays for the code that still serves it). Before, Automatisch was the game's way: the trigger
+    // placed or threw, with the preview. The game finds the place for
     // a charge with a ray from the camera (DemoChargeController.TryGetNewTarget, some meters far; the hand's aim camera in
     // VR), turns it with the camera's up and the cut toggle, and throws it where the camera looks when the ray finds
     // nothing. With this on, for the extended way of working the tools:
@@ -92,10 +95,19 @@ namespace ShipbreakerVR
         // Manuell, and the hand stays at its controller after letting go (VrToolModels.PoseArm bends the game's arm no more).
         public static bool Decoupled => VrAim.Active;
 
-        private static bool On => VrSettings.ChargePlacing != null && VrSettings.ChargePlacing.Value == Placing.Manuell && VrAim.Active;
+        // Both ways of placing take the charges into the hand as things of their own (Raik, 2026-11-20: Automatisch with the
+        // game's tool in the hand and a copy of the detonator beside it still did not work well enough; "take over the
+        // manual system completely"). Automatisch adds the game's preview and the trigger to it (Auto).
+        private static bool On => VrSettings.ChargePlacing != null && VrAim.Active;
 
-        // The charges are put on by hand (Manuell), for VrChargeDisarm.
-        public static bool Manual => On;
+        // The charges are taken into the hand as things of their own (either way of placing), for VrChargeDisarm.
+        public static bool ByHand => On;
+
+        // Placed with the preview and the trigger (Automatisch): the game's preview shows where a charge in the hand goes
+        // on, at the wall its back is held to or else where the controller points, as far as the game reaches; the
+        // trigger puts it on there, and a hand that keeps its grip closed gets the next charge from behind the back
+        // after the game's wait. Let go at the wall it goes on there as well, as with Manuell.
+        public static bool Auto => On && VrSettings.ChargePlacing.Value == Placing.Automatisch;
 
         // Whether that hand holds a charge afloat, as a thing of its own (VrControls: Y brakes then).
         public static bool Holds(VrInput.Hand hand) => afloat[hand.IsLeft ? 0 : 1].Charge != null;
@@ -181,7 +193,7 @@ namespace ShipbreakerVR
         {
             controller = instance;
             inside = false;
-            HidePreview(On);
+            HidePreview(On && !Auto);
             if (!On || !FindMesh() || !ChargesInHand()) return;
             if (frame == null) frame = new GameObject("ShipbreakerVR Charge frame").transform;
             var scale = VrCamera.WorldScale;
@@ -506,8 +518,11 @@ namespace ShipbreakerVR
             public bool Near;
             public bool Shown;
             public StructurePart Target;
+            public Collider Wall;
             public Vector3 Point;
             public Quaternion Turn;
+            // With Auto: no wall at its back, but one where the controller points, within the game's reach.
+            public bool Aimed;
             // The other hand holds it as well (VrToolFit: once that hand lets go, the hold is stored).
             public bool Shared;
             // How far the wall is from the charge's back, in meters at world scale 1 (MaxValue without one in reach).
@@ -553,6 +568,13 @@ namespace ShipbreakerVR
 
         private static DemoChargePreview Preview() => controller != null && PreviewField != null ? PreviewField.GetValue(controller) as DemoChargePreview : null;
 
+        private static readonly AccessTools.FieldRef<DemoChargeController, IDemoChargeControllerData> Data =
+            AccessTools.FieldRefAccess<DemoChargeController, IDemoChargeControllerData>("mData");
+        private static readonly AccessTools.FieldRef<DemoChargeController, EntityQuery> ChargeQuery =
+            AccessTools.FieldRefAccess<DemoChargeController, EntityQuery>("mDemoChargeQuery");
+        private static readonly MethodInfo BlockedSound = AccessTools.Method(typeof(DemoChargeController), "DemoChargeBlocked");
+        private static readonly MethodInfo LimitWarning = AccessTools.Method(typeof(DemoChargeController), "InWorldLimitReached");
+
         private static LayerMask WallMask()
         {
             var data = controller != null && DataField != null ? DataField.GetValue(controller) : null;
@@ -560,56 +582,290 @@ namespace ShipbreakerVR
             return mask is LayerMask layers ? layers : (LayerMask)Physics.DefaultRaycastLayers;
         }
 
-        // The wall within reach of the back of the charge that hand holds, with the game's preview on it.
-        private static void Aim(Afloat held)
+        // What the rays to a wall and the preview's test for room leave out: the charges in the hands (and that charge's
+        // own pieces), the player's body and what hangs on the VR rig.
+        private static bool Ours(Collider collider, Transform charge)
         {
-            var was = held.Shown;
-            held.Near = held.Shown = false;
-            var part = held.Charge.DemoCharge;
-            if (part != null && controller != null)
-            {
-                var frame = part.transform;
-                var scale = VrCamera.WorldScale;
-                var mask = WallMask();
-                var count = Physics.RaycastNonAlloc(frame.position + frame.forward * (Lead * scale), -frame.forward, Hits, (Lead + BackOfMesh + Reach) * scale, mask, QueryTriggerInteraction.Ignore);
-                var nearest = float.MaxValue;
-                Collider wall = null;
-                for (var i = 0; i < count; i++)
-                {
-                    var hit = Hits[i];
-                    if (hit.distance >= nearest || hit.collider.attachedRigidbody == held.Body || hit.collider.transform.IsChildOf(frame)) continue;
-                    var target = hit.collider.GetComponent<StructurePart>();
-                    if (target == null || target == part || !EntityBlueprintComponent.IsValid(target.EntityBlueprintComponent)) continue;
-                    nearest = hit.distance;
-                    wall = hit.collider;
-                    held.Target = target;
-                    held.Point = hit.point;
-                    held.Turn = MathUtility.GetLookRotation(hit.normal, frame.up);
-                }
-                held.Near = wall != null;
-                // The game's preview is not asked here (Raik, 2026-11-18: no preview with the charges put on by hand): it
-                // called the place blocked by the very charge that is held to it, and the charge did not go on.
-                held.Reach = wall != null ? nearest / scale - Lead - BackOfMesh : float.MaxValue;
-            }
-            if (was && !ChargesInHand()) Preview()?.Deactivate();
+            if (collider == null) return true;
+            var body = collider.attachedRigidbody;
+            if (body != null && (body == afloat[0].Body || body == afloat[1].Body || body == VrToolCollide.Player())) return true;
+            if (charge != null && collider.transform.IsChildOf(charge)) return true;
+            var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+            return rig != null && collider.transform.IsChildOf(rig);
         }
 
-        // Let go at the wall its preview showed: on it goes.
+        // A demo charge, on a wall or afloat: no wall for another one (as the game's UpdateTargeting has it).
+        private static bool IsCharge(StructurePart part)
+        {
+            var blueprint = part.EntityBlueprintComponent;
+            var manager = blueprint.EntityManager;
+            return manager.Exists(blueprint.Entity) && manager.HasComponent<DemoCharge>(blueprint.Entity);
+        }
+
+        private static bool Fits(StructurePart target, StructurePart part) =>
+            target != null && target != part && EntityBlueprintComponent.IsValid(target.EntityBlueprintComponent) && !IsCharge(target);
+
+        private static void Found(Afloat held, StructurePart target, RaycastHit hit, Transform charge)
+        {
+            held.Target = target;
+            held.Wall = hit.collider;
+            held.Point = hit.point;
+            held.Turn = MathUtility.GetLookRotation(hit.normal, charge.up);
+        }
+
+        // Where the controller points, in the world.
+        private static bool AimRay(VrInput.Hand hand, out Ray ray)
+        {
+            ray = default;
+            var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+            if (rig == null || !hand.TryGetAimPose(out var at, out var turn, out _)) return false;
+            ray = new Ray(rig.TransformPoint(at), rig.rotation * turn * Vector3.forward);
+            return true;
+        }
+
+        // Where the charge that hand holds would go on: at the wall within reach of its back, turned as it is held (the
+        // line on it is the cut); with Auto, without such a wall, where the controller points, within the game's reach
+        // (IDemoChargeControllerData.RaycastDistance), turned the same way against that wall.
+        private static void Aim(VrInput.Hand hand, Afloat held)
+        {
+            held.Near = held.Aimed = false;
+            held.Target = null;
+            held.Wall = null;
+            held.Reach = float.MaxValue;
+            var part = held.Charge.DemoCharge;
+            if (part == null || controller == null) return;
+            var frame = part.transform;
+            var scale = VrCamera.WorldScale;
+            var mask = WallMask();
+            var count = Physics.RaycastNonAlloc(frame.position + frame.forward * (Lead * scale), -frame.forward, Hits, (Lead + BackOfMesh + Reach) * scale, mask, QueryTriggerInteraction.Ignore);
+            var nearest = float.MaxValue;
+            for (var i = 0; i < count; i++)
+            {
+                var hit = Hits[i];
+                if (hit.distance >= nearest || Ours(hit.collider, frame)) continue;
+                var target = hit.collider.GetComponent<StructurePart>();
+                if (!Fits(target, part)) continue;
+                nearest = hit.distance;
+                Found(held, target, hit, frame);
+            }
+            held.Near = held.Target != null;
+            if (held.Near)
+            {
+                held.Reach = nearest / scale - Lead - BackOfMesh;
+                return;
+            }
+            var data = Data(controller);
+            if (!Auto || data == null || !AimRay(hand, out var ray)) return;
+            // The first thing the ray meets, as with the game's ray from the camera: a wall behind a pipe is not reached.
+            count = Physics.RaycastNonAlloc(ray, Hits, data.RaycastDistance, mask, QueryTriggerInteraction.Ignore);
+            var first = -1;
+            nearest = float.MaxValue;
+            for (var i = 0; i < count; i++)
+                if (Hits[i].distance < nearest && !Ours(Hits[i].collider, frame))
+                {
+                    nearest = Hits[i].distance;
+                    first = i;
+                }
+            if (first < 0) return;
+            var aimed = Hits[first].collider.GetComponent<StructurePart>();
+            if (!Fits(aimed, part)) return;
+            Found(held, aimed, Hits[first], frame);
+            held.Aimed = true;
+        }
+
+        // ---- The preview and the trigger (Auto) ----
+
+        // The hand whose charge the preview shows (there is one preview: with a charge in each hand, the one that had it
+        // first keeps it).
+        private static VrInput.Hand previewHand;
+        // The hand that put its charge on with the trigger and keeps its grip closed: the next charge comes into it.
+        private static VrInput.Hand reloadHand;
+        private static float reloadAt;
+        private static int previewLogs;
+
+        private static Afloat Of(VrInput.Hand hand) => afloat[hand.IsLeft ? 0 : 1];
+
+        private static bool Previews(VrInput.Hand hand)
+        {
+            if (hand == null || !Auto) return false;
+            var held = Of(hand);
+            return held.Charge != null && held.Target != null && (held.Near || held.Aimed);
+        }
+
+        // The game's preview where the charge would go on, as the game shows it for the charges in its hand.
+        private static void ShowPreview()
+        {
+            afloat[0].Shown = afloat[1].Shown = false;
+            var owner = Previews(previewHand) ? previewHand : Previews(VrInput.Left) ? VrInput.Left : Previews(VrInput.Right) ? VrInput.Right : null;
+            var preview = Preview();
+            if (owner == null || preview == null)
+            {
+                if (previewHand != null && preview != null) preview.Deactivate();
+                previewHand = null;
+                return;
+            }
+            if (owner != previewHand && previewLogs++ < 20) Plugin.Log.LogInfo($"Charge by hand: the preview shows where the charge in the {owner.Name} hand goes on");
+            previewHand = owner;
+            var held = Of(owner);
+            if (JointSetup != null && JointSetup.GetValue(controller) == null) CacheJointSetup?.Invoke(controller, null);
+            preview.Activate();
+            preview.SetTargetData(held.Point, held.Turn, held.Wall, WallMask(), held.Target, JointSetup?.GetValue(controller) as JointSetupAsset);
+            held.Shown = true;
+        }
+
+        // The preview calls the place taken: the game's sound for it.
+        private static bool Refused()
+        {
+            var preview = Preview();
+            if (preview == null || !preview.IsBlocked) return false;
+            BlockedSound?.Invoke(controller, null);
+            return true;
+        }
+
+        // The game's limit of charges in the world reached: its warning. The charge in the hand is one of them, and goes
+        // back to the stock as the new one is made.
+        private static bool LimitReached()
+        {
+            var data = Data(controller);
+            if (data == null) return false;
+            int count;
+            try { count = ChargeQuery(controller).CalculateEntityCount(); }
+            catch (System.Exception) { return false; }
+            if (count - 1 < data.InWorldLimit) return false;
+            LimitWarning?.Invoke(controller, null);
+            return true;
+        }
+
+        // The charge afloat goes back to the stock the game's way and one from the stock goes on the wall, as the game
+        // places one.
+        private static void Place(VrInput.Hand hand, DemoChargeRetrievalController charge, Vector3 point, Quaternion turn, StructurePart target)
+        {
+            charge.OnSuccess();
+            var part = Instantiate.Invoke(controller, new object[] { point, turn }) as StructurePart;
+            if (part == null) return;
+            JointingService.Instance.JointStructureParts(part, target);
+            ModifyCount?.Invoke(controller, new object[] { -1, false, false });
+            hand.Buzz(0.6f, 0.08f);
+        }
+
+        private static void Forget(Afloat held)
+        {
+            held.Charge = null;
+            held.Body = null;
+            held.AtPlace = held.Shared = false;
+            held.StickyOff = false;
+            held.Near = held.Aimed = held.Shown = false;
+        }
+
+        // The trigger of a hand that holds a charge (Auto): the charge goes on where the preview shows it.
+        private static void Fire(VrInput.Hand hand, Afloat held)
+        {
+            if (previewHand != hand || !held.Shown || held.Target == null || controller == null || Instantiate == null)
+            {
+                hand.Buzz(0.15f, 0.04f);
+                if (logs++ < 60) Plugin.Log.LogInfo($"Charge by hand: trigger of the {hand.Name} hand, no place for its charge shown");
+                return;
+            }
+            if (Refused() || LimitReached())
+            {
+                hand.Buzz(0.3f, 0.1f);
+                if (logs++ < 60) Plugin.Log.LogInfo($"Charge by hand: trigger of the {hand.Name} hand, the charge does not go on (the place is taken or too many charges are out)");
+                return;
+            }
+            var charge = held.Charge;
+            var body = held.Body;
+            var near = held.Near;
+            var point = held.Point;
+            var turn = held.Turn;
+            var target = held.Target;
+            Forget(held);
+            VrClimb.Drop(hand, "the demo charge goes on with the trigger");
+            var other = hand.IsLeft ? VrInput.Right : VrInput.Left;
+            if (body != null && VrClimb.HeldBody(other) == body)
+            {
+                Forget(Of(other));
+                VrClimb.Drop(other, "the demo charge goes on with the other hand's trigger");
+            }
+            Place(hand, charge, point, turn, target);
+            reloadHand = hand;
+            var data = Data(controller);
+            reloadAt = Time.unscaledTime + (data != null ? Mathf.Clamp(data.PlacementCooldown, 0.1f, 2f) : 0.3f);
+            if (logs++ < 60) Plugin.Log.LogInfo($"Charge by hand: the {hand.Name} hand's trigger puts its charge on {(near ? "the wall at its back" : "where the controller points")}");
+        }
+
+        // The hand that put its charge on with the trigger, its grip still closed: the next charge from behind the back,
+        // after the game's wait (Raik, 2026-11-20: with the grip held the charges come into the hand one after another).
+        private static void Reload()
+        {
+            var hand = reloadHand;
+            if (hand == null) return;
+            if (!Auto || !hand.Grip.Down)
+            {
+                reloadHand = null;
+                return;
+            }
+            if (Time.unscaledTime < reloadAt) return;
+            reloadHand = null;
+            if (VrClimb.HeldBody(hand) != null || (hand.IsLeft ? VrHand.Left : VrHand.Right).State != HandState.Empty) return;
+            if (TakesOut(hand) && logs++ < 60) Plugin.Log.LogInfo($"Charge by hand: the {hand.Name} hand kept its grip closed, the next charge comes into it");
+        }
+
+        // ---- The preview's test for room ----
+
+        private static readonly AccessTools.FieldRef<DemoChargePreview, bool> RoomRefresh = AccessTools.FieldRefAccess<DemoChargePreview, bool>("mRefreshState");
+        private static readonly AccessTools.FieldRef<DemoChargePreview, Vector3> RoomExtents = AccessTools.FieldRefAccess<DemoChargePreview, Vector3>("m_Extents");
+        private static readonly AccessTools.FieldRef<DemoChargePreview, Collider> RoomTarget = AccessTools.FieldRefAccess<DemoChargePreview, Collider>("mTargetCol");
+        private static readonly AccessTools.FieldRef<DemoChargePreview, StructurePart> RoomPart = AccessTools.FieldRefAccess<DemoChargePreview, StructurePart>("mTargetPart");
+        private static readonly AccessTools.FieldRef<DemoChargePreview, JointSetupAsset> RoomJoint = AccessTools.FieldRefAccess<DemoChargePreview, JointSetupAsset>("mDemoChargeJSA");
+        private static readonly AccessTools.FieldRef<DemoChargePreview, LayerMask> RoomMask = AccessTools.FieldRefAccess<DemoChargePreview, LayerMask>("mLayerMask");
+        private static readonly MethodInfo RoomState = AccessTools.Method(typeof(DemoChargePreview), "SetState");
+        private static readonly Collider[] Room = new Collider[32];
+        private static int roomLogs;
+
+        // From ChargePreviewRoomPatch (DemoChargePreview.FixedUpdate): while the preview shows for a charge in a hand, its
+        // test for room is the game's, leaving out that charge, the player and the rig (Raik, 2026-11-18: it found the very
+        // charge held to the wall and called the place taken). False to run the game's own.
+        public static bool TestsRoom(DemoChargePreview preview)
+        {
+            if (previewHand == null || preview == null || preview != Preview() || RoomState == null) return false;
+            if (!RoomRefresh(preview)) return true;
+            RoomRefresh(preview) = false;
+            var half = RoomExtents(preview) * 0.5f;
+            var frame = preview.transform;
+            var count = Physics.OverlapBoxNonAlloc(frame.position + frame.forward * (half.z + 0.001f), half, Room, frame.rotation, RoomMask(preview), QueryTriggerInteraction.Ignore);
+            var target = RoomTarget(preview);
+            Collider blocker = null;
+            for (var i = 0; i < count && blocker == null; i++)
+                if (Room[i] != target && !Ours(Room[i], null)) blocker = Room[i];
+            var part = RoomPart(preview);
+            var joins = part == null || part.StructurePartAsset == null
+                || JointingService.Instance.CanJoint(part.StructurePartAsset.Data.JointSetupAsset, RoomJoint(preview));
+            var taken = blocker != null || !joins;
+            if (taken && !preview.IsBlocked && roomLogs++ < 30)
+                Plugin.Log.LogInfo($"Charge by hand: the preview calls the place taken: {(blocker != null ? $"'{VrUtil.Chain(blocker.transform, 3)}' is in the way" : "the charge does not joint to that part")}");
+            RoomState.Invoke(preview, new object[] { taken ? DemoChargePreviewState.InRangeBlocked : DemoChargePreviewState.InRangeUnblocked });
+            return true;
+        }
+
+        // Let go at the wall its preview showed: on it goes. With the preview (Auto) not where it calls the place taken,
+        // nor with the game's limit of charges reached.
         private static bool PutOn(VrInput.Hand hand, Afloat held, DemoChargeRetrievalController charge)
         {
             var near = held.Near;
-            held.Near = held.Shown = false;
+            var shown = held.Shown;
+            held.Near = held.Aimed = held.Shown = false;
             if (!near || held.Target == null || controller == null || Instantiate == null)
             {
                 if (logs++ < 60) Plugin.Log.LogInfo($"Charge by hand: a charge afloat let go by the {hand.Name} hand with no wall within {Reach * 100f:0} cm of its back");
                 return false;
             }
-            charge.OnSuccess();
-            var part = Instantiate.Invoke(controller, new object[] { held.Point, held.Turn }) as StructurePart;
-            if (part == null) return true;
-            JointingService.Instance.JointStructureParts(part, held.Target);
-            ModifyCount?.Invoke(controller, new object[] { -1, false, false });
-            hand.Buzz(0.6f, 0.08f);
+            if (Auto && ((shown && Refused()) || LimitReached()))
+            {
+                hand.Buzz(0.3f, 0.1f);
+                if (logs++ < 60) Plugin.Log.LogInfo($"Charge by hand: a charge let go by the {hand.Name} hand at a wall does not go on (the place is taken or too many charges are out)");
+                return false;
+            }
+            Place(hand, charge, held.Point, held.Turn, held.Target);
             if (logs++ < 60) Plugin.Log.LogInfo($"Charge by hand: a charge afloat let go by the {hand.Name} hand {held.Reach * 100f:0} cm from a wall, put on it");
             return true;
         }
@@ -690,6 +946,8 @@ namespace ShipbreakerVR
             }
             Check(VrInput.Left, afloat[0]);
             Check(VrInput.Right, afloat[1]);
+            ShowPreview();
+            Reload();
             Fit();
         }
 
@@ -729,7 +987,7 @@ namespace ShipbreakerVR
                     held.Body = body;
                     held.AtPlace = false;
                     held.Shared = false;
-                    held.Near = held.Shown = false;
+                    held.Near = held.Aimed = held.Shown = false;
                     held.Charge = body.mass <= HeaviestCharge ? body.GetComponentInChildren<DemoChargeRetrievalController>(true) : null;
                     if (held.Charge != null && Deployed(held.Charge)) held.Charge = null;
                 }
@@ -748,7 +1006,7 @@ namespace ShipbreakerVR
                     return;
                 }
                 Unstick(held);
-                Aim(held);
+                Aim(hand, held);
                 MeasureHeld(hand, held);
                 var shared = VrClimb.HeldBody(hand.IsLeft ? VrInput.Right : VrInput.Left) == body;
                 if (held.Shared && !shared && VrToolFit.On) StoreHold(hand, held);
@@ -756,6 +1014,7 @@ namespace ShipbreakerVR
                 var at = VrToolBelt.Stows(VrToolBelt.Zone.DemoCharge, hand);
                 if (at && !held.AtPlace) hand.Buzz(0.25f, 0.04f);
                 held.AtPlace = at;
+                if (Auto && hand.Trigger.Pressed) Fire(hand, held);
                 return;
             }
             var was = held.Charge;
@@ -767,8 +1026,7 @@ namespace ShipbreakerVR
             // Let go with the grip (not lost by tracking), and not still held by the other hand.
             if (was == null || hand.Grip.Down || (wasBody != null && VrClimb.HeldBody(hand.IsLeft ? VrInput.Right : VrInput.Left) == wasBody))
             {
-                if (held.Shown && !ChargesInHand()) Preview()?.Deactivate();
-                held.Near = held.Shown = false;
+                held.Near = held.Aimed = held.Shown = false;
                 Restick(held);
                 return;
             }
@@ -787,8 +1045,7 @@ namespace ShipbreakerVR
                     return;
                 }
             }
-            if (held.Shown && !ChargesInHand()) Preview()?.Deactivate();
-            held.Near = held.Shown = false;
+            held.Near = held.Aimed = held.Shown = false;
             held.StickyOff = false;
             was.OnSuccess();
             hand.Buzz(1f, 0.15f);
@@ -856,6 +1113,13 @@ namespace ShipbreakerVR
         {
             if (__result != null) VrChargeByHand.Fresh(__result);
         }
+    }
+
+    // The preview's test for room, for a charge in a hand (VrChargeByHand.TestsRoom).
+    [HarmonyPatch(typeof(DemoChargePreview), "FixedUpdate")]
+    internal static class ChargePreviewRoomPatch
+    {
+        private static bool Prefix(DemoChargePreview __instance) => !VrChargeByHand.TestsRoom(__instance);
     }
 
     [HarmonyPatch(typeof(DemoChargeAsset), nameof(DemoChargeAsset.SetComponentData))]
