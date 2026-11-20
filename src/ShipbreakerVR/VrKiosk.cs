@@ -124,9 +124,13 @@ namespace ShipbreakerVR
         {
             var shape = collider.sharedMesh;
             if (shape == null || shape.name != PlatformShape || !Fitted.Add(collider.GetInstanceID())) return;
-            if (collider.attachedRigidbody != null || !shape.isReadable)
+            // On the MasterJack's kinematic body (Raik, 2026-11-20: both hands still above and below the floor; the log
+            // showed it left as it was since this was made, as any body counted as moving): only a body physics moves
+            // leaves it be.
+            var body = collider.attachedRigidbody;
+            if ((body != null && !body.isKinematic) || !shape.isReadable)
             {
-                Plugin.Log.LogInfo($"Kiosk: platform '{Path(collider.transform)}' left as it is ({(shape.isReadable ? "it moves" : "its shape is not readable")})");
+                Plugin.Log.LogInfo($"Kiosk: platform '{Path(collider.transform)}' left as it is ({(shape.isReadable ? "it moves freely" : "its shape is not readable")})");
                 return;
             }
             var vertices = shape.vertices;
@@ -152,7 +156,7 @@ namespace ShipbreakerVR
             collider.sharedMesh = lowered;
             Lowered.Add((collider, shape, lowered));
             var solids = AddFloors(collider);
-            Plugin.Log.LogInfo($"Kiosk: platform '{Path(collider.transform)}' collides with its floors where they are drawn ({moved} of {vertices.Length} points lowered 6 to 15 cm), {solids} solid floor(s) under them");
+            Plugin.Log.LogInfo($"Kiosk: platform '{Path(collider.transform)}' collides with its floors where they are drawn ({moved} of {vertices.Length} points lowered 6 to 15 cm), {solids} solid floor(s) under them{(body != null ? " (on a kinematic body)" : "")}");
         }
 
         // Not convex, the platform is only a skin to physics (Raik, 2026-11-20, testing 0.32.0: the hand lay on the shape
