@@ -17,7 +17,7 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
 
 ## Use
 - Connect the headset and start the game; VR starts right away. **F3** toggles VR.
-- **F4** (or pressing the **left stick** on the controllers) recenters the view on the headset: position, and in menus also view direction and the menu canvas.
+- **F4** (or holding the **left stick** in for 1.2 seconds on the controllers) recenters the view on the headset: position, and in menus also view direction and the menu canvas.
   Menus always appear at eye height, also when you look up or down.
   The row "Center view" at the top of the VR options does the same.
 - Own posters: put PNG or JPG files into `BepInExShipbreakerVR-Poster`, the folder appears after the first visit to the station. They join the pictures you can choose for the posters there.
@@ -46,7 +46,7 @@ both; full thrust always stays at least 5 cm beyond the deadzone.
 
 The right stick turns (left/right) and pitches (up/down), the further, the faster; it needs no trigger. The row "Turning"
 switches turning to steps of 30, 45 or 90 degrees per flick. Y brakes. Pressing the right stick opens the pause menu
-(also in the station), pressing the left stick recenters the view, and holding it in for half a second while flying straightens you up. Mouse, keyboard and gamepad keep working.
+(also in the station), holding the left stick in for 1.2 seconds recenters the view, and a short press while flying straightens you up. Mouse, keyboard and gamepad keep working.
 
 While the grapple holds something heavy, the flat game stops thrust and brake and lets you swing on the rope instead.
 With controller flying you keep flying and braking as usual; the rope keeps pulling, and it snaps if you fly farther
@@ -141,7 +141,7 @@ button prompts:
 - pressing the right stick = Start: in gameplay and in the station it opens the pause menu, on loading screens it
   cycles the tips. In the station it works where Esc does, not inside a terminal screen. In menus it is R3, since the
   game would read Start as "confirm".
-- pressing the left stick recenters the view, like F4, everywhere.
+- holding the left stick in for 1.2 seconds recenters the view, like F4, everywhere; a short press straightens you up in flight. To center again, let go and hold it once more.
 
 There is no View button and no D-pad; the left menu button stays with Virtual Desktop. In gameplay only the right
 stick press reaches the game.

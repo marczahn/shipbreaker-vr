@@ -48,11 +48,86 @@ namespace ShipbreakerVR
         // fingers (where the palm faces), in meters at world scale 1: it lies over it.
         private const float ThumbOver = 0.015f;
         private const float GripThumb = 25f;
+        // Test (Raik's photos, 2026-11-13: the closed hand on a tool looked too stiff): the cutter and the grapple held as a
+        // handle in the hand, each finger joint (index, middle, ring, little; base, middle, tip) this far from the knuckles'
+        // line towards the palm, in degrees, wrapped round it: the index finger a little more open, each further finger a
+        // little more curled. The thumb lies over the index finger's middle bone (ThumbOnIndex), ThumbOver out from it.
+        // Raik (2026-11-14, a picture of the hand on the grapple): the fingers closed parallel, all bent alike, not fanning
+        // out more from the index finger down to the little one.
+        private static readonly float[] ToolBend = { 68f, 155f, 195f, 68f, 155f, 195f, 68f, 155f, 195f, 68f, 155f, 195f };
+        // Raik (2026-11-14): on a tool the thumb lies a little above the index finger, this far towards the thumb's side.
+        private const float ThumbAbove = 0.01f;
+        // A finger's bones as round, this thick.
+        private const float FingerRadius = 0.009f;
         // A flat hand is not stiff: each finger joint (base, middle, tip) stays bent this much towards the palm, in
         // degrees. The thumb lies in the palm's plane with the fingers, each of its bones this much towards the palm, about
         // 2 to 3 mm over its length (Raik).
         private static readonly float[] FlatBend = { 4f, 6f, 4f };
         private const float ThumbIn = 3f;
+        // Test (Raik's photos, 2026-11-13): holding on to a wall the hand is not quite flat. It stands ClawLift further off
+        // the surface, and each finger bends (base, middle, tip, in degrees, at most ClawBend) until its tip, TipRadius
+        // thick, touches the surface under it; the thumb leans ClawThumb more towards it. As if trying to grip the wall.
+        private const float ClawLift = 0.01f;
+        private static readonly float[] ClawBend = { 12f, 28f, 12f };
+        private const float TipRadius = 0.008f;
+        private const float ClawThumb = 12f;
+        // Test (Raik, 2026-11-13): an empty hand pushed against a surface without holding on lies flat on it, as on a
+        // hold, and its fingers curl over edges. Pushed: the controller's wrist PressAt or less off the surface (the
+        // palm would be PalmThickness off it), the palm facing it by PressFacing (cosine) at least; let go again
+        // PressRelease further out.
+        private const float PressFacing = 0.5f;
+        // Test (Raik, 2026-11-13): an empty hand whose palm comes within FlatFrom of a surface it faces lies flat on it
+        // (0: from touching on, so a hand folding over goes on to lie flat without a jump; 0.9 cm jumped),
+        // and lets go again FlatRelease further out. Coming at a surface fingers first, the fingers bend back at the
+        // knuckles as far as they need to, at most MostBack degrees; from there on the hand folds over onto the surface
+        // (Fold) until it lies flat. Raik (2026-11-14): the palm keeps following the controller while the fingers, the
+        // softest part, take the movement; only once they are back KnuckleBackAtMost does the palm fold over too. The wall is looked for up to WallReach from the wrist.
+        private const float FlatFrom = 0f;
+        // Test (Raik, 2026-11-14): a flat hand follows what lies under its palm. PalmGrid points over the palm (from the
+        // heel to the knuckles, from the index to the little finger) look for a surface from PalmLook behind the palm out
+        // to PalmFind in front of it; the hand lies on the average of what they find, each weighed less the further it lies,
+        // so over an edge it turns over as the palm goes over it. The turn follows within about SurfaceTurnTime.
+        private const int PalmGrid = 3;
+        private const float PalmLook = 0.03f;
+        private const float PalmFind = 0.04f;
+        private const float SurfaceTurnTime = 0.04f;
+        // A surface the hand would be deeper in than IntoAtMost is a plane drawn on past its edge, not one it touches
+        // (the log, 2026-11-14: hands thrown 20 cm by it); at its back or side the hand is pushed out at most BackPushAtMost.
+        private const float IntoAtMost = 0.1f;
+        // How long a fold, a bend back or a lift takes to go back once nothing needs it any more.
+        private const float RelaxTime = 0.15f;
+        // Test (2026-11-14, faces meeting at a ship's nose): another face must be this much closer to take over, and the
+        // way the hand folds turns to it within about FoldTurnTime.
+        private const float KeepFace = 0.006f;
+        private const float FoldTurnTime = 0.06f;
+        // Raik (2026-11-14): fingers bend back towards the back of the hand at most this far at the knuckle, in all; a hand
+        // turned further against a surface is pushed off it instead (Touch), at most by PushOffAtMost.
+        private const float PushOffAtMost = 0.06f;
+        private const float KnuckleBackAtMost = 80f;
+        private const float BackPushAtMost = 0.04f;
+        private const float FlatRelease = 0.003f;
+        private const float MostBack = KnuckleBackAtMost;
+        private const float WallReach = 0.25f;
+        // The wrist's own radius, the arm stopping at walls (OutOfWalls): the hand's shape does the rest (Touch).
+        private const float WristRadius = 0.02f;
+        // A tip pressing on a held wall goes this far into it at most (Claw).
+        private const float ClawPress = 0.002f;
+        // Test (0.30.0, Raik's photos of his hand): an empty hand is loose, not as the game animates it. Each finger joint
+        // (index, middle, ring, little; base, middle, tip) bent this far from the knuckles' line towards the palm, in
+        // degrees: the index finger nearly straight, each further finger a little more curled, the little one the most.
+        private static readonly float[] IdleBend = { 8f, 18f, 28f, 12f, 26f, 38f, 15f, 32f, 45f, 20f, 40f, 54f };
+        // Test (Raik): the game's fingers are long, the index finger the longest. All fingers this much of their length,
+        // the index finger at most as long as the ring finger, and this much shorter again.
+        private const float FingerLength = 0.85f;
+        private const float IndexShorter = 0.97f;
+        // Test (Raik, 2026-11-13): the real controller sat at the game hand's palm, so the own hand felt nearly outside
+        // the game's. An empty or grabbing hand sits this far away from where its palm faces (the hands, palms facing each
+        // other, 1 cm further apart each), in meters (tracking space); a hand on the cutter or the grapple stays as fitted
+        // to the tool.
+        private const float PalmShift = 0.01f;
+        // The thumb's free part (from its first joint out of the palm); its base in the palm keeps its size, so the thumb
+        // sits where it did and the ball of the thumb keeps its shape (Raik: scaling the base kinked it and set it low).
+        private const float ThumbLength = 0.94f;
         // Over an edge a flat hand's fingers curl around it: each joint whose next bone finds no surface under it bends
         // this much (base, middle, tip, in degrees), over EdgeTime. Under a bone means within EdgeProbe of it towards the
         // palm, in meters at world scale 1.
@@ -86,6 +161,9 @@ namespace ShipbreakerVR
             // own pose again, instead of bending further every frame.
             public readonly Quaternion[] Base = new Quaternion[17];
             public readonly Quaternion[] Set = new Quaternion[17];
+            public float IndexScale;
+            public int ThumbBendLogs;
+            public bool IdleLogged;
             // The thumb's angles to the palm's plane once logged for this flat hold.
             public bool ThumbLogged;
             // How far the fingers are closed (0 open, 1 the full bend), and towards what.
@@ -97,6 +175,74 @@ namespace ShipbreakerVR
             public float Flat;
             // How far each finger joint is curled over an edge (0 to 1), as Joints.
             public readonly float[] Edge = new float[12];
+            // How far the fingers press their tips on a held surface (0 to 1, ClawBend).
+            public float Claw;
+            // The surface the empty hand met last frame (OutOfWalls), how far the controller's wrist was off it, and
+            // whether and how far the hand lies flat on it, pushed (Press).
+            public bool WallMet;
+            public Vector3 WallPoint;
+            public Vector3 WallNormal;
+            public float WallDepth;
+            public bool Pressed;
+            public float Press;
+            // The surface the flat hand lies on (Touch, PalmSurface): its own, not OutOfWalls', turned over smoothly as the
+            // palm passes onto another surface.
+            public Vector3 FlatPoint;
+            public Vector3 FlatNormal;
+            // Test (Raik, 2026-11-14: jumps, fingers flipping): what the hand shows of folding over, bending back and lifting
+            // its fingers. Each goes up at once (so nothing goes into the wall) but back down only over RelaxTime, so a
+            // contact found in one frame and not the next no longer flips the hand.
+            public float FoldShown;
+            public Vector3 FoldNormal;
+            // The face the hand met last frame (Wall), kept unless another is clearly closer.
+            public Collider TouchCollider;
+            public Vector3 TouchNormal;
+            // How far the empty hand is pushed off a surface so its fingers need not bend back past KnuckleBackAtMost.
+            public float PushShown;
+            public Vector3 PushNormal;
+            // What Touch makes of the controller's hand as shown (Ease): the wrist's shift and the hand's turn in the
+            // controller's axes, and how fast each changes.
+            public Vector3 EaseShift, EaseShiftSpeed;
+            public Quaternion EaseTurn = Quaternion.identity;
+            public float EaseTurnSpeed;
+            public float BackShown;
+            public readonly float[] BendShown = new float[4];
+            public readonly float[] LiftShown = new float[4];
+            // The back of the hand on something (BendBack): how far each finger is folded in towards the palm, whether
+            // they fold in or bend back as before, when a finger's back last touched, and where each folded finger's tip
+            // rests (held there as by friction) and when that finger was last near something.
+            public readonly float[] TuckShown = new float[4];
+            // How far the empty hand is held back because a finger stays in something (FingerPush).
+            public Vector3 FingerPush;
+            public bool FoldIn = true;
+            public float BackTouchAt = -10f;
+            public readonly Vector3[] TuckAnchor = new Vector3[4];
+            public readonly bool[] TuckHas = new bool[4];
+            public readonly float[] TuckNearAt = new float[4];
+            public readonly float[] UnbendShown = new float[4];
+            public float FingerLogAt;
+            // The hand's shape in its own axes (Frame), as last posed before bending back: each finger's knuckle and tip
+            // (index to little), for Touch to try the hand against a wall before it is posed.
+            public readonly Vector3[] ShapeKnuckle = new Vector3[4];
+            public readonly Vector3[] ShapeTip = new Vector3[4];
+            public bool ShapeKnown;
+            // How far the fingers are bent back at the knuckles (Touch), and how far the hand is folded over (0 to 1).
+            public float Back;
+            public float Folded;
+            public float FoldedBefore;
+            public bool ClawLogged;
+            // The palm folding in under the knuckles (PalmFold): each finger's base joint where the animation had it and
+            // where it was set here, and how far the palm is folded now, in degrees (the front of its shape, PalmBoxes).
+            public readonly Vector3[] FoldBase = new Vector3[4];
+            public readonly Vector3[] FoldSet = new Vector3[4];
+            public float PalmFold;
+            // The side of the tool in the other hand the palm came against it from, in the tool's own axes (zero when
+            // not at it), and when it last was (StayOutOfTool).
+            public Vector3 ToolSide;
+            public float ToolSideAt;
+            // The same for the other arm, in its forearm's axes (StayOutOfArm).
+            public Vector3 ArmSide;
+            public float ArmSideAt;
             // The hand on its hold (Grip): fixed on the thing held, turned (GripTurn) and placed (GripPoint, GripOffset)
             // as it took hold, flat on large ones; blended in and out over GripTime.
             public bool Gripping;
@@ -265,6 +411,49 @@ namespace ShipbreakerVR
 
         // An arm as drawn last, whatever its hand does: shoulder, elbow, wrist and the middle finger's base (VrArmPush,
         // VrToolCollide).
+        // Local test view (VrToolShapeView): the hand's collision shape as drawn now, as KeepOut and PalmOut test it: each
+        // finger bone and thumb bone as a capsule (from, to, radius) and the palm's box (PalmOut). False without a hand.
+        public static bool TryGetHandShape(bool left, List<Vector3> from, List<Vector3> to, List<float> radius, List<Vector3> boxCenter, List<Quaternion> boxTurn, List<Vector3> boxHalf)
+        {
+            var arm = left ? LeftArm : RightArm;
+            boxCenter.Clear();
+            boxTurn.Clear();
+            boxHalf.Clear();
+            if (arm.Wrist == null) return false;
+            var scale = VrCamera.WorldScale;
+            for (var finger = 0; finger < 4; finger++)
+            {
+                if (!Chain(arm, finger)) continue;
+                for (var k = 0; k < 3; k++)
+                {
+                    var joint = arm.Joints[finger * 3 + k];
+                    var next = k < 2 ? arm.Joints[finger * 3 + k + 1] : joint.GetChild(0);
+                    from.Add(joint.position);
+                    to.Add(next.position);
+                    radius.Add(VrHandShape.FingerRadius[finger] * scale);
+                }
+            }
+            for (var k = 0; k < arm.Thumb.Length; k++)
+            {
+                var joint = arm.Thumb[k];
+                if (joint == null) break;
+                var next = k + 1 < arm.Thumb.Length && arm.Thumb[k + 1] != null ? arm.Thumb[k + 1] : joint.childCount > 0 ? joint.GetChild(0) : null;
+                if (next == null) break;
+                from.Add(joint.position);
+                to.Add(next.position);
+                radius.Add(VrHandShape.ThumbRadius * scale);
+            }
+            if (!Frame(arm, out var wrist, out var frame)) return true;
+            var boxes = PalmBoxes(arm, left ? 1f : -1f);
+            for (var b = 0; b < boxes; b++)
+            {
+                boxCenter.Add(wrist + frame * PalmCenter[b]);
+                boxTurn.Add(frame * PalmTurn[b]);
+                boxHalf.Add(PalmHalf[b]);
+            }
+            return true;
+        }
+
         public static bool TryGetArm(bool left, out Vector3 shoulder, out Vector3 elbow, out Vector3 wrist, out Vector3 knuckles)
         {
             var arm = left ? LeftArm : RightArm;
@@ -282,12 +471,17 @@ namespace ShipbreakerVR
         public static void LateUpdate()
         {
             if (!Find()) return;
+            Shorten(LeftArm);
+            Shorten(RightArm);
             var leftWasDriven = LeftArm.Driven;
             var rightWasDriven = RightArm.Driven;
             var active = VrAim.Active;
             var equipment = grab.RightHand.CurrentEquipmentType;
             var chargeLeft = VrToolModels.ChargeInLeftHand;
             // Every frame for both, so a hand let go of its control forgets it once the game is done with it.
+            // The knuckles back where the animation has them before anything reads the hand's axes from them (Frame).
+            RestoreFold(LeftArm);
+            RestoreFold(RightArm);
             var leftControl = UsesHeldControl(LeftArm);
             var rightControl = UsesHeldControl(RightArm);
             Drive(LeftArm, active && (Idle(grab.LeftHand) || leftControl));
@@ -302,8 +496,11 @@ namespace ShipbreakerVR
             Pose(RightArm, Quaternion.identity);
             AtControl(LeftArm);
             AtControl(RightArm);
+            MirrorThumb(active && !VrHand.Right.HoldsTool);
+            ReadChargeFingers(active && chargeLeft);
             Curl(LeftArm);
             Curl(RightArm);
+            MirrorChargeFingers();
             Charges(active && chargeLeft);
         }
 
@@ -363,10 +560,13 @@ namespace ShipbreakerVR
         // left on the right hand, to the right on the left one. The thumb turns about the knuckles' axis over the palm.
         private static void Curl(Arm arm)
         {
+            RestoreFold(arm);
             var hand = arm == LeftArm ? VrHand.Left : VrHand.Right;
             var tool = hand.HoldsTool && hand.Tool != EquipmentController.Equipment.DemoCharge;
             var grip = arm.Input.Grip.Down && hand.State != HandState.HiddenTool;
-            var flat = arm.Driven && !tool && grip && VrClimb.HoldsFlat(arm.Input);
+            var held = grip && VrClimb.HoldsFlat(arm.Input);
+            var flat = arm.Driven && !tool && (held || (!grip && arm.Pressed));
+            arm.Claw = Mathf.MoveTowards(arm.Claw, flat && held ? 1f : 0f, Time.unscaledDeltaTime / CurlTime);
             var closing = arm.Driven && (tool || (grip && !flat));
             if (closing) arm.Fist = !tool && (hand.State != HandState.Holding || VrClimb.HoldsControl(arm.Input));
             arm.Closed = Mathf.MoveTowards(arm.Closed, closing ? 1f : 0f, Time.unscaledDeltaTime / CurlTime);
@@ -378,7 +578,9 @@ namespace ShipbreakerVR
             }
             var amount = arm.Closed * arm.Weight;
             var flatness = arm.Flat * arm.Weight;
-            if ((amount <= 0f && flatness <= 0f) || !Frame(arm, out _, out var frame))
+            // The loose hand fades out as the hand closes, so a grip still starts from the animation's pose.
+            var loose = arm.Weight * (1f - arm.Closed);
+            if ((amount <= 0f && flatness <= 0f && loose <= 0f) || !Frame(arm, out _, out var frame))
             {
                 Open(arm);
                 return;
@@ -389,23 +591,90 @@ namespace ShipbreakerVR
             if (amount <= 0f)
             {
                 // Held on by the glove, as by a magnet: the fingers along the knuckles, barely bent, the thumb in
-                // their plane instead of in the surface.
+                // their plane instead of in the surface. Empty, loose (IdleBend), and from there to flat.
                 for (var i = 0; i < arm.Joints.Length; i++)
-                    Straighten(arm, i, across, Quaternion.AngleAxis(side * FlatBend[i % 3], across) * along, across, flatness);
+                {
+                    var toward = Mathf.Lerp(IdleBend[i], FlatBend[i % 3], arm.Flat);
+                    Straighten(arm, i, across, Quaternion.AngleAxis(side * toward, across) * along, across, arm.Weight);
+                    InLine(arm, i, across, arm.Weight);
+                }
+                Remember(arm);
+                if (flatness <= 0f)
+                {
+                    BendBack(arm, across, side);
+                    ThumbInLine(arm, frame * Vector3.right * side, arm.Weight, false);
+                    KeepOut(arm, across, side, arm.Weight);
+                    LogFingers(arm, across, side);
+                    LogIdle(arm);
+                    return;
+                }
                 var palm = frame * Vector3.right * side;
                 OverEdges(arm, palm, across, side, flatness);
-                for (var i = 0; i < arm.Thumb.Length; i++) LiftThumb(arm, i, palm, flatness);
+                Claw(arm, palm, across, side, flatness * arm.Claw);
+                for (var i = 0; i < arm.Thumb.Length; i++) LiftThumb(arm, i, palm, flatness, ThumbIn + ClawThumb * arm.Claw);
+                ThumbInLine(arm, palm, flatness, true);
+                KeepOut(arm, across, side, flatness);
+                LogFingers(arm, across, side);
                 LogThumb(arm, palm, flatness);
                 return;
             }
             var bend = arm.Fist ? FistBend : GripBend;
+            // Raik (2026-11-14): the empty hand's fist, the grip pressed on nothing, closes as on a tool for now: fingers
+            // parallel (ToolBend), the thumb above the index finger (ThumbOnIndex).
+            var handle = tool || (arm.Fist && hand.State == HandState.Empty);
             for (var i = 0; i < arm.Joints.Length; i++)
-                Turn(arm, arm.Joints[i], i, Quaternion.AngleAxis(side * bend[i % 3] * amount, across));
-            var thumb = (arm.Fist ? FistThumb : GripThumb) * amount;
+            {
+                // A tool: wrapped round its handle, from the animation's pose (ToolBend).
+                if (handle)
+                {
+                    Straighten(arm, i, across, Quaternion.AngleAxis(side * ToolBend[i], across) * along, across, amount);
+                    Parallel(arm, i, across, amount);
+                    InLine(arm, i, across, amount);
+                    continue;
+                }
+                // Closing from the loose hand: the grip on top of what is left of it.
+                if (loose > 0f)
+                {
+                    Straighten(arm, i, across, Quaternion.AngleAxis(side * IdleBend[i], across) * along, across, loose);
+                    InLine(arm, i, across, loose);
+                }
+                else if (!Restore(arm, arm.Joints[i], i)) continue;
+                var joint = arm.Joints[i];
+                if (joint == null) continue;
+                joint.rotation = Quaternion.AngleAxis(side * bend[i % 3] * amount, across) * joint.rotation;
+                arm.Set[i] = joint.localRotation;
+            }
+            if (handle || arm.Fist) PalmFold(arm, frame, side, amount);
+            var thumb = (arm.Fist && !handle ? FistThumb : GripThumb) * amount;
             // The humanoid three only: the rig's further thumb bones keep their pose relative to them.
             for (var i = 0; i < 3; i++)
                 Turn(arm, arm.Thumb[i], arm.Joints.Length + i, Quaternion.AngleAxis(-side * thumb, along));
-            if (arm.Fist) ThumbOnMiddle(arm, frame * Vector3.right * side, amount);
+            if (handle) ThumbOnIndex(arm, frame * Vector3.right * side, amount);
+            else if (arm.Fist) ThumbOnMiddle(arm, frame * Vector3.right * side, amount);
+        }
+
+        // The other hand's tool is in the way of a hand that does not hold it itself (VrHandShape.Gather).
+        private static bool SeesTool(Arm arm) => !(arm == LeftArm ? VrHand.Left : VrHand.Right).HoldsTool;
+
+        // The other arm, in the way of this hand (VrHandShape.Limb); not for a hand that supports a tool held in the other
+        // hand, which lies right at its wrist.
+        private static VrHandShape.Limb OtherLimb(Arm arm)
+        {
+            var other = arm == LeftArm ? RightArm : LeftArm;
+            return Limb(other);
+        }
+
+        private static VrHandShape.Limb Limb(Arm arm)
+        {
+            if (arm.Upper == null || arm.Lower == null || arm.Wrist == null) return default;
+            return new VrHandShape.Limb
+            {
+                Known = true,
+                Shoulder = arm.Upper.position,
+                Elbow = arm.Lower.position,
+                Wrist = arm.Wrist.position,
+                Turn = arm.Lower.rotation,
+            };
         }
 
         // The thumb's base turned so that its tip lies over the middle finger's last joint, closing the fist's tunnel.
@@ -422,9 +691,30 @@ namespace ShipbreakerVR
             arm.Set[arm.Joints.Length] = root.localRotation;
         }
 
+        // On a tool, the thumb's base turned so that its tip lies over the middle of the index finger's middle bone, out
+        // from it by ThumbOver, as when holding a handle (Raik's photos).
+        private static void ThumbOnIndex(Arm arm, Vector3 palm, float share)
+        {
+            var root = arm.Thumb[0];
+            var last = arm.Thumb.LastOrDefault(j => j != null);
+            var from = arm.Joints[1];
+            var to = arm.Joints[2];
+            if (root == null || last == null || from == null || to == null) return;
+            var tip = last.childCount > 0 ? last.GetChild(0).position : last.position;
+            var target = (from.position + to.position) * 0.5f + palm * ThumbOver * VrCamera.WorldScale;
+            // Above the index finger: from the little finger's knuckle towards the index finger's.
+            var little = arm.Joints.Length >= 12 ? arm.Joints[9] : null;
+            if (little != null && (arm.Joints[0].position - little.position).sqrMagnitude > 1e-6f)
+                target += (arm.Joints[0].position - little.position).normalized * ThumbAbove * VrCamera.WorldScale;
+            var turn = Quaternion.FromToRotation(tip - root.position, target - root.position);
+            root.rotation = Quaternion.Slerp(Quaternion.identity, turn, share) * root.rotation;
+            arm.Set[arm.Joints.Length] = root.localRotation;
+        }
+
         // The joints that are still as Curl left them back to the animation's pose.
         private static void Open(Arm arm)
         {
+            RestoreFold(arm);
             for (var i = 0; i < arm.Base.Length; i++)
             {
                 var joint = i < arm.Joints.Length ? arm.Joints[i] : arm.Thumb[i - arm.Joints.Length];
@@ -455,12 +745,141 @@ namespace ShipbreakerVR
             arm.Set[index] = joint.localRotation;
         }
 
+        // Raik (2026-11-14, his own hand): closing a fist, the palm folds in under the knuckles too; on its back the hand
+        // bends at the knuckles, on its inside at a crease CreaseShare of the palm's length behind them. The game's hand
+        // has no bones between wrist and fingers, so each finger's base joint is turned about that crease instead of about
+        // itself, by FoldAt degrees (index to little, the little finger most, as a hand cups) times the share closed: the
+        // knuckle moves in towards the palm and the glove round it follows. Half of that turn is taken back at the joint,
+        // so the fingers keep about the pose they had. The palm's shape folds its front the same way (PalmBoxes).
+        private const float CreaseShare = 0.15f;
+        private static readonly float[] FoldAt = { 8f, 10f, 13f, 16f };
+        private static int foldPalmLogs;
+
+        private static void PalmFold(Arm arm, Quaternion frame, float side, float share)
+        {
+            if (share <= 0f) return;
+            var scale = VrCamera.WorldScale;
+            var across = frame * Vector3.up;
+            var along = frame * Vector3.forward;
+            var palm = frame * Vector3.right * side;
+            var total = 0f;
+            for (var finger = 0; finger < 4; finger++)
+            {
+                var index = finger * 3;
+                var joint = arm.Joints[index];
+                if (joint == null) continue;
+                var angle = FoldAt[finger] * share;
+                var pivot = joint.position - along * (CreaseShare * PalmLength * scale) + palm * (PalmThickness * 0.5f * scale);
+                var turn = Quaternion.AngleAxis(side * angle, across);
+                joint.position = pivot + turn * (joint.position - pivot);
+                joint.rotation = Quaternion.AngleAxis(side * angle * 0.5f, across) * joint.rotation;
+                arm.FoldSet[finger] = joint.localPosition;
+                arm.Set[index] = joint.localRotation;
+                total += angle;
+            }
+            arm.PalmFold = total / 4f;
+            if (foldPalmLogs++ < 10) Plugin.Log.LogInfo($"Hands: {arm.Name} palm folds in under the knuckles, {arm.PalmFold:0}° on average");
+        }
+
+        // The finger's base joints back where the animation had them, if they are still where PalmFold put them.
+        private static void RestoreFold(Arm arm)
+        {
+            arm.PalmFold = 0f;
+            for (var finger = 0; finger < 4; finger++)
+            {
+                var joint = finger * 3 < arm.Joints.Length ? arm.Joints[finger * 3] : null;
+                if (joint == null) continue;
+                if (arm.FoldSet[finger] != Vector3.zero && joint.localPosition == arm.FoldSet[finger]) joint.localPosition = arm.FoldBase[finger];
+                arm.FoldBase[finger] = joint.localPosition;
+                arm.FoldSet[finger] = Vector3.zero;
+            }
+        }
+
+        // Test (Raik, 2026-11-14): the palm's shape in three boxes, in the hand's axes from the wrist (middle, turn, half
+        // size): the main one from the wrist to CreaseShare before the knuckles; beyond it the back of the hand on to the
+        // knuckles, and the palm's front under them, folded in about the crease by PalmFold. Up to three, none without the
+        // hand's shape known.
+        private static readonly Vector3[] PalmCenter = new Vector3[3];
+        private static readonly Quaternion[] PalmTurn = new Quaternion[3];
+        private static readonly Vector3[] PalmHalf = new Vector3[3];
+
+        private static int PalmBoxes(Arm arm, float side)
+        {
+            if (!arm.ShapeKnown) return 0;
+            var scale = VrCamera.WorldScale;
+            var length = arm.ShapeKnuckle[1].z;
+            if (length <= 0.01f * scale) return 0;
+            var width = Mathf.Abs(arm.ShapeKnuckle[0].y - arm.ShapeKnuckle[3].y) + 2f * VrHandShape.FingerRadius[1] * scale;
+            var middle = (arm.ShapeKnuckle[0].y + arm.ShapeKnuckle[3].y) * 0.5f;
+            var palmSide = PalmThickness * 0.9f * scale;
+            var backSide = 0.01f * scale;
+            var crease = (1f - CreaseShare) * length;
+            var front = CreaseShare * length;
+            PalmCenter[0] = new Vector3(side * (palmSide - backSide) * 0.5f, middle, crease * 0.5f);
+            PalmTurn[0] = Quaternion.identity;
+            PalmHalf[0] = new Vector3((palmSide + backSide) * 0.5f, width * 0.5f, crease * 0.5f);
+            PalmCenter[1] = new Vector3(-side * backSide * 0.5f, middle, crease + front * 0.5f);
+            PalmTurn[1] = Quaternion.identity;
+            PalmHalf[1] = new Vector3(backSide * 0.5f, width * 0.5f, front * 0.5f);
+            var hinge = new Vector3(0f, middle, crease);
+            var fold = Quaternion.AngleAxis(side * arm.PalmFold, Vector3.up);
+            PalmCenter[2] = hinge + fold * (new Vector3(side * palmSide * 0.5f, middle, crease + front * 0.5f) - hinge);
+            PalmTurn[2] = fold;
+            PalmHalf[2] = new Vector3(palmSide * 0.5f, width * 0.5f, front * 0.5f);
+            return 3;
+        }
+
+        // Raik (2026-11-14, picture: the little finger still bent out towards the hand's edge): Straighten bends a finger
+        // only in its own plane, so it kept the animation's spread sideways. On a handle each finger's base bone is
+        // turned sideways until it leans neither towards the thumb nor away (InLine lines up the rest), by that share:
+        // the fingers lie side by side, parallel.
+        private static void Parallel(Arm arm, int index, Vector3 across, float share)
+        {
+            if (index % 3 != 0 || share <= 0f) return;
+            var joint = arm.Joints[index];
+            var next = arm.Joints[index + 1];
+            if (joint == null || next == null) return;
+            var bone = next.position - joint.position;
+            if (bone.sqrMagnitude <= 1e-10f) return;
+            var axis = Vector3.Cross(bone, across);
+            if (axis.sqrMagnitude <= 1e-10f) return;
+            var lean = Mathf.Asin(Mathf.Clamp(Vector3.Dot(bone.normalized, across), -1f, 1f)) * Mathf.Rad2Deg;
+            joint.rotation = Quaternion.AngleAxis(-lean * share, axis.normalized) * joint.rotation;
+            arm.Set[index] = joint.localRotation;
+        }
+
+        // Test (Raik): seen from above a finger runs straight, not in an arc. Its middle and last bone turned sideways (towards
+        // or away from the thumb side) until they lean as far to that side as the bone before them, by that share.
+        private static void InLine(Arm arm, int index, Vector3 across, float share)
+        {
+            if (index % 3 == 0 || share <= 0f) return;
+            var joint = arm.Joints[index];
+            var before = arm.Joints[index - 1];
+            if (joint == null || before == null) return;
+            var next = index % 3 < 2 ? arm.Joints[index + 1] : joint.childCount > 0 ? joint.GetChild(0) : null;
+            if (next == null) return;
+            var bone = next.position - joint.position;
+            var last = joint.position - before.position;
+            if (bone.sqrMagnitude <= 1e-10f || last.sqrMagnitude <= 1e-10f) return;
+            var axis = Vector3.Cross(bone, across);
+            if (axis.sqrMagnitude <= 1e-10f) return;
+            var lean = Mathf.Asin(Mathf.Clamp(Vector3.Dot(bone.normalized, across), -1f, 1f));
+            var lastLean = Mathf.Asin(Mathf.Clamp(Vector3.Dot(last.normalized, across), -1f, 1f));
+            joint.rotation = Quaternion.AngleAxis(-(lean - lastLean) * Mathf.Rad2Deg * share, axis.normalized) * joint.rotation;
+            arm.Set[index] = joint.localRotation;
+        }
+
         // Each finger, straight as Straighten left it, curls from the first joint whose next bone has no surface under it:
         // there it reaches over an edge. Found on the straight finger, so the curl does not change what is found.
         private static void OverEdges(Arm arm, Vector3 palm, Vector3 across, float side, float share)
         {
             var body = arm.Wrist.root;
             var probe = EdgeProbe * VrCamera.WorldScale;
+            // Edges are looked for only once the hand lies on the surface: while it still goes there (GripBlend, Press),
+            // every finger found nothing under it and curled (the log, 2026-11-13: all four at once on each hold).
+            var arrived = arm.Pressed ? arm.Press >= 1f : arm.GripBlend >= 1f;
+            VrHandShape.Gather(arm.Wrist.position, WallReach * VrCamera.WorldScale, body, SeesTool(arm), OtherLimb(arm));
+            var saved = new Quaternion[3];
             for (var finger = 0; finger < arm.Joints.Length / 3; finger++)
             {
                 var over = false;
@@ -469,27 +888,601 @@ namespace ShipbreakerVR
                     var index = finger * 3 + k;
                     var joint = arm.Joints[index];
                     var next = k < 2 ? arm.Joints[index + 1] : joint != null && joint.childCount > 0 ? joint.GetChild(0) : null;
-                    if (!over && next != null && !Supported(next.position, palm, probe, body)) over = true;
+                    if (!over && arrived && next != null && !Supported(next.position, palm, probe, body))
+                    {
+                        over = true;
+                        if (arm.Edge[index] <= 0f && edgeLogs++ < 40)
+                            Plugin.Log.LogInfo($"Hands: {arm.Name} {joint?.name} reaches over an edge ({(arm.Pressed ? "pressed" : "held")})");
+                    }
                     arm.Edge[index] = Mathf.MoveTowards(arm.Edge[index], over ? 1f : 0f, Time.unscaledDeltaTime / EdgeTime);
                 }
-                for (var k = 0; k < 3; k++)
+                // Test (Raik, 2026-11-14: the ring finger went into the held wall, curled over an edge that was none): the
+                // curl only as far as the finger stays out of what it lies on, ClawPress at most.
+                var first = finger * 3;
+                if (arm.Edge[first] <= 0f && arm.Edge[first + 1] <= 0f && arm.Edge[first + 2] <= 0f) continue;
+                if (!Chain(arm, finger)) continue;
+                for (var k = 0; k < 3; k++) saved[k] = arm.Joints[first + k].localRotation;
+                var reach = 1f;
+                if (EdgeCurl(arm, finger, saved, across, side, share, 1f))
                 {
-                    var index = finger * 3 + k;
-                    var joint = arm.Joints[index];
-                    if (joint == null || arm.Edge[index] <= 0f) continue;
-                    joint.rotation = Quaternion.AngleAxis(side * EdgeBend[k] * arm.Edge[index] * share, across) * joint.rotation;
-                    arm.Set[index] = joint.localRotation;
+                    var low = 0f;
+                    for (var step = 0; step < 6; step++)
+                    {
+                        var middle = (low + reach) * 0.5f;
+                        if (EdgeCurl(arm, finger, saved, across, side, share, middle)) reach = middle; else low = middle;
+                    }
+                    reach = low;
+                    if (curlLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} {arm.Joints[first].name} curls over an edge only {reach * 100f:0}%, the surface is under it");
                 }
+                EdgeCurl(arm, finger, saved, across, side, share, reach);
+                for (var k = 0; k < 3; k++) arm.Set[first + k] = arm.Joints[first + k].localRotation;
             }
         }
+
+        private static int curlLogs;
+
+        // The finger curled over an edge by that share of its Edge, from saved; true when it is then in something.
+        private static bool EdgeCurl(Arm arm, int finger, Quaternion[] saved, Vector3 across, float side, float share, float reach)
+        {
+            for (var k = 0; k < 3; k++) arm.Joints[finger * 3 + k].localRotation = saved[k];
+            for (var k = 0; k < 3; k++)
+            {
+                var index = finger * 3 + k;
+                if (arm.Edge[index] <= 0f) continue;
+                var joint = arm.Joints[index];
+                joint.rotation = Quaternion.AngleAxis(side * EdgeBend[k] * arm.Edge[index] * share * reach, across) * joint.rotation;
+            }
+            return FingerIn(arm, finger, ClawPress * VrCamera.WorldScale);
+        }
+
+        // Test (Raik, 2026-11-14): a finger of the flat hand still in the surface (the ring finger on a held wall) bends
+        // back at its knuckle until it is out, ClawPress at most, up to MostBack.
+        // Test (Raik, 2026-11-14): the hand as drawn is its collision shape, each finger and thumb bone a capsule to the
+        // visible tip; at the end of the pose none may be more than PressInAtMost in a surface, as a suit glove pressed
+        // on it. A finger still in bends back at its knuckle (up to MostLift), then unbends its middle and last joint
+        // (up to MostUnbend each); the thumb turns out of it the way out. What is left is logged.
+        private const float PressInAtMost = 0.0015f;
+        private const float MostLift = 45f;
+        private const float MostUnbend = 60f;
+
+        private static void KeepOut(Arm arm, Vector3 across, float side, float share)
+        {
+            // Also on a hold (the ring finger on a held wall): only the hand that follows its controller.
+            if (share <= 0f || !arm.Driven) return;
+            var allowed = PressInAtMost * VrCamera.WorldScale;
+            VrHandShape.Gather(arm.Wrist.position, WallReach * VrCamera.WorldScale, arm.Wrist.root, SeesTool(arm), OtherLimb(arm));
+            for (var finger = 0; finger < 4; finger++)
+            {
+                if (!Chain(arm, finger)) continue;
+                var root = arm.Joints[finger * 3];
+                var start = root.localRotation;
+                var inside = FingerIn(arm, finger, allowed);
+                // The knuckle bends back at most KnuckleBackAtMost in all (Raik): what it is bent back already counts.
+                var mostLift = Mathf.Clamp(Mathf.Min(MostLift, KnuckleBackAtMost + KnuckleBend(arm, finger, across, side)), 0f, MostLift);
+                var lift = inside ? Search(mostLift, angle =>
+                {
+                    root.localRotation = start;
+                    root.rotation = Quaternion.AngleAxis(-side * angle, across) * root.rotation;
+                    return FingerIn(arm, finger, allowed);
+                }) : 0f;
+                lift = Mathf.Min(mostLift, Mathf.Max(lift, arm.LiftShown[finger] - Time.unscaledDeltaTime * MostLift / RelaxTime));
+                arm.LiftShown[finger] = lift;
+                root.localRotation = start;
+                if (lift > 0f) root.rotation = Quaternion.AngleAxis(-side * lift * share, across) * root.rotation;
+                arm.Set[finger * 3] = root.localRotation;
+                var unbend = 0f;
+                // Middle and last joint unbend at most until they are straight, never bent backwards (the picture,
+                // 2026-11-14: fingers overstretched).
+                var mostUnbend = Mathf.Clamp(Mathf.Min(JointBend(arm, finger * 3 + 1, across, side), JointBend(arm, finger * 3 + 2, across, side)), 0f, MostUnbend);
+                var stillIn = inside && FingerIn(arm, finger, allowed);
+                if (stillIn || arm.UnbendShown[finger] > 0f)
+                {
+                    var middleJoint = arm.Joints[finger * 3 + 1];
+                    var lastJoint = arm.Joints[finger * 3 + 2];
+                    var middleStart = middleJoint.localRotation;
+                    var lastStart = lastJoint.localRotation;
+                    if (stillIn) unbend = Search(mostUnbend, angle =>
+                    {
+                        middleJoint.localRotation = middleStart;
+                        lastJoint.localRotation = lastStart;
+                        middleJoint.rotation = Quaternion.AngleAxis(-side * angle, across) * middleJoint.rotation;
+                        lastJoint.rotation = Quaternion.AngleAxis(-side * angle, across) * lastJoint.rotation;
+                        return FingerIn(arm, finger, allowed);
+                    });
+                    unbend = Mathf.Min(mostUnbend, Mathf.Max(unbend, arm.UnbendShown[finger] - Time.unscaledDeltaTime * MostUnbend / RelaxTime));
+                    middleJoint.localRotation = middleStart;
+                    lastJoint.localRotation = lastStart;
+                    middleJoint.rotation = Quaternion.AngleAxis(-side * unbend * share, across) * middleJoint.rotation;
+                    lastJoint.rotation = Quaternion.AngleAxis(-side * unbend * share, across) * lastJoint.rotation;
+                    arm.Set[finger * 3 + 1] = middleJoint.localRotation;
+                    arm.Set[finger * 3 + 2] = lastJoint.localRotation;
+                }
+                arm.UnbendShown[finger] = unbend;
+                if (!inside) continue;
+                if (keepLogs++ < 30)
+                    Plugin.Log.LogInfo($"Hands: {arm.Name} {root.name} kept out of the surface: lifted {lift:0}°, unbent {unbend:0}°, still {FingerDepth(arm, finger) * 1000f / VrCamera.WorldScale:0.0} mm in");
+            }
+            ThumbOut(arm, allowed);
+            FingerPush(arm, allowed);
+        }
+
+        // Test (Raik, 2026-11-14: with the open hand the fingers still slipped into a wall where faces meet, and drawing
+        // the hand up along it they stayed in): bent back as far as they go (MostLift) and straight, a finger can still
+        // lie in a face ahead of the palm. Then the empty hand is held back, the next frame on, along the way out of the
+        // deepest finger, until none is in more than allowed; with none in, it comes back towards its controller at
+        // FingerPushBack m/s, so it settles at the surface. At most FingerPushMost.
+        private const float FingerPushMost = 0.08f;
+        private const float FingerPushBack = 0.05f;
+        private static int fingerPushLogs;
+
+        private static void FingerPush(Arm arm, float allowed)
+        {
+            var state = (arm == LeftArm ? VrHand.Left : VrHand.Right).State;
+            if (state != HandState.Empty)
+            {
+                arm.FingerPush = Vector3.zero;
+                return;
+            }
+            var scale = VrCamera.WorldScale;
+            var deepest = 0f;
+            var way = Vector3.zero;
+            for (var finger = 0; finger < 4; finger++)
+            {
+                if (!Chain(arm, finger)) continue;
+                var depth = FingerWay(arm, finger, out var fingerWay);
+                if (depth <= deepest) continue;
+                deepest = depth;
+                way = fingerWay;
+            }
+            if (deepest > allowed && way != Vector3.zero)
+            {
+                var before = arm.FingerPush.magnitude;
+                arm.FingerPush = Vector3.ClampMagnitude(arm.FingerPush + way * (deepest - allowed), FingerPushMost * scale);
+                if (before <= 0f && fingerPushLogs++ < 30)
+                    Plugin.Log.LogInfo($"Hands: {arm.Name} hand held back, a finger {deepest * 1000f / scale:0.0} mm in a surface");
+            }
+            else arm.FingerPush = Vector3.MoveTowards(arm.FingerPush, Vector3.zero, FingerPushBack * scale * Time.unscaledDeltaTime);
+        }
+
+        // How far a finger joint's bone is bent towards the palm from the bone before it, in degrees (negative: backwards).
+        private static float JointBend(Arm arm, int index, Vector3 across, float side)
+        {
+            var joint = arm.Joints[index];
+            var before = arm.Joints[index - 1];
+            var next = index % 3 < 2 ? arm.Joints[index + 1] : joint.childCount > 0 ? joint.GetChild(0) : null;
+            if (joint == null || before == null || next == null) return 0f;
+            return side * Vector3.SignedAngle(joint.position - before.position, next.position - joint.position, across);
+        }
+
+        // How far a finger's first bone is bent towards the palm from the knuckles' line, in degrees (negative: backwards).
+        private static float KnuckleBend(Arm arm, int finger, Vector3 across, float side)
+        {
+            if (!Frame(arm, out _, out var frame)) return 0f;
+            var root = arm.Joints[finger * 3];
+            var next = arm.Joints[finger * 3 + 1];
+            if (root == null || next == null) return 0f;
+            return side * Vector3.SignedAngle(frame * Vector3.forward, next.position - root.position, across);
+        }
+
+        // Local test tool (Raik, 2026-11-14: fingers overstretched): while a finger of the empty hand is bent back more
+        // than 30 degrees at a joint, every quarter second each finger's bends (knuckle, middle, last; negative backwards)
+        // and what bent it.
+        private static int fingerPoseLogs;
+
+        private static void LogFingers(Arm arm, Vector3 across, float side)
+        {
+            if (fingerPoseLogs >= 300 || Time.unscaledTime - arm.FingerLogAt < 0.25f) return;
+            var worst = 0f;
+            var b = new System.Text.StringBuilder();
+            for (var finger = 0; finger < 4; finger++)
+            {
+                if (!Chain(arm, finger)) continue;
+                var knuckle = KnuckleBend(arm, finger, across, side);
+                var middle = JointBend(arm, finger * 3 + 1, across, side);
+                var last = JointBend(arm, finger * 3 + 2, across, side);
+                worst = Mathf.Min(worst, Mathf.Min(knuckle, Mathf.Min(middle, last)));
+                b.Append($" {"IMRL"[finger]} {knuckle:0}/{middle:0}/{last:0} (bent {arm.BendShown[finger]:0}, lifted {arm.LiftShown[finger]:0}, unbent {arm.UnbendShown[finger]:0}, {FingerDepth(arm, finger) * 1000f / VrCamera.WorldScale:0.0} mm in);");
+            }
+            if (worst > -30f) return;
+            arm.FingerLogAt = Time.unscaledTime;
+            fingerPoseLogs++;
+            Plugin.Log.LogInfo($"Finger pose: {arm.Name} knuckle/middle/last in degrees:{b} hand back {arm.Back:0}°, folded {arm.Folded:0.00}, flat {arm.Press:0.00}");
+        }
+
+        // The least value in 0 to most for which inside is false (most when it stays true), by halving.
+        private static float Search(float most, System.Func<float, bool> inside)
+        {
+            if (!inside(most))
+            {
+                var least = 0f;
+                for (var step = 0; step < 6; step++)
+                {
+                    var middle = (least + most) * 0.5f;
+                    if (inside(middle)) least = middle; else most = middle;
+                }
+            }
+            return most;
+        }
+
+        // How deep the finger's deepest bone is in something.
+        private static float FingerDepth(Arm arm, int finger)
+        {
+            var radius = VrHandShape.FingerRadius[finger] * VrCamera.WorldScale;
+            var deepest = 0f;
+            for (var k = 0; k < 3; k++)
+            {
+                var joint = arm.Joints[finger * 3 + k];
+                var next = k < 2 ? arm.Joints[finger * 3 + k + 1] : joint.GetChild(0);
+                deepest = Mathf.Max(deepest, VrHandShape.Capsule(joint.position, next.position, radius, out _));
+            }
+            return deepest;
+        }
+
+        // The thumb's bones as capsules: while one is in something deeper than allowed, the thumb's base turns so that
+        // that bone's end moves out the way out, three times at most.
+        private static void ThumbOut(Arm arm, float allowed)
+        {
+            var root = arm.Thumb[0];
+            if (root == null) return;
+            var radius = VrHandShape.ThumbRadius * VrCamera.WorldScale;
+            for (var round = 0; round < 3; round++)
+            {
+                var deepest = 0f;
+                var way = Vector3.zero;
+                var end = Vector3.zero;
+                for (var k = 0; k < arm.Thumb.Length; k++)
+                {
+                    var joint = arm.Thumb[k];
+                    if (joint == null) break;
+                    var next = k + 1 < arm.Thumb.Length && arm.Thumb[k + 1] != null ? arm.Thumb[k + 1] : joint.childCount > 0 ? joint.GetChild(0) : null;
+                    if (next == null) break;
+                    var depth = VrHandShape.Capsule(joint.position, next.position, radius, out var out_);
+                    if (depth > deepest)
+                    {
+                        deepest = depth;
+                        way = out_;
+                        end = next.position;
+                    }
+                }
+                if (deepest <= allowed) return;
+                var turn = Quaternion.FromToRotation(end - root.position, end + way * (deepest - allowed * 0.5f) - root.position);
+                root.rotation = turn * root.rotation;
+                arm.Set[arm.Joints.Length] = root.localRotation;
+                if (thumbOutLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} thumb turned {Quaternion.Angle(Quaternion.identity, turn):0}° out of a surface it was {deepest * 1000f / VrCamera.WorldScale:0.0} mm in");
+            }
+        }
+
+        private static int thumbOutLogs;
+
+        private static int keepLogs;
+
+        // Each finger with the surface under it (not curled over an edge) bends by ClawBend, scaled down until its tip's
+        // capsule (VrHandShape) presses at most ClawPress into the surface, so it adapts to how far off it the hand is.
+        // The first time per hold, each finger's share is logged (Raik: the ring finger seemed pressed down too often).
+        private static void Claw(Arm arm, Vector3 palm, Vector3 across, float side, float share)
+        {
+            if (share <= 0f)
+            {
+                arm.ClawLogged = false;
+                return;
+            }
+            VrHandShape.Gather(arm.Wrist.position, WallReach * VrCamera.WorldScale, arm.Wrist.root, SeesTool(arm), OtherLimb(arm));
+            var log = share >= 1f && !arm.ClawLogged && clawLogs < 30 ? new System.Text.StringBuilder() : null;
+            var saved = new Quaternion[3];
+            for (var finger = 0; finger < arm.Joints.Length / 3; finger++)
+            {
+                var first = finger * 3;
+                var edge = Mathf.Max(arm.Edge[first], Mathf.Max(arm.Edge[first + 1], arm.Edge[first + 2]));
+                var weight = share * (1f - edge);
+                if (weight <= 0f || !Chain(arm, finger)) continue;
+                for (var k = 0; k < 3; k++) saved[k] = arm.Joints[first + k].localRotation;
+                var reach = 1f;
+                if (TipIn(arm, finger, saved, across, side, weight, 1f) > ClawPress * VrCamera.WorldScale)
+                {
+                    var low = 0f;
+                    for (var step = 0; step < 8; step++)
+                    {
+                        var middle = (low + reach) * 0.5f;
+                        if (TipIn(arm, finger, saved, across, side, weight, middle) > ClawPress * VrCamera.WorldScale) reach = middle; else low = middle;
+                    }
+                    reach = low;
+                }
+                ClawFinger(arm, finger, saved, across, side, weight * reach);
+                for (var k = 0; k < 3; k++) arm.Set[first + k] = arm.Joints[first + k].localRotation;
+                if (log != null) log.Append($" {arm.Joints[first].name} {reach:0.00}{(edge > 0f ? " (edge)" : "")} {Under(arm, arm.Joints[first].position, palm)}");
+            }
+            if (log != null)
+            {
+                arm.ClawLogged = true;
+                clawLogs++;
+                Plugin.Log.LogInfo($"Hands: {arm.Name} fingertips on the wall, each finger's share of ClawBend:{log}");
+            }
+        }
+
+        private static int clawLogs;
+
+        // For the log: how far the surface lies under that point towards the palm, in cm, or '-' within 10 cm none.
+        private static string Under(Arm arm, Vector3 point, Vector3 palm)
+        {
+            var count = Physics.RaycastNonAlloc(point - palm * 0.02f * VrCamera.WorldScale, palm, WallHits, 0.12f * VrCamera.WorldScale, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            var nearest = float.MaxValue;
+            for (var i = 0; i < count; i++)
+                if (!WallHits[i].collider.transform.IsChildOf(arm.Wrist.root)) nearest = Mathf.Min(nearest, WallHits[i].distance);
+            return nearest == float.MaxValue ? "(-)" : $"({(nearest - 0.02f * VrCamera.WorldScale) * 100f:0.0} cm)";
+        }
+
+        private static bool Chain(Arm arm, int finger)
+        {
+            var last = arm.Joints[finger * 3 + 2];
+            return arm.Joints[finger * 3] != null && arm.Joints[finger * 3 + 1] != null && last != null && last.childCount > 0;
+        }
+
+        private static void ClawFinger(Arm arm, int finger, Quaternion[] saved, Vector3 across, float side, float share)
+        {
+            for (var k = 0; k < 3; k++) arm.Joints[finger * 3 + k].localRotation = saved[k];
+            for (var k = 0; k < 3; k++)
+            {
+                var joint = arm.Joints[finger * 3 + k];
+                joint.rotation = Quaternion.AngleAxis(side * ClawBend[k] * share, across) * joint.rotation;
+            }
+        }
+
+        // How deep the finger's tip bone is in the surface with ClawBend by that share.
+        private static float TipIn(Arm arm, int finger, Quaternion[] saved, Vector3 across, float side, float weight, float reach)
+        {
+            ClawFinger(arm, finger, saved, across, side, weight * reach);
+            var last = arm.Joints[finger * 3 + 2];
+            var depth = VrHandShape.Capsule(last.position, last.GetChild(0).position, VrHandShape.FingerRadius[finger] * VrCamera.WorldScale, out _);
+            for (var k = 0; k < 3; k++) arm.Joints[finger * 3 + k].localRotation = saved[k];
+            return depth;
+        }
+
+        // The hand's shape in its own axes for Touch, from the fingers as straightened, before they bend back.
+        private static void Remember(Arm arm)
+        {
+            if (!Frame(arm, out var wrist, out var frame)) return;
+            var back = Quaternion.Inverse(frame);
+            for (var finger = 0; finger < 4; finger++)
+            {
+                if (!Chain(arm, finger)) return;
+                arm.ShapeKnuckle[finger] = back * (arm.Joints[finger * 3].position - wrist);
+                arm.ShapeTip[finger] = back * (arm.Joints[finger * 3 + 2].GetChild(0).position - wrist);
+            }
+            arm.ShapeKnown = true;
+        }
+
+        // The loose empty hand's fingers bent back at the knuckles: each finger that is in something (its bones' capsules
+        // against the real shapes, VrHandShape) as far as it needs, up to MostBack. Test (Raik, 2026-11-14: fingers lift
+        // as the hand comes near, though the shapes are right): no longer all together as far as Touch found, which
+        // reckons with the surface as a plane drawn on past its edges and lifted every finger as far as the one nearest it.
+        // Touch still uses that to tell when the hand folds over.
+        // Test (Raik, 2026-11-14): a finger touching something with its back (the back of the hand on a hull) folds in
+        // towards the palm at its knuckle, long and straight, as far as it has to, up to MostFold, instead of bending back
+        // into it.
+        // Test (Raik, 2026-11-14: the fingers swung over as soon as the palm was raised a little; they should only once
+        // the palm goes over them, dragging them along): no longer by which way the hand moves. A folded finger's tip
+        // rests where it touched (TuckAnchor), as held there by friction: it slides along while the finger is pressed
+        // further in, and is dragged after the knuckle when that goes further off than the finger is long. The finger
+        // keeps pointing at that spot as the hand turns or lifts. Only when the knuckles have passed over it, the spot
+        // FlipAt degrees on the back of the hand's side, the fingers swing over and bend back as before, until BackForget
+        // seconds pass without a finger's back touching. A tip no longer within NearGap of anything for BackForget
+        // seconds lets go of its spot and the finger relaxes.
+        private const float MostFold = 90f;
+        private const float FlipAt = 5f;
+        private const float NearGap = 0.008f;
+        private const float BackForget = 0.3f;
+        // A finger touches with its back when the way out of what it is in points this much towards the palm.
+        private const float BackSide = 0.2f;
+        private static int tuckLogs;
+
+        // Whether some bone of the finger is within gap of something.
+        private static bool FingerNear(Arm arm, int finger, float gap)
+        {
+            var radius = VrHandShape.FingerRadius[finger] * VrCamera.WorldScale + gap;
+            for (var k = 0; k < 3; k++)
+            {
+                var joint = arm.Joints[finger * 3 + k];
+                var next = k < 2 ? arm.Joints[finger * 3 + k + 1] : joint.GetChild(0);
+                if (VrHandShape.Capsule(joint.position, next.position, radius, out _) > 0.001f) return true;
+            }
+            return false;
+        }
+
+        // The finger's length from its knuckle to its tip, along its bones.
+        private static float FingerReach(Arm arm, int finger)
+        {
+            var length = 0f;
+            for (var k = 0; k < 3; k++)
+            {
+                var joint = arm.Joints[finger * 3 + k];
+                var next = k < 2 ? arm.Joints[finger * 3 + k + 1] : joint.GetChild(0);
+                length += Vector3.Distance(joint.position, next.position);
+            }
+            return length;
+        }
+
+        // How deep the finger's deepest bone is in something, and the way out of it there.
+        private static float FingerWay(Arm arm, int finger, out Vector3 way)
+        {
+            way = Vector3.zero;
+            var deepest = 0f;
+            var radius = VrHandShape.FingerRadius[finger] * VrCamera.WorldScale;
+            for (var k = 0; k < 3; k++)
+            {
+                var joint = arm.Joints[finger * 3 + k];
+                var next = k < 2 ? arm.Joints[finger * 3 + k + 1] : joint.GetChild(0);
+                var depth = VrHandShape.Capsule(joint.position, next.position, radius, out var boneWay);
+                if (depth <= deepest) continue;
+                deepest = depth;
+                way = boneWay;
+            }
+            return deepest;
+        }
+
+        // The finger folded in by that many degrees at its knuckle (towards the palm), its middle and last joint
+        // straightened as much as it is folded in, from start.
+        private static void Fold(Arm arm, int finger, Quaternion start, float angle, Vector3 across, float side)
+        {
+            var root = arm.Joints[finger * 3];
+            root.localRotation = start;
+            root.rotation = Quaternion.AngleAxis(side * angle, across) * root.rotation;
+            var straight = Mathf.Clamp01(angle / 20f);
+            for (var k = 1; k < 3; k++)
+            {
+                var joint = arm.Joints[finger * 3 + k];
+                var bend = JointBend(arm, finger * 3 + k, across, side);
+                if (bend > 0f) joint.rotation = Quaternion.AngleAxis(-side * bend * straight, across) * joint.rotation;
+            }
+        }
+
+        private static void BendBack(Arm arm, Vector3 across, float side)
+        {
+            var state = (arm == LeftArm ? VrHand.Left : VrHand.Right).State;
+            if (state != HandState.Empty || !arm.Driven || arm.Weight <= 0f) return;
+            VrHandShape.Gather(arm.Wrist.position, WallReach * VrCamera.WorldScale, arm.Wrist.root, SeesTool(arm), OtherLimb(arm));
+            var framed = Frame(arm, out _, out var handFrame);
+            var palm = framed ? handFrame * Vector3.right * side : Vector3.zero;
+            var now = Time.unscaledTime;
+            if (!arm.FoldIn && now - arm.BackTouchAt > BackForget)
+            {
+                arm.FoldIn = true;
+                if (tuckLogs++ < 30) Plugin.Log.LogInfo($"Hands: {arm.Name} fingers fold in again on their backs");
+            }
+            for (var finger = 0; finger < 4; finger++)
+            {
+                if (!Chain(arm, finger)) continue;
+                var root = arm.Joints[finger * 3];
+                var room = MostBack;
+                var need = 0f;
+                var start = root.localRotation;
+                var middleStart = arm.Joints[finger * 3 + 1].localRotation;
+                var lastStart = arm.Joints[finger * 3 + 2].localRotation;
+                var onBack = framed && FingerWay(arm, finger, out var fingerWay) > 0.001f && Vector3.Dot(fingerWay, palm) > BackSide;
+                if (onBack) arm.BackTouchAt = now;
+                var fold = 0f;
+                var outAt = 0f;
+                var held = 0f;
+                if (framed && arm.FoldIn)
+                {
+                    var bentAt = KnuckleBend(arm, finger, across, side);
+                    if (onBack)
+                    {
+                        // As little folded in as gets the finger out.
+                        var most = MostFold;
+                        for (var step = 0; step < 6; step++)
+                        {
+                            var middle = (outAt + most) * 0.5f;
+                            Fold(arm, finger, start, middle, across, side);
+                            if (FingerIn(arm, finger)) outAt = middle; else most = middle;
+                            arm.Joints[finger * 3 + 1].localRotation = middleStart;
+                            arm.Joints[finger * 3 + 2].localRotation = lastStart;
+                        }
+                        root.localRotation = start;
+                        outAt = most;
+                    }
+                    if (arm.TuckHas[finger] && now - arm.TuckNearAt[finger] > BackForget)
+                    {
+                        arm.TuckHas[finger] = false;
+                        if (tuckLogs++ < 30) Plugin.Log.LogInfo($"Hands: {arm.Name} {root.name} lets go of where its tip rested, nothing near");
+                    }
+                    if (arm.TuckHas[finger])
+                    {
+                        // Pointing at where its tip rests, that dragged along when out of the finger's reach.
+                        var knuckle = root.position;
+                        var length = FingerReach(arm, finger);
+                        var toAnchor = arm.TuckAnchor[finger] - knuckle;
+                        if (toAnchor.magnitude > length)
+                        {
+                            toAnchor = toAnchor.normalized * length;
+                            arm.TuckAnchor[finger] = knuckle + toAnchor;
+                        }
+                        var aim = side * Vector3.SignedAngle(handFrame * Vector3.forward, Vector3.ProjectOnPlane(toAnchor, across), across);
+                        if (aim < -FlipAt)
+                        {
+                            // The palm went over the fingers: they swing over.
+                            arm.FoldIn = false;
+                            for (var each = 0; each < 4; each++) arm.TuckHas[each] = false;
+                            outAt = 0f;
+                            if (tuckLogs++ < 30) Plugin.Log.LogInfo($"Hands: {arm.Name} knuckles passed over {root.name}'s tip ({aim:0}°), the fingers swing over and bend back");
+                        }
+                        else held = Mathf.Max(0f, aim - bentAt);
+                    }
+                    if (arm.FoldIn) fold = Mathf.Min(Mathf.Max(outAt, held), MostFold);
+                }
+                var folded = Mathf.Clamp(Mathf.Max(fold, arm.TuckShown[finger] - Time.unscaledDeltaTime * MostFold / RelaxTime), 0f, MostFold);
+                arm.TuckShown[finger] = folded;
+                if (folded > 0f)
+                {
+                    // Folded in, or still swinging over: no bending back meanwhile.
+                    Fold(arm, finger, start, folded * arm.Weight, across, side);
+                    arm.Set[finger * 3] = root.localRotation;
+                    arm.Set[finger * 3 + 1] = arm.Joints[finger * 3 + 1].localRotation;
+                    arm.Set[finger * 3 + 2] = arm.Joints[finger * 3 + 2].localRotation;
+                    arm.BendShown[finger] = 0f;
+                    if (arm.FoldIn && fold > 0f)
+                    {
+                        // Pressed in (no further folded than getting out takes): the tip rests, or slides on, where it is now.
+                        var fresh = !arm.TuckHas[finger];
+                        if ((fresh || outAt >= held) && fold >= folded - 0.01f)
+                        {
+                            arm.TuckAnchor[finger] = arm.Joints[finger * 3 + 2].GetChild(0).position;
+                            arm.TuckHas[finger] = true;
+                            if (fresh) arm.TuckNearAt[finger] = now;
+                            if (fresh && tuckLogs++ < 30) Plugin.Log.LogInfo($"Hands: {arm.Name} {root.name} folded in {fold:0}° on its back, its tip resting there");
+                        }
+                        if (arm.TuckHas[finger] && FingerNear(arm, finger, NearGap * VrCamera.WorldScale)) arm.TuckNearAt[finger] = now;
+                    }
+                    continue;
+                }
+                if (room > 0.5f && FingerIn(arm, finger))
+                {
+                    var least = 0f;
+                    var most = room;
+                    for (var step = 0; step < 6; step++)
+                    {
+                        var middle = (least + most) * 0.5f;
+                        root.localRotation = start;
+                        root.rotation = Quaternion.AngleAxis(-side * middle, across) * root.rotation;
+                        if (FingerIn(arm, finger)) least = middle; else most = middle;
+                    }
+                    need = most;
+                    if (backLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} {root.name} bent back {most:0}° at a wall");
+                }
+                var shown = Mathf.Clamp(Mathf.Max(need, arm.BendShown[finger] - Time.unscaledDeltaTime * MostBack / RelaxTime), 0f, Mathf.Max(0f, room));
+                arm.BendShown[finger] = shown;
+                root.localRotation = start;
+                if (shown > 0f) root.rotation = Quaternion.AngleAxis(-side * shown * arm.Weight, across) * root.rotation;
+                arm.Set[finger * 3] = root.localRotation;
+            }
+        }
+
+        private static int backLogs;
+
+        // Whether any bone of the finger, as a capsule, is in something.
+        private static bool FingerIn(Arm arm, int finger) => FingerIn(arm, finger, 0.001f);
+
+        private static bool FingerIn(Arm arm, int finger, float allowed)
+        {
+            var radius = VrHandShape.FingerRadius[finger] * VrCamera.WorldScale;
+            for (var k = 0; k < 3; k++)
+            {
+                var joint = arm.Joints[finger * 3 + k];
+                var next = k < 2 ? arm.Joints[finger * 3 + k + 1] : joint.GetChild(0);
+                if (VrHandShape.Capsule(joint.position, next.position, radius, out _) > allowed) return true;
+            }
+            return false;
+        }
+
+        private static int edgeLogs;
 
         // Whether something solid lies within probe of that point towards the palm (or the point is in it).
         private static bool Supported(Vector3 point, Vector3 palm, float probe, Transform body)
         {
             var count = Physics.RaycastNonAlloc(point - palm * probe, palm, WallHits, 2f * probe, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            var found = false;
             for (var i = 0; i < count; i++)
-                if (!WallHits[i].collider.transform.IsChildOf(body)) return true;
-            return false;
+                if (!WallHits[i].collider.transform.IsChildOf(body)) found = true;
+            return found;
         }
 
         // The last bone of a chain's tip, or null.
@@ -516,7 +1509,7 @@ namespace ShipbreakerVR
 
         // A thumb joint turned so that its bone runs ThumbIn from the palm's plane towards the palm: on a flat hand the
         // animation's thumb pointed into the wall.
-        private static void LiftThumb(Arm arm, int index, Vector3 palm, float share)
+        private static void LiftThumb(Arm arm, int index, Vector3 palm, float share, float lean)
         {
             var joint = arm.Thumb[index];
             var at = arm.Joints.Length + index;
@@ -527,9 +1520,41 @@ namespace ShipbreakerVR
             var bone = next.position - joint.position;
             var axis = Vector3.Cross(bone, palm);
             if (axis.sqrMagnitude <= 1e-12f) return;
-            var into = 90f - Vector3.Angle(bone, palm) - ThumbIn;
+            var into = 90f - Vector3.Angle(bone, palm) - lean;
             joint.rotation = Quaternion.AngleAxis(-into * share, axis.normalized) * joint.rotation;
             arm.Set[at] = joint.localRotation;
+        }
+
+        // Test (Raik, 2026-11-13: the right thumb kinked, the left not, both lying in the palm's plane alike): the right hand's
+        // animation (it carries the tools) bends the thumb's outer bones sideways in that plane. Each bone after the base
+        // turned about the palm's normal until it runs on as the one before it, seen from above, by that share. The first
+        // few times per hand the bends found are logged, so left and right compare.
+        private static void ThumbInLine(Arm arm, Vector3 palm, float share, bool lifted)
+        {
+            if (share <= 0f) return;
+            var found = new System.Text.StringBuilder();
+            for (var index = 1; index < arm.Thumb.Length; index++)
+            {
+                var joint = arm.Thumb[index];
+                var before = arm.Thumb[index - 1];
+                if (joint == null || before == null) continue;
+                var next = index + 1 < arm.Thumb.Length && arm.Thumb[index + 1] != null ? arm.Thumb[index + 1]
+                    : joint.childCount > 0 ? joint.GetChild(0) : null;
+                if (next == null) continue;
+                var bone = Vector3.ProjectOnPlane(next.position - joint.position, palm);
+                var last = Vector3.ProjectOnPlane(joint.position - before.position, palm);
+                if (bone.sqrMagnitude <= 1e-12f || last.sqrMagnitude <= 1e-12f) continue;
+                var at = arm.Joints.Length + index;
+                // On top of LiftThumb this frame, or else from the animation's pose.
+                if (!lifted && !Restore(arm, joint, at)) continue;
+                var bend = Vector3.SignedAngle(last, bone, palm);
+                found.Append($" {joint.name} {bend:0}°");
+                joint.rotation = Quaternion.AngleAxis(-bend * share, palm) * joint.rotation;
+                arm.Set[at] = joint.localRotation;
+            }
+            if (arm.ThumbBendLogs >= 4 || found.Length == 0) return;
+            arm.ThumbBendLogs++;
+            Plugin.Log.LogInfo($"Hands: {arm.Name} thumb bent sideways in the palm's plane:{found}");
         }
 
         // The joint back to the animation's pose if it is still as it was set here, that pose kept as its base.
@@ -585,6 +1610,7 @@ namespace ShipbreakerVR
                 // With weight the tool lags behind the controller, and the hand on its grip with it (VrToolWeight).
                 gripLocal = VrToolWeight.Grip(arm.Input, vrHand.Tool, gripLocal);
             }
+            if (!vrHand.HoldsTool) gripLocal += aimLocal * new Vector3(arm == LeftArm ? -PalmShift : PalmShift, 0f, 0f);
             if (!VrToolModels.TrackingToWorld(gripLocal + aimLocal * VrInput.WristBehindGrip, aimLocal, out var wrist, out var aim)) return;
             var held = VrClimb.TryGetHold(arm.Input, out var point);
             if (held && VrToolModels.TrackingToWorld(gripLocal, aimLocal, out var grip, out _))
@@ -592,9 +1618,10 @@ namespace ShipbreakerVR
             else
                 arm.OffController = Vector3.MoveTowards(arm.OffController, Vector3.zero, HoldReturn * VrCamera.WorldScale * Time.unscaledDeltaTime);
             wrist += arm.OffController;
-            wrist = OutOfWalls(arm, wrist);
             var aimed = aim * hold;
             var frame = Quaternion.LookRotation(aimed * Vector3.forward, aimed * Vector3.up);
+            wrist = OutOfWalls(arm, wrist);
+            Touch(arm, ref wrist, ref frame);
             Grip(arm, held, point, ref wrist, ref frame);
 
             var animated = arm.Wrist.rotation;
@@ -629,7 +1656,7 @@ namespace ShipbreakerVR
                     var start = flat ? FlatFrame(arm, frame, normal) : frame;
                     var side = arm == LeftArm ? 1f : -1f;
                     arm.GripOffset = flat
-                        ? new Vector3(-side * PalmThickness, 0f, -PalmLength) * VrCamera.WorldScale
+                        ? new Vector3(-side * (PalmThickness + ClawLift), 0f, -PalmLength) * VrCamera.WorldScale
                         : Quaternion.Inverse(start) * (wrist - point);
                     if (!flat) start = AroundBar(arm, true) * start;
                     arm.GripNormal = Quaternion.Inverse(anchor.rotation) * normal;
@@ -666,11 +1693,28 @@ namespace ShipbreakerVR
                 }
             }
             // Held free (a nacelle switch, VrClimb.HeldFree), the hand stays on its hold but turns with the controller.
-            var turn = arm.Gripping && VrClimb.HeldFree(arm.Input) ? AroundBar(arm, false) * frame : arm.GripAnchor.rotation * gripTurn;
+            var free = arm.Gripping && VrClimb.HeldFree(arm.Input);
+            var turn = free ? AroundBar(arm, false) * frame : arm.GripAnchor.rotation * gripTurn;
             var placed = arm.GripAnchor.TransformPoint(arm.GripPoint) + turn * arm.GripOffset;
-            if (arm.GripFlat) placed = OutOfSurface(arm, placed, turn);
+            if (free) placed += SwitchHandShift(placed);
+            if (arm.GripFlat) placed = HeldOut(arm, OutOfSurface(arm, placed, turn), turn);
             wrist = Vector3.Lerp(wrist, placed, arm.GripBlend);
             frame = Quaternion.Slerp(frame, turn, arm.GripBlend);
+        }
+
+        // Test (Raik, 2026-11-14: the hand on the nacelle switch's grip sat a little low, not quite as a hand would hold
+        // it): drawn SwitchHandUp higher and SwitchHandBack level towards the head, in the body's upright.
+        private const float SwitchHandUp = 0.01f;
+        private const float SwitchHandBack = 0.01f;
+
+        private static Vector3 SwitchHandShift(Vector3 placed)
+        {
+            var camera = VrCamera.Instance != null ? VrCamera.Instance.transform : null;
+            if (camera == null || camera.parent == null) return Vector3.zero;
+            var up = camera.parent.up;
+            var back = Vector3.ProjectOnPlane(camera.position - placed, up);
+            back = back.sqrMagnitude > 1e-6f ? back.normalized : Vector3.zero;
+            return (up * SwitchHandUp + back * SwitchHandBack) * VrCamera.WorldScale;
         }
 
         // On a lever's grip (VrClimb.TryGetBar), the turn that lays the fist around it: the controller's grip axis, which
@@ -724,6 +1768,42 @@ namespace ShipbreakerVR
             return wrist - palm * deepest;
         }
 
+        // Test (Raik, 2026-11-14: holding the nose where four faces meet, the hand sat 5 to 11 cm in the part, the
+        // fingers straight and lifted as far as they go): OutOfSurface only looks along the palm's way, so what lies
+        // beside the hand (the faces of a corner, the next part) was never felt. A flat hand on its hold is pushed out of
+        // everything by the palm's boxes as the empty hand is (PalmOut), in up to three steps; not out of the tool in
+        // the other hand or the other arm, which keep their own sides.
+        private static int heldOutLogs;
+
+        private static Vector3 HeldOut(Arm arm, Vector3 wrist, Quaternion turn)
+        {
+            var side = arm == LeftArm ? 1f : -1f;
+            var boxes = PalmBoxes(arm, side);
+            if (boxes == 0) return wrist;
+            VrHandShape.Gather(wrist, WallReach * VrCamera.WorldScale, arm.Wrist.root, SeesTool(arm), OtherLimb(arm));
+            var moved = Vector3.zero;
+            for (var step = 0; step < 3; step++)
+            {
+                var depth = 0f;
+                var way = Vector3.zero;
+                var other = false;
+                for (var b = 0; b < boxes; b++)
+                {
+                    var deep = VrHandShape.Box(wrist + turn * PalmCenter[b], turn * PalmTurn[b], PalmHalf[b], out var boxWay);
+                    if (deep <= depth) continue;
+                    depth = deep;
+                    way = boxWay;
+                    other = VrHandShape.FromTool || VrHandShape.FromArm;
+                }
+                if (depth <= 0.0005f || other) break;
+                wrist += way * depth;
+                moved += way * depth;
+            }
+            if (moved != Vector3.zero && heldOutLogs++ < 30)
+                Plugin.Log.LogInfo($"Hands: {arm.Name} hand on its hold pushed {moved.magnitude * 100f / VrCamera.WorldScale:0.0} cm out of what lies beside it");
+            return wrist;
+        }
+
         // The hand's axes (Frame) lying flat on a surface: the palm on it (to the left of the right hand, to the right of
         // the left one), the knuckles along the surface where the controller points.
         private static Quaternion FlatFrame(Arm arm, Quaternion frame, Vector3 normal)
@@ -753,23 +1833,635 @@ namespace ShipbreakerVR
         private static Vector3 OutOfWalls(Arm arm, Vector3 wrist)
         {
             var state = (arm == LeftArm ? VrHand.Left : VrHand.Right).State;
+            arm.WallMet = false;
             if (state != HandState.Empty) return wrist;
             var shoulder = arm.Upper.position;
             var way = wrist - shoulder;
             var length = way.magnitude;
             if (length < 0.01f) return wrist;
             var direction = way / length;
-            var count = Physics.SphereCastNonAlloc(shoulder, HandRadius, direction, WallHits, length, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            var count = Physics.SphereCastNonAlloc(shoulder, WristRadius, direction, WallHits, length, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
             var free = length;
             var body = arm.Wrist.root;
+            var first = -1;
             for (var i = 0; i < count; i++)
             {
                 var hit = WallHits[i];
                 // Hits from where the cast starts inside something have no place on the way.
-                if (hit.distance > 0f && hit.distance < free && !hit.collider.transform.IsChildOf(body)) free = hit.distance;
+                if (hit.distance > 0f && hit.distance < free && !hit.collider.transform.IsChildOf(body))
+                {
+                    free = hit.distance;
+                    first = i;
+                }
+            }
+            if (first < 0) return wrist;
+            arm.WallMet = true;
+            arm.WallPoint = WallHits[first].point;
+            arm.WallNormal = WallHits[first].normal;
+            arm.WallDepth = Vector3.Dot(wrist - WallHits[first].point, WallHits[first].normal);
+            // The hand slides along the surface instead of back along the arm (Raik, 2026-11-13: looking at a wall at a
+            // slant, the hand was pushed towards the body, though the controller was out in front): out of it along its
+            // normal, to WristRadius off its plane. Only if the way there is free, else back along the arm as before.
+            var wall = WallHits[first];
+            var into = WristRadius - Vector3.Dot(wrist - wall.point, wall.normal);
+            if (into > 0f)
+            {
+                var slid = wrist + wall.normal * into;
+                var toSlid = slid - shoulder;
+                var reach = toSlid.magnitude;
+                if (reach > 0.01f)
+                {
+                    var blocked = false;
+                    var again = Physics.SphereCastNonAlloc(shoulder, WristRadius * 0.9f, toSlid / reach, WallHits, reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                    for (var i = 0; i < again && !blocked; i++)
+                        blocked = WallHits[i].distance > 0f && WallHits[i].distance < reach - 0.005f && !WallHits[i].collider.transform.IsChildOf(body);
+                    if (!blocked)
+                    {
+                        if (slideLogs++ < 10) Plugin.Log.LogInfo($"Hands: {arm.Name} hand slides along '{wall.collider.name}', {Vector3.Distance(slid, wrist) * 100f:0.0} cm off the controller (along the arm it would be {(length - free) * 100f:0.0} cm)");
+                        return slid;
+                    }
+                }
             }
             return shoulder + direction * free;
         }
+
+        private static int pressLogs;
+
+        // An empty hand at a surface (Raik, 2026-11-13). Its palm within FlatFrom of a surface it faces: it turns flat onto it,
+        // the knuckles along the controller's aim (FlatFrame), and lies on it, the wrist PalmThickness off it; Curl
+        // straightens its fingers and curls them over edges as on a hold. Fingers first into it: they bend back (Back), then
+        // the hand folds over (Fold). Its back or side against it: the hand stops there. Then the palm's box is pushed out
+        // of anything it is still in (a corner, an edge). Flat blended in and out over CurlTime.
+        private static void Touch(Arm arm, ref Vector3 wrist, ref Quaternion frame)
+        {
+            var side = arm == LeftArm ? 1f : -1f;
+            var state = (arm == LeftArm ? VrHand.Left : VrHand.Right).State;
+            var scale = VrCamera.WorldScale;
+            var fromWrist = wrist;
+            var fromFrame = frame;
+            arm.Back = 0f;
+            arm.Folded = 0f;
+            var pressed = false;
+            var empty = state == HandState.Empty && arm.Driven && arm.Wrist != null;
+            if (empty) VrHandShape.Gather(wrist, WallReach * scale, arm.Wrist.root, SeesTool(arm), OtherLimb(arm));
+            var stays = false;
+            var pushNeed = 0f;
+            if (empty && arm.ShapeKnown && arm.Pressed && PalmSurface(arm, wrist, frame, side, out var under, out var underNormal))
+            {
+                // Lying flat: on what lies under the palm, while the controller's palm still faces it and is near it.
+                var facing = Vector3.Dot(frame * Vector3.right * side, -underNormal);
+                var gap = Vector3.Dot(wrist + frame * (new Vector3(side * PalmThickness, 0f, PalmLength) * scale) - under, underNormal);
+                // Raik (2026-11-14: still pulled onto surfaces): no margin to let go any more, only the collision. It stays
+                // flat while the controller's palm faces the surface and is in it; out of it, the hand is the controller's
+                // again, folded only as far as its shape meets the surface (Fold), eased (Ease).
+                stays = facing > PressFacing && gap < FlatFrom * scale;
+                if (stays)
+                {
+                    pressed = true;
+                    arm.FlatNormal = Vector3.Slerp(arm.FlatNormal, underNormal, 1f - Mathf.Exp(-Time.unscaledDeltaTime / SurfaceTurnTime)).normalized;
+                    arm.FlatPoint = under;
+                }
+            }
+            if (!stays && empty && arm.ShapeKnown && Wall(arm, wrist, frame, side, out var point, out var normal))
+            {
+                var facing = Vector3.Dot(frame * Vector3.right * side, -normal);
+                var gap = Vector3.Dot(wrist + frame * (new Vector3(side * PalmThickness, 0f, PalmLength) * scale) - point, normal);
+                pressed = arm.Pressed && facing > PressFacing && gap < FlatFrom * scale;
+                if (!pressed && facing > 0f)
+                {
+                    pressed = Fold(arm, wrist, ref frame, side, point, normal);
+                    // Raik (2026-11-14): no pull onto the surface any more for the empty hand; it lies flat only once it
+                    // has folded over all the way (Fold), the fingers and the hand's shape do the rest.
+                    // Folded over until it can fold no further: lying flat goes on from as far as it was folded.
+                    if (pressed) arm.Press = Mathf.Max(arm.Press, arm.FoldedBefore);
+                }
+                else if (!pressed)
+                {
+                    var least = Mathf.Min(Tips(arm, wrist, frame, side, 0f, point, normal), Rest(arm, wrist, frame, side, point, normal));
+                    least = Mathf.Min(least, Vector3.Dot(wrist + frame * (new Vector3(-side * 0.012f, 0f, PalmLength * 0.5f) * scale) - point, normal));
+                    if (least < 0f && least > -BackPushAtMost * scale) wrist -= normal * least;
+                }
+                if (pressed)
+                {
+                    // From the surface found, at once when the hand did not lie flat before.
+                    arm.FlatPoint = point;
+                    arm.FlatNormal = arm.Press > 0f ? Vector3.Slerp(arm.FlatNormal, normal, 1f - Mathf.Exp(-Time.unscaledDeltaTime / SurfaceTurnTime)).normalized : normal;
+                }
+                else if (facing > 0f)
+                {
+                    // Raik (2026-11-14): turned so far against the surface that the fingers would bend back past
+                    // KnuckleBackAtMost, the hand is pushed off it until they need no more.
+                    var least = Mathf.Min(Tips(arm, wrist, frame, side, KnuckleBackAtMost, point, normal), Rest(arm, wrist, frame, side, point, normal));
+                    if (least < 0f)
+                    {
+                        pushNeed = Mathf.Min(-least, PushOffAtMost * scale);
+                        arm.PushNormal = normal;
+                        if (pushLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} hand pushed {pushNeed * 100f:0.0} cm off a surface, its fingers would bend back past {KnuckleBackAtMost:0}°");
+                    }
+                }
+            }
+            // The push goes up at once and back over RelaxTime.
+            arm.PushShown = empty && !pressed ? Mathf.Max(pushNeed, arm.PushShown - Time.unscaledDeltaTime * PushOffAtMost * scale / RelaxTime) : 0f;
+            if (arm.PushShown > 0f) wrist += arm.PushNormal * arm.PushShown;
+            if (!empty || pressed)
+            {
+                arm.FoldShown = arm.Folded;
+                if (!empty) arm.BackShown = 0f;
+            }
+            else if (arm.Folded <= 0f && arm.FoldShown > 0f)
+            {
+                // Nothing to fold over onto this frame: the hand turns back to the controller over RelaxTime.
+                arm.FoldShown = Mathf.Max(0f, arm.FoldShown - Time.unscaledDeltaTime / RelaxTime);
+                if (arm.FoldShown > 0f) frame = Quaternion.Slerp(frame, FlatFrame(arm, frame, arm.FoldNormal), arm.FoldShown);
+                arm.Folded = arm.FoldShown;
+            }
+            if (empty && !pressed)
+            {
+                arm.Back = Mathf.Max(arm.Back, arm.BackShown - Time.unscaledDeltaTime * MostBack / RelaxTime);
+                arm.BackShown = arm.Back;
+            }
+            if (pressed && !arm.Pressed && pressLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} hand lies flat on a surface");
+            if (arm.Folded > 0f && foldLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} hand folds over onto a surface, {arm.Folded * 100f:0}% of the way, fingers {arm.Back:0}° back");
+            arm.Pressed = pressed;
+            arm.FoldedBefore = arm.Folded;
+            // Lying flat comes and goes with the collision, at once (Ease keeps it from jumping), not over CurlTime.
+            arm.Press = pressed ? 1f : 0f;
+            if (arm.Press > 0f)
+            {
+                frame = Quaternion.Slerp(frame, FlatFrame(arm, frame, arm.FlatNormal), arm.Press);
+                var off = Vector3.Dot(wrist - arm.FlatPoint, arm.FlatNormal);
+                wrist += arm.FlatNormal * ((PalmThickness * scale - off) * arm.Press);
+            }
+            if (empty && arm.Press < 1f) PalmOut(arm, ref wrist, frame, side);
+            if (empty) wrist += arm.FingerPush;
+            else arm.FingerPush = Vector3.zero;
+            Ease(arm, fromWrist, fromFrame, ref wrist, ref frame, empty);
+        }
+
+        // Test (Raik, 2026-11-14: the hand still jumps where several faces meet): what Touch makes of the controller's hand
+        // (folded, lying flat, the palm pushed out) is shown speeding up and slowing down towards it, within about
+        // EaseTime, never in one frame. It may lag a few millimetres into a surface meanwhile. A hand that holds or works
+        // something takes it at once.
+        private const float EaseTime = 0.04f;
+
+        private static void Ease(Arm arm, Vector3 fromWrist, Quaternion fromFrame, ref Vector3 wrist, ref Quaternion frame, bool empty)
+        {
+            var back = Quaternion.Inverse(fromFrame);
+            var shift = back * (wrist - fromWrist);
+            var turn = back * frame;
+            var dt = Time.unscaledDeltaTime;
+            if (!empty || dt <= 0f)
+            {
+                arm.EaseShift = shift;
+                arm.EaseShiftSpeed = Vector3.zero;
+                arm.EaseTurn = turn;
+                arm.EaseTurnSpeed = 0f;
+                return;
+            }
+            arm.EaseShift = Vector3.SmoothDamp(arm.EaseShift, shift, ref arm.EaseShiftSpeed, EaseTime, Mathf.Infinity, dt);
+            var apart = Quaternion.Angle(arm.EaseTurn, turn);
+            if (apart > 0.01f)
+            {
+                var left = Mathf.SmoothDamp(apart, 0f, ref arm.EaseTurnSpeed, EaseTime, Mathf.Infinity, dt);
+                arm.EaseTurn = Quaternion.Slerp(turn, arm.EaseTurn, left / apart);
+            }
+            else
+            {
+                arm.EaseTurn = turn;
+                arm.EaseTurnSpeed = 0f;
+            }
+            wrist = fromWrist + fromFrame * arm.EaseShift;
+            frame = fromFrame * arm.EaseTurn;
+        }
+
+        private static int foldLogs;
+        private static int pushLogs;
+        private static int palmLogs;
+
+        // The nearest surface the hand may meet: looked for from the wrist along the fingers, towards the palm, between
+        // both, and towards the back and the side of the hand; the one the hand comes closest to (Tips, Rest) is taken.
+        private static bool Wall(Arm arm, Vector3 wrist, Quaternion frame, float side, out Vector3 point, out Vector3 normal)
+        {
+            point = Vector3.zero;
+            normal = Vector3.zero;
+            var best = float.MaxValue;
+            Collider chosen = null;
+            var body = arm.Wrist.root;
+            var reach = WallReach * VrCamera.WorldScale;
+            var palm = frame * Vector3.right * side;
+            var along = frame * Vector3.forward;
+            for (var w = 0; w < 5; w++)
+            {
+                var way = w == 0 ? along : w == 1 ? palm : w == 2 ? (along + palm).normalized : w == 3 ? -palm : (along - palm).normalized;
+                var count = Physics.RaycastNonAlloc(wrist, way, WallHits, reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                for (var i = 0; i < count; i++)
+                {
+                    var hit = WallHits[i];
+                    if (hit.distance <= 0f || Vector3.Dot(hit.normal, way) >= 0f || !VrHandShape.Stops(hit.collider, body)) continue;
+                    var least = Mathf.Min(Tips(arm, wrist, frame, side, 0f, hit.point, hit.normal), Rest(arm, wrist, frame, side, hit.point, hit.normal));
+                    if (least < -IntoAtMost * VrCamera.WorldScale) continue;
+                    // Where several faces meet (the log, 2026-11-14: four at a ship's nose), the face met last frame
+                    // wins unless another is clearly closer, so the hand does not flip between them every frame.
+                    var rank = least - (hit.collider == arm.TouchCollider && Vector3.Angle(hit.normal, arm.TouchNormal) < 5f ? KeepFace * VrCamera.WorldScale : 0f);
+                    if (rank < best)
+                    {
+                        best = rank;
+                        point = hit.point;
+                        normal = hit.normal;
+                        chosen = hit.collider;
+                    }
+                }
+            }
+            arm.TouchCollider = chosen;
+            arm.TouchNormal = normal;
+            return best < (FlatFrom + FlatRelease + 0.03f) * VrCamera.WorldScale;
+        }
+
+        private static readonly RaycastHit[] PalmHits = new RaycastHit[16];
+        private static int roundLogs;
+        // How far below the surface a point past an edge looks back for the face the edge turns down to.
+        private const float EdgeDown = 0.004f;
+
+        // What lies under the flat hand's palm (Test, Raik 2026-11-14): PalmGrid by PalmGrid points over the palm, as the
+        // hand lies now (FlatNormal), each looking from PalmLook behind the palm towards it for the nearest surface out to
+        // PalmFind in front of it. Their points and outward directions averaged, each weighed less the further in front of
+        // the palm it lies. False when none finds one.
+        private static bool PalmSurface(Arm arm, Vector3 wrist, Quaternion frame, float side, out Vector3 point, out Vector3 normal)
+        {
+            point = Vector3.zero;
+            normal = Vector3.zero;
+            if (arm.FlatNormal.sqrMagnitude < 0.5f) return false;
+            var scale = VrCamera.WorldScale;
+            var flat = FlatFrame(arm, frame, arm.FlatNormal);
+            var palm = -arm.FlatNormal;
+            var body = arm.Wrist.root;
+            var length = Mathf.Max(arm.ShapeKnuckle[1].z, 0.05f * scale);
+            var across0 = arm.ShapeKnuckle[0].y;
+            var across3 = arm.ShapeKnuckle[3].y;
+            // The palm's plane: the flat wrist lies PalmThickness off the surface.
+            var plane = arm.FlatPoint + arm.FlatNormal * (PalmThickness * scale);
+            var onPlane = wrist - arm.FlatNormal * Vector3.Dot(wrist - plane, arm.FlatNormal);
+            var look = PalmLook * scale;
+            var reach = look + (PalmThickness + PalmFind) * scale;
+            var total = 0f;
+            var rounded = 0;
+            var middle = onPlane + flat * new Vector3(0f, (across0 + across3) * 0.5f, 0.6f * length);
+            for (var a = 0; a < PalmGrid; a++)
+                for (var b = 0; b < PalmGrid; b++)
+                {
+                    var along = Mathf.Lerp(0.2f, 1f, a / (PalmGrid - 1f)) * length;
+                    var across = Mathf.Lerp(across0, across3, b / (PalmGrid - 1f));
+                    var start = onPlane + flat * new Vector3(0f, across, along) - palm * look;
+                    var count = Physics.RaycastNonAlloc(start, palm, PalmHits, reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                    var nearest = -1;
+                    for (var i = 0; i < count; i++)
+                    {
+                        var hit = PalmHits[i];
+                        if (hit.distance <= 0f || Vector3.Dot(hit.normal, palm) >= 0f || !VrHandShape.Stops(hit.collider, body)) continue;
+                        if (nearest < 0 || hit.distance < PalmHits[nearest].distance) nearest = i;
+                    }
+                    if (nearest < 0)
+                    {
+                        // Test (Raik, 2026-11-14): past an edge of 90 degrees the point finds nothing in front of the palm.
+                        // Just below where the surface was, it looks back towards the palm's middle for the face the edge
+                        // turns down to; that counts as fully as a surface under the palm, so the palm rounds over the edge
+                        // by how much of it is past the edge, a few millimetres into the corner.
+                        var depth = (PalmThickness + EdgeDown) * scale;
+                        var from = start + palm * (look + depth);
+                        var to = middle + palm * depth;
+                        var back = to - from;
+                        var far = back.magnitude;
+                        if (far < 0.005f * scale) continue;
+                        back /= far;
+                        var backCount = Physics.RaycastNonAlloc(from, back, PalmHits, far + 0.02f * scale, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                        for (var i = 0; i < backCount; i++)
+                        {
+                            var hit = PalmHits[i];
+                            if (hit.distance <= 0f || Vector3.Dot(hit.normal, back) >= 0f || !VrHandShape.Stops(hit.collider, body)) continue;
+                            if (nearest < 0 || hit.distance < PalmHits[nearest].distance) nearest = i;
+                        }
+                        if (nearest < 0) continue;
+                        var face = PalmHits[nearest];
+                        point += face.point;
+                        normal += face.normal;
+                        total += 1f;
+                        rounded++;
+                        continue;
+                    }
+                    var found = PalmHits[nearest];
+                    var beyond = found.distance - look - PalmThickness * scale;
+                    var weight = Mathf.Clamp01(1f - beyond / (PalmFind * scale));
+                    if (weight <= 0f) continue;
+                    point += found.point * weight;
+                    normal += found.normal * weight;
+                    total += weight;
+                }
+            if (total <= 0f || normal.sqrMagnitude < 1e-6f) return false;
+            point /= total;
+            normal.Normalize();
+            if (rounded > 0 && roundLogs++ < 20)
+                Plugin.Log.LogInfo($"Hands: {arm.Name} palm rounds over an edge, {rounded} of {PalmGrid * PalmGrid} points past it, turned {Vector3.Angle(normal, arm.FlatNormal):0}° from before");
+            return true;
+        }
+
+        // The fingers' tips' least distance off a wall, less their radius, with the fingers bent back at the knuckles.
+        private static float Tips(Arm arm, Vector3 wrist, Quaternion frame, float side, float back, Vector3 point, Vector3 normal)
+        {
+            var bend = Quaternion.AngleAxis(-side * back, Vector3.up);
+            var least = float.MaxValue;
+            for (var i = 0; i < 4; i++)
+            {
+                var tip = arm.ShapeKnuckle[i] + bend * (arm.ShapeTip[i] - arm.ShapeKnuckle[i]);
+                least = Mathf.Min(least, Vector3.Dot(wrist + frame * tip - point, normal) - VrHandShape.FingerRadius[i] * VrCamera.WorldScale);
+            }
+            return least;
+        }
+
+        // The rest of the hand's least distance off a wall: the knuckles, less the fingers' radius, the palm's middle and
+        // its heel.
+        private static float Rest(Arm arm, Vector3 wrist, Quaternion frame, float side, Vector3 point, Vector3 normal)
+        {
+            var scale = VrCamera.WorldScale;
+            var least = float.MaxValue;
+            for (var i = 0; i < 4; i++)
+                least = Mathf.Min(least, Vector3.Dot(wrist + frame * arm.ShapeKnuckle[i] - point, normal) - VrHandShape.FingerRadius[i] * scale);
+            least = Mathf.Min(least, Vector3.Dot(wrist + frame * (new Vector3(side * PalmThickness, 0f, PalmLength) * scale) - point, normal));
+            least = Mathf.Min(least, Vector3.Dot(wrist + frame * (new Vector3(side * PalmThickness, 0f, 0.02f) * scale) - point, normal));
+            return least;
+        }
+
+        // Fingers first at a wall the palm faces: bent back as far as needed (at most MostBack); if that is not enough, the
+        // hand turned from the controller's way towards lying flat (FlatFrame) as far as it must, the fingers again bent
+        // back as needed. True when even that does not keep it out: then it lies flat (Touch).
+        private static bool Fold(Arm arm, Vector3 wrist, ref Quaternion frame, float side, Vector3 point, Vector3 normal)
+        {
+            if (Mathf.Min(Tips(arm, wrist, frame, side, 0f, point, normal), Rest(arm, wrist, frame, side, point, normal)) >= 0f) return false;
+            // The way it folds over turns to a new face within about FoldTurnTime, not in one frame.
+            var toward = arm.FoldShown > 0f && arm.FoldNormal.sqrMagnitude > 0.5f
+                ? Vector3.Slerp(arm.FoldNormal, normal, 1f - Mathf.Exp(-Time.unscaledDeltaTime / FoldTurnTime)).normalized : normal;
+            var flat = FlatFrame(arm, frame, toward);
+            var found = -1f;
+            if (Fits(arm, wrist, frame, side, point, normal)) found = 0f;
+            else
+            {
+                var before = 0f;
+                for (var k = 1; k <= 20 && found < 0f; k++)
+                {
+                    var at = k / 20f;
+                    if (!Fits(arm, wrist, Quaternion.Slerp(frame, flat, at), side, point, normal))
+                    {
+                        before = at;
+                        continue;
+                    }
+                    var low = before;
+                    var high = at;
+                    for (var step = 0; step < 6; step++)
+                    {
+                        var middle = (low + high) * 0.5f;
+                        if (Fits(arm, wrist, Quaternion.Slerp(frame, flat, middle), side, point, normal)) high = middle; else low = middle;
+                    }
+                    found = high;
+                }
+            }
+            if (found < 0f) return true;
+            found = Mathf.Max(found, arm.FoldShown - Time.unscaledDeltaTime / RelaxTime);
+            arm.FoldShown = found;
+            arm.FoldNormal = toward;
+            frame = Quaternion.Slerp(frame, flat, found);
+            arm.Folded = found;
+            if (Tips(arm, wrist, frame, side, 0f, point, normal) >= 0f) return false;
+            var least = 0f;
+            var most = MostBack;
+            for (var step = 0; step < 8; step++)
+            {
+                var middle = (least + most) * 0.5f;
+                if (Tips(arm, wrist, frame, side, middle, point, normal) >= 0f) most = middle; else least = middle;
+            }
+            arm.Back = most;
+            return false;
+        }
+
+        private static bool Fits(Arm arm, Vector3 wrist, Quaternion frame, float side, Vector3 point, Vector3 normal)
+            => Rest(arm, wrist, frame, side, point, normal) >= 0f && Tips(arm, wrist, frame, side, MostBack, point, normal) >= 0f;
+
+        // The palm as a box from the wrist to the knuckles, as wide as the knuckles and as thick as the palm, pushed out of
+        // what it is still in (a corner or an edge the surface found by Wall does not cover), in up to three steps.
+        // Test (Raik, 2026-11-14): out of the tool in the other hand as out of a wall, the hand staying on its surface off
+        // the controller and sliding along it; the tool does not move for it. Deeper in than MostIntoTool (meters at
+        // world scale 1) the hand goes through instead of being pushed out the far side.
+        private const float MostIntoTool = 0.1f;
+
+        private static void PalmOut(Arm arm, ref Vector3 wrist, Quaternion frame, float side)
+        {
+            var boxes = PalmBoxes(arm, side);
+            if (boxes == 0) return;
+            StayOutOfTool(arm, ref wrist, frame, boxes);
+            StayOutOfArm(arm, ref wrist, frame, boxes);
+            for (var step = 0; step < 3; step++)
+            {
+                var depth = 0f;
+                var way = Vector3.zero;
+                var fromTool = false;
+                for (var b = 0; b < boxes; b++)
+                {
+                    var deep = VrHandShape.Box(wrist + frame * PalmCenter[b], frame * PalmTurn[b], PalmHalf[b], out var boxWay);
+                    if (deep <= depth) continue;
+                    depth = deep;
+                    way = boxWay;
+                    fromTool = VrHandShape.FromTool || VrHandShape.FromArm;
+                }
+                if (depth <= 0.0005f) break;
+                // The tool is StayOutOfTool's, the other arm StayOutOfArm's: pushed out of them here, the hand could go
+                // through them.
+                if (fromTool) break;
+                wrist += way * depth;
+                if (palmLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} palm pushed {depth * 100f:0.0} cm out of {(fromTool ? "the tool in the other hand" : "something")}");
+            }
+            ForearmOutOfTool(arm, ref wrist);
+        }
+
+        // Test (Raik, 2026-11-14): the forearm does not go into the tool in the other hand either: the hand is held back
+        // until it is out, a little further than the tool keeps from it (VrToolCollide.PieceRadius), so the two do not
+        // push each other back and forth. Points along it move with the wrist by how far along they lie.
+        private const float ForearmRadius = 0.04f;
+        // Not up to the wrist: the palm lies on the tool (PalmOut), and the forearm near it would lift it off.
+        private static readonly float[] ForearmAt = { 0.25f, 0.45f, 0.65f };
+
+        private static void ForearmOutOfTool(Arm arm, ref Vector3 wrist)
+        {
+            if (arm.Lower == null) return;
+            var scale = VrCamera.WorldScale;
+            var elbow = arm.Lower.position;
+            var moved = Vector3.zero;
+            for (var step = 0; step < 2; step++)
+            {
+                var need = 0f;
+                var way = Vector3.zero;
+                foreach (var t in ForearmAt)
+                {
+                    var depth = ForearmRadius * scale - VrToolCollide.WorldDistance(Vector3.Lerp(elbow, wrist, t), out var outward);
+                    if (depth <= 0f || depth / t <= need) continue;
+                    need = depth / t;
+                    way = outward;
+                }
+                if (need <= 0.0005f || need > MostIntoTool * scale) break;
+                wrist += way * need;
+                moved += way * need;
+            }
+            if (moved != Vector3.zero && forearmLogs++ < 20)
+                Plugin.Log.LogInfo($"Hands: {arm.Name} forearm kept out of the tool in the other hand, the hand held back {moved.magnitude * 100f / scale:0.0} cm");
+        }
+
+        private static int forearmLogs;
+
+        // Test (Raik, 2026-11-14: a hand pushed through the tool, and its physics went wild): the palm never goes through
+        // the tool in the other hand. It stays on the side it came against it from, kept in the tool's own axes: pushed
+        // out the shortest way while that is still this side, else (past the tool's middle, or deeper than MostIntoTool)
+        // marched back along that side's way until it is out. The controller may go through; the hand stays at the
+        // surface and slides along it. The side is forgotten ForgetToolSide seconds after the palm left the tool.
+        private const float ForgetToolSide = 0.3f;
+        private const float StayStep = 0.01f;
+        private const float StayFar = 0.5f;
+        private static int stayLogs;
+
+        private static void StayOutOfTool(Arm arm, ref Vector3 wrist, Quaternion frame, int boxes)
+        {
+            var now = Time.unscaledTime;
+            if (!VrToolCollide.ToolTurn(out var toolTurn))
+            {
+                arm.ToolSide = Vector3.zero;
+                return;
+            }
+            var depth = PalmInTool(wrist, frame, boxes, out var way);
+            if (depth <= 0.0005f)
+            {
+                if (now - arm.ToolSideAt > ForgetToolSide) arm.ToolSide = Vector3.zero;
+                return;
+            }
+            arm.ToolSideAt = now;
+            var scale = VrCamera.WorldScale;
+            if (arm.ToolSide == Vector3.zero) arm.ToolSide = Quaternion.Inverse(toolTurn) * way;
+            var kept = toolTurn * arm.ToolSide;
+            if (Vector3.Dot(way, kept) > 0.3f && depth <= MostIntoTool * scale)
+            {
+                // Still this side: out the shortest way, and the side follows the surface as the hand slides round it.
+                wrist += way * depth;
+                arm.ToolSide = Quaternion.Inverse(toolTurn) * way;
+                if (PalmInTool(wrist, frame, boxes, out var again) > 0.0005f) wrist += again * PalmInTool(wrist, frame, boxes, out _);
+                return;
+            }
+            // Through it, or past its middle: back along the kept side's way until the palm is out.
+            var least = 0f;
+            var most = -1f;
+            for (var d = StayStep; d <= StayFar + 1e-4f; d += StayStep)
+            {
+                if (PalmInTool(wrist + kept * d * scale, frame, boxes, out _) <= 0.0005f) { most = d; break; }
+                least = d;
+            }
+            if (most < 0f) return;
+            for (var i = 0; i < 4; i++)
+            {
+                var middle = (least + most) * 0.5f;
+                if (PalmInTool(wrist + kept * middle * scale, frame, boxes, out _) <= 0.0005f) most = middle; else least = middle;
+            }
+            wrist += kept * most * scale;
+            if (stayLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} palm kept on its side of the tool in the other hand, {most * 100f:0.0} cm off the controller");
+        }
+
+        // Test (Raik, 2026-11-14): the palm stays on its side of the other arm as of the tool (StayOutOfTool), kept in the
+        // other forearm's axes, so it slides over the arm and never comes out on its far side.
+        private static int armStayLogs;
+
+        private static void StayOutOfArm(Arm arm, ref Vector3 wrist, Quaternion frame, int boxes)
+        {
+            var now = Time.unscaledTime;
+            var limb = OtherLimb(arm);
+            if (!limb.Known)
+            {
+                arm.ArmSide = Vector3.zero;
+                return;
+            }
+            var depth = PalmInArm(limb, wrist, frame, boxes, out var way);
+            if (depth <= 0.0005f)
+            {
+                if (now - arm.ArmSideAt > ForgetToolSide) arm.ArmSide = Vector3.zero;
+                return;
+            }
+            arm.ArmSideAt = now;
+            var scale = VrCamera.WorldScale;
+            if (arm.ArmSide == Vector3.zero) arm.ArmSide = Quaternion.Inverse(limb.Turn) * way;
+            var kept = limb.Turn * arm.ArmSide;
+            if (Vector3.Dot(way, kept) > 0.3f)
+            {
+                wrist += way * depth;
+                arm.ArmSide = Quaternion.Inverse(limb.Turn) * way;
+                var again = PalmInArm(limb, wrist, frame, boxes, out var againWay);
+                if (again > 0.0005f) wrist += againWay * again;
+                return;
+            }
+            var least = 0f;
+            var most = -1f;
+            for (var d = StayStep; d <= StayFar + 1e-4f; d += StayStep)
+            {
+                if (PalmInArm(limb, wrist + kept * d * scale, frame, boxes, out _) <= 0.0005f) { most = d; break; }
+                least = d;
+            }
+            if (most < 0f) return;
+            for (var i = 0; i < 4; i++)
+            {
+                var middle = (least + most) * 0.5f;
+                if (PalmInArm(limb, wrist + kept * middle * scale, frame, boxes, out _) <= 0.0005f) most = middle; else least = middle;
+            }
+            wrist += kept * most * scale;
+            if (armStayLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} palm kept on its side of the other arm, {most * 100f:0.0} cm off the controller");
+        }
+
+        private static float PalmInArm(VrHandShape.Limb limb, Vector3 wrist, Quaternion frame, int boxes, out Vector3 way)
+        {
+            way = Vector3.zero;
+            var deepest = 0f;
+            for (var b = 0; b < boxes; b++)
+            {
+                var center = wrist + frame * PalmCenter[b];
+                var turn = frame * PalmTurn[b];
+                var half = PalmHalf[b];
+                for (var x = -1; x <= 1; x++)
+                    for (var y = -1; y <= 1; y++)
+                        for (var z = -1; z <= 1; z++)
+                        {
+                            var depth = -VrHandShape.ArmDistance(limb, center + turn * Vector3.Scale(half, new Vector3(x, y, z)), out var outward);
+                            if (depth <= deepest) continue;
+                            deepest = depth;
+                            way = outward;
+                        }
+            }
+            return deepest;
+        }
+
+        // How deep the palm's boxes (PalmBoxes, as last worked out) lie in the tool in the other hand, and the way out.
+        private static float PalmInTool(Vector3 wrist, Quaternion frame, int boxes, out Vector3 way)
+        {
+            way = Vector3.zero;
+            var deepest = 0f;
+            for (var b = 0; b < boxes; b++)
+            {
+                var center = wrist + frame * PalmCenter[b];
+                var turn = frame * PalmTurn[b];
+                var half = PalmHalf[b];
+                for (var x = -1; x <= 1; x++)
+                    for (var y = -1; y <= 1; y++)
+                        for (var z = -1; z <= 1; z++)
+                        {
+                            var depth = -VrToolCollide.WorldDistance(center + turn * Vector3.Scale(half, new Vector3(x, y, z)), out var outward);
+                            if (depth <= deepest) continue;
+                            deepest = depth;
+                            way = outward;
+                        }
+            }
+            return deepest;
+        }
+
+        private static int slideLogs;
 
         // Every this many seconds while an arm follows its controller, how often its wrist stayed short of it.
         private const float CountPeriod = 10f;
@@ -847,6 +2539,217 @@ namespace ShipbreakerVR
             if (knuckles.sqrMagnitude <= 1e-8f || thumbSide.sqrMagnitude <= 1e-8f) return false;
             wrist = arm.Wrist.position;
             frame = Quaternion.LookRotation(knuckles, thumbSide);
+            return true;
+        }
+
+        // Test (0.30.0, Raik): the hand holding the demo charges keeps the game's own finger pose. With the charge in the
+        // left hand, that hand's fingers take the right hand's animated pose instead of Curl's grip, mirrored in the hands'
+        // own axes (Frame): each bone points as the right one does, from the knuckles to the tips. Read before Curl bends
+        // the right hand (around a second tool).
+        private static readonly Vector3[] chargeBones = new Vector3[17];
+        private static bool chargeBonesRead;
+        private static bool chargeFingersLogged;
+
+        private static void ReadChargeFingers(bool left)
+        {
+            chargeBonesRead = false;
+            if (!left || !Frame(RightArm, out _, out var frame)) return;
+            var toRight = Quaternion.Inverse(frame);
+            for (var i = 0; i < chargeBones.Length; i++)
+            {
+                var bone = Bone(RightArm, i);
+                chargeBones[i] = bone.sqrMagnitude > 1e-10f ? toRight * bone : Vector3.zero;
+            }
+            chargeBonesRead = true;
+        }
+
+        private static void MirrorChargeFingers()
+        {
+            if (!chargeBonesRead || LeftArm.Weight <= 0f || !Frame(LeftArm, out _, out var frame)) return;
+            var turned = 0;
+            // Root to tip within each finger, as the arrays run: a bone's direction depends only on its own joint's turn.
+            for (var i = 0; i < chargeBones.Length; i++)
+            {
+                var want = chargeBones[i];
+                if (want == Vector3.zero) continue;
+                var joint = Joint(LeftArm, i);
+                if (!Restore(LeftArm, joint, i)) continue;
+                var bone = Bone(LeftArm, i);
+                if (bone.sqrMagnitude <= 1e-10f) continue;
+                want.x = -want.x;
+                var turn = Quaternion.FromToRotation(bone, frame * want);
+                joint.rotation = Quaternion.Slerp(Quaternion.identity, turn, LeftArm.Weight) * joint.rotation;
+                LeftArm.Set[i] = joint.localRotation;
+                turned++;
+            }
+            if (chargeFingersLogged) return;
+            chargeFingersLogged = true;
+            Plugin.Log.LogInfo($"Hands: left hand takes the demo charge's finger pose from the right hand ({turned} joints)");
+        }
+
+        private static Transform Joint(Arm arm, int index) =>
+            index < arm.Joints.Length ? arm.Joints[index] : arm.Thumb[index - arm.Joints.Length];
+
+        // From a finger joint to the next one, or at the tip to its child.
+        private static Vector3 Bone(Arm arm, int index)
+        {
+            var joint = Joint(arm, index);
+            if (joint == null) return Vector3.zero;
+            Transform next = null;
+            if (index < arm.Joints.Length)
+            {
+                if (index % 3 < 2) next = arm.Joints[index + 1];
+            }
+            else
+            {
+                var thumb = index - arm.Joints.Length;
+                if (thumb + 1 < arm.Thumb.Length) next = arm.Thumb[thumb + 1];
+            }
+            if (next == null && joint.childCount > 0) next = joint.GetChild(0);
+            return next != null ? next.position - joint.position : Vector3.zero;
+        }
+
+        // Test (Raik): shorter fingers. Each finger's base joint (and the thumb's) scaled as a whole, so the finger keeps its
+        // shape and only gets smaller; the palm stays as it is. The index finger to at most the ring finger's length,
+        // measured once from the game's skeleton, and IndexShorter more. Every frame, in case anything sets the scale back.
+        private static void Shorten(Arm arm)
+        {
+            if (arm.IndexScale <= 0f)
+            {
+                var index = Length(arm, 0);
+                var ring = Length(arm, 6);
+                if (index <= 0f || ring <= 0f) return;
+                arm.IndexScale = FingerLength * Mathf.Min(1f, ring / index) * IndexShorter;
+                Plugin.Log.LogInfo($"Hands: {arm.Name} fingers to {FingerLength:0.00} of their length, the index finger ({index:0.000} m, ring finger {ring:0.000} m) to {arm.IndexScale:0.00}");
+            }
+            for (var finger = 0; finger < arm.Joints.Length / 3; finger++)
+            {
+                var root = arm.Joints[finger * 3];
+                if (root != null) root.localScale = Vector3.one * (finger == 0 ? arm.IndexScale : FingerLength);
+            }
+            if (arm.Thumb[0] != null) arm.Thumb[0].localScale = Vector3.one;
+            if (arm.Thumb[1] != null) arm.Thumb[1].localScale = Vector3.one * ThumbLength;
+        }
+
+        // A finger's length from its base joint to the tip of its last bone, as the skeleton has it.
+        private static float Length(Arm arm, int first)
+        {
+            var length = 0f;
+            for (var k = 0; k < 3; k++)
+            {
+                var joint = arm.Joints[first + k];
+                if (joint == null) return 0f;
+                var next = k < 2 ? arm.Joints[first + k + 1] : joint.childCount > 0 ? joint.GetChild(0) : null;
+                if (next == null) return k == 2 ? length : 0f;
+                length += Vector3.Distance(joint.position, next.position);
+            }
+            return length;
+        }
+
+        private static void LogIdle(Arm arm)
+        {
+            if (arm.IdleLogged) return;
+            arm.IdleLogged = true;
+            Plugin.Log.LogInfo($"Hands: {arm.Name} hand loose (IdleBend)");
+        }
+
+        // Test (Raik, 2026-11-13): the right thumb showed a bend in its middle the left one has not, though both lie alike
+        // (snapshot: their bones' bends and angles to the palm match within a few degrees), so it twists about its own
+        // bones. The right thumb takes the left one's pose as animated, mirrored in the hands' own axes (Frame), before
+        // anything bends the fingers. Each bone's axes are matched through the rig's bind pose (the skinned mesh's
+        // bindposes), where both thumbs are taken as mirror images: so the right thumb turns as the left one, not only
+        // points the same way. Only while both arms follow their controllers and the right hand holds no tool.
+        private static readonly Quaternion[] thumbMatch = new Quaternion[3];
+        private static bool thumbMatchKnown;
+        private static bool thumbMatchTried;
+
+        private static void MirrorThumb(bool on)
+        {
+            var share = on ? Mathf.Min(LeftArm.Weight, RightArm.Weight) : 0f;
+            if (share <= 0f) return;
+            if (!thumbMatchTried)
+            {
+                thumbMatchTried = true;
+                thumbMatchKnown = MatchThumbs();
+            }
+            if (!thumbMatchKnown || !Frame(LeftArm, out _, out var left) || !Frame(RightArm, out _, out var right)) return;
+            var toLeft = Quaternion.Inverse(left);
+            for (var i = 0; i < thumbMatch.Length; i++)
+            {
+                var from = LeftArm.Thumb[i];
+                var to = RightArm.Thumb[i];
+                if (from == null || to == null) continue;
+                var wanted = right * Mirror(toLeft * from.rotation) * thumbMatch[i];
+                to.rotation = Quaternion.Slerp(to.rotation, wanted, share);
+            }
+        }
+
+        // A rotation in a hand's own axes as on the other hand: reflected through the plane of knuckles and thumb side.
+        private static Quaternion Mirror(Quaternion q) => new Quaternion(q.x, -q.y, -q.z, q.w);
+
+        // For each thumb bone, how the right one's axes sit against the mirrored left one's in the bind pose.
+        private static bool MatchThumbs()
+        {
+            if (!BindFrame(LeftArm, out var leftMesh, out var leftFrame) || !BindFrame(RightArm, out var rightMesh, out var rightFrame))
+            {
+                Plugin.Log.LogInfo("Hands: thumb mirror: no bind pose found for both hands, right thumb stays as animated");
+                return false;
+            }
+            var log = new System.Text.StringBuilder();
+            for (var i = 0; i < thumbMatch.Length; i++)
+            {
+                if (!BindRotation(leftMesh, LeftArm.Thumb[i], out var l) || !BindRotation(rightMesh, RightArm.Thumb[i], out var r)) return false;
+                var leftInHand = Quaternion.Inverse(leftFrame) * l;
+                var rightInHand = Quaternion.Inverse(rightFrame) * r;
+                thumbMatch[i] = Quaternion.Inverse(Mirror(leftInHand)) * rightInHand;
+                thumbMatch[i].ToAngleAxis(out var angle, out var axis);
+                log.Append($" {RightArm.Thumb[i].name} {angle:0}° about {axis}");
+            }
+            Plugin.Log.LogInfo($"Hands: thumb mirror: right thumb bones against the mirrored left ones in the bind pose:{log}");
+            return true;
+        }
+
+        // The hand's own axes (as Frame) in the bind pose of the skinned mesh that carries its thumb.
+        private static bool BindFrame(Arm arm, out SkinnedMeshRenderer mesh, out Quaternion frame)
+        {
+            frame = Quaternion.identity;
+            mesh = null;
+            if (arm.Thumb[0] == null || arm.Wrist == null) return false;
+            foreach (var candidate in arm.Wrist.root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                if (candidate.bones != null && System.Array.IndexOf(candidate.bones, arm.Thumb[0]) >= 0
+                    && System.Array.IndexOf(candidate.bones, arm.Wrist) >= 0 && System.Array.IndexOf(candidate.bones, arm.Index) >= 0
+                    && System.Array.IndexOf(candidate.bones, arm.Middle) >= 0 && System.Array.IndexOf(candidate.bones, arm.Little) >= 0)
+                {
+                    mesh = candidate;
+                    break;
+                }
+            if (mesh == null) return false;
+            if (!BindPosition(mesh, arm.Wrist, out var wrist) || !BindPosition(mesh, arm.Index, out var index)
+                || !BindPosition(mesh, arm.Middle, out var middle) || !BindPosition(mesh, arm.Little, out var little)) return false;
+            var knuckles = middle - wrist;
+            var thumbSide = index - little;
+            if (knuckles.sqrMagnitude <= 1e-10f || thumbSide.sqrMagnitude <= 1e-10f) return false;
+            frame = Quaternion.LookRotation(knuckles, thumbSide);
+            return true;
+        }
+
+        private static bool BindPosition(SkinnedMeshRenderer mesh, Transform bone, out Vector3 position)
+        {
+            position = Vector3.zero;
+            var i = System.Array.IndexOf(mesh.bones, bone);
+            var poses = mesh.sharedMesh != null ? mesh.sharedMesh.bindposes : null;
+            if (i < 0 || poses == null || i >= poses.Length) return false;
+            position = poses[i].inverse.GetColumn(3);
+            return true;
+        }
+
+        private static bool BindRotation(SkinnedMeshRenderer mesh, Transform bone, out Quaternion rotation)
+        {
+            rotation = Quaternion.identity;
+            var i = bone == null ? -1 : System.Array.IndexOf(mesh.bones, bone);
+            var poses = mesh.sharedMesh != null ? mesh.sharedMesh.bindposes : null;
+            if (i < 0 || poses == null || i >= poses.Length) return false;
+            rotation = poses[i].inverse.rotation;
             return true;
         }
 

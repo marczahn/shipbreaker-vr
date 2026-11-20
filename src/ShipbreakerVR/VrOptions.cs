@@ -116,6 +116,8 @@ namespace ShipbreakerVR
                 EnumRow(L("Turn around", "Drehen um"), VrSettings.TurnAround),
                 new BoolRow { Label = L("Upright body", "Oberkörper aufrecht"), Entry = VrSettings.UprightBody },
                 EnumRow(L("Thrust mode", "Schubmodus"), VrSettings.ThrustMode),
+                EnumRow(L("Climbing", "Hangeln"), VrSettings.ClimbTurning),
+                new SliderRow { Label = L("Climbing dead zone (cm)", "Hangeln-Totzone (cm)"), Entry = VrSettings.ClimbTurnDeadzone, Format = "0", Step = 1f },
                 new SliderRow { Label = L("Hand tilt (°)", "Handneigung (°)"), Entry = VrSettings.HandTilt, Format = "0", Step = 1f },
                 new BoolRow { Label = L("Fit tools in the hand", "Werkzeuge justieren"), Entry = VrToolFit.Adjusting },
                 new SliderRow { Label = L("Head height (cm)", "Kopfhöhe (cm)"), Entry = VrSettings.HeadHeight, Format = "0", Step = 1f },

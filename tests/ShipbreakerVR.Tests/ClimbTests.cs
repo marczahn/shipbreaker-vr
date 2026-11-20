@@ -322,5 +322,20 @@ namespace ShipbreakerVR.Tests
             var flipped = new Quaternion(-turn.x, -turn.y, -turn.z, -turn.w);
             Assert.Equal(70f, LeverMath.Twist(flipped, axis), 2);
         }
+
+        [Fact]
+        public void TenKilogramsAreThrownAtMostByTheArmsForce()
+        {
+            // 170 N over 0.7 m into 10 kg and the arm's 2 kg: about 4.45 m/s.
+            Assert.Equal(4.45f, ClimbContact.MostThrowSpeed(10f), 2);
+            Assert.True(ClimbContact.MostThrowSpeed(1f) > ClimbContact.MostThrowSpeed(10f) * 1.9f);
+        }
+
+        [Fact]
+        public void TwoArmsSpeedAPartUpFasterThanOne()
+        {
+            Assert.Equal(170f / 12f, ClimbContact.MostAcceleration(10f, 1), 3);
+            Assert.Equal(340f / 14f, ClimbContact.MostAcceleration(10f, 2), 3);
+        }
     }
 }
