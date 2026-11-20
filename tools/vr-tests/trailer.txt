@@ -1,0 +1,26 @@
+# Trailer take: head and right hand move together on smooth paths, at a fixed 60 fps game time, without HUD.
+# Start it in a shift, standing where the take begins (Test/Testmodus on, ideally Test/MockRuntime).
+head 0 1.7 0 0 0 0
+left -0.25 1.25 0.3 0 0 0
+right 0.25 1.25 0.3 0 0 0
+wait 1
+recenter
+wait 1
+hud off
+hide Hologram
+capturefps 60
+record take1
+# The head looks around on a spline while the hand rises and aims; both start at once.
+track head async
+  0   0 1.7 0   0 0 0
+  2   0 1.7 0   5 -35 0
+  5   0 1.65 0.1   -10 25 0
+  7   0 1.7 0   0 0 0
+end
+wait 1.5
+move right 0.3 1.5 0.55 -20 10 0 in 2 ease async
+wait 2.5
+press right trigger 2
+waitmoves
+record stop
+capturefps 0

@@ -21,7 +21,14 @@ namespace ShipbreakerVR
     //   head X Y Z [P Y R]                 the headset's pose
     //   left|right X Y Z [P Y R]           a controller's grip pose (the aim pose follows, see aim)
     //   left|right off                     the controller's pose from the runtime again
-    //   move head|left|right X Y Z [P Y R] in T   glides there over T seconds (waits for it)
+    //   move head|left|right X Y Z [P Y R] in T [EASING] [async]
+    //                                      glides there over T seconds and waits for it; with async the next lines run
+    //                                      at once, so head and hands move together. EASING: linear (default), ease
+    //                                      (smooth start and stop), ease-in, ease-out
+    //   track head|left|right [async]      a smooth path through keyframes, one per line up to 'end':
+    //     T X Y Z [P Y R]                  T seconds after the start; the spline passes every key and starts and stops
+    //   end                                gently. Without a key at 0 it starts where the device is.
+    //   waitmoves                          waits until every glide and track has arrived
     //   left|right BUTTON VALUE            trigger, grip, a, b, x, y, menu, stickclick, or an input path (input/...)
     //   left|right stick X Y               the thumbstick
     //   press left|right BUTTON [T]        down, T seconds (default 0.2), up again
@@ -38,19 +45,23 @@ namespace ShipbreakerVR
     //   log TEXT                           writes TEXT into the log
     //   quit                               quits the game
     //   restart                            quits the game and starts it again (for changes to the OpenXR setup)
+    // For trailer recordings:
+    //   capturefps N                       the game advances exactly 1/N s per frame (Time.captureFramerate), however
+    //                                      long the frame takes; the script's clock follows it. 0 switches it off
+    //   record NAME [N]                    saves the game window as results\<script>\NAME\00001.png ... every frame (every
+    //                                      Nth), for ffmpeg -framerate <fps> -i %05d.png; best with capturefps
+    //   record stop                        stops saving
+    //   hud on|off                         the HUD visor in front of the eyes (menus stay)
+    //   lasers on|off                      the aiming lasers and tool lines
+    //   hide TEXT                          switches off every renderer whose object path contains TEXT (see dump for
+    //                                      names), e.g. tutorial holograms; hide off shows them all again
+    // capturefps, record, hud, lasers and hide end with the script.
     internal static class VrTestScript
     {
         static VrTestScript() => VrSession.OnUnload("test scripts", () => Finish("unloaded"));
 
         private static readonly string Root = Path.Combine(Paths.BepInExRootPath, "ShipbreakerVR-test");
         private static string Inbox => Path.Combine(Root, "inbox");
-
-        private class Glide
-        {
-            public VrTestXr.Device Device;
-            public VrTestXr.Pose From, To;
-            public float Start, Duration;
-        }
 
         private static string name;
         private static string results;
@@ -60,7 +71,18 @@ namespace ShipbreakerVR
         private static int waitFrames;
         private static string waitForLog;
         private static volatile bool logSeen;
-        private static readonly List<Glide> Glides = new List<Glide>();
+        private static readonly List<VrTestTrack> Tracks = new List<VrTestTrack>();
+        private static bool waitForTracks;
+        // The script's clock: real time, or 1/capturefps per frame while that is set.
+        private static float clock;
+        private static int captureFps;
+        private static string recordFolder;
+        private static int recordEvery, recordFrame, recordSaved;
+        private static readonly List<Renderer> Hidden = new List<Renderer>();
+
+        // Read by VrUi and its pass.
+        public static bool HideHud { get; private set; }
+        public static bool HideLasers { get; private set; }
         private static readonly List<(float At, VrTestXr.Device Hand, string Input)> Releases = new List<(float, VrTestXr.Device, string)>();
         private static Listener listener;
         private static int failures;
@@ -80,8 +102,10 @@ namespace ShipbreakerVR
                 TryStartNext();
                 return;
             }
-            var now = Time.unscaledTime;
+            clock += captureFps > 0 ? 1f / captureFps : Time.unscaledDeltaTime;
+            var now = clock;
             Step(now);
+            Record();
             while (Running && next < lines.Count && Ready(now))
             {
                 var line = lines[next++];
@@ -92,11 +116,16 @@ namespace ShipbreakerVR
                     Plugin.Log.LogError($"Test {name} line {next}: '{line}' failed: {e.Message}");
                 }
             }
-            if (Running && next >= lines.Count && Ready(now) && Glides.Count == 0 && Releases.Count == 0) Finish(failures == 0 ? "finished" : $"finished with {failures} failed lines");
+            if (Running && next >= lines.Count && Ready(now) && Tracks.Count == 0 && Releases.Count == 0) Finish(failures == 0 ? "finished" : $"finished with {failures} failed lines");
         }
 
         private static bool Ready(float now)
         {
+            if (waitForTracks)
+            {
+                if (Tracks.Count > 0) return false;
+                waitForTracks = false;
+            }
             if (waitFrames > 0)
             {
                 waitFrames--;
@@ -139,6 +168,8 @@ namespace ShipbreakerVR
             waitUntil = 0f;
             waitFrames = 0;
             waitForLog = null;
+            waitForTracks = false;
+            clock = 0f;
             listener = new Listener(Path.Combine(results, "log.txt"));
             BepInEx.Logging.Logger.Listeners.Add(listener);
             Plugin.Log.LogInfo($"Test {name} started ({lines.Count} lines), {Plugin.Name} {Plugin.Version}, VR {(VrXr.IsRunning ? "running" : "off")}, test input {(VrTestXr.Hooked ? "hooked" : "NOT hooked: restart the game with Test/Testmodus on")}");
@@ -149,9 +180,15 @@ namespace ShipbreakerVR
             if (!Running) return;
             Plugin.Log.LogInfo($"Test {name} {how}");
             VrTestXr.Reset();
-            Glides.Clear();
+            Tracks.Clear();
             Releases.Clear();
             lines = null;
+            if (captureFps > 0) Time.captureFramerate = 0;
+            captureFps = 0;
+            StopRecording();
+            HideHud = false;
+            HideLasers = false;
+            ShowHidden();
             if (listener != null)
             {
                 BepInEx.Logging.Logger.Listeners.Remove(listener);
@@ -162,15 +199,14 @@ namespace ShipbreakerVR
             catch (Exception e) { Plugin.Log.LogWarning($"Test {name}: {e.Message}"); }
         }
 
-        // Glides and timed releases, every frame.
+        // Glides, tracks and timed releases, every frame.
         private static void Step(float now)
         {
-            for (var i = Glides.Count - 1; i >= 0; i--)
+            for (var i = Tracks.Count - 1; i >= 0; i--)
             {
-                var g = Glides[i];
-                var t = g.Duration <= 0f ? 1f : Mathf.Clamp01((now - g.Start) / g.Duration);
-                VrTestXr.SetPose(g.Device, new VrTestXr.Pose(Vector3.Lerp(g.From.Position, g.To.Position, t), Quaternion.Slerp(g.From.Rotation, g.To.Rotation, t)));
-                if (t >= 1f) Glides.RemoveAt(i);
+                var track = Tracks[i];
+                VrTestXr.SetPose(track.Device, track.Evaluate(now));
+                if (track.Done(now)) Tracks.RemoveAt(i);
             }
             for (var i = Releases.Count - 1; i >= 0; i--)
             {
@@ -197,11 +233,74 @@ namespace ShipbreakerVR
                 {
                     var device = ParseDevice(words[1]);
                     var inAt = Array.FindIndex(words, w => w.ToLowerInvariant() == "in");
-                    if (inAt < 0) throw new FormatException("move needs 'in SECONDS'");
+                    if (inAt < 0 || inAt + 1 >= words.Length) throw new FormatException("move needs 'in SECONDS'");
                     var to = ParsePose(words.Skip(2).Take(inAt - 2).ToArray(), VrTestXr.GetPose(device));
                     var duration = Number(words[inAt + 1]);
-                    Glides.Add(new Glide { Device = device, From = Current(device), To = to, Start = now, Duration = duration });
-                    waitUntil = now + duration;
+                    var easing = VrTestTrack.Easing.Linear;
+                    var async = false;
+                    foreach (var word in words.Skip(inAt + 2))
+                    {
+                        if (word.ToLowerInvariant() == "async") async = true;
+                        else easing = VrTestTrack.ParseEasing(word);
+                    }
+                    Start(new VrTestTrack(device, now, new[] { 0f, duration }, new[] { Current(device), to }, easing), async, now);
+                    return;
+                }
+                case "track":
+                {
+                    var device = ParseDevice(words[1]);
+                    var async = words.Length > 2 && words[2].ToLowerInvariant() == "async";
+                    var times = new List<float>();
+                    var keys = new List<VrTestXr.Pose>();
+                    var previous = VrTestXr.GetPose(device);
+                    while (true)
+                    {
+                        if (next >= lines.Count) throw new FormatException("track without 'end'");
+                        var key = lines[next++].Trim();
+                        if (key.Length == 0 || key.StartsWith("#")) continue;
+                        var parts = key.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
+                        if (parts[0].ToLowerInvariant() == "end") break;
+                        var pose = ParsePose(parts.Skip(1).ToArray(), previous);
+                        times.Add(Number(parts[0]));
+                        keys.Add(pose);
+                        previous = pose;
+                    }
+                    if (times.Count == 0) throw new FormatException("track without keys");
+                    if (times[0] > 0f)
+                    {
+                        times.Insert(0, 0f);
+                        keys.Insert(0, Current(device));
+                    }
+                    if (times.Count == 1)
+                    {
+                        times.Add(0f);
+                        keys.Add(keys[0]);
+                    }
+                    Start(new VrTestTrack(device, now, times.ToArray(), keys.ToArray()), async, now);
+                    return;
+                }
+                case "waitmoves":
+                    waitForTracks = true;
+                    return;
+                case "capturefps":
+                    captureFps = Math.Max(0, (int)Number(words[1]));
+                    Time.captureFramerate = captureFps;
+                    return;
+                case "record":
+                    if (words[1].ToLowerInvariant() == "stop") StopRecording();
+                    else StartRecording(words[1], words.Length > 2 ? Math.Max(1, (int)Number(words[2])) : 1);
+                    return;
+                case "hud":
+                    HideHud = !OnOff(words[1]);
+                    return;
+                case "lasers":
+                    HideLasers = !OnOff(words[1]);
+                    return;
+                case "hide":
+                {
+                    var text = line.Substring(words[0].Length).Trim();
+                    if (text.ToLowerInvariant() == "off") ShowHidden();
+                    else Hide(text);
                     return;
                 }
                 case "press":
@@ -223,7 +322,7 @@ namespace ShipbreakerVR
                     return;
                 case "reset":
                     VrTestXr.Reset();
-                    Glides.Clear();
+                    Tracks.Clear();
                     return;
                 case "wait":
                     waitUntil = now + Number(words[1]);
@@ -278,6 +377,74 @@ namespace ShipbreakerVR
                 default:
                     throw new FormatException($"unknown command '{words[0]}'");
             }
+        }
+
+        // A new path for the device replaces the one it is on; without async the script waits until it has arrived.
+        private static void Start(VrTestTrack track, bool async, float now)
+        {
+            Tracks.RemoveAll(t => t.Device == track.Device);
+            Tracks.Add(track);
+            if (!async) waitUntil = now + track.Duration;
+        }
+
+        private static bool OnOff(string word)
+        {
+            switch (word.ToLowerInvariant())
+            {
+                case "on": return true;
+                case "off": return false;
+                default: throw new FormatException($"'{word}' is not on or off");
+            }
+        }
+
+        private static void StartRecording(string folder, int every)
+        {
+            StopRecording();
+            recordFolder = Path.Combine(results, folder);
+            if (Directory.Exists(recordFolder)) Directory.Delete(recordFolder, true);
+            Directory.CreateDirectory(recordFolder);
+            recordEvery = every;
+            recordFrame = 0;
+            recordSaved = 0;
+            Plugin.Log.LogInfo($"Test {name}: recording the game window to {recordFolder}{(captureFps > 0 ? $" at {captureFps} fps game time" : " (no capturefps: frames follow real time)")}");
+        }
+
+        private static void StopRecording()
+        {
+            if (recordFolder == null) return;
+            Plugin.Log.LogInfo($"Test {name}: recording stopped, {recordSaved} frames in {recordFolder}");
+            recordFolder = null;
+        }
+
+        // ScreenCapture writes the window at the end of this frame.
+        private static void Record()
+        {
+            if (recordFolder == null) return;
+            if (recordFrame++ % recordEvery != 0) return;
+            recordSaved++;
+            ScreenCapture.CaptureScreenshot(Path.Combine(recordFolder, recordSaved.ToString("00000", CultureInfo.InvariantCulture) + ".png"));
+        }
+
+        private static void Hide(string text)
+        {
+            var count = 0;
+            foreach (var renderer in UnityEngine.Object.FindObjectsOfType<Renderer>())
+            {
+                if (!renderer.enabled || Hidden.Contains(renderer)) continue;
+                if (VrUtil.Path(renderer.transform).IndexOf(text, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                renderer.enabled = false;
+                Hidden.Add(renderer);
+                count++;
+                if (count <= 20) Plugin.Log.LogInfo($"Test {name}: hidden {VrUtil.Path(renderer.transform)}");
+            }
+            Plugin.Log.LogInfo($"Test {name}: {count} renderers with '{text}' hidden");
+        }
+
+        private static void ShowHidden()
+        {
+            foreach (var renderer in Hidden)
+                if (renderer != null) renderer.enabled = true;
+            Hidden.Clear();
         }
 
         // head|left|right X Y Z [P Y R], left|right off, left|right BUTTON VALUE, left|right stick X Y
