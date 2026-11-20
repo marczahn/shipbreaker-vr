@@ -14,6 +14,11 @@ namespace ShipbreakerVR
         private const float TremorAngle = 0.5f;
         // How long the tool takes to follow, in seconds.
         private const float Lag = 0.04f;
+        // The cutter with the second hand on it (VrToolSupport) is steadied more (Raik, 2026-11-18: the other way round
+        // from the grapple, which the second hand makes quicker; so a precise cut does not stray onto delicate parts):
+        // tremor within a wider angle is filtered out, and it follows more slowly.
+        private const float TwoHandTremor = 1.5f;
+        private const float TwoHandLag = 0.10f;
 
         private class Filter
         {
@@ -45,7 +50,9 @@ namespace ShipbreakerVR
             }
             if (filter.Frame == Time.frameCount) return VrToolCollide.Apply(hand, tool, VrToolWeight.Turn(hand, tool, filter.Rotation));
             filter.Frame = Time.frameCount;
-            var share = Share(Quaternion.Angle(filter.Rotation, raw), TremorAngle) * (1f - Mathf.Exp(-Time.unscaledDeltaTime / Lag));
+            var steadier = tool == EquipmentController.Equipment.CuttingTool && VrToolSupport.Supported(hand);
+            var share = Share(Quaternion.Angle(filter.Rotation, raw), steadier ? TwoHandTremor : TremorAngle)
+                * (1f - Mathf.Exp(-Time.unscaledDeltaTime / (steadier ? TwoHandLag : Lag)));
             filter.Rotation = Quaternion.Slerp(filter.Rotation, raw, share);
             // Then given weight and kept out of what is in the tool's way (extended tool physics).
             return VrToolCollide.Apply(hand, tool, VrToolWeight.Turn(hand, tool, filter.Rotation));

@@ -12,6 +12,10 @@ namespace ShipbreakerVR
     // view, so in VR the grapple and the cutter lay at one's feet, with a copy of the grapple at the hip besides (Raik,
     // 2026-11-08). Now the grapple's rest points are moved to the hip each frame: it is the one grapple, put away it glides
     // to the hip, and drawn it leaves from there. The cutter's rest points go onto the back the same way.
+    // The demo charges' detonator shows at the other hip, where it is drawn from (Raik, 2026-11-18: "like the grapple,
+    // only on the left side, on the belt, to be seen"). The game has no model of it but the prop on the hand, hidden
+    // while the charges are put away: copies of that prop's meshes show it, upright, turned as a hand there with its
+    // forearm forward would hold it, while it is neither in a hand nor afloat (VrLooseTools).
     internal static class VrBeltGrapple
     {
         static VrBeltGrapple() => VrSession.OnUnload("belt grapple", Release);
@@ -24,13 +28,35 @@ namespace ShipbreakerVR
         // how far its muzzle points forward from straight down, in degrees: where Raik held it, as he would like it to
         // hang (hand snapshot 2026-11-08 13:31:16, looking down about 58°). Hung by its grip at the middle of the zone
         // (VrToolBelt.GripAt) its body lay 23 cm lower and 26 cm further forward, too far away (Raik). Then 10 cm further
-        // out to the right, and 3 cm further right, forward and up (Raik).
-        private static readonly Vector3 BodyAt = new Vector3(0.40f, -0.69f, -0.16f);
+        // out to the right, and 3 cm further right, forward and up (Raik). Then 7 cm further forward, to see and reach it
+        // better (Raik, 2026-11-18).
+        // Both tools hang on the body, not on the head (Raik, 2026-11-18): the places stay written as from the head, for
+        // the head as it was when they were found (VrToolBelt.HipRef, ShoulderRef), and are taken from the neck along the
+        // heading the body keeps (VrToolBelt.BodyFrame), so the head looks around freely without moving them.
+        private static readonly Vector3 BodyAt = new Vector3(0.40f, -0.69f, -0.09f);
         private const float MuzzleForward = 25f;
         // Where the cutter's grip hangs on the back, in the same axes, within the zone over the right shoulder it is drawn
         // from (VrToolBelt: above -0.12 m, behind -0.05 m), and how far its muzzle points towards the left, in degrees.
         private static readonly Vector3 CutterGripAt = new Vector3(0.15f, -0.08f, -0.22f);
         private const float CutterSlant = 20f;
+
+        // Where the detonator's middle hangs, in the axes its zone is measured in (VrToolBelt.ChargeRef; mirrored with
+        // the tools for the left-handed). Raik, 2026-11-18: "into the middle of the grip's field, or at least a little
+        // closer to the body and a little further back"; it hung by a wrist placed in the grapple's axes before. The
+        // zone's middle lies 20 cm to the side, 65 cm down and 11 cm back; the detonator hangs 3 cm further out than
+        // that, so it does not sit in the suit's hip.
+        // There it was out of sight (Raik, the same day): at the neck's line beside the body, 11 cm higher and some
+        // 10 cm further back than where he had seen it before. The zone went 10 cm forward (VrToolBelt), and the
+        // detonator hangs near its middle again: 26 cm to the side, 10 cm in front of the neck's line (as far forward
+        // as the grapple's body on the other side) and 55 cm below the neck. Then 7 cm further forward still (Raik).
+        private static readonly Vector3 DetonatorAt = new Vector3(-0.26f, -0.72f, 0.07f);
+        private static GameObject detonatorShown;
+        // The middle of its parts, in its own axes; the prop's size, which the copy's own frame does not have.
+        private static Vector3 detonatorMiddle;
+        private static Vector3 detonatorSize = Vector3.one;
+        private static bool detonatorPlaced;
+        private static Transform detonatorOf;
+        private static float nextDetonator;
 
         // How fast the grapple glides onto its rest point, per second, as the game's spring may only run while it is held.
         private const float Glide = 10f;
@@ -79,31 +105,113 @@ namespace ShipbreakerVR
                 Hide();
                 return;
             }
-            var forward = vr.transform.localRotation * Vector3.forward;
-            forward.y = 0f;
-            if (forward.sqrMagnitude < 1e-4f) return;
-            var heading = Quaternion.LookRotation(forward, Vector3.up);
-            var head = vr.transform.localPosition;
+            if (!VrToolBelt.BodyFrame(out var neck, out var heading)) return;
 
             // The grapple: muzzle down along the leg and a little forward, the grip to the back, hung by its body.
             var gunModel = Gun(gun);
             var rest = GunRest(gun);
             var hanging = heading * Quaternion.Euler(-MuzzleForward, 0f, 0f) * Quaternion.LookRotation(Vector3.down, Vector3.forward);
-            if (gunModel != null && rest != null && VrToolModels.TrackingToWorld(head + heading * BodyAt, hanging, out var at, out var rotation))
+            if (gunModel != null && rest != null && !VrLooseTools.IsLoose(EquipmentController.Equipment.GrappleHook)
+                && VrToolModels.TrackingToWorld(neck + heading * (VrToolBelt.Sided(BodyAt) - VrToolBelt.HipRef), hanging, out var at, out var rotation))
             {
                 var modelInGun = Quaternion.Inverse(gunModel.rotation) * model.rotation;
                 Hang(gunModel, rest, Shadow(gun), ShadowRest(gun), at, rotation * Quaternion.Inverse(modelInGun),
                     gunModel.InverseTransformPoint(body.TransformPoint(bodyCenter)));
-                if (logs++ % 2000 == 0 && gunModel.parent == rest) LogGrip(vr.transform, heading);
+                if (logs++ % 2000 == 0 && gunModel.parent == rest) LogGrip(vr.transform.parent, neck, heading);
             }
 
             // The cutter on the back, like a sword: its grip by the right shoulder, where it is drawn from (VrToolBelt), the
             // muzzle down towards the left hip, its top away from the back. Hung by its pivot, where the hand holds it.
             var cutterModel = cutter != null ? Cutter(cutter) : null;
             var cutterRest = cutter != null ? CutterRest(cutter) : null;
-            var onBack = heading * Quaternion.Euler(0f, 0f, -CutterSlant) * Quaternion.LookRotation(Vector3.down, Vector3.back);
-            if (cutterModel != null && cutterRest != null && VrToolModels.TrackingToWorld(head + heading * CutterGripAt, onBack, out var cutterAt, out var cutterRotation))
+            var onBack = heading * Quaternion.Euler(0f, 0f, VrToolBelt.LeftHanded ? CutterSlant : -CutterSlant) * Quaternion.LookRotation(Vector3.down, Vector3.back);
+            if (cutterModel != null && cutterRest != null && !VrLooseTools.IsLoose(EquipmentController.Equipment.CuttingTool)
+                && VrToolModels.TrackingToWorld(neck + heading * (VrToolBelt.Sided(CutterGripAt) - VrToolBelt.ShoulderRef), onBack, out var cutterAt, out var cutterRotation))
                 Hang(cutterModel, cutterRest, CutterShadow(cutter), CutterShadowRest(cutter), cutterAt, cutterRotation, Vector3.zero);
+
+            HangDetonator(neck, heading);
+        }
+
+        // The detonator's copy at the hip, while the player has the charges and the detonator is put away.
+        private static void HangDetonator(Vector3 neck, Quaternion heading)
+        {
+            var prop = VrLooseTools.DetonatorModel;
+            var equipment = GameRefs.Equipment;
+            var inHandAt = Vector3.zero;
+            var inHandTurn = Quaternion.identity;
+            var wrist = Vector3.zero;
+            var frame = Quaternion.identity;
+            // Its place is kept also while it does not show (in a hand, afloat): where it is put back (DetonatorAtHip).
+            var placed = prop != null && equipment != null && equipment.CanEquip(EquipmentController.Equipment.DemoCharge)
+                && VrHands.DetonatorRest(out inHandAt, out inHandTurn)
+                && VrToolModels.TrackingToWorld(neck + heading * (VrToolBelt.Sided(DetonatorAt) - VrToolBelt.ChargeRef), heading, out wrist, out frame);
+            var shows = placed && !VrLooseTools.DetonatorShowsInHand && !VrLooseTools.DetonatorLoose;
+            if (placed && (detonatorShown == null || detonatorOf != prop) && Time.unscaledTime >= nextDetonator)
+            {
+                nextDetonator = Time.unscaledTime + 2f;
+                BuildDetonator(prop);
+            }
+            detonatorPlaced = placed && detonatorShown != null;
+            if (!detonatorPlaced)
+            {
+                if (detonatorShown != null && detonatorShown.activeSelf) detonatorShown.SetActive(false);
+                return;
+            }
+            // Turned as in a hand there, its middle at the place.
+            var turned = frame * inHandTurn;
+            detonatorShown.transform.SetPositionAndRotation(wrist - turned * detonatorMiddle, turned);
+            if (detonatorShown.activeSelf != shows) detonatorShown.SetActive(shows);
+        }
+
+        // For VrLooseTools: where a point of the detonator's model (in the prop's own axes) is on the copy at the hip,
+        // in the world; shown: whether the copy shows there now. False while it has no place at the hip.
+        internal static bool DetonatorAtHip(Vector3 inModel, out Vector3 at, out bool shown)
+        {
+            at = Vector3.zero;
+            shown = false;
+            if (!detonatorPlaced || detonatorShown == null) return false;
+            at = detonatorShown.transform.TransformPoint(Vector3.Scale(detonatorSize, inModel));
+            shown = detonatorShown.activeSelf;
+            return true;
+        }
+
+        private static void BuildDetonator(Transform prop)
+        {
+            if (detonatorShown != null) Object.Destroy(detonatorShown);
+            detonatorShown = null;
+            detonatorOf = null;
+            var root = new GameObject("ShipbreakerVR detonator at the hip");
+            root.transform.SetPositionAndRotation(prop.position, prop.rotation);
+            var parts = 0;
+            var middle = Vector3.zero;
+            foreach (var filter in prop.GetComponentsInChildren<MeshFilter>(true))
+            {
+                var source = filter.GetComponent<MeshRenderer>();
+                if (source == null || filter.sharedMesh == null) continue;
+                var copy = new GameObject(filter.name) { layer = filter.gameObject.layer };
+                copy.transform.SetParent(root.transform, false);
+                copy.transform.SetPositionAndRotation(filter.transform.position, filter.transform.rotation);
+                copy.transform.localScale = filter.transform.lossyScale;
+                copy.AddComponent<MeshFilter>().sharedMesh = filter.sharedMesh;
+                var shown = copy.AddComponent<MeshRenderer>();
+                shown.sharedMaterials = source.sharedMaterials;
+                shown.shadowCastingMode = source.shadowCastingMode;
+                shown.receiveShadows = source.receiveShadows;
+                middle += copy.transform.TransformPoint(filter.sharedMesh.bounds.center);
+                parts++;
+            }
+            if (parts == 0)
+            {
+                Object.Destroy(root);
+                return;
+            }
+            detonatorMiddle = root.transform.InverseTransformPoint(middle / parts);
+            detonatorSize = prop.lossyScale;
+            root.SetActive(false);
+            detonatorShown = root;
+            detonatorOf = prop;
+            Plugin.Log.LogInfo($"Belt grapple: the detonator shows at the hip, {parts} part(s) copied from '{prop.name}', its middle {detonatorMiddle.magnitude / VrCamera.WorldScale * 100f:0} cm from its origin, "
+                + $"hung at ({DetonatorAt.x:0.00}, {DetonatorAt.y:0.00}, {DetonatorAt.z:0.00}) m as its zone is measured");
         }
 
         // Moves a tool's rest points so that the tool, once it lies on them, has its anchor (in its own axes) at the point
@@ -122,13 +230,13 @@ namespace ShipbreakerVR
             Settle(shadow, shadowRest);
         }
 
-        // Where the grip hangs against the zone it is drawn from, in the head's heading as VrToolBelt measures.
-        private static void LogGrip(Transform head, Quaternion heading)
+        // Where the grip hangs against the zone it is drawn from, against the body as VrToolBelt measures the hip.
+        private static void LogGrip(Transform rig, Vector3 neck, Quaternion heading)
         {
-            var rig = head.parent;
             if (rig == null || grip == null) return;
-            var local = Quaternion.Inverse(heading) * (rig.InverseTransformPoint(grip.position) - head.localPosition);
-            Plugin.Log.LogInfo($"Belt grapple: its grip hangs at ({local.x:0.00}, {local.y:0.00}, {local.z:0.00}) m from the head, its zone around ({VrToolBelt.GripAt.x:0.00}, {VrToolBelt.GripAt.y:0.00}, {VrToolBelt.GripAt.z:0.00})");
+            var local = Quaternion.Inverse(heading) * (rig.InverseTransformPoint(grip.position) - neck) + VrToolBelt.HipRef;
+            Plugin.Log.LogInfo($"Belt grapple: its grip hangs at ({local.x:0.00}, {local.y:0.00}, {local.z:0.00}) m from the head (as when looking down at the hip; on the body, {(VrTorso.Upright ? "its own heading" : "the head's heading")}), "
+                + $"its zone around ({VrToolBelt.GripAt.x:0.00}, {VrToolBelt.GripAt.y:0.00}, {VrToolBelt.GripAt.z:0.00})");
         }
 
         // The grapple glides onto its rest point once it lies on it.
@@ -140,7 +248,32 @@ namespace ShipbreakerVR
             tool.localRotation = Quaternion.Slerp(tool.localRotation, Quaternion.identity, t);
         }
 
-        private static void Remember(Transform point)
+        // Experiment (VrLooseTools): a tool's model and rest points as the game keeps them; false while they are not there.
+        internal static bool Parts(EquipmentController.Equipment kind, out Transform tool, out Transform rest, out Transform shadow, out Transform shadowRest)
+        {
+            tool = rest = shadow = shadowRest = null;
+            if (kind == EquipmentController.Equipment.GrappleHook)
+            {
+                var controller = GameRefs.Gun;
+                if (controller == null) return false;
+                tool = Gun(controller);
+                rest = GunRest(controller);
+                shadow = Shadow(controller);
+                shadowRest = ShadowRest(controller);
+            }
+            else if (kind == EquipmentController.Equipment.CuttingTool)
+            {
+                var controller = GameRefs.Cutter;
+                if (controller == null) return false;
+                tool = Cutter(controller);
+                rest = CutterRest(controller);
+                shadow = CutterShadow(controller);
+                shadowRest = CutterShadowRest(controller);
+            }
+            return tool != null && rest != null;
+        }
+
+        internal static void Remember(Transform point)
         {
             foreach (var m in moved)
                 if (m.Point == point) return;
@@ -182,18 +315,24 @@ namespace ShipbreakerVR
         // longer runs.
         public static void Hide()
         {
+            if (detonatorShown != null && detonatorShown.activeSelf) detonatorShown.SetActive(false);
+            detonatorPlaced = false;
+            // A tool afloat keeps its rest points where it floats (VrLooseTools); they go back once it is on the body again.
             foreach (var m in moved)
-                if (m.Point != null)
+                if (m.Point != null && !VrLooseTools.Holds(m.Point))
                 {
                     m.Point.localPosition = m.Position;
                     m.Point.localRotation = m.Rotation;
                 }
-            moved.Clear();
+            moved.RemoveAll(m => m.Point == null || !VrLooseTools.Holds(m.Point));
         }
 
         private static void Release()
         {
             Hide();
+            if (detonatorShown != null) Object.Destroy(detonatorShown);
+            detonatorShown = null;
+            detonatorOf = null;
             gun = null;
             cutter = null;
             model = null;

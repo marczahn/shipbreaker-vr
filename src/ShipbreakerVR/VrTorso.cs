@@ -57,6 +57,15 @@ namespace ShipbreakerVR
 
         public static Quaternion Frame(Quaternion cameraRotation) => Correction * cameraRotation;
 
+        // The body's frame in tracking space, for what hangs on the body rather than on the head (VrToolBelt): whether
+        // the model stands upright on a heading of its own, that heading in degrees around the up axis, and where the
+        // neck is from the eye, in the head's axes and real meters (x right, y up, z forward; followed smoothly, the
+        // model's own 20 cm below the eye until it is known).
+        public static bool Upright => applied && headingKnown && weight > 0.5f;
+        public static float Heading => heading;
+        public static Vector3 NeckFromEye { get; private set; } = new Vector3(0f, -0.2f, 0f);
+        private const float NeckRate = 10f;
+
         // From VrFrame, first of the steps after the animation.
         public static void LateUpdate()
         {
@@ -94,6 +103,11 @@ namespace ShipbreakerVR
             animatedRotation = hips.localRotation;
             var pivot = neck.position;
             var neckRotation = neck.rotation;
+            if (VrCamera.WorldScale > 1e-4f)
+            {
+                var fromEye = Vector3.Scale(camera.transform.lossyScale, camera.transform.InverseTransformPoint(pivot)) / VrCamera.WorldScale;
+                NeckFromEye = Vector3.Lerp(NeckFromEye, fromEye, 1f - Mathf.Exp(-NeckRate * Time.unscaledDeltaTime));
+            }
             var shift = Vector3.zero;
             if (VrToolModels.TrackingToWorld(vr.transform.localPosition, vr.HeadRotation, out var eye, out var eyeRotation))
             {

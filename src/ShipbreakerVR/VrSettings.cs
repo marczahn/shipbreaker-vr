@@ -69,6 +69,8 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> Climbing;
         public static ConfigEntry<bool> ShoulderStow;
         public static ConfigEntry<bool> UprightBody;
+        public static ConfigEntry<VrToolBelt.Handed> Handedness;
+        public static ConfigEntry<VrChargeByHand.Placing> ChargePlacing;
         public static ConfigEntry<bool> Diagnostics;
         public static ConfigEntry<bool> TestMode;
         public static ConfigEntry<bool> MockRuntime;
@@ -187,6 +189,14 @@ namespace ShipbreakerVR
                     "Sammelteile (Kabel, Platinen, Datenkassetten und Ähnliches) sammelst du ein, indem du sie über die linke Schulter hältst und dort loslässt, wie in einen Rucksack: ein leichtes Vibrieren zeigt, dass du dort bist, ein kurzes Rasseln und ein Vibrieren bestätigen es. Aus: nur mit A oder X, während du sie hältst."),
                 "Needs Festhalten.");
 
+            ChargePlacing = Bind("Steuerung", "Sprengsatzplatzierung", VrChargeByHand.Placing.Automatisch,
+                ("How demo charges are put on. Automatic: as in the game, the trigger puts the charge on the wall you point at, with a preview of where it goes, or throws it. Manual: you take a charge from behind your back into your hand as a thing of its own, bring it to the wall and let go; it goes on as you hold it, the line on it shows the cut, and there is no preview. Let go away from a wall it floats with extended tool physics, and goes back behind your back without.",
+                    "Wie Sprengsätze angebracht werden. Automatisch: wie im Spiel, der Trigger setzt den Sprengsatz an die Wand, auf die du zeigst, mit einer Vorschau, oder wirft ihn. Manuell: Du nimmst einen Sprengsatz hinter dem Rücken als eigenes Objekt in die Hand, führst ihn an die Wand und lässt los; er wird so gesetzt, wie du ihn hältst, die Linie darauf zeigt den Schnitt, eine Vorschau gibt es nicht. Fern einer Wand losgelassen schwebt er mit erweiterter Werkzeugphysik, ohne sie kommt er zurück hinter den Rücken."),
+                (new[] { "Automatic", "Manual" }, new[] { "Automatisch", "Manuell" }));
+            Handedness = Bind("Steuerung", "Haendigkeit", VrToolBelt.Handed.Rechts,
+                ("Where the tools and the backpack sit on your body. Right-handed: grapple at the right hip, cutter over the right shoulder, detonator at the left hip, backpack over the left shoulder, scanner at the right and flashlight at the left of the helmet. Left-handed: all of it mirrored. The demo charges are behind the lower back either way.",
+                    "Wo Werkzeuge und Rucksack am Körper sitzen. Rechtshänder: Greifer an der rechten Hüfte, Cutter über der rechten Schulter, Zünder an der linken Hüfte, Rucksack über der linken Schulter, Scanner rechts und Lampe links am Helm. Linkshänder: alles gespiegelt. Die Sprengsätze sitzen in beiden Fällen hinter dem unteren Rücken."),
+                (new[] { "Right-handed", "Left-handed" }, new[] { "Rechtshänder", "Linkshänder" }));
             UprightBody = Bind("Steuerung", "OberkoerperAufrecht", true,
                 ("Your body stays upright and faces your hands while you look around, and follows your head when you lean, so the hands reach the controllers the same way wherever you look. Off: the body turns with every look and stays put when you lean, as before.",
                     "Dein Körper bleibt aufrecht und zu deinen Händen gewandt, während du dich umschaust, und geht mit, wenn du dich vorbeugst: Die Hände reichen gleich weit, egal wohin du schaust. Aus: Der Körper dreht sich wie bisher mit jedem Blick mit und bleibt stehen, wenn du dich vorbeugst."));
@@ -269,8 +279,8 @@ namespace ShipbreakerVR
                 ("Extended world physics. On: holding on to something fixed, the other hand moves heavy parts up to 5 t with a limited force of 250 N, with each hand on a heavy part they push each other apart, and your body weighs 100 kg in these pulls and pushes. Off: the game's own physics, where such parts do not move.",
                     "Erweiterte Weltphysik. An: Hältst du dich an etwas Festem, bewegt die andere Hand schwere Teile bis 5 t mit begrenzter Kraft von 250 N, mit je einer Hand an zwei schweren Teilen drückst du sie auseinander, und dein Körper wiegt dabei 100 kg. Aus: die Physik des Spiels, in der solche Teile sich nicht bewegen."));
             ToolPhysics = Bind("Steuerung", "ErweiterteWerkzeugphysik", false,
-                ("Extended tool physics. On: the cutter and the grapple bump into things instead of going through them and have weight (Tool weight). Off: as in the game.",
-                    "Erweiterte Werkzeugphysik. An: Cutter und Grappler stoßen an, statt durch Dinge hindurchzugehen, und haben Gewicht (Werkzeuggewicht). Aus: wie im Spiel."));
+                ("Extended tool physics. On: the cutter and the grapple bump into things instead of going through them and have weight (Tool weight); let go away from their place on the body they float on a line to the hip, and a demo charge let go floats where it is, until you put them back by hand. Off: as in the game, and a tool or a demo charge let go is back at its place on the body.",
+                    "Erweiterte Werkzeugphysik. An: Cutter und Grappler stoßen an, statt durch Dinge hindurchzugehen, und haben Gewicht (Werkzeuggewicht); abseits ihres Platzes am Körper losgelassen schweben sie an einer Leine zur Hüfte, und ein losgelassener Sprengsatz schwebt, wo er ist, bis du sie von Hand zurücksteckst. Aus: wie im Spiel, und ein losgelassenes Werkzeug oder ein losgelassener Sprengsatz ist wieder an seinem Platz am Körper."));
             ToolWeight = Bind("Steuerung", "Werkzeuggewicht", 5f,
                 ("With extended tool physics, how heavy the cutter and the grapple are in your hand: moved fast they lag behind the controller and settle, and your hand stays on them. 0 for none.",
                     "Mit erweiterter Werkzeugphysik: wie schwer Cutter und Grappler in der Hand sind. Schnell bewegt hängen sie dem Controller nach und pendeln aus, deine Hand bleibt an ihnen. 0 für keins."),

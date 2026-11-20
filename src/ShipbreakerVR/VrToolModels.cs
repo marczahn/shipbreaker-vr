@@ -118,6 +118,7 @@ namespace ShipbreakerVR
             point.rotation = aim * turn;
             point.position = grip + aim * mount;
             moved = true;
+            Glide();
         }
 
         // The equipped tool (the game keeps it on its right hand).
@@ -259,6 +260,10 @@ namespace ShipbreakerVR
             var weight = 0f;
             if (charge && !ChargeInLeftHand) weight = 1f;
             else if (stowingSince >= 0f && Time.time - stowingSince < StowBlend) weight = 1f - (Time.time - stowingSince) / StowBlend;
+            // With the charges put on by hand the right hand follows its controller like the left one (VrHands), also
+            // after letting go: blending back into the game's stow animation swung the arm round in a wide circle and
+            // knocked the charge away (Raik, 2026-11-18).
+            if (VrChargeByHand.Decoupled) weight = 0f;
             PosesRightArm = weight > 0f;
             if (weight <= 0f || vr == null || hand == null || !rigKnown) return;
             var camera = vr.GameCamera;
@@ -267,7 +272,8 @@ namespace ShipbreakerVR
             if (handLocal)
             {
                 // The hand with the charge sits as fitted (VrToolFit, dragged by the other hand while adjusting).
-                VrToolFit.Adjust(EquipmentController.Equipment.DemoCharge, false, wristLocal, aimLocal);
+                // Not dragged while the detonator shows: that is fitted by itself (VrToolFit.Detonator).
+                if (!VrChargeByHand.DetonatorOut) VrToolFit.Adjust(EquipmentController.Equipment.DemoCharge, false, wristLocal, aimLocal);
                 if (VrToolFit.TryGet(EquipmentController.Equipment.DemoCharge, false, out var fitOffset, out var fitTurn))
                 {
                     wristLocal += aimLocal * (fitOffset / VrCamera.WorldScale);
@@ -578,14 +584,52 @@ namespace ShipbreakerVR
 
         // The game parents a drawn tool to the equipment point keeping its world pose, so it starts where it rested in front
         // of the body and springs into the hand from there (CuttingFXController / GunController lerp it to the point). With
-        // the point in the controller the tool is taken from the body where the hand reaches for it, so it starts in the
-        // hand at once.
+        // the point in the controller the tool is taken from the body where the hand reaches for it, so it was put into
+        // the hand at once. Taken out of the air (VrLooseTools) that was a jump (Raik, 2026-11-18): it is drawn into the
+        // hand within DrawTime now, from where it was against the playspace (so flying on does not leave it behind) onto
+        // the point as the hand moves it (Glide), easing in and out. The game's own spring is overruled meanwhile.
+        private const float DrawTime = 0.18f;
+        private static Transform drawn;
+        private static Vector3 drawnFrom;
+        private static Quaternion drawnTurn;
+        private static float drawnAt;
+
         public static void SnapIntoHand(Transform tool)
         {
             if (!moved || point == null || tool == null || tool.parent != point) return;
-            Plugin.Log.LogInfo($"Tool in hand: '{tool.name}' drawn straight into the hand ({tool.localPosition.magnitude:0.00} m from it)");
-            tool.localPosition = Vector3.zero;
-            tool.localRotation = Quaternion.identity;
+            var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+            if (rig == null)
+            {
+                tool.localPosition = Vector3.zero;
+                tool.localRotation = Quaternion.identity;
+                return;
+            }
+            Plugin.Log.LogInfo($"Tool in hand: '{tool.name}' drawn into the hand within {DrawTime * 1000f:0} ms ({tool.localPosition.magnitude:0.00} m from it)");
+            drawn = tool;
+            drawnFrom = rig.InverseTransformPoint(tool.position);
+            drawnTurn = Quaternion.Inverse(rig.rotation) * tool.rotation;
+            drawnAt = Time.unscaledTime;
+        }
+
+        // From Place, with the point where the hand has it this frame.
+        private static void Glide()
+        {
+            if (drawn == null) return;
+            var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+            var t = (Time.unscaledTime - drawnAt) / DrawTime;
+            if (rig == null || drawn.parent != point || t >= 1f)
+            {
+                if (drawn.parent == point)
+                {
+                    drawn.localPosition = Vector3.zero;
+                    drawn.localRotation = Quaternion.identity;
+                }
+                drawn = null;
+                return;
+            }
+            var eased = t * t * (3f - 2f * t);
+            drawn.SetPositionAndRotation(Vector3.Lerp(rig.TransformPoint(drawnFrom), point.position, eased),
+                Quaternion.Slerp(rig.rotation * drawnTurn, point.rotation, eased));
         }
 
         // On unload (hot reload): the equipment point goes back to the game.
@@ -598,6 +642,7 @@ namespace ShipbreakerVR
             stowingSince = -1f;
             Restore();
             point = null;
+            drawn = null;
             grab = null;
             cutter = null;
             splitsaw = null;

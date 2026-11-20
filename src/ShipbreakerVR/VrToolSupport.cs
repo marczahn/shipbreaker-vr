@@ -6,13 +6,19 @@ namespace ShipbreakerVR
     // The free hand takes hold of the cutter or the grapple in the other hand, as Raik asked: anywhere on it, by pressing
     // its grip within Reach of the tool's shape (VrToolCollide.Distance). The hand then stays where it took hold, turning
     // and moving with the tool instead of its controller (VrHands.Pose), and its fingers close until they touch the tool
-    // (VrHands.Wrap). The tool is steadied by it: its own weight lags 80% less, a part on the grapple 60% less
-    // (VrToolWeight). Letting go of the grip, or the tool leaving the other hand, lets go. The tool keeps aiming with the
+    // (VrHands.Wrap). The grapple is quicker with it: its own weight lags 80% less, a part on it 60% less
+    // (VrToolWeight). The cutter keeps its weight and is steadied more instead, for precise cuts (VrToolSteady; Raik,
+    // 2026-11-18). Letting go of the grip, or the tool leaving the other hand, lets go. The tool keeps aiming with the
     // hand that works it. While a hand holds the tool, or is about to, it does not hold on to anything else (VrHand.Free).
     internal static class VrToolSupport
     {
         // The hand's grip this near the tool's shape takes hold of it, in meters at world scale 1.
         private const float Reach = 0.07f;
+        // The demo charges are taken hold of as well (Raik, 2026-11-18), whatever the tool physics: by the charge showing
+        // in the hand, this near its middle. The hand that had them may then let go, and the other one has them
+        // (VrToolInput, Supporter): from hand to hand as a thing afloat goes, instead of jumping over.
+        private const float ChargeReach = 0.16f;
+        private static bool physics;
         // How much of the tool's own weight, and of a grappled part's, is left with two hands.
         public const float ToolLeft = 0.2f;
         public const float LoadLeft = 0.4f;
@@ -47,7 +53,8 @@ namespace ShipbreakerVR
         public static void Update()
         {
             // Only with extended tool physics (VR options, Physik), like the tool's weight and collision.
-            running = VrXr.IsRunning && VrSettings.ToolPhysics != null && VrSettings.ToolPhysics.Value;
+            running = VrXr.IsRunning;
+            physics = running && VrSettings.ToolPhysics != null && VrSettings.ToolPhysics.Value;
             // Which hands are near enough to take hold, for Claims this frame (worked out here: the hand tests call Claims
             // without the game, where no engine call may run).
             claimLeft = running && supporting == null && Near(VrHand.Left);
@@ -106,7 +113,11 @@ namespace ShipbreakerVR
         }
 
         private static bool Works(VrHand hand) => hand != null && hand.HoldsTool
-            && (hand.Tool == EquipmentController.Equipment.CuttingTool || hand.Tool == EquipmentController.Equipment.GrappleHook);
+            && (hand.Tool == EquipmentController.Equipment.DemoCharge
+                || (physics && (hand.Tool == EquipmentController.Equipment.CuttingTool || hand.Tool == EquipmentController.Equipment.GrappleHook)));
+
+        // The hand that holds the tool in that hand as well, or null.
+        public static VrHand Supporter(VrInput.Hand hand) => Supported(hand) ? supporting : null;
 
         // An empty hand whose grip is near the tool in the other hand.
         private static bool Near(VrHand hand)
@@ -114,7 +125,9 @@ namespace ShipbreakerVR
             if (hand.State != HandState.Empty || hand.Zone != VrToolBelt.Zone.None || !Works(hand.Other)) return false;
             var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
             if (rig == null || !hand.Input.TryGetPosition(out var local)) return false;
-            return VrToolCollide.Distance(hand.Other.Input, hand.Other.Tool, rig.TransformPoint(local)) <= Reach * VrCamera.WorldScale;
+            var at = rig.TransformPoint(local);
+            if (hand.Other.Tool == EquipmentController.Equipment.DemoCharge) return VrChargeByHand.Distance(at) <= ChargeReach * VrCamera.WorldScale;
+            return VrToolCollide.Distance(hand.Other.Input, hand.Other.Tool, at) <= Reach * VrCamera.WorldScale;
         }
 
         // The tool's grip and turn this frame in tracking space, as the hand working it holds it.

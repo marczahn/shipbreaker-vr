@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Reflection;
 using BBI.Unity.Game;
 using HarmonyLib;
@@ -17,6 +18,8 @@ namespace ShipbreakerVR
     [HarmonyPatch(typeof(PlayerElementalHandsAndHeadController), "Update")]
     internal static class VrFire
     {
+        static VrFire() => VrSession.OnUnload("fire", CancelFades);
+
         // Turns of the hand's way for an arm (about three shakes back and forth), from what speed in m/s a stroke
         // counts, how far a turn must swing round (cosine), and the longest pause between two, in seconds.
         // Test (Raik, 2026-11-14: five went out a little too soon): seven.
@@ -26,6 +29,30 @@ namespace ShipbreakerVR
         private const float ShakeGap = 0.5f;
         // What the game's times are held at, seconds.
         private const float HoldTime = 0.5f;
+        // Raik, 2026-11-18: shaken out, the flames were gone within one frame. They get this long to go out, in seconds
+        // of game time. First 0.6 s with the effect only stopped (no new flames, those alight burn down): still too quick,
+        // as the flames alight live only a moment. Now a second (Raik), and the flames are made smaller over it: the
+        // effect burns on while its object shrinks to SmallSize of its size, is stopped after StopShare of the time and
+        // shrinks on to LeastSize while what is alight burns down. Then it is switched off and has its size back.
+        private const float FadeTime = 1f;
+        private const float StopShare = 0.7f;
+        private const float SmallSize = 0.35f;
+        private const float LeastSize = 0.05f;
+        // The game's own time for the flames runs this much longer than the fade, so the fade ends them, not the game.
+        private const float FadeMargin = 0.2f;
+
+        private sealed class Fading
+        {
+            public Behaviour Effect;
+            public Transform Frame;
+            public Vector3 Size;
+            public float From;
+            public bool Stopped;
+        }
+
+        private static readonly List<Fading> fades = new List<Fading>();
+        // The game's time for the flames after the last step here: it only runs down, so more of it means a new fire.
+        private static float knownTime;
         // Test (Raik, 2026-11-14: held burning, the suit took no damage): while held, the fire takes its own toll, a
         // DeathTime-th of full health each Tick seconds, so a fire never shaken off kills from full health in a minute.
         // Taken straight off the player's HealthComponent (VitalitySystem.TryModifyHealth changed nothing).
@@ -71,14 +98,28 @@ namespace ShipbreakerVR
 
         private static void Prefix(PlayerElementalHandsAndHeadController __instance)
         {
+            // Set alight again while it burns or goes out (the game switches all flames on anew): a fire of its own.
+            if (burning && Playing(__instance) == ElementalType.Fire && EffectTime(__instance) > knownTime + 0.05f)
+            {
+                burning = false;
+                Plugin.Log.LogInfo("Fire: set alight again");
+            }
+            Step(__instance);
+            knownTime = EffectTime(__instance);
+        }
+
+        private static void Step(PlayerElementalHandsAndHeadController __instance)
+        {
             if (Playing(__instance) != ElementalType.Fire)
             {
                 burning = false;
+                CancelFades();
                 return;
             }
             if (!burning)
             {
                 burning = true;
+                CancelFades();
                 startedAt = Time.unscaledTime;
                 Reset(LeftSide);
                 Reset(RightSide);
@@ -92,6 +133,7 @@ namespace ShipbreakerVR
                     ? $"Fire: the suit burns until both hands are shaken out; health {startHealth:0.0}, the game's burning {(timer >= 0f ? $"{timer:0.0} s" : "not found")}"
                     : "Fire: the suit burns for the game's time (no controllers to shake it off with)");
             }
+            Fade();
             if (!held) return;
             if (!VrXr.IsRunning)
             {
@@ -102,8 +144,11 @@ namespace ShipbreakerVR
             Shake(__instance, RightSide);
             if (LeftSide.Out && RightSide.Out)
             {
+                // The last flames go out over FadeTime, the helmet's with the arm's; the game's time for them ends a
+                // little after. The burning itself, with its damage, ends now.
                 held = false;
-                EffectTime(__instance) = 0f;
+                FadeOut(Effect(__instance, "HeadEffect"));
+                EffectTime(__instance) = FadeTime + FadeMargin;
                 SetTimer(__instance, 0f);
                 VrInput.Left.Buzz(0.6f, 0.15f);
                 VrInput.Right.Buzz(0.6f, 0.15f);
@@ -219,21 +264,76 @@ namespace ShipbreakerVR
             side.Input.Buzz(0.2f, 0.03f);
             if (side.Shakes < ShakesNeeded) return;
             side.Out = true;
-            StopArm(controller, side.Left);
+            StopArm(controller, side);
             side.Input.Buzz(0.5f, 0.1f);
             Plugin.Log.LogInfo($"Fire: {(side.Left ? "left" : "right")} hand shaken out");
         }
 
-        // That arm's flames off, as the game puts them out (Stop, then the object off); its next fire turns them on again.
-        private static void StopArm(PlayerElementalHandsAndHeadController controller, bool left)
+        // That arm's flames go out (FadeOut); its next fire turns them on again.
+        private static void StopArm(PlayerElementalHandsAndHeadController controller, Side side) =>
+            FadeOut(Effect(controller, side.Left ? "LeftArmEffect" : "RightArmEffect"));
+
+        // That effect's flames go out over FadeTime (Fade), then it is off as the game puts it out (Stop, the object off).
+        private static void FadeOut(Behaviour effect)
         {
-            if (!(EffectsField?.GetValue(controller) is System.Array effects) || effects.Length <= (int)ElementalType.Fire) return;
+            if (effect == null) return;
+            foreach (var fade in fades)
+                if (fade.Effect == effect) return;
+            fades.Add(new Fading { Effect = effect, Frame = effect.transform, Size = effect.transform.localScale, From = Time.time });
+        }
+
+        // Each frame while the fire plays: the effects going out shrink, are stopped, and at last switched off.
+        private static void Fade()
+        {
+            for (var i = fades.Count - 1; i >= 0; i--)
+            {
+                var fade = fades[i];
+                if (fade.Effect == null)
+                {
+                    fades.RemoveAt(i);
+                    continue;
+                }
+                var t = (Time.time - fade.From) / FadeTime;
+                if (t >= 1f)
+                {
+                    Stop(fade.Effect);
+                    fade.Effect.gameObject.SetActive(false);
+                    fade.Frame.localScale = fade.Size;
+                    fades.RemoveAt(i);
+                    continue;
+                }
+                if (!fade.Stopped && t >= StopShare)
+                {
+                    fade.Stopped = true;
+                    Stop(fade.Effect);
+                }
+                var size = t < StopShare
+                    ? Mathf.Lerp(1f, SmallSize, t / StopShare)
+                    : Mathf.Lerp(SmallSize, LeastSize, (t - StopShare) / (1f - StopShare));
+                fade.Frame.localScale = fade.Size * size;
+            }
+        }
+
+        // The effects going out get their size back and are left to the game: a new fire, the fire over, or unloading.
+        private static void CancelFades()
+        {
+            foreach (var fade in fades)
+                if (fade.Effect != null) fade.Frame.localScale = fade.Size;
+            fades.Clear();
+        }
+
+        // One of the fire's effects (LeftArmEffect, RightArmEffect, HeadEffect), a VisualEffect; null without one.
+        private static Behaviour Effect(PlayerElementalHandsAndHeadController controller, string name)
+        {
+            if (!(EffectsField?.GetValue(controller) is System.Array effects) || effects.Length <= (int)ElementalType.Fire) return null;
             var fx = effects.GetValue((int)ElementalType.Fire);
-            if (fx == null) return;
-            var field = AccessTools.Field(fx.GetType(), left ? "LeftArmEffect" : "RightArmEffect");
-            if (!(field?.GetValue(fx) is Behaviour effect) || effect == null) return;
-            AccessTools.Method(effect.GetType(), "Stop", new System.Type[0])?.Invoke(effect, null);
-            effect.gameObject.SetActive(false);
+            if (fx == null) return null;
+            return AccessTools.Field(fx.GetType(), name)?.GetValue(fx) is Behaviour effect && effect != null ? effect : null;
+        }
+
+        private static void Stop(Behaviour effect)
+        {
+            if (effect != null) AccessTools.Method(effect.GetType(), "Stop", new System.Type[0])?.Invoke(effect, null);
         }
 
         private static int timerLogs;

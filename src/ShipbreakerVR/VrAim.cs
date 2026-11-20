@@ -143,6 +143,8 @@ namespace ShipbreakerVR
 
         public static Transform CameraTransformFor(int family)
         {
+            // The demo charges put on by hand look from the charge itself (VrChargeByHand).
+            if (VrChargeByHand.Aims(out var charge)) return charge;
             var second = VrDualTools.Routes(family) && Active ? VrDualTools.AimCamera : null;
             return second != null ? second.transform : CameraTransform;
         }
@@ -159,6 +161,8 @@ namespace ShipbreakerVR
         // player's forward in the flat game). Placed charges are jointed to the ship, which drops that velocity.
         public static Transform ThrowOrigin(Transform offset)
         {
+            // Put on by hand, a charge let go starts where the hand has it (VrChargeByHand).
+            if (VrChargeByHand.ThrowFrom(out var held)) return held;
             if (!Aiming) return offset;
             if (throwOrigin == null)
             {
@@ -634,7 +638,7 @@ namespace ShipbreakerVR
         {
             var text = $"aim with hand: option {VrSettings.AimWithHand.Value}{(PatchReport.HandAimWorks ? "" : " (off, patches incomplete)")}, active {Active}, tool {withTool}";
             if (active) text += $", hand at {VrDiagnostics.Direction(head, aim.transform.position)} {Vector3.Distance(head.position, aim.transform.position):0.00} m, pointing {VrDiagnostics.Direction(head, head.position + aim.transform.forward)}, beam on {beamTarget}, Splitsaw line {cutLineInfo}";
-            return text + "; " + VrHand.Describe() + "; " + VrDualTools.Describe() + CutterModel();
+            return text + "; " + VrHand.Describe() + "; " + VrDualTools.Describe() + "; " + VrLooseTools.Describe() + CutterModel();
         }
 
         // Where the game keeps the cutter's model, for moving the tools into the hand later.

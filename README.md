@@ -34,8 +34,9 @@ your motion controllers.
 - **Fly with your controllers.** Move your hand where you want to go, the other controller turns you. How flying
   feels is up to you: the VR options offer several ways to turn and to slow down, from braking by yourself to keeping
   every bit of speed as in real space.
-- **Tools in your hands.** Grab the grapple, cutter, demo charges and scanner from your hips, shoulder and helmet with
-  either hand, one in each hand if you like, and aim them where your hand points. A thin laser shows where, with a
+- **Tools in your hands.** Grab the grapple, cutter, demo charges, their detonator and the scanner from your hips,
+  back, shoulder and helmet with either hand, one in each hand if you like, and aim them where your hand points. Let
+  one go and it floats beside you on its line; demo charges can be put on by hand. A thin laser shows where, with a
   bright dot where the grapple's or cutter's laser hits. The grapple has a second mode for placing tethers. The cutter's
   plain right side, never seen in the flat game, gets the detail of its left side.
 - **Hands that touch things.** Hold on to anything with an empty hand and climb along it, pull light parts to you, and
@@ -107,7 +108,7 @@ The settings that change the controls the most:
 ![Flying controls](docs/images/flying.svg)
 
 The left hand flies, the right hand steers. While the left hand holds a tool or holds on to something, it works that
-instead, and flying pauses until you let go.
+instead, and flying pauses until you let go. With a demo charge or the detonator in the left hand, Y still brakes.
 
 | I want to … | How |
 |---|---|
@@ -129,13 +130,17 @@ menus still work with the controllers.
 
 ![Hands](docs/images/hands.svg)
 
+![Tools on your suit](docs/images/body.svg)
+
 | I want to … | How |
 |---|---|
-| Take a tool | Reach to where it sits and squeeze the grip: grapple at the right hip, demo charges at the left hip, cutter over the right shoulder, scanner at the right side of the helmet. The controller buzzes when you are there. |
+| Take a tool | Reach to where it sits and squeeze the grip: grapple at the right hip, detonator at the left hip, demo charges behind your lower back (with either hand), cutter over the right shoulder, scanner at the right side of the helmet. The controller buzzes when you are there. The grapple and the detonator hang where you can see them. Left-handed? **Handedness** in the VR options mirrors all places. |
 | Flashlight | Reach to the left side of the helmet with the left hand and squeeze the grip to switch it on or off. |
-| Put it away | Let go of the grip. |
+| Put it away | Let go of the grip. With **Extended tool physics** on, do that at the tool's place; anywhere else the tool stays afloat. |
+| Let a tool go | With **Extended tool physics** on, let go of the cutter, the grapple or the detonator away from its place: it floats where it is, with the shape of its model, on a 5 m line to your hip. Take it again by its grip. A free hand can also take the line and pull the tool in, hand over hand. |
+| Hold a tool with both hands | With **Extended tool physics** on, take hold of the cutter or the grapple with your free hand anywhere on it. The grapple follows your hand more quickly then; the cutter gets steadier, for precise cuts. |
 | Hold two tools at once | While one hand holds the cutter, the grapple or the demo charges, take another of them with your other hand. Each hand's trigger and buttons work its own tool. |
-| Hand a tool to the other hand | Reach for it with the other hand and squeeze the grip. |
+| Hand a tool to the other hand | Squeeze the grip of the other hand right at the tool's grip, hand next to hand. Further along the tool the second hand only holds it. |
 | Scan with a tool in the other hand | Take the scanner with your free hand. The other tool disappears while you scan; keep its grip squeezed and it comes back when you let go of the scanner. |
 | Hold on and climb | Squeeze the grip of a hand without a tool close to anything: the hand holds on there. Move the hand to pull yourself along, with both hands hand over hand, or with one while the other works a tool. Light parts come to your hand instead; the station and fixed hulls stay put. Only really small things (nuts, bolts, debris) are held in a fist; on anything larger, a hoist truck or a console, the hand lies on it. Let go while moving the hand to push off. |
 | Collect something | Hold a thing to collect (cable, circuit board, data cassette, ...) behind your left shoulder (a light buzz tells you are there) and let go: it goes into your backpack, with a rattle and a short buzz. |
@@ -145,7 +150,7 @@ menus still work with the controllers.
 | Work an airlock console or a switch | Look at it and press A or X. The grip only holds on, also there: your hand lies on it as on a wall, and closes as a fist only round a lever's grip. |
 | End the shift or use the kiosk | Look at the exit door or the kiosk on the MasterJack and press A or X, with its prompt, as in the flat game. |
 | Press an air conditioner's button | Push it in with your hand: right at the button your fingers stay straight and press it, broken or working. |
-| Use a tool with the left hand | Take it with the left hand. X and Y then do what A and B do, and flying pauses until you let go. |
+| Use a tool with the left hand | Take it with the left hand. X and Y then do what A and B do, and flying pauses until you let go. With a demo charge or the detonator Y brakes instead. |
 | Feel what I do | The controllers vibrate: the cutter's hand while it cuts, the grapple's hand while it holds a part (stronger the closer the part comes to slipping away), and a short buzz for each tether end. |
 
 ### Tool buttons
@@ -159,7 +164,7 @@ menus still work with the controllers.
 | Use what I point at | Press A or X, with either hand. With an empty hand it uses what is in the middle of your view, marked by the game's dot. Without a tool the trigger and B do nothing. On the cutter A turns the cut instead, so use the other hand. |
 | Throw | Hold the trigger and press A. |
 | Reel in what the grapple holds | Hold the trigger and press B. |
-| Switch the tool's mode | Press B (demo charges: switch to the detonator; grapple: see below). |
+| Switch the tool's mode | Press B (cutter: Splitsaw or Stinger; grapple: see below). The demo charges and their detonator have places of their own instead. |
 | Turn the cutter's line | Press A to switch between horizontal and vertical cuts. The line also turns when you roll your wrist. |
 
 ### Cutter
@@ -176,12 +181,20 @@ menus still work with the controllers.
 
 ![Demo charges](docs/images/charges.svg)
 
+The charges are behind your lower back, their detonator hangs at your left hip. **Demo charge placing** in the VR
+options chooses how a charge goes on: *Automatic* as in the flat game, or *Manual*, by hand.
+
 | I want to … | How |
 |---|---|
-| Place a charge | Point at a surface and pull the trigger. |
-| Throw a charge | Point at nothing and pull the trigger. It flies where your hand points. |
-| Take the detonator | Press B. B again goes back to the charges, while you have some left. |
-| Detonate | Pull the trigger with the detonator in your hand. |
+| Take a charge | Squeeze the grip behind your lower back, with either hand. |
+| Place a charge (*Automatic*) | Point at a surface and pull the trigger; the game's preview shows where it goes. Pointing at nothing, the trigger throws it where your hand points. |
+| Place a charge (*Manual*) | The charge comes into your hand as a thing of its own. Bring its back to the surface and let go: it goes on as you hold it, and the line on the charge is the cut. There is no preview. |
+| Let a charge go | Let go away from a surface. With **Extended tool physics** it floats where it is, and you take it again or put it back behind your back; without, it goes back by itself. |
+| Hand a charge over | Take hold of it with the other hand, then let go with the first. |
+| Take a charge off a wall | Hold on to it with a hand and press A (X): the game's ring comes up. Press A again while the ring is in its safe zone. With *Manual* the charge comes off into that hand; with *Automatic* you hold the charges again. |
+| Take the detonator | Squeeze the grip at your left hip, where it hangs. |
+| Detonate | Pull the trigger with the detonator in your hand: two fingers press its lever, and all placed charges go off. |
+| See how many charges are left | The visor shows it while you hold a charge or the detonator, the charges in your hands counted in. |
 
 ### Grapple and tethers
 
@@ -256,14 +269,22 @@ The ones you are most likely to need:
 - **Hold on and climb:** switch it off if the grip of an empty hand should do nothing.
 - **Extended physics:** switch it on to push heavy parts with your hands (see [Your hands](#your-hands)). Off, heavy
   parts behave as in the game and do not move.
+- **Extended tool physics:** the cutter and the grapple bump into things instead of going through them and have
+  weight, a second hand can hold them, and a tool or a demo charge you let go stays afloat (the tools on a line to
+  your hip) until you put it back by hand. Off: as in the game, and whatever you let go is back at its place.
+- **Demo charge placing:** *Automatic*: the trigger places a charge where you point, with the game's preview, or throws
+  it. *Manual*: you bring the charge to the surface by hand and let go (see [Demo charges](#demo-charges)).
+- **Handedness:** *Right* or *Left*. *Left* mirrors the places of the tools and the backpack on your body.
 - **Upright body:** your suit's body stays upright and faces your hands while you look around, and leans with you, so
   your hands reach the controllers the same way wherever you look. Switch it off to let the body turn with every look,
   as before.
 - **Walk in the station:** walk freely between shifts instead of hopping between spots (see
   [Free walking in the station](#free-walking-in-the-station)).
 - **Performance display:** shows the frame rate in the visor, to see what a setting changes.
-- **Fit tools in the hand:** if the cutter or the grapple does not sit right in your hand, switch this on, grab the
-  tool with your other hand and move it into place. Letting go stores it. Switch it off again when you are done.
+- **Fit tools in the hand:** if the cutter, the grapple or the detonator does not sit right in your hand, switch this
+  on, grab the tool with your other hand and move it into place. Letting go stores it. A demo charge placed by hand
+  (*Manual*) is passed from hand to hand until it lies right; when the other hand lets go, that hold is stored and
+  charges come into your hand like that. Switch it off again when you are done.
 
 ## Something is wrong
 

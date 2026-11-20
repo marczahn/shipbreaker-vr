@@ -307,6 +307,11 @@ namespace ShipbreakerVR
         private static void Throw(Hand hand, Rigidbody body)
         {
             if (body == null || player == null || body.isKinematic || !HandSpeed(hand, out var speed, out var spin)) return;
+            // Letting go turns and moves the hand a little by itself; below these the release puts nothing in, above them
+            // only what goes beyond (Raik 2026-11-16: the radio, held 28 cm from its middle, flew off from a hand at rest,
+            // a 3° wrist turn while opening times the lever).
+            speed = Beyond(speed, ReleaseDrift * VrCamera.WorldScale);
+            spin = Beyond(spin, ReleaseTurn * Mathf.Deg2Rad);
             var gain = ClimbContact.ThrowGain(body.mass);
             var before = body.velocity - player.velocity;
             var lever = body.worldCenterOfMass - HandWorld(hand);
@@ -322,6 +327,35 @@ namespace ShipbreakerVR
                     + $"(hand {speed.magnitude:0.00} m/s over {ThrowWindow * 1000f:0} ms, held {lever.magnitude:0.00} m from its middle, x{gain:0.00}; "
                     + $"the last step had {before.magnitude:0.00} m/s, {Vector3.Angle(before, middle):0}° off"
                     + (wanted > allowed + 0.01f ? $"; the hand's {wanted:0.00} m/s held to {allowed:0.00} by the arm's force)" : ")"));
+        }
+
+        // Experiment (VrLooseTools): how the hand moved a tool it lets go, in the world relative to the body, over the same
+        // window; what stays below drift (m/s) and turn (degrees per second) counts as none. False without a path.
+        internal static bool LetGoMotion(VrInput.Hand input, float drift, float turn, out Vector3 speed, out Vector3 spin)
+        {
+            speed = spin = Vector3.zero;
+            var hand = input.IsLeft ? LeftHand : RightHand;
+            if (VrCamera.Instance == null || !HandSpeed(hand, out speed, out spin))
+            {
+                speed = spin = Vector3.zero;
+                return false;
+            }
+            speed = Beyond(speed, drift);
+            spin = Beyond(spin, turn * Mathf.Deg2Rad);
+            return true;
+        }
+
+        // The body's mass as the pulls and pushes take it, for the tug of a tool's line (VrLooseTools).
+        internal static float BodyWeight => player != null ? BodyMass : ExtendedBodyMass;
+
+        private const float ReleaseDrift = 0.05f;   // m/s
+        private const float ReleaseTurn = 60f;      // °/s
+
+        // A vector shortened by floor, zero when shorter.
+        private static Vector3 Beyond(Vector3 v, float floor)
+        {
+            var length = v.magnitude;
+            return length <= floor ? Vector3.zero : v * ((length - floor) / length);
         }
 
         // From VrCamera.FixedUpdate, before the physics step.
@@ -917,7 +951,8 @@ namespace ShipbreakerVR
             for (var i = 0; i < count; i++)
             {
                 var collider = Found[i];
-                if (Own(collider) || !Holdable(collider)) continue;
+                // A tool afloat is held by its body like any loose part (its grip is the tool belt's, VrLooseTools.Zone).
+                if ((Own(collider) && !VrLooseTools.Owns(collider)) || !Holdable(collider)) continue;
                 var closest = Closest(collider, at, reach);
                 var distance = (closest - at).sqrMagnitude;
                 if (distance >= bestDistance) continue;
@@ -1665,6 +1700,10 @@ namespace ShipbreakerVR
                 var center = body.worldCenterOfMass;
                 var wantedCenter = HandWorld(hand) - turn * (Hold(hand) - center);
                 var toHand = Vector3.ClampMagnitude((wantedCenter - center) * follow / dt, MaxPull * VrCamera.WorldScale);
+                // Experiment (Raik, 2026-11-17, third test of the tools afloat): a tool held by its body went with a swung
+                // hand at up to MaxPull and batted the other tool away at 7.9 m/s, more than the arm can throw its 5 kg at
+                // (ClimbContact.MostThrowSpeed, 5.8 m/s; let go, it was held to that already). Held, it goes no faster.
+                if (VrLooseTools.Owns(body)) toHand = Vector3.ClampMagnitude(toHand, ClimbContact.MostThrowSpeed(body.mass) * VrCamera.WorldScale);
                 // Test (Raik, 2026-11-14: a 10 kg crate flew as fast as the arm moved): the arms speed it up and slow it down
                 // with ClimbContact.ArmForce each at most, so a heavy part lags a quick swing and goes as fast as that force
                 // can make it.
@@ -1945,6 +1984,35 @@ namespace ShipbreakerVR
         }
 
         // The rigidbody that hand holds on to, if any (VrArmPush leaves it alone).
+        // That hand lets go of what it holds and takes hold of that collider instead, where the hand is: a demo charge
+        // taken off a wall is a new thing in the place of the old one (VrChargeDisarm). False if it could not.
+        internal static bool HoldOn(VrInput.Hand input, Collider collider)
+        {
+            if (collider == null || player == null || VrCamera.Instance == null) return false;
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input) continue;
+                if (hand.Holding) LetGo(hand, false, "takes the thing that came off");
+                var at = HandWorld(hand);
+                var surface = Closest(collider, at, Reach * VrCamera.WorldScale);
+                // Also at a place on the body where the grip draws a tool (a charge taken out from behind the back).
+                var zone = hand.Vr.Zone;
+                hand.Vr.Zone = VrToolBelt.Zone.None;
+                Take(hand, collider, at, surface, (surface - at).sqrMagnitude, null, Vector3.zero);
+                hand.Vr.Zone = zone;
+                return hand.Holding;
+            }
+            return false;
+        }
+
+        // That hand lets go of what it holds, without a push: a demo charge it held is the game's tool in it from now on
+        // (VrChargeByHand, VrChargeDisarm).
+        internal static void Drop(VrInput.Hand input, string reason)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input && hand.Holding) LetGo(hand, false, reason);
+        }
+
         public static Rigidbody HeldBody(VrInput.Hand input)
         {
             foreach (var hand in Hands)
@@ -2282,9 +2350,10 @@ namespace ShipbreakerVR
             VrCamera.Instance.transform.parent.TransformPoint(ClimbContact.Closer(hand.Local, VrCamera.Instance.transform.localPosition) + hand.PullOffset)
             + (player.position - bodyAtRig);
 
-        // The player's own colliders (body, tools) are nothing to hold on to.
+        // The player's own colliders (body, tools) are nothing to hold on to; nor is a tool afloat (VrLooseTools), which
+        // the hand takes as a tool.
         private static bool Own(Collider collider) =>
-            collider.attachedRigidbody == player || collider.transform.IsChildOf(player.transform);
+            collider.attachedRigidbody == player || collider.transform.IsChildOf(player.transform) || VrLooseTools.Owns(collider);
 
         // The point of the collider nearest to the hand. Non-convex meshes have no such query, most of a ship's are: rays
         // all around the hand find it; a hand with no surface around counts as on them.
@@ -2315,6 +2384,8 @@ namespace ShipbreakerVR
             var body = hand.Body;
             if (firm) Unfirm(hand);
             if (firm && push && body != null && !Held(body)) Throw(hand, body);
+            // The arm that let it go leaves it alone until it is clear of it (VrArmPush.Spare).
+            if (movable && body != null && !Held(body)) VrArmPush.Spare(body);
             hand.Anchor = null;
             hand.Collider = null;
             hand.Body = null;

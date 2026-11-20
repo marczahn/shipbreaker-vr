@@ -12,9 +12,139 @@ namespace ShipbreakerVR
     // ("x y z / pitch yaw roll"). The tool turns with it, and so does the aim, which runs along the barrel. Measuring the
     // flat game's hold left the tools off in both hands, each differently, so they are set in the headset: with
     // "WerkzeugeJustieren" on, the grip of the other hand grabs the tool in the hand and moves it rigidly, and letting go
-    // stores where it is (Adjust). The defaults are where Marc put them; the option stays for anyone whose hands differ.
+    // stores where it is (Adjust). The defaults are where Raik put them; the option stays for anyone whose hands differ.
+    // Raik, 2026-11-18, to try: the same for the charges' detonator and for a demo charge held as a thing of its own
+    // (Sprengsatzplatzierung = Manuell), whose hold had taken several rounds of builds to get right.
+    // - The detonator is a prop on the hand: the other hand's grip drags it against the hand that holds it (Detonator,
+    //   from VrHands), and letting go stores where it sits in that hand (ZuenderHaltung).
+    // - The charge is handed from hand to hand until it lies right; when the other hand lets go, how it lies in the
+    //   hand that keeps it is stored (SprengsatzHaltung, VrChargeByHand), and a charge comes into the hand like that.
+    // Both are kept as in the right hand; the left hand's is the mirror image. Empty: as the mod has them.
     internal static class VrToolFit
     {
+        // A hold kept in the config as "x y z / pitch yaw roll": the place in centimeters and the turn in degrees.
+        internal sealed class Hold
+        {
+            public ConfigEntry<string> Entry;
+            private string parsed;
+            private bool set;
+            private Vector3 at;
+            private Quaternion turn = Quaternion.identity;
+
+            // In meters at world scale 1; false while nothing is stored.
+            public bool TryGet(out Vector3 place, out Quaternion turned)
+            {
+                place = Vector3.zero;
+                turned = Quaternion.identity;
+                if (Entry == null) return false;
+                var text = Entry.Value;
+                if (!ReferenceEquals(text, parsed))
+                {
+                    parsed = text;
+                    set = TryParse(text, out var offset, out var angles);
+                    if (set)
+                    {
+                        at = offset / 100f;
+                        turn = Quaternion.Euler(angles);
+                    }
+                }
+                place = at;
+                turned = turn;
+                return set;
+            }
+
+            public void Store(Vector3 place, Quaternion turned)
+            {
+                if (Entry == null) return;
+                var angles = turned.eulerAngles;
+                for (var i = 0; i < 3; i++)
+                    if (angles[i] > 180f) angles[i] -= 360f;
+                Entry.Value = string.Format(CultureInfo.InvariantCulture, "{0:0.0} {1:0.0} {2:0.0} / {3:0.0} {4:0.0} {5:0.0}",
+                    place.x * 100f, place.y * 100f, place.z * 100f, angles.x, angles.y, angles.z);
+                Plugin.Log.LogInfo($"Tool fit: {Entry.Definition.Key} = {Entry.Value}");
+            }
+        }
+
+        public static readonly Hold ChargeHold = new Hold();
+        public static readonly Hold DetonatorHold = new Hold();
+
+        public static bool On => Adjusting != null && Adjusting.Value;
+
+        // A pose in one hand's axes as the other hand has it.
+        internal static void Mirror(ref Vector3 at, ref Quaternion turn)
+        {
+            at.x = -at.x;
+            turn = new Quaternion(turn.x, -turn.y, -turn.z, turn.w);
+        }
+
+        // The other hand drags the detonator: the grip as last seen, and the detonator against the dragging hand.
+        private static bool detonatorGripping, detonatorDragged;
+        private static Vector3 detonatorGrabAt, dragAt;
+        private static Quaternion detonatorGrabTurn, dragTurn;
+
+        // From VrHands, each frame the detonator shows in a hand, with that hand's wrist and axes in the world and where
+        // the detonator is against them (as in the right hand, in meters at world scale 1): the place it is fitted to
+        // instead, dragged by the other hand's grip while adjusting. False if it stays where the game has it.
+        public static bool Detonator(bool left, Vector3 wrist, Quaternion frame, ref Vector3 at, ref Quaternion turn)
+        {
+            var changed = false;
+            if (detonatorDragged)
+            {
+                at = dragAt;
+                turn = dragTurn;
+                changed = true;
+            }
+            else if (DetonatorHold.TryGet(out var fitAt, out var fitTurn))
+            {
+                at = fitAt;
+                turn = fitTurn;
+                changed = true;
+            }
+            var other = left ? VrInput.Right : VrInput.Left;
+            var down = On && other.Grip.Down;
+            var pressed = down && !detonatorGripping;
+            detonatorGripping = down;
+            var hand = Vector3.zero;
+            var handTurn = Quaternion.identity;
+            var held = down && other.TryGetGripPose(out var handLocal, out var handTurnLocal)
+                && VrToolModels.TrackingToWorld(handLocal, handTurnLocal, out hand, out handTurn);
+            if (!held)
+            {
+                if (!down) DetonatorIdle();
+                return changed;
+            }
+            var scale = VrCamera.WorldScale;
+            if (pressed)
+            {
+                if (!NearTool(other.Node)) return changed;
+                var nowAt = at;
+                var nowTurn = turn;
+                if (left) Mirror(ref nowAt, ref nowTurn);
+                detonatorGrabTurn = Quaternion.Inverse(handTurn) * (frame * nowTurn);
+                detonatorGrabAt = Quaternion.Inverse(handTurn) * (wrist + frame * (nowAt * scale) - hand);
+                detonatorDragged = true;
+                dragAt = at;
+                dragTurn = turn;
+                Plugin.Log.LogInfo($"Tool fit: the detonator grabbed with the {other.Name} hand");
+                return changed;
+            }
+            if (!detonatorDragged) return changed;
+            var draggedAt = Quaternion.Inverse(frame) * (hand + handTurn * detonatorGrabAt - wrist) / scale;
+            var draggedTurn = Quaternion.Inverse(frame) * (handTurn * detonatorGrabTurn);
+            if (left) Mirror(ref draggedAt, ref draggedTurn);
+            dragAt = at = draggedAt;
+            dragTurn = turn = draggedTurn;
+            return true;
+        }
+
+        // The detonator is not in a hand, or the dragging grip opened: what was dragged is stored.
+        public static void DetonatorIdle()
+        {
+            detonatorGripping = false;
+            if (!detonatorDragged) return;
+            detonatorDragged = false;
+            DetonatorHold.Store(dragAt, dragTurn);
+        }
 
         private class Fit
         {
@@ -32,14 +162,20 @@ namespace ShipbreakerVR
             }
         }
 
-        // As Marc fitted them in the headset.
-        private static readonly Fit GrappleRight = new Fit("GreifhakenRechts", "-6.5 12.1 -20.7 / 5.9 1.1 8.6");
-        private static readonly Fit GrappleLeft = new Fit("GreifhakenLinks", "3.7 10.0 -23.2 / 4.9 -0.3 -1.6");
-        private static readonly Fit CutterRight = new Fit("CutterRechts", "1.6 -4.6 -0.5 / 7.0 5.2 10.8");
-        private static readonly Fit CutterLeft = new Fit("CutterLinks", "2.8 -4.9 1.9 / 6.5 6.2 -6.7");
+        // As Raik fitted them in the headset (his config of 2026-11-17, the mod's standard from then on, as he asked).
+        // Before, as Marc had fitted them: grapple "-6.5 12.1 -20.7 / 5.9 1.1 8.6" right and "3.7 10.0 -23.2 / 4.9 -0.3
+        // -1.6" left, cutter "1.6 -4.6 -0.5 / 7.0 5.2 10.8" right and "2.8 -4.9 1.9 / 6.5 6.2 -6.7" left.
+        private static readonly Fit GrappleRight = new Fit("GreifhakenRechts", "-1.3 6.0 -19.1 / 2.0 -3.9 7.0");
+        private static readonly Fit GrappleLeft = new Fit("GreifhakenLinks", "-3.4 10.0 -17.5 / 10.6 10.8 -4.5");
+        private static readonly Fit CutterRight = new Fit("CutterRechts", "-3.2 -4.5 20.5 / -10.0 -8.2 4.3");
+        private static readonly Fit CutterLeft = new Fit("CutterLinks", "4.7 -4.9 18.6 / -9.4 12.0 -5.0");
         // The demo charge hangs on the game's right hand: its fit moves that hand (its wrist) against the controller.
         // Turned 6 degrees anticlockwise as seen from behind (Raik, 2026-11-13: the hand was turned 5 to 7 degrees too far
         // clockwise against the empty hand).
+        // Measured with Raik, 2026-11-18: with this fit the charge's back points 79 degrees to the right and 25 degrees
+        // down of the controller's aim. A fit that straightens the charge ("20 0 18 / 11.6 -80.0 33.3") turned the hand
+        // and the detonator by as much, so with the charges put on by hand the charge is set by itself instead
+        // (VrChargeByHand.Decoupled) and this fit only counts with that off.
         private static readonly Fit ChargeRight = new Fit("SprengsatzRechts", "0 0 0 / 0 0 6");
 
         public static ConfigEntry<bool> Adjusting;
@@ -54,12 +190,18 @@ namespace ShipbreakerVR
         public static void Bind()
         {
             Adjusting = VrSettings.Bind("Justierung", "WerkzeugeJustieren", false,
-                ("While one hand holds the cutter, the grapple or (right) a demo charge, squeeze the other hand's grip to grab the tool and move it until it sits in the hand; letting go stores the place for that tool and hand. Switch it off when they fit.",
-                    "Während eine Hand Cutter, Greifhaken oder (rechts) einen Sprengsatz hält: Grip der anderen Hand greift das Werkzeug, bewege es, bis es in der Hand sitzt. Loslassen speichert die Lage für dieses Werkzeug und diese Hand. Danach wieder ausschalten."),
+                ("While one hand holds the cutter, the grapple, the detonator or (right) a demo charge, squeeze the other hand's grip to grab the tool and move it until it sits in the hand; letting go stores the place for that tool and hand. A demo charge placed by hand (Demo charge placing: Manual) is handed from hand to hand until it lies right; when the other hand lets go, that hold is stored and charges come into the hand like that. Switch it off when they fit.",
+                    "Während eine Hand Cutter, Greifhaken, Zünder oder (rechts) einen Sprengsatz hält: Grip der anderen Hand greift das Werkzeug, bewege es, bis es in der Hand sitzt. Loslassen speichert die Lage für dieses Werkzeug und diese Hand. Einen von Hand gesetzten Sprengsatz (Sprengsatzplatzierung: Manuell) gibst du von Hand zu Hand, bis er richtig liegt; lässt die andere Hand los, wird diese Haltung gespeichert, und Sprengsätze kommen so in die Hand. Danach wieder ausschalten."),
                 "The places are stored in the entries below; delete an entry to get its default back.");
             foreach (var fit in new[] { GrappleRight, GrappleLeft, CutterRight, CutterLeft, ChargeRight })
                 fit.Entry = VrSettings.Bind("Justierung", fit.Key, fit.Default,
                     "Where the tool sits in that hand: its mount relative to the wrist in centimeters (x right, y up, z forward along the controller), then its turn in degrees (pitch, yaw, roll), as \"x y z / pitch yaw roll\".");
+            ChargeHold.Entry = VrSettings.Bind("Justierung", "SprengsatzHaltung", "",
+                "How a demo charge placed by hand lies in the right hand (the left hand's is the mirror image): its middle from the grip in centimeters (x right, y up, z forward along the controller), then its turn in degrees, as \"x y z / pitch yaw roll\". Stored while fitting the tools; empty for the mod's own hold.");
+            // As Raik fitted it in the headset on 2026-11-18, the standard for new installs as he asked; before, empty
+            // (the game's own place), which stays for whoever has that stored.
+            DetonatorHold.Entry = VrSettings.Bind("Justierung", "ZuenderHaltung", "-1.8 -13.0 -3.3 / 15.7 -20.5 -5.5",
+                "Where the charges' detonator sits in the right hand (the left hand's is the mirror image): from the wrist in centimeters in the hand's own axes (x to the palm's side, y to the thumb's side, z along the knuckles), then its turn in degrees, as \"x y z / pitch yaw roll\". Stored while fitting the tools; empty for the game's own place, delete the entry for the mod's.");
         }
 
         // The fit of the tool in the hand, in world units relative to the wrist and the aim pose; false for tools without a
@@ -80,7 +222,7 @@ namespace ShipbreakerVR
         // drags the tool or is near it (Raik, 2026-11-14: with a charge in the left hand the right one could not hold the
         // wall; that charge has no fit to adjust at all).
         public static bool Blocks(XRNode node) => Adjusting != null && Adjusting.Value && node != VrHand.GameToolHand.Node && HoldsModel()
-            && (dragged != null || NearTool(node));
+            && (dragged != null || detonatorDragged || NearTool(node));
 
         // Within this of the tool hand's grip, the other hand's grip takes the tool to adjust it.
         private const float AdjustReach = 0.2f;
@@ -131,7 +273,7 @@ namespace ShipbreakerVR
             fit.Offset = Quaternion.Inverse(aim) * (position - wrist) * scale;
         }
 
-        private static bool HoldsModel() => VrAim.Active && Find(VrToolModels.Equipped, VrHand.GameToolHand.IsLeft) != null;
+        private static bool HoldsModel() => VrAim.Active && (Find(VrToolModels.Equipped, VrHand.GameToolHand.IsLeft) != null || VrChargeByHand.DetonatorOut);
 
         private static Fit Find(EquipmentController.Equipment tool, bool left)
         {

@@ -153,7 +153,8 @@ namespace ShipbreakerVR
         // Whether this collider stops a hand (not the body, not a light loose part).
         public static bool Stops(Collider collider, Transform body)
         {
-            if (collider.isTrigger || collider.transform.IsChildOf(body)) return false;
+            // A tool afloat is no wall to the hand: the hand is in it when it lets go, and reaches into it to take it.
+            if (collider.isTrigger || collider.transform.IsChildOf(body) || VrLooseTools.HandsPass(collider)) return false;
             var rigidbody = collider.attachedRigidbody;
             return rigidbody == null || rigidbody.isKinematic || rigidbody.mass >= LightestStops;
         }
