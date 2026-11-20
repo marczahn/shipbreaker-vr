@@ -50,6 +50,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<float> HeadHeight;
         public static ConfigEntry<float> HeadSideways;
         public static ConfigEntry<VrPerformance.Occlusion> AmbientOcclusion;
+        public static ConfigEntry<VrSuitLocal.Quality> SuitQuality;
         public static ConfigEntry<bool> DebrisRange;
         public static ConfigEntry<bool> NearLampShadows;
         public static ConfigEntry<VrControls.Scheme> ControlScheme;
@@ -133,6 +134,11 @@ namespace ShipbreakerVR
                     "Schattierung in Ecken und Fugen. Niedrig sieht fast gleich aus und spart viel Leistung; der Spielstandard kann auf der Station ruckeln. Aus für die meiste Leistung."),
                 (new[] { "Low", "Off", "Game default" }, new[] { "Niedrig", "Aus", "Spielstandard" }),
                 "Low is half resolution and few steps, as the game uses it in the bay; the station asks for full resolution and 16 steps, which costs a lot of GPU time at VR resolution.");
+            SuitQuality = Bind("Bild", "Anzugqualitaet", VrSuitLocal.Quality.Originalarme,
+                ("The player's new body (prototype): the new suit with the game's own arms, or off for the game's own body.",
+                    "Der neue Körper des Spielers (Prototyp): der neue Anzug mit den Armen des Spiels, oder aus für den Körper des Spiels."),
+                (new[] { "Off", "New body (prototype)" }, new[] { "Aus", "Neuer Körper (Prototyp)" }),
+                "Files in BepInEx\\plugins\\ShipbreakerVR\\Anzug.");
 
             ControlScheme = Bind("Steuerung", "Controllersteuerung", VrControls.Scheme.Vtol,
                 ("VTOL: hold the left trigger, moving the controller thrusts that way, tilting it sideways rolls. Shooter: the left stick thrusts forward, back, left and right, as strongly as you push it; forward is where the left controller points, so tilt it up or down to thrust up or down; with the left trigger held, left and right roll. Both: right stick turns and pitches, Y brakes. Off if you fly with mouse and keyboard or a gamepad.",

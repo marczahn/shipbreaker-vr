@@ -156,6 +156,7 @@ namespace ShipbreakerVR
                 new SliderRow { Label = L("Screen sharpness", "Monitor-Schärfe"), Entry = VrSettings.MonitorSharpness, Format = "0.0", Step = 0.1f },
                 EnumRow(L("Anti-aliasing", "Kantenglättung"), VrSettings.AntiAliasing),
                 EnumRow(L("Ambient occlusion", "Umgebungsverdeckung"), VrSettings.AmbientOcclusion),
+                EnumRow(L("Body", "Körper"), VrSettings.SuitQuality),
                 new BoolRow { Label = L("Debris farther away", "Trümmer weiter sehen"), Entry = VrSettings.DebrisRange },
                 new BoolRow { Label = L("Lamp shadows only nearby", "Lampenschatten nur nah"), Entry = VrSettings.NearLampShadows },
                 new BoolRow { Label = L("Share work between eyes", "Augen teilen"), Entry = VrSettings.EyeSharing },

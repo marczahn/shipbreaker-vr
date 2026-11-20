@@ -46,6 +46,7 @@ namespace ShipbreakerVR
             ("frame statistics", VrPerformance.FrameStart),
             ("load trace", () => VrLoadTrace.EndFrame(VrCamera.Instance)),
             ("diagnostics", () => VrDiagnostics.Update(VrCamera.Instance)),
+            ("local suit", VrSuitLocal.Update),
             ("debris range", VrDebrisRange.Update),
             ("lamp shadows", VrLampShadows.Update),
             ("shoulder stow", VrShoulderStow.Update),
@@ -79,6 +80,7 @@ namespace ShipbreakerVR
             ("hands", VrHands.LateUpdate),
             ("arm push", VrArmPush.LateUpdate),
             ("crosshair", VrCrosshair.LateUpdate),
+            ("local suit joints", VrSuitLocal.LateUpdate),
         };
 
         private static readonly (string Name, System.Action Step)[] PlacedSteps =
