@@ -1135,6 +1135,9 @@ headset: test scripts move the head and the controllers, press buttons, save scr
   `hide geo_arms` removes them for a take, the cause in the mod is still open. `waitlog VR camera attached to` missed
   the shift there: the line is written once, when the camera changes, which can be before the script reaches the
   `waitlog`; `waitgame` checks the state instead (main camera followed, no load screen, not in the Hab).
+  `reloadshift` calls `SceneLoader.TearDownAndReloadCurrentSceneAsync`, which loads the current level again with the
+  same ship preview, so the next take starts fresh at the start position without the menus (about a minute instead
+  of four). It refuses outside free play (`GameSession.SessionType.FreeMode`) so no career save is involved.
 - **Several hooks on `xrGetInstanceProcAddr`**: alternate eyes and the test input both chain it. Under Mono,
   `Marshal.GetDelegateForFunctionPointer` on a pointer that came from a managed delegate returns that very delegate,
   and casting it to another delegate type throws `InvalidCastException`. So every feature uses the one delegate type

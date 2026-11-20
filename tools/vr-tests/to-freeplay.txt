@@ -1,0 +1,26 @@
+# From the game's start to the first free-play shift (about 4 minutes), with fixed waits: drop it into the inbox
+# right after starting the game. Check each step with a desktop screenshot the first time; A presses that come too
+# early are eaten. Afterwards reloadshift gives the next take without the menus (see trailer-approach.txt).
+head 0 1.7 0 0 0 0
+left -0.3 1.0 0.15 0 0 0
+right 0.3 1.0 0.15 0 0 0
+wait 60
+recenter
+# Profile screen -> main menu
+press right a 0.2
+wait 12
+# Down to FREIES SPIEL (check it is selected, otherwise A starts the career in the Hab)
+left stick 0 -1
+wait 0.3
+left stick 0 0
+wait 1
+press right a 0.2
+wait 6
+# Ship selection -> load screen
+press right a 0.2
+wait 85
+# "Press A" on the load screen
+press right a 0.2
+waitgame 120
+wait 5
+log in the shift

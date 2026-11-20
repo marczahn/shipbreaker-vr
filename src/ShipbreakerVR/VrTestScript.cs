@@ -60,6 +60,9 @@ namespace ShipbreakerVR
     //   hide TEXT                          switches off every renderer whose object path contains TEXT, e.g. geo_arms
     //                                      (the suit's arms); objects that appear later are not hidden; hide off shows
     //                                      them all again
+    //   reloadshift                        loads the current free-play shift again (same ship, start position), for the
+    //                                      next take without the menus; only in free play, so no career save is touched.
+    //                                      Follow it with waitgame (and the load screen's A press, if the game asks)
     //   renderers [R] [TEXT]               logs the paths of the visible renderers within R meters of the view
     //                                      (default 5), nearest first, optionally only those containing TEXT; to find
     //                                      names for hide
@@ -304,6 +307,9 @@ namespace ShipbreakerVR
                     waitConditionName = "in the shift";
                     waitUntil = now + (words.Length > 1 ? Number(words[1]) : 180f);
                     return;
+                case "reloadshift":
+                    ReloadShift();
+                    return;
                 case "renderers":
                 {
                     var radius = words.Length > 1 && IsNumber(words[1]) ? Number(words[1]) : 5f;
@@ -479,6 +485,20 @@ namespace ShipbreakerVR
             var vr = VrCamera.Instance;
             var loading = SceneLoader.Instance != null && SceneLoader.Instance.LoadScreenVisible;
             return main != null && vr != null && vr.GameCamera == main && !vr.FollowsHab && VrHab.Camera == null && !loading;
+        }
+
+        private static void ReloadShift()
+        {
+            var loader = SceneLoader.Instance;
+            if (loader == null) throw new InvalidOperationException("no scene loader");
+            if (GameSession.CurrentSessionType != GameSession.SessionType.FreeMode)
+                throw new InvalidOperationException($"reloadshift only works in free play (now {GameSession.CurrentSessionType}), to keep career saves untouched");
+            bool busy;
+            try { busy = loader.IsExecutingTearDownAndLoad; }
+            catch (NullReferenceException) { busy = false; }
+            if (busy) throw new InvalidOperationException("the game is already loading");
+            Plugin.Log.LogInfo($"Test {name}: reloading the shift");
+            loader.TearDownAndReloadCurrentSceneAsync();
         }
 
         private static void ListRenderers(float radius, string text)
