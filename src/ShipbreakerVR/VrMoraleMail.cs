@@ -3,7 +3,7 @@ using BepInEx.Configuration;
 
 namespace ShipbreakerVR
 {
-    // EXPERIMENT (branch 'experimente', Raik 2026-11-15): after the first shift of the career, the tutorial with Weaver
+    // Collection (Raik 2026-11-15, in 0.32.0): after the first shift of the career, the tutorial with Weaver
     // (PlayerProfile.TutorialCompleted), LYNX's department for employee satisfaction writes to the Hab's inbox (VrModMail):
     // keeping up morale matters, so everyone may now hang their own posters in their quarters. Only from then on the
     // mod's own pictures (VrHabCustomPosters, BepInEx\ShipbreakerVR-Poster) are among the posters' pictures; before,

@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace ShipbreakerVR
 {
-    // EXPERIMENT (branch 'experimente', Raik 2026-11-15, "Sammelkampagne"): the radio's model, Raik's own (made with his
+    // Collection (Raik 2026-11-15, "Sammelkampagne", in 0.32.0): the radio's model, Raik's own (made with his
     // Meshy subscription, the lettering made up). Its OBJ and colour texture are built into the DLL (Models/Radio.obj,
     // Models/Radio.png) and turned into a Unity mesh and material at run time, once.
     internal static class VrRadioModel

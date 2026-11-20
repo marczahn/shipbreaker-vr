@@ -2,7 +2,7 @@ using BBI.Unity.Game;
 
 namespace ShipbreakerVR
 {
-    // EXPERIMENT (branch 'experimente', Raik 2026-11-15): after the first AI node went into the backpack (VrAiNode),
+    // Collection (Raik 2026-11-15, in 0.32.0): after the first AI node went into the backpack (VrAiNode),
     // LYNX sends a warning to the Hab's inbox, one of the mod's own messages (VrModMail). Read or not is kept in
     // Experimente/KiKnotenAbmahnung. Its text is in Mails/KiKnoten-Abmahnung-Deutsch.txt and -English.txt.
     internal static class VrAiNodeMail

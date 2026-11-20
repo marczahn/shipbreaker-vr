@@ -30,7 +30,7 @@ namespace ShipbreakerVR
 
         public static bool IsOwn(Sprite sprite) => sprite != null && sprites.Contains(sprite);
 
-        // EXPERIMENT (branch 'experimente'): own pictures only after LYNX's morale notice (VrMoraleMail), which comes after
+        // Collection (in 0.32.0): own pictures only after LYNX's morale notice (VrMoraleMail), which comes after
         // the tutorial.
         public static void AddTo(List<NarrativeContentImageAsset> list)
         {

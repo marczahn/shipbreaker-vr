@@ -12,7 +12,7 @@ using UnityEngine.ResourceManagement.AsyncOperations;
 
 namespace ShipbreakerVR
 {
-    // EXPERIMENT (branch 'experimente', Raik 2026-11-15), not part of a release: the AI nodes of the ghost ships
+    // Collection (Raik 2026-11-15, in 0.32.0): the AI nodes of the ghost ships
     // ('SM_Props_AI_Node_...', structure parts fixed on walls and cargo) come off with the grapple, and by hand as a
     // first aid kit does (VrPullOff). Held in a hand and let go over the left shoulder they go into the backpack like the
     // things to collect (VrShoulderStow): removed as the game removes a completed thing (PendingDestruction on its entity,

@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace ShipbreakerVR
 {
-    // EXPERIMENT (branch 'experimente', Raik 2026-11-15): the inventory list (InventoryScreenController, the game's
+    // Collection (Raik 2026-11-15, in 0.32.0): the inventory list (InventoryScreenController, the game's
     // currencies and truck parts) shows a row "AI Node" with how many went into the backpack (VrAiNode,
     // Experimente/KiKnotenImRucksack). The row is only drawn, one of the list's own rows with an id of its own: no
     // currency, nothing in the save. The game has no icon for an AI node: the mod draws its own (Icon), a dark dome seen

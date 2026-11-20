@@ -11,7 +11,7 @@ using UnityEngine.ResourceManagement.AsyncOperations;
 
 namespace ShipbreakerVR
 {
-    // EXPERIMENT (branch 'experimente', Raik 2026-11-15, "Sammelkampagne"): a radio, collected as the AI nodes and the
+    // Collection (Raik 2026-11-15, "Sammelkampagne", in 0.32.0): a radio, collected as the AI nodes and the
     // game's pink bunny are. From ship level 2 on, a ship has it floating loose somewhere inside now and then
     // (Experimente/RadioChance); put in the backpack over the left shoulder, it stands in the Hab on the table left of
     // the message computer from then on (Experimente/RadioGesammelt, Experimente/RadioPlatz). Its model is Raik's own

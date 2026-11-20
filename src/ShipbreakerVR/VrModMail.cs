@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace ShipbreakerVR
 {
-    // EXPERIMENT (branch 'experimente', Raik 2026-11-15): the mod's own messages in the Hab's inbox, as if from LYNX. Each
+    // Collection (Raik 2026-11-15, in 0.32.0): the mod's own messages in the Hab's inbox, as if from LYNX. Each
     // is a NarrativeMessageAsset made at run time, its texts answered by the localization for its own IDs, and it never
     // enters the save: it is in the inbox's runtime list of reconciled messages only while the inbox builds its list
     // (HabNarrativeMessageButtonController.RefreshMessages), and opening it is not handed to the game's inventory
