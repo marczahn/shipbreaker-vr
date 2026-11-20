@@ -52,6 +52,9 @@ namespace ShipbreakerVR
     // For trailer recordings:
     //   capturefps N                       the game advances exactly 1/N s per frame (Time.captureFramerate), however
     //                                      long the frame takes; the script's clock follows it. 0 switches it off
+    //   timescale X                        the game's time runs at X (0.25 = slow motion, debris and sparks included);
+    //                                      the script's moves keep their speed, so the view can sweep through a slowed
+    //                                      moment. 1 = normal
     //   record NAME [N]                    saves the game window as results\<script>\NAME\00001.png ... every frame (every
     //                                      Nth), for ffmpeg -framerate <fps> -i %05d.png; best with capturefps
     //   record stop                        stops saving
@@ -66,7 +69,7 @@ namespace ShipbreakerVR
     //   renderers [R] [TEXT]               logs the paths of the visible renderers within R meters of the view
     //                                      (default 5), nearest first, optionally only those containing TEXT; to find
     //                                      names for hide
-    // capturefps, record, hud, lasers and hide end with the script.
+    // capturefps, timescale, record, hud, lasers and hide end with the script.
     internal static class VrTestScript
     {
         static VrTestScript() => VrSession.OnUnload("test scripts", () => Finish("unloaded"));
@@ -89,6 +92,7 @@ namespace ShipbreakerVR
         // The script's clock: real time, or 1/capturefps per frame while that is set.
         private static float clock;
         private static int captureFps;
+        private static bool timeScaled;
         private static string recordFolder;
         private static int recordEvery, recordFrame, recordSaved;
         private static readonly List<Renderer> Hidden = new List<Renderer>();
@@ -208,6 +212,8 @@ namespace ShipbreakerVR
             lines = null;
             if (captureFps > 0) Time.captureFramerate = 0;
             captureFps = 0;
+            if (timeScaled) Time.timeScale = 1f;
+            timeScaled = false;
             StopRecording();
             HideHud = false;
             HideLasers = false;
@@ -324,6 +330,14 @@ namespace ShipbreakerVR
                     captureFps = Math.Max(0, (int)Number(words[1]));
                     Time.captureFramerate = captureFps;
                     return;
+                case "timescale":
+                {
+                    var scale = Number(words[1]);
+                    if (scale <= 0f || scale > 4f) throw new FormatException("timescale must be above 0 and at most 4");
+                    Time.timeScale = scale;
+                    timeScaled = scale != 1f;
+                    return;
+                }
                 case "record":
                     if (words[1].ToLowerInvariant() == "stop") StopRecording();
                     else StartRecording(words[1], words.Length > 2 ? Math.Max(1, (int)Number(words[2])) : 1);
