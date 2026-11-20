@@ -509,19 +509,21 @@ namespace ShipbreakerVR
             AtControl(LeftArm);
             AtControl(RightArm);
             MirrorThumb(active && !VrHand.Right.HoldsTool);
+            var detonator = active && equipment == EquipmentController.Equipment.DemoCharge
+                && grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped && VrChargeByHand.DetonatorOut;
             ReadChargeFingers(active && chargeLeft);
+            ReadDetonatorFingers(detonator);
             Curl(LeftArm);
             Curl(RightArm);
             KeepTips(LeftArm);
             KeepTips(RightArm);
             MirrorChargeFingers();
+            HoldSecondDetonator(active);
             RestoreDetonator();
             RestoreLever();
             Charges(active && chargeLeft);
             ChargeInHand(active && VrChargeByHand.Decoupled && equipment == EquipmentController.Equipment.DemoCharge
                 && grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped);
-            var detonator = active && equipment == EquipmentController.Equipment.DemoCharge
-                && grab.RightHand.CurrentHandState == HandGrab.HandState.Equipped && VrChargeByHand.DetonatorOut;
             FitDetonator(detonator);
             PressDetonator(detonator);
         }
@@ -611,29 +613,33 @@ namespace ShipbreakerVR
                 + $"the lever {Mathf.Abs(Vector3.Dot(size, length)) * meters * 100f:0.0} cm long, axis ({leverAxis.x:0.00}, {leverAxis.y:0.00}, {leverAxis.z:0.00}) in its own axes");
         }
 
+        // The index and the middle finger of the hand that holds the detonator, which lie on its lever: straighter by
+        // LeverReach, so their tips lie on its front, and closed with the trigger by SqueezeBend.
+        private static void Squeeze(Arm arm, bool left, float pulled)
+        {
+            if (!Frame(arm, out _, out var frame)) return;
+            // Towards the palm, about the hand's thumb-side axis, as Curl bends them; the other two fingers lie round the grip.
+            var across = frame * Vector3.up;
+            var side = left ? 1f : -1f;
+            for (var i = 0; i < arm.Joints.Length && i < 6; i++)
+            {
+                var joint = arm.Joints[i];
+                var bend = SqueezeBend[i % 3] * pulled - LeverReach[i % 3];
+                if (joint == null || Mathf.Abs(bend) < 0.01f) continue;
+                // Not set this frame (the game's own pose): that pose is its base from here.
+                if (joint.localRotation != arm.Set[i]) arm.Base[i] = joint.localRotation;
+                joint.rotation = Quaternion.AngleAxis(side * bend, across) * joint.rotation;
+                arm.Set[i] = joint.localRotation;
+            }
+        }
+
         private static void PressDetonator(bool on)
         {
             if (!on || detonatorProp == null) return;
             var left = VrHand.GameToolHand.IsLeft;
             var arm = left ? LeftArm : RightArm;
             var pulled = Mathf.Clamp01(arm.Input.TriggerValue);
-            if (Frame(arm, out _, out var frame))
-            {
-                // Towards the palm, about the hand's thumb-side axis, as Curl bends them; straighter by LeverReach.
-                // The index and the middle finger only: those two lie on the lever, the other two round the grip.
-                var across = frame * Vector3.up;
-                var side = left ? 1f : -1f;
-                for (var i = 0; i < arm.Joints.Length && i < 6; i++)
-                {
-                    var joint = arm.Joints[i];
-                    var bend = SqueezeBend[i % 3] * pulled - LeverReach[i % 3];
-                    if (joint == null || Mathf.Abs(bend) < 0.01f) continue;
-                    // Not set this frame (the game's own pose): that pose is its base from here.
-                    if (joint.localRotation != arm.Set[i]) arm.Base[i] = joint.localRotation;
-                    joint.rotation = Quaternion.AngleAxis(side * bend, across) * joint.rotation;
-                    arm.Set[i] = joint.localRotation;
-                }
-            }
+            Squeeze(arm, left, pulled);
             if (pulled <= 0.01f) return;
             if (!leverLooked)
             {
@@ -839,6 +845,14 @@ namespace ShipbreakerVR
             // put on by hand the right hand follows its controller, and its grip closed it to the empty hand's fist
             // instead (Raik, 2026-11-18: the right hand held the detonator in another shape than the left).
             if (arm == RightArm && hand.HoldsTool && hand.Tool == EquipmentController.Equipment.DemoCharge)
+            {
+                arm.Closed = arm.Flat = arm.Claw = arm.Straight = 0f;
+                Open(arm);
+                return;
+            }
+            // The detonator taken beside the charges (VrSecondDetonator): held as with the charges put on by hand, in the
+            // game's own hold of it (HoldSecondDetonator), not in the empty hand's fist, once that hold is known.
+            if (VrSecondDetonator.Holds(arm.Input) && DetonatorFingersKnown)
             {
                 arm.Closed = arm.Flat = arm.Claw = arm.Straight = 0f;
                 Open(arm);
@@ -3031,6 +3045,77 @@ namespace ShipbreakerVR
             if (chargeFingersLogged) return;
             chargeFingersLogged = true;
             Plugin.Log.LogInfo($"Hands: left hand takes the demo charge's finger pose from the right hand ({turned} joints)");
+        }
+
+        // Raik (2026-11-20): the detonator taken beside the charges (VrSecondDetonator, Automatic placing) lies in the hand
+        // as the game's own detonator does with Manual placing: the game's right hand round it, as its animation has it
+        // (read here while the game's detonator is out, each bone in that hand's own axes), mirrored for the left hand,
+        // with the index and the middle finger on the lever and closing with the trigger (Squeeze). The game shows
+        // that pose only while its own detonator is out, so the pose stays as read last; DetonatorFingers is the
+        // pose measured on Raik's install, for a session that has not had the detonator out yet.
+        private static readonly Vector3[] DetonatorFingers = null;
+        private static readonly Vector3[] detonatorBones = new Vector3[17];
+        private static bool detonatorBonesRead, detonatorBonesReading;
+        private static int detonatorBonesLogs;
+        private static bool secondDetonatorLogged;
+
+        private static bool DetonatorFingersKnown => detonatorBonesRead || DetonatorFingers != null;
+
+        private static void ReadDetonatorFingers(bool on)
+        {
+            if (!on || !Frame(RightArm, out _, out var frame))
+            {
+                // Put away: the pose as it was last, for the log (to become DetonatorFingers).
+                if (detonatorBonesReading && detonatorBonesLogs++ < 3)
+                {
+                    var text = new System.Text.StringBuilder();
+                    for (var i = 0; i < detonatorBones.Length; i++)
+                    {
+                        var bone = detonatorBones[i];
+                        text.Append(i == 0 ? "" : ", ").Append(System.FormattableString.Invariant($"new Vector3({bone.x:0.0000}f, {bone.y:0.0000}f, {bone.z:0.0000}f)"));
+                    }
+                    Plugin.Log.LogInfo($"Hands: the game's hold of the detonator, right hand's bones in its own axes: {text}");
+                }
+                detonatorBonesReading = false;
+                return;
+            }
+            var toRight = Quaternion.Inverse(frame);
+            for (var i = 0; i < detonatorBones.Length; i++)
+            {
+                var bone = Bone(RightArm, i);
+                detonatorBones[i] = bone.sqrMagnitude > 1e-10f ? (toRight * bone).normalized : Vector3.zero;
+            }
+            detonatorBonesRead = true;
+            detonatorBonesReading = true;
+        }
+
+        private static void HoldSecondDetonator(bool active)
+        {
+            if (!active || !VrSecondDetonator.Active || !DetonatorFingersKnown) return;
+            var arm = VrSecondDetonator.Holds(LeftArm.Input) ? LeftArm : VrSecondDetonator.Holds(RightArm.Input) ? RightArm : null;
+            if (arm == null || arm.Weight <= 0f || !Frame(arm, out _, out var frame)) return;
+            var left = arm == LeftArm;
+            var bones = detonatorBonesRead ? detonatorBones : DetonatorFingers;
+            var turned = 0;
+            // Root to tip within each finger, as the arrays run: a bone's direction depends only on its own joint's turn.
+            for (var i = 0; i < bones.Length; i++)
+            {
+                var want = bones[i];
+                if (want == Vector3.zero) continue;
+                var joint = Joint(arm, i);
+                if (!Restore(arm, joint, i)) continue;
+                var bone = Bone(arm, i);
+                if (bone.sqrMagnitude <= 1e-10f) continue;
+                if (left) want.x = -want.x;
+                var turn = Quaternion.FromToRotation(bone, frame * want);
+                joint.rotation = Quaternion.Slerp(Quaternion.identity, turn, arm.Weight) * joint.rotation;
+                arm.Set[i] = joint.localRotation;
+                turned++;
+            }
+            Squeeze(arm, left, Mathf.Clamp01(arm.Input.TriggerValue));
+            if (secondDetonatorLogged) return;
+            secondDetonatorLogged = true;
+            Plugin.Log.LogInfo($"Hands: {arm.Name} hand holds the detonator beside the charges in the game's hold of it ({turned} joints, {(detonatorBonesRead ? "as read this session" : "as measured")})");
         }
 
         private static Transform Joint(Arm arm, int index) =>
