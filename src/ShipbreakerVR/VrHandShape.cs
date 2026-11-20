@@ -54,11 +54,12 @@ namespace ShipbreakerVR
         public static bool FromArm { get; private set; }
 
         // How far a point lies outside that arm (less than 0 inside it), and the way out of it; MaxValue without one.
-        public static float ArmDistance(Limb arm, Vector3 point, out Vector3 way)
+        public static float ArmDistance(Limb arm, Vector3 point, out Vector3 way) => ArmDistance(arm, point, VrCamera.WorldScale, out way);
+
+        internal static float ArmDistance(Limb arm, Vector3 point, float scale, out Vector3 way)
         {
             way = Vector3.zero;
             if (!arm.Known) return float.MaxValue;
-            var scale = VrCamera.WorldScale;
             var upper = Segment(point, arm.Shoulder, arm.Elbow, UpperArmRadius * scale, ElbowRadius * scale, out var upperWay);
             var lower = Segment(point, arm.Elbow, arm.Wrist, ElbowRadius * scale, WristRadius * scale, out var lowerWay);
             if (upper <= lower)
@@ -68,6 +69,22 @@ namespace ShipbreakerVR
             }
             way = lowerWay;
             return lower;
+        }
+
+        // Whether a box with that half size, whose middle is that far outside the other arm (ArmDistance), has no point
+        // in it. A point no further than the box's corners from the middle is at most that much closer to the arm's
+        // middle line, and the arm may be its thickest there where the middle counted its thinnest.
+        internal static bool BoxClearOfArm(float middleDistance, Vector3 half, float scale) =>
+            middleDistance > half.magnitude + (UpperArmRadius - WristRadius) * scale;
+
+        // Whether the last Gather found nothing a hand could be in: every Capsule is then 0 (and neither FromTool nor
+        // FromArm), so a caller can save working out where the bones are, each a walk up the skeleton.
+        public static bool NothingNear()
+        {
+            if (Near.Count > 0 || toolNear || armNear) return false;
+            FromTool = false;
+            FromArm = false;
+            return true;
         }
 
         private static float Along(Vector3 p, Vector3 a, Vector3 b)

@@ -1492,7 +1492,16 @@ namespace ShipbreakerVR
         private static void LogFingers(Arm arm, Vector3 across, float side)
         {
             if (fingerPoseLogs >= 300 || Time.unscaledTime - arm.FingerLogAt < 0.25f) return;
+            // The bends alone first: the line, with each finger's depth, was put together every frame and thrown away
+            // (0.15 ms per frame for both hands, measured with VrTestProfile).
             var worst = 0f;
+            for (var finger = 0; finger < 4; finger++)
+            {
+                if (!Chain(arm, finger)) continue;
+                worst = Mathf.Min(worst, Mathf.Min(KnuckleBend(arm, finger, across, side),
+                    Mathf.Min(JointBend(arm, finger * 3 + 1, across, side), JointBend(arm, finger * 3 + 2, across, side))));
+            }
+            if (worst > -30f) return;
             var b = new System.Text.StringBuilder();
             for (var finger = 0; finger < 4; finger++)
             {
@@ -1500,10 +1509,8 @@ namespace ShipbreakerVR
                 var knuckle = KnuckleBend(arm, finger, across, side);
                 var middle = JointBend(arm, finger * 3 + 1, across, side);
                 var last = JointBend(arm, finger * 3 + 2, across, side);
-                worst = Mathf.Min(worst, Mathf.Min(knuckle, Mathf.Min(middle, last)));
                 b.Append($" {"IMRL"[finger]} {knuckle:0}/{middle:0}/{last:0} (bent {arm.BendShown[finger]:0}, lifted {arm.LiftShown[finger]:0}, unbent {arm.UnbendShown[finger]:0}, {FingerDepth(arm, finger) * 1000f / VrCamera.WorldScale:0.0} mm in);");
             }
-            if (worst > -30f) return;
             arm.FingerLogAt = Time.unscaledTime;
             fingerPoseLogs++;
             Plugin.Log.LogInfo($"Finger pose: {arm.Name} knuckle/middle/last in degrees:{b} hand back {arm.Back:0}°, folded {arm.Folded:0.00}, flat {arm.Press:0.00}");
@@ -1527,6 +1534,7 @@ namespace ShipbreakerVR
         // How deep the finger's deepest bone is in something.
         private static float FingerDepth(Arm arm, int finger)
         {
+            if (VrHandShape.NothingNear()) return 0f;
             var radius = VrHandShape.FingerRadius[finger] * VrCamera.WorldScale;
             var deepest = 0f;
             for (var k = 0; k < 3; k++)
@@ -1544,6 +1552,7 @@ namespace ShipbreakerVR
         {
             var root = arm.Thumb[0];
             if (root == null) return;
+            if (allowed >= 0f && VrHandShape.NothingNear()) return;
             var radius = VrHandShape.ThumbRadius * VrCamera.WorldScale;
             for (var round = 0; round < 3; round++)
             {
@@ -1726,6 +1735,7 @@ namespace ShipbreakerVR
         {
             way = Vector3.zero;
             var deepest = 0f;
+            if (VrHandShape.NothingNear()) return 0f;
             var radius = VrHandShape.FingerRadius[finger] * VrCamera.WorldScale;
             for (var k = 0; k < 3; k++)
             {
@@ -1883,6 +1893,7 @@ namespace ShipbreakerVR
 
         private static bool FingerIn(Arm arm, int finger, float allowed)
         {
+            if (VrHandShape.NothingNear()) return 0f > allowed;
             var radius = VrHandShape.FingerRadius[finger] * VrCamera.WorldScale;
             for (var k = 0; k < 3; k++)
             {
@@ -1952,7 +1963,8 @@ namespace ShipbreakerVR
         private static void ThumbInLine(Arm arm, Vector3 palm, float share, bool lifted)
         {
             if (share <= 0f) return;
-            var found = new System.Text.StringBuilder();
+            // Only while there is still a line to log: this runs every frame.
+            var found = arm.ThumbBendLogs < 4 ? new System.Text.StringBuilder() : null;
             for (var index = 1; index < arm.Thumb.Length; index++)
             {
                 var joint = arm.Thumb[index];
@@ -1968,11 +1980,11 @@ namespace ShipbreakerVR
                 // On top of LiftThumb this frame, or else from the animation's pose.
                 if (!lifted && !Restore(arm, joint, at)) continue;
                 var bend = Vector3.SignedAngle(last, bone, palm);
-                found.Append($" {joint.name} {bend:0}°");
+                found?.Append($" {joint.name} {bend:0}°");
                 joint.rotation = Quaternion.AngleAxis(-bend * share, palm) * joint.rotation;
                 arm.Set[at] = joint.localRotation;
             }
-            if (arm.ThumbBendLogs >= 4 || found.Length == 0) return;
+            if (found == null || found.Length == 0) return;
             arm.ThumbBendLogs++;
             Plugin.Log.LogInfo($"Hands: {arm.Name} thumb bent sideways in the palm's plane:{found}");
         }
@@ -2872,6 +2884,8 @@ namespace ShipbreakerVR
                 var center = wrist + frame * PalmCenter[b];
                 var turn = frame * PalmTurn[b];
                 var half = PalmHalf[b];
+                // Mostly the palm is nowhere near the other arm, and one distance says so instead of 27.
+                if (VrHandShape.BoxClearOfArm(VrHandShape.ArmDistance(limb, center, out _), half, VrCamera.WorldScale)) continue;
                 for (var x = -1; x <= 1; x++)
                     for (var y = -1; y <= 1; y++)
                         for (var z = -1; z <= 1; z++)
