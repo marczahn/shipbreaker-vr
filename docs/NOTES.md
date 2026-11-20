@@ -1375,6 +1375,23 @@ milliseconds per frame and calls per frame.
   per call. The frame time of a profiled stretch is therefore not the game's; the example script has a stretch
   without the timestamps before and after.
 
+Runs in the bay (2026-11-21, 0.32.0 with this profile, mock runtime, 1.15x, both hands empty, standing at the Hab;
+15.3 ms per frame, 313 methods timed, 61 ns per timed call):
+- `Update`: 0.92 ms in 1,144 calls per frame; `LateUpdate`: 0.34 ms in 227 calls; `FixedUpdate`: 0.05 ms in 23 calls.
+  Unity's steps around them take 1.26 and 1.5 ms, so calling into the 1,144 `Update`s costs about 0.3 ms on top.
+- No script of the game stands out: `Main.Update` 0.16 ms, `LynxControls.Update` 0.09, `BayAnimatedLightManager.Update`
+  0.06 (8 calls), `ScrollRect.LateUpdate` 0.04, `EventSystem.Update` 0.04, everything else below 0.04 ms.
+  `TriggerableComponent.Update` runs 568 times per frame and does next to nothing (0.04 ms in all, most of it the
+  timestamps), `HDAdditionalLightData.LateUpdate` 194 times (0.02 ms).
+- The mod is the largest single item: `VrHands` 1.13 ms (all of it in `LateUpdate`, see "Performance audit" for its
+  parts), the VR camera's `LateUpdate` 0.26 ms and `Update` 0.15 ms for the other steps. `Mod steps` in the same run:
+  1.6 ms per frame, hands 1.1, lamp shadows 0.09, everything else below 0.05 ms.
+- Threading: `Render info` reports `LegacyJobified` with 7 job workers.
+A first run logged no `Script steps` for the profiled stretch (`profile off` threw the numbers away before the
+stretch's lines were logged), and its `Frame steps` seemed to show 1.6 ms more in `ScriptRunBehaviourUpdate` at the
+start of a shift: that was the stall of putting the timestamps in (2.1 s for 178 methods, 3.7 s for 313), which
+landed in the step totals of the stretch that ended in that frame, but not in its frame count.
+
 In a `stats` stretch the `Mod steps` line (`VrFrame`, the mod's own steps per frame) is now logged as well, and
 `Render info` gives Unity's threading mode (`SystemInfo.renderingThreadingMode`) and the number of job workers next to
 `multithreaded rendering`, which reads False in this game although `Player.log` says `GfxDevice: creating device

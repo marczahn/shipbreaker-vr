@@ -3,8 +3,9 @@
 # with Test/MockRuntime the frame rate is not tied to a headset). In results\script-cost\log.txt, the "Script steps"
 # lines give the totals and the methods that take the most, in milliseconds per frame with their calls per frame;
 # "Mod steps" gives the mod's own steps, "Frame steps" Unity's. Putting the timestamps in and taking them out stalls
-# the game for some seconds, so the stretches begin after it; the last stretch is without the timestamps, for the
-# frame time they cost.
+# the game for some seconds, so the stretches begin after 'profile on' and end a moment before 'profile off' (in the
+# same frame the stall lands in the "Frame steps" of the stretch that just ended); the last stretch is without the
+# timestamps, for the frame time they cost.
 head 0 1.7 0 0 0 0
 wait 2
 profile on VrHands
@@ -16,6 +17,7 @@ wait 1
 stats scripts again
 wait 25
 stats
+wait 1
 profile off
 wait 3
 stats without profile
