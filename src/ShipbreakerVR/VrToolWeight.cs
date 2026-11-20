@@ -38,6 +38,30 @@ namespace ShipbreakerVR
         // Only with extended tool physics (VR options, Physik).
         private static float Mass => VrSettings.ToolWeight != null && VrSettings.ToolPhysics != null && VrSettings.ToolPhysics.Value ? VrSettings.ToolWeight.Value : 0f;
 
+        // A part on the grapple makes it heavier to move, the heavier the part, but never so much that it cannot be
+        // moved (Raik): LoadPerDoubling kg more for each doubling of the part's mass over LoadBase, at most LoadMost.
+        // So 5 kg more at 50 kg, 17 at 500, 33 at 5 t. The lag stays within MostBehind and MostTurn whatever the load.
+        private const float LoadBase = 50f;
+        private const float LoadPerDoubling = 5f;
+        private const float LoadMost = 40f;
+
+        // How heavy the tool in that hand is to move now: its own weight and a grappled part's, both less with a second
+        // hand on it (VrToolSupport).
+        private static float Effective(VrInput.Hand hand, EquipmentController.Equipment tool)
+        {
+            var own = Mass;
+            var load = 0f;
+            var grapple = GameRefs.Grapple;
+            if (tool == EquipmentController.Equipment.GrappleHook && grapple != null && !VrTetherMode.On && grapple.GrappledRigidbody != null)
+                load = Mathf.Min(LoadPerDoubling * Mathf.Log(1f + grapple.GrappledRigidbody.mass / LoadBase, 2f), LoadMost);
+            if (VrToolSupport.Supported(hand))
+            {
+                own *= VrToolSupport.ToolLeft;
+                load *= VrToolSupport.LoadLeft;
+            }
+            return own + load;
+        }
+
         public static bool Weighs(EquipmentController.Equipment tool) =>
             Mass > 0f && (tool == EquipmentController.Equipment.CuttingTool || tool == EquipmentController.Equipment.GrappleHook);
 
@@ -65,7 +89,7 @@ namespace ShipbreakerVR
                 if (logs++ < 10) Plugin.Log.LogInfo($"Tool weight: {hand.Name} {tool} at {Mass:0} kg");
                 return wanted;
             }
-            var mass = Mathf.Max(Mass, 0.5f);
+            var mass = Mathf.Max(Effective(hand, tool), 0.5f);
             var omega = Mathf.Sqrt(Stiffness / mass);
             var turnOmega = omega * TurnFaster;
             var time = Mathf.Min(Time.unscaledDeltaTime, 0.1f);

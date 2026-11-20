@@ -36,6 +36,9 @@ namespace ShipbreakerVR
         public static ConfigEntry<VrFlightComfort.Thrust> ThrustMode;
         public static ConfigEntry<VrClimb.Turning> ClimbTurning;
         public static ConfigEntry<float> ClimbTurnDeadzone;
+        public static ConfigEntry<float> GloveBrake;
+        public static ConfigEntry<float> ArmPull;
+        public static ConfigEntry<float> CatchForce;
         public static ConfigEntry<bool> BracedPush;
         public static ConfigEntry<bool> ToolPhysics;
         public static ConfigEntry<bool> FreeWalking;
@@ -241,13 +244,26 @@ namespace ShipbreakerVR
                 (new[] { "Simple", "Standard", "Realistic" }, new[] { "Einfach", "Standard", "Realistisch" }));
             // Test (Raik, 2026-11-14): whether twisting the arms at a large part turns the body, and from how far.
             ClimbTurning = Bind("Steuerung", "Hangeln", VrClimb.Turning.Einfach,
-                ("How the body moves when both hands hold the same large part that moves. Simple: you move along it but never turn or swing round; you stay level as you are. Realistic: twisting your arms against each other turns you round the part as far as its weight lets you, past a dead zone (Climbing dead zone).",
-                    "Wie sich der Körper bewegt, wenn beide Hände dasselbe große Teil halten, das sich bewegen kann. Einfach: Du bewegst dich daran entlang, drehst und schwenkst dich aber nie; du bleibst in deiner Ebene. Realistisch: Verdrehst du die Arme gegeneinander, drehst du dich um das Teil, so weit sein Gewicht es zulässt, erst nach einer Totzone (Hangeln-Totzone)."),
+                ("How the body moves when both hands hold the same large part that moves. Simple: you move along it but never turn or swing round; you stay level as you are. Realistic: twisting your arms against each other turns you round the part as far as its weight lets you, past a dead zone (Climbing dead zone); and your body has inertia: your arms move it only with their force (Arm force), and taking hold it glides on a little (Catch force).",
+                    "Wie sich der Körper bewegt, wenn beide Hände dasselbe große Teil halten, das sich bewegen kann. Einfach: Du bewegst dich daran entlang, drehst und schwenkst dich aber nie; du bleibst in deiner Ebene. Realistisch: Verdrehst du die Arme gegeneinander, drehst du dich um das Teil, so weit sein Gewicht es zulässt, erst nach einer Totzone (Hangeln-Totzone); außerdem hat dein Körper Trägheit: Deine Arme bewegen ihn nur mit ihrer Kraft (Armkraft), und beim Zugreifen gleitet er kurz nach (Abfangkraft)."),
                 (new[] { "Simple", "Realistic" }, new[] { "Einfach", "Realistisch" }));
-            ClimbTurnDeadzone = Bind("Steuerung", "HangelnTotzone", 4f,
+            ClimbTurnDeadzone = Bind("Steuerung", "HangelnTotzone", 3f,
                 ("With realistic climbing: how far the hands have to be twisted against each other, crosswise, before the body starts to turn. Within it you hold on and move to and fro as before.",
                     "Beim realistischen Hangeln: wie weit die Hände quer gegeneinander verdreht sein müssen, bevor sich der Körper dreht. Darunter hältst du dich fest und bewegst dich wie bisher hin und her."),
                 "In centimeters.", Between(0f, 15f));
+            GloveBrake = Bind("Steuerung", "HandschuhBremse", 215f,
+                ("How hard a hand holding on to a hull or other fixed surface brakes you when you take hold at speed and glide along it. Two hands brake twice as hard. 215 N (2.15 m/s²) stops you within 23 cm from 1 m/s and within 2.1 m from 3 m/s.",
+                    "Wie stark eine Hand bremst, die an der Hülle oder einer anderen festen Fläche zugreift, während du darauf entlanggleitest. Zwei Hände bremsen doppelt so stark. 215 N (2,15 m/s²) halten dich aus 1 m/s nach 23 cm an, aus 3 m/s nach 2,1 m."),
+                "In newtons.", Between(25f, 2000f));
+            // Raik, 0.30.1: the body's inertia with realistic climbing.
+            ArmPull = Bind("Steuerung", "Armkraft", 500f,
+                ("With realistic climbing: how hard each arm speeds your body (100 kg) up on a fixed hold, pulling or pushing off; only your body, parts you move keep their own force. 500 N is 5 m/s² a hand; pushing off over an arm's length you reach about 2.2 m/s with one hand and 3.2 m/s with both, and hand over hand you keep your speed and can push it on.",
+                    "Beim realistischen Hangeln: wie stark jeder Arm deinen Körper (100 kg) an einem festen Halt beschleunigt, beim Ziehen und Abstoßen; nur deinen Körper, Teile bewegst du weiter mit ihrer eigenen Kraft. 500 N sind 5 m/s² pro Hand; stößt du dich über eine Armlänge ab, erreichst du mit einer Hand etwa 2,2 m/s, mit beiden 3,2 m/s, und Hand über Hand behältst du dein Tempo und kannst weiter zulegen."),
+                "In newtons.", Between(50f, 1500f));
+            CatchForce = Bind("Steuerung", "Abfangkraft", 900f,
+                ("With realistic climbing: how hard a hand that takes hold stops your body (100 kg), as far as you hold the hand still against your body; move it back along with your body and you keep your speed. The hand stays put at once, the body glides on a little and is drawn back. 900 N: about 6 cm from 1 m/s, 22 cm from 2 m/s; too fast to stop within half a meter (about 3 m/s with one hand), the hand is torn off.",
+                    "Beim realistischen Hangeln: wie stark eine Hand, die zugreift, deinen Körper (100 kg) abfängt, so weit du die Hand gegenüber dem Körper stillhältst; nimmst du sie mit dem Körper nach hinten mit, behältst du dein Tempo. Die Hand steht sofort, der Körper gleitet kurz nach und wird zurückgezogen. 900 N: etwa 6 cm aus 1 m/s, 22 cm aus 2 m/s; zu schnell, um innerhalb eines halben Meters zu halten (mit einer Hand etwa 3 m/s), reißt die Hand ab."),
+                "In newtons.", Between(100f, 5000f));
             // Extended world physics (the key's old name kept, so the setting survives the rename).
             BracedPush = Bind("Steuerung", "SchwereTeileSchieben", false,
                 ("Extended world physics. On: holding on to something fixed, the other hand moves heavy parts up to 5 t with a limited force of 250 N, with each hand on a heavy part they push each other apart, and your body weighs 100 kg in these pulls and pushes. Off: the game's own physics, where such parts do not move.",

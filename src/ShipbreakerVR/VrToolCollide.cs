@@ -148,7 +148,8 @@ namespace ShipbreakerVR
         }
 
         // The other arm, which the tool does not pass through and cannot push aside (Raik, 2026-11-08): its upper arm and
-        // forearm as drawn (VrHands), set for each tool's turn (Apply), and its hand to the finger tips.
+        // forearm as drawn (VrHands), set for each tool's turn (Apply), and its hand to the finger tips while it does not
+        // hold the tool as a second hand (VrToolSupport).
         // Test (Raik, 2026-11-14): a little thinner than the forearm VrHands keeps out of the tool (ForearmRadius).
         private const float ArmRadius = 0.035f;
         private const float HandRadius = 0.012f;
@@ -162,16 +163,27 @@ namespace ShipbreakerVR
         private static readonly Vector3[][] JointsBefore = { new Vector3[4], new Vector3[4] };
         private static readonly int[] JointsFrame = { -10, -10 };
 
+        // Raik, 0.30.1: the own body and the tool do not meet for now. The tool passes through the other arm and hand
+        // (OtherArm), and the free hand and forearm pass through the tool (WorldTool: VrHands, VrHandShape). The tool still
+        // meets the world, and a second hand still takes hold of it (VrToolSupport, Distance).
+        internal static readonly bool BodyMeetsTool = false;
+
         private static void OtherArm(VrInput.Hand hand)
         {
+            if (!BodyMeetsTool)
+            {
+                armKnown = false;
+                return;
+            }
             armKnown = VrHands.TryGetArm(!hand.IsLeft, out ArmJoints[0], out ArmJoints[1], out ArmJoints[2], out var knuckles);
             var along = knuckles - ArmJoints[2];
             // Test (Raik, 2026-11-14): the hand as a thin line from the wrist to the knuckles, inside its palm, so a hand lying
             // on the tool (VrHands.PalmOut) does not touch it here and the two never push each other about; the fingers
-            // bend out of the tool themselves.
+            // bend out of the tool themselves. Not while it holds the tool as a second hand.
             armPieces = 2;
             ArmJoints[3] = knuckles;
-            if (armKnown && along.sqrMagnitude > 1e-6f) armPieces = 3;
+            var other = hand.IsLeft ? VrInput.Right : VrInput.Left;
+            if (armKnown && along.sqrMagnitude > 1e-6f && !VrToolSupport.Supports(other)) armPieces = 3;
             var side = hand.IsLeft ? 1 : 0;
             var before = JointsBefore[side];
             var dt = Time.unscaledDeltaTime;
@@ -744,6 +756,40 @@ namespace ShipbreakerVR
             state.HeldBack = held;
         }
 
+        // How far a point in the world lies from the shape of the tool in that hand, as it is held this frame (the boxes of
+        // its model, or the ball along it), in meters; MaxValue without a tool. For a second hand taking hold of the tool
+        // (VrToolSupport) and its fingers closing on it.
+        public static float Distance(VrInput.Hand hand, EquipmentController.Equipment tool, Vector3 point)
+        {
+            var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+            if (rig == null || (tool != EquipmentController.Equipment.CuttingTool && tool != EquipmentController.Equipment.GrappleHook)
+                || !hand.TryGetPosition(out var gripLocal) || !hand.TryGetAimRotation(out var aimLocal)) return float.MaxValue;
+            var turned = VrToolSteady.Apply(hand, tool, aimLocal);
+            var pivot = rig.TransformPoint(VrToolWeight.Grip(hand, tool, gripLocal));
+            var rotation = rig.rotation * turned;
+            var boxes = hand == VrHand.GameToolHand.Input ? Shape(tool) : null;
+            if (boxes != null)
+            {
+                var nearest = float.MaxValue;
+                foreach (var box in boxes)
+                {
+                    var local = Quaternion.Inverse(rotation * box.Turn) * (point - (pivot + rotation * box.Center));
+                    var outside = new Vector3(Mathf.Max(Mathf.Abs(local.x) - box.Half.x, 0f), Mathf.Max(Mathf.Abs(local.y) - box.Half.y, 0f),
+                        Mathf.Max(Mathf.Abs(local.z) - box.Half.z, 0f));
+                    nearest = Mathf.Min(nearest, outside.magnitude);
+                }
+                return nearest;
+            }
+            var scale = VrCamera.WorldScale;
+            var forward = rotation * Vector3.forward;
+            var from = pivot + forward * FromGrip * scale;
+            var to = pivot + forward * ToolLength(pivot, rotation);
+            var along = Vector3.Project(point - from, to - from);
+            var share = Vector3.Dot(along, to - from) / Mathf.Max((to - from).sqrMagnitude, 1e-8f);
+            var closest = from + (to - from) * Mathf.Clamp01(share);
+            return Mathf.Max(Vector3.Distance(point, closest) - Radius * scale, 0f);
+        }
+
         // Test (Raik, 2026-11-14): the tool in the game tool hand as the other hand feels it (VrHandShape), as held this
         // frame. The grapple by its own shape (grappleField, cells of 1.5 cm, and its four arms as capsules): the boxes
         // round its parts were far larger than it, the housing's 22 x 49 x 59 cm with the empty ring, and pushed a hand
@@ -760,6 +806,7 @@ namespace ShipbreakerVR
             if (worldFrame == Time.frameCount) return worldKnown;
             worldFrame = Time.frameCount;
             worldKnown = false;
+            if (!BodyMeetsTool) return false;
             var hand = VrHand.GameToolHand;
             var tool = VrToolModels.Equipped;
             var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;

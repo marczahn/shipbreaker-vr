@@ -32,6 +32,7 @@ namespace ShipbreakerVR
         {
             ("input", VrInput.Update),
             ("tool input", VrToolInput.Update),
+            ("tool support", VrToolSupport.Update),
             ("aim", VrAim.Update),
             ("second aim", VrDualTools.UpdateAim),
             ("flying", VrControls.Update),

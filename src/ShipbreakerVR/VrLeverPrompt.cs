@@ -23,7 +23,7 @@ namespace ShipbreakerVR
         // them (VrInteractGrab). Things to collect and breakers to remove keep both.
         public static bool WorkedByHand(InteractableObject control)
         {
-            if (control == null || VrKiosk.Is(control)) return false;
+            if (control == null || VrKiosk.UsedFromView(control)) return false;
             if (VrLever.Turnable(control) || VrNacelle.Is(control)) return true;
             var type = VrLever.TypeName(control);
             return type.StartsWith("Lever") || type.StartsWith("PushButton");

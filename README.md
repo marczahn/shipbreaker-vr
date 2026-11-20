@@ -137,12 +137,14 @@ menus still work with the controllers.
 | Hold two tools at once | While one hand holds the cutter, the grapple or the demo charges, take another of them with your other hand. Each hand's trigger and buttons work its own tool. |
 | Hand a tool to the other hand | Reach for it with the other hand and squeeze the grip. |
 | Scan with a tool in the other hand | Take the scanner with your free hand. The other tool disappears while you scan; keep its grip squeezed and it comes back when you let go of the scanner. |
-| Hold on and climb | Squeeze the grip of a hand without a tool close to anything: the hand holds on there. Move the hand to pull yourself along, with both hands hand over hand, or with one while the other works a tool. Light parts come to your hand instead; the station and fixed hulls stay put. Let go while moving the hand to push off. |
+| Hold on and climb | Squeeze the grip of a hand without a tool close to anything: the hand holds on there. Move the hand to pull yourself along, with both hands hand over hand, or with one while the other works a tool. Light parts come to your hand instead; the station and fixed hulls stay put. Only really small things (nuts, bolts, debris) are held in a fist; on anything larger, a hoist truck or a console, the hand lies on it. Let go while moving the hand to push off. |
 | Collect something | Hold a thing to collect (cable, circuit board, data cassette, ...) behind your left shoulder (a light buzz tells you are there) and let go: it goes into your backpack, with a rattle and a short buzz. |
 | Push heavy parts | Switch on **Extended physics** in the VR options. Hold on to something fixed with one hand and move a heavy part with the other, or hold two heavy parts and push them apart. The heavier a part, the slower it gets going. |
-| Turn myself on a big part | Set **Climbing** to *Realistic*, hold the same big part with both hands and twist your arms against each other: past the **Climbing dead zone** you turn round the part, the more the heavier it is. With *Simple* you never turn. |
+| Turn myself on a big part | Set **Climbing** to *Realistic*, hold the same big part with both hands and twist your arms against each other: past the **Climbing dead zone** you turn round the part, the more the heavier it is. With *Simple* you never turn. With *Realistic* your body also has inertia: your arms speed it up only with their force (**Arm force**, 500 N each). Taking hold, the hand stops at once; hold it still and the body glides on a little before it stops (**Catch force**, 900 N), or move it back with your body, hand over hand, to keep your speed and push on. |
 | Put out a fire on my suit | Shake each hand hard back and forth, about seven quick strokes, until its flames go out. Left alone, the fire keeps burning. |
-| Work an airlock console or a switch | Look at it and press A or X. The grip only holds on, also there: near a switch your hand closes on it as a fist. |
+| Work an airlock console or a switch | Look at it and press A or X. The grip only holds on, also there: your hand lies on it as on a wall, and closes as a fist only round a lever's grip. |
+| End the shift or use the kiosk | Look at the exit door or the kiosk on the MasterJack and press A or X, with its prompt, as in the flat game. |
+| Press an air conditioner's button | Push it in with your hand: right at the button your fingers stay straight and press it, broken or working. |
 | Use a tool with the left hand | Take it with the left hand. X and Y then do what A and B do, and flying pauses until you let go. |
 | Feel what I do | The controllers vibrate: the cutter's hand while it cuts, the grapple's hand while it holds a part (stronger the closer the part comes to slipping away), and a short buzz for each tether end. |
 
@@ -233,7 +235,11 @@ The ones you are most likely to need:
 - **Thrust mode:** *Simple*, *Standard* or *Realistic*, see [Playing](#playing). *Simple* is the easiest to start
   with if you get lost in free flight.
 - **Climbing** and **Climbing dead zone:** with both hands on the same big part, *Simple* keeps you level, *Realistic*
-  turns you round the part when you twist your arms past the dead zone (4 cm by default).
+  turns you round the part when you twist your arms past the dead zone (3 cm by default). *Realistic* also gives your
+  body inertia, see **Arm force** and **Catch force**.
+- **Glove brake:** how hard a hand gliding along a hull brakes you when you take hold faster than 2 m/s (215 N).
+- **Arm force** and **Catch force:** with *Realistic* climbing, how hard your arms speed your body up (500 N a hand)
+  and how hard a hand held still stops it when you take hold (900 N).
 - **Turn around:** whether the right stick turns you around your head's up (where you look) or your body's, so that
   looking up or down does not tip the turn.
 - **Head height** and **Head sideways:** move your view if you seem to sit too low or off to one side in the suit.

@@ -5,7 +5,7 @@ using UnityEngine;
 namespace ShipbreakerVR
 {
     // Buttons pressed by touch (Raik, 0.29): the big black button of an air conditioner is pushed in with the hand, not
-    // used with A. The tip of the hand (Tip, ahead of the controller along its pointing direction; no index finger yet)
+    // used with A. The tip of the hand (Tip, ahead of the controller along its pointing direction, and the game's fingertips)
     // going PressDepth into the button's face uses its control, as A would, once its control may be used again
     // (VrLever.Ready); out of it again, the next push may use it again. The button sinks in with the hand (Travel at most)
     // and springs back, and a press gives a short click. A button with no control (a broken air conditioner) sinks in and
@@ -68,6 +68,9 @@ namespace ShipbreakerVR
             public readonly HashSet<Button> In = new HashSet<Button>();
             // The button the tip pushes in this frame, if any (VrTouchSound).
             public Button Pushing;
+            // A fingertip or the controller's tip right in front of a button's face (within Approach): the fingers stay
+            // straight there (VrHands).
+            public bool AtButton;
 
             public Tip(VrInput.Hand input) => Input = input;
         }
@@ -95,7 +98,11 @@ namespace ShipbreakerVR
             if (VrXr.IsRunning && VrAim.Active)
                 foreach (var tip in Tips) Touch(tip, pushed);
             else
-                foreach (var tip in Tips) tip.Pushing = null;
+                foreach (var tip in Tips)
+                {
+                    tip.Pushing = null;
+                    tip.AtButton = false;
+                }
             // Each button as far in as the deepest tip, back out when none.
             foreach (var each in pushed) Sinking.Add(each.Key);
             Done.Clear();
@@ -133,9 +140,21 @@ namespace ShipbreakerVR
             return button != null;
         }
 
+        // Raik (0.30.1): right at a button the game's hand keeps its fingers straight, and they push it in: the fingertips
+        // (VrHands, as shown last frame) count as tips as well as the controller's front.
+        public static bool AtButton(VrInput.Hand input)
+        {
+            foreach (var tip in Tips)
+                if (tip.Input == input) return tip.AtButton;
+            return false;
+        }
+
+        private static readonly List<Vector3> Points = new List<Vector3>();
+
         private static void Touch(Tip tip, Dictionary<Button, float> pushed)
         {
             tip.Pushing = null;
+            tip.AtButton = false;
             if (VrClimb.TryGetHold(tip.Input, out _)) { tip.In.Clear(); return; }
             if (!tip.Input.TryGetGripPose(out var gripLocal, out _) || !tip.Input.TryGetAimRotation(out var aimLocal)) return;
             if (!VrToolModels.TrackingToWorld(gripLocal, aimLocal, out var grip, out var aim)) return;
@@ -145,24 +164,34 @@ namespace ShipbreakerVR
                 tip.LookAt = Time.time + LookEvery;
                 Look(tip, at);
             }
+            Points.Clear();
+            Points.Add(at);
+            if (VrHands.TryGetFingerTips(tip.Input, out var fingers)) Points.AddRange(fingers);
             foreach (var button in tip.Near)
             {
                 if (button.Filter == null) continue;
                 var t = button.Filter.transform;
                 // In the button's own axes, from where it rests (not where it sank to).
                 var rest = t.parent != null ? t.parent.TransformPoint(button.Rest) : button.Rest;
-                var local = Quaternion.Inverse(t.rotation) * (at - rest);
-                local = new Vector3(local.x / t.lossyScale.x, local.y / t.lossyScale.y, local.z / t.lossyScale.z) - button.Center;
                 if (!button.OutKnown)
                 {
-                    if (Vector3.Dot(local, button.Out) < 0f) button.Out = -button.Out;
+                    if (Vector3.Dot(Local(t, rest, button, at), button.Out) < 0f) button.Out = -button.Out;
                     button.OutKnown = true;
                 }
                 var scale = Mathf.Abs(Vector3.Dot(t.lossyScale, Abs(button.Out)));
-                var depth = (button.Half - Vector3.Dot(local, button.Out)) * scale;
-                var across = local - button.Out * Vector3.Dot(local, button.Out);
                 var side = Vector3.Scale(button.Extents, Vector3.one - Abs(button.Out)) + Vector3.one * (Beside * VrCamera.WorldScale / Mathf.Max(scale, 1e-4f));
-                var onFace = Mathf.Abs(across.x) <= side.x && Mathf.Abs(across.y) <= side.y && Mathf.Abs(across.z) <= side.z;
+                // The deepest of the points on the face.
+                var onFace = false;
+                var depth = float.MinValue;
+                foreach (var point in Points)
+                {
+                    var local = Local(t, rest, button, point);
+                    var across = local - button.Out * Vector3.Dot(local, button.Out);
+                    if (Mathf.Abs(across.x) > side.x || Mathf.Abs(across.y) > side.y || Mathf.Abs(across.z) > side.z) continue;
+                    onFace = true;
+                    depth = Mathf.Max(depth, (button.Half - Vector3.Dot(local, button.Out)) * scale);
+                }
+                if (onFace && depth > -Approach * VrCamera.WorldScale) tip.AtButton = true;
                 // Coming up to the button, its control is offered to the game already: the game takes a press only for what
                 // it was offered before (with the other hand off the air conditioner, the press did nothing, Raik).
                 if (onFace && depth > -Approach * VrCamera.WorldScale && button.Control != null && button.Control.isActiveAndEnabled)
@@ -182,6 +211,13 @@ namespace ShipbreakerVR
                 tip.In.Add(button);
                 Press(tip, button, depth);
             }
+        }
+
+        // A point in the button's own axes, from its middle at rest.
+        private static Vector3 Local(Transform t, Vector3 rest, Button button, Vector3 point)
+        {
+            var local = Quaternion.Inverse(t.rotation) * (point - rest);
+            return new Vector3(local.x / t.lossyScale.x, local.y / t.lossyScale.y, local.z / t.lossyScale.z) - button.Center;
         }
 
         private static void Press(Tip tip, Button button, float depth)

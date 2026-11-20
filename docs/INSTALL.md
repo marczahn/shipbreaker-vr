@@ -123,6 +123,17 @@ hand instead. Let go while the hand moves to push off; you keep that speed. Whil
 flying pauses. Near an airlock console or a switch the grip holds on too; A or X works it. The row "Hold on and climb"
 in the VR options switches this off.
 
+On large things the hand lies on the surface, its fingers laid on and curling over edges; only small things and a
+lever's grip are held in a fist. At an air conditioner's button the fingers stay straight and press it in.
+
+Taking hold faster than 2 m/s along a surface, the glove glides on and brakes evenly ("Glove brake", 215 N a hand);
+seams take some speed, a step up catches the hand, at a drop-off it lets go. With "Climbing" set to *Realistic* your
+body has inertia: your arms speed it up only with their force ("Arm force"), and taking hold, a hand held still stops
+the body after a short glide ("Catch force"), while a hand moved back along with the body, hand over hand, keeps your
+speed. Too fast to stop within half a meter, the hand is torn off.
+
+With your free hand you can also take hold of the tool in your other hand, anywhere on it.
+
 Things to collect (cables, circuit boards, data cassettes and the like) can be held like any light part. Bring one
 behind your left shoulder, where a light buzz tells you are there, and let go of the grip: it is collected as with A or X, with a short rattle and a buzz in the
 controller. The row "Stow over the shoulder" in the VR options switches this off.

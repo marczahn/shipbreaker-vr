@@ -118,6 +118,9 @@ namespace ShipbreakerVR
                 EnumRow(L("Thrust mode", "Schubmodus"), VrSettings.ThrustMode),
                 EnumRow(L("Climbing", "Hangeln"), VrSettings.ClimbTurning),
                 new SliderRow { Label = L("Climbing dead zone (cm)", "Hangeln-Totzone (cm)"), Entry = VrSettings.ClimbTurnDeadzone, Format = "0", Step = 1f },
+                new SliderRow { Label = L("Glove brake (N)", "Handschuh-Bremse (N)"), Entry = VrSettings.GloveBrake, Format = "0", Step = 5f },
+                new SliderRow { Label = L("Arm force (N)", "Armkraft (N)"), Entry = VrSettings.ArmPull, Format = "0", Step = 10f },
+                new SliderRow { Label = L("Catch force (N)", "Abfangkraft (N)"), Entry = VrSettings.CatchForce, Format = "0", Step = 10f },
                 new SliderRow { Label = L("Hand tilt (°)", "Handneigung (°)"), Entry = VrSettings.HandTilt, Format = "0", Step = 1f },
                 new BoolRow { Label = L("Fit tools in the hand", "Werkzeuge justieren"), Entry = VrToolFit.Adjusting },
                 new SliderRow { Label = L("Head height (cm)", "Kopfhöhe (cm)"), Entry = VrSettings.HeadHeight, Format = "0", Step = 1f },
@@ -309,6 +312,8 @@ namespace ShipbreakerVR
             text.text = value;
         }
 
+        private static bool filling;
+
         public static bool TryRefresh(OptionEntry entry)
         {
             if (!Rows.TryGetValue(entry, out var row)) return false;
@@ -322,19 +327,29 @@ namespace ShipbreakerVR
                     break;
                 case SliderRow s:
                     var slider = t.Field("m_Slider").GetValue<Slider>();
-                    slider.SetValueWithoutNotify(Mathf.Clamp(s.Entry.Value, s.Min, s.Max));
-                    slider.minValue = s.Min;
-                    slider.maxValue = s.Max;
-                    // Whole steps (centimeters): the stick moves by exactly one step, without the game's acceleration,
-                    // and dragging snaps to whole values.
-                    if (s.Step >= 1f)
+                    // Setting the range clamps the slider's value and reports it as a change: a setting above the game
+                    // slider's own range (0 to 1) came back as the new minimum and was saved (Raik, 2026-11-14: the glove
+                    // brake at 100 N instead of 500, full thrust at 5 instead of 10). Changes while filling are not taken.
+                    filling = true;
+                    try
                     {
-                        slider.wholeNumbers = true;
-                        t.Field("m_ControllerSliderStep").SetValue(s.Step);
-                        t.Field("mSpeed").SetValue(s.Step);
-                        t.Field("m_AccelerateWhenHeld").SetValue(false);
+                        slider.maxValue = s.Max;
+                        slider.minValue = s.Min;
+                        // Whole steps (centimeters): the stick moves by exactly one step, without the game's acceleration,
+                        // and dragging snaps to whole values.
+                        if (s.Step >= 1f)
+                        {
+                            slider.wholeNumbers = true;
+                            t.Field("m_ControllerSliderStep").SetValue(s.Step);
+                            t.Field("mSpeed").SetValue(s.Step);
+                            t.Field("m_AccelerateWhenHeld").SetValue(false);
+                        }
+                        slider.SetValueWithoutNotify(Mathf.Clamp(s.Entry.Value, s.Min, s.Max));
                     }
-                    slider.SetValueWithoutNotify(Mathf.Clamp(s.Entry.Value, s.Min, s.Max));
+                    finally
+                    {
+                        filling = false;
+                    }
                     SetText(t.Field("m_ValueText").GetValue<TextMeshProUGUI>(), row.ValueText);
                     break;
                 case ActionRow _:
@@ -376,6 +391,8 @@ namespace ShipbreakerVR
         public static bool TrySlide(OptionEntry entry, float value)
         {
             if (!Rows.TryGetValue(entry, out var row) || !(row is SliderRow s)) return false;
+            // The range being set (TryRefresh): not the player's change.
+            if (filling) return true;
             sliding = entry;
             try
             {
