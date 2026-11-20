@@ -1,0 +1,50 @@
+# What the bay's furnaces and processors cost: frame times with their parts switched off one at a time, then with
+# parts in a furnace. Start it in a shift, floating in the bay with a furnace in view (Test/Testmodus on; with
+# Test/MockRuntime the frame rate is not tied to a headset, so every saving shows in the average).
+# Compare the "Frame time", "Frame steps" (FixedUpdate is physics and the scripts' physics steps) and "Render steps"
+# lines of the stretches in results\bay-cost\log.txt. The scene must not change in between: do not cut or move.
+# The last part (bay feed) changes the shift: loose parts go into the furnace. Use a save that does not matter, or
+# delete everything from "bay feed" on.
+head 0 1.7 0 0 0 0
+wait 2
+bay survey
+stats baseline
+wait 20
+bay flow off
+stats flow off
+wait 20
+bay flow on
+bay triggers off
+stats triggers off
+wait 20
+bay triggers on
+bay shadows off Furnace
+stats furnace light shadows off
+wait 20
+bay lights off Furnace
+stats furnace lights off
+wait 20
+bay lights on
+bay shadows on
+bay effects off Furnace
+stats furnace effects off
+wait 20
+bay effects on
+# Every light's shadows, the sun's too, as the upper limit of what shadows cost here.
+bay shadows off *
+stats all shadows off
+wait 20
+bay shadows on
+stats baseline again
+wait 20
+bay feed 40 Trigger_Furnace
+stats 40 parts in the furnace
+# A furnace part is gone after 10 s (5 s heating up, 5 s dissolving).
+wait 12
+bay survey
+stats after the furnace
+wait 20
+bay survey
+# The last stretch's lines are logged when it ends; they need a moment before the script does.
+stats
+wait 1

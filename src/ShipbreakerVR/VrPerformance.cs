@@ -52,6 +52,11 @@ namespace ShipbreakerVR
         private static float labelScale;
         private static bool labelSharing;
         private static bool labelAlternate;
+        private static string labelTag;
+
+        // A name a test script gives the stretch it is in ('stats', VrTestScript). It is part of the label, so every
+        // stretch gets frame time lines of its own, and they are logged while it is set.
+        public static string Tag { get; set; }
 
         // Where a frame's time goes: the main thread from Update until rendering starts (game logic), rendering on the
         // main thread (which also waits for the headset's next frame, so it fills up to the frame time), and the GPU
@@ -221,7 +226,7 @@ namespace ShipbreakerVR
                 panini.distance.overrideState = off;
             }
             // Logged with the diagnostics, and while the overlay shows, so a test with it on leaves numbers in the log.
-            var logged = VrSettings.Diagnostics.Value || VrSettings.PerformanceOverlay.Value;
+            var logged = VrSettings.Diagnostics.Value || VrSettings.PerformanceOverlay.Value || Tag != null;
             RecordFrame(logged && running && !worldHidden ? Label(followed, inHab) : null);
             VrPerformanceOverlay.Update(running, inHab);
         }
@@ -232,14 +237,15 @@ namespace ShipbreakerVR
             var occlusion = VrSettings.AmbientOcclusion.Value;
             var scale = UnityEngine.XR.XRSettings.eyeTextureResolutionScale;
             var sharing = VrSettings.EyeSharing.Value;
-            if (statsLabel == null || followed != labelCamera || occlusion != labelOcclusion || !Mathf.Approximately(scale, labelScale) || sharing != labelSharing || VrAlternateEyes.Enabled != labelAlternate)
+            if (statsLabel == null || followed != labelCamera || occlusion != labelOcclusion || !Mathf.Approximately(scale, labelScale) || sharing != labelSharing || VrAlternateEyes.Enabled != labelAlternate || Tag != labelTag)
             {
                 labelCamera = followed;
                 labelOcclusion = occlusion;
                 labelScale = scale;
                 labelSharing = sharing;
                 labelAlternate = VrAlternateEyes.Enabled;
-                return $"{(inHab ? "Hab" : $"'{followed.name}'")}, occlusion {occlusion}, {scale:0.00}x, eye sharing {(sharing ? "on" : "off")}{(labelAlternate ? ", alternate eyes" : "")}";
+                labelTag = Tag;
+                return $"{(labelTag != null ? $"{labelTag}: " : "")}{(inHab ? "Hab" : $"'{followed.name}'")}, occlusion {occlusion}, {scale:0.00}x, eye sharing {(sharing ? "on" : "off")}{(labelAlternate ? ", alternate eyes" : "")}";
             }
             return statsLabel;
         }

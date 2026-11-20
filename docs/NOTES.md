@@ -1284,6 +1284,55 @@ Ideas not done yet, for after the measurements:
   low-res transparency, Stop NaNs) could be switched off in the VR camera's frame settings once the render info shows
   they are on and a scan shows no material needs them.
 
+## What the furnaces cost
+Marc's question (2026-11-20): do the physics of the furnaces take a large part of the frame? The mod has no code for
+furnaces, processors or the barge, so whatever they cost is the game's. What follows is read from the game's code and
+the bay scene; **none of it is measured yet**. `tools/vr-tests/bay-cost.txt` measures it (see below).
+
+What is there, per side of the bay (the bay has two sides, each with a furnace and a processor):
+- An acceptor per furnace and processor (`FurnaceVolume`, `ProcessorVolume`, both `SalvageAcceptorVolumeBase`): a
+  trigger box of 17.4 x 17.4 x 4.4 m across the mouth. A collider entering it is looked up to its part; a part (or its
+  group) is taken once.
+- Seven flow volumes (`ForceVolume`, trigger boxes): for each of furnace and processor a gentle one in front of the
+  mouth (10 m deep, strength 1 for the furnace, 3 for the processor), a moderate one in the mouth (4 m, strength 6) and
+  a heavy one behind it (45 m into the tunnel, strength 100), plus one counterflow at the far end of the tunnels
+  (strength -100). Every physics step (50 per second) a volume goes through the bodies inside it and pushes each along
+  its axis with its strength as an acceleration, until the body is as fast as the volume's target: 0.6 m/s here (the
+  volume's velocity of 1 in its own space, at the bay prefab's scale of 0.6). They take bodies of up to 17.5 t (the
+  ship itself is heavier), the player included. Ten more such volumes under "No No No Wrong Way" are inactive.
+- The barge has its own (`BargeForceVolume` and the `BargeSystem`).
+- The tunnels' walls are plain box colliders.
+
+What an object costs once it is accepted:
+- Furnace: the part gets a vaporization component and goes to the `Surface_NoAttach` layer. `VaporizationSystem`
+  heats it for 5 s and dissolves it for 5 s (a material property block per part and frame), then it is destroyed. At
+  the start of dissolving its colliders move to the Ignore Raycast layer, its joints to the rest are removed, and an
+  effect is spawned (at most 2 per frame, 50 at a time). The game also has a `PreFurnaceVolume` that starts a smoke
+  effect per part from the part's mesh points, but the bay scene's data shows none placed (`bay survey` counts them).
+- Processor: the part is marked and destroyed 15 s later by a coroutine of the acceptor.
+- Until then the part stays a full rigidbody that the heavy flow carries into the tunnel and that collides with the
+  walls and with the other parts in there. So the cost is per part and ends 10 or 15 s after it went in; a lot thrown
+  in at once can hitch (effects, joints, destruction), but nothing accumulates.
+
+Idle, the physics are next to nothing: 14 active flow volumes going through empty lists 50 times a second and a
+handful of static trigger boxes. A body floating in a flow volume never falls asleep (a force wakes it), but that is
+one body. What could cost all the time is rendering, not physics:
+- In each furnace sits a spot light (`.../Furnaces/FurnaceRight/Point Light`, `FurnaceLeft/Point Light (1)`: 22
+  degrees, range 90 m, shadows on, rendered every frame, fading only at 100 m) that shines out of the mouth across
+  the bay, so the ship is drawn once more into its shadow map each frame. Shadow casters are 1,100-2,500 of the
+  bay's 3,500-5,100 draw calls (see the performance audit), over 61 lights with shadows in the bay scene alone.
+  `Bild/LampenschattenNurNah` already cuts these two off beyond 20 m.
+- Two visual effects run in the furnaces' mouths all the time (`PRF_FX_Furnace_Idle`).
+
+Measuring (`VrTestBay`, test mode): `bay flow|triggers|shadows|lights|effects off [TEXT]` switches one of these off
+and `on` brings it back; `stats LABEL` starts a stretch whose frame time lines carry the label (`VrPerformance.Tag`),
+so stretches compare line by line: the `FixedUpdate` phase in "Frame steps" is the physics, shadow casters and draw
+calls are in "Render steps". `bay survey` logs the flow volumes with the bodies in them, the acceptors, how many
+rigidbodies are awake, the lights with shadows and the effects' particles. `bay feed N` puts N loose parts into an
+acceptor at once for the cost per part (it changes the shift). Switching off: a flow volume loses its collider, its
+script and its list of bodies (a disabled trigger sends no exit, so the list would be stale); the acceptors lose only
+their colliders, as their coroutines must go on destroying what they took.
+
 ## Roadmap
 1. Inventory – done
 2. Foundation (BepInEx, plugin, camera hook) – done
