@@ -13,6 +13,9 @@ The release is one ZIP laid out like the game folder; users extract it next to `
 - `MANAGED_DIR`: the game's `Shipbreaker_Data/Managed` folder (reference assemblies for the build).
 - `BEPINEX_DIR`: unpacked BepInEx 5.4.23.3 with `winhttp.dll`, `doorstop_config.ini`, `.doorstop_version` and `BepInEx/core`.
 - `DEPLOY_DIR`: output of the Unity helper project (`unity/ShipbreakerVRUnity`) with `plugin/`, `native/`, `subsys/`, `bundles/`.
+- `SUIT_DIR`: the new body's six files (`Anzug-Koerper.suit`, `Anzug-Helm.suit`, `Anzug-Visier.suit`, `Anzug-Farbe.png`,
+  `Anzug-Normal.png`, `Anzug-Maske.png`), made for the mod (Raik's model, weights of its own), not from the game; they
+  go to `BepInEx/plugins/ShipbreakerVR/Anzug/`.
 - License files in the repo: `LICENSE` (the mod, MIT), `DISCLAIMER.md`, `licenses/`, `THIRD-PARTY-NOTICES.md`.
 - Build tools: .NET SDK 8 and `zip`.
 
@@ -24,7 +27,7 @@ The release is one ZIP laid out like the game folder; users extract it next to `
    Unity OpenXR 1.2.8 / XR Management 4.2.1 / Input System 1.0.2 (Unity Companion License),
    Khronos OpenXR loader (Apache-2.0, openxr_loader.dll), XR settings from Raicuparta's ShipbreakerVR (MIT).
    If a component is added or upgraded, fetch its license from the upstream repo at the matching tag.
-3. Build: `MANAGED_DIR=... BEPINEX_DIR=... DEPLOY_DIR=... tools/build-release.sh <version> <out dir>`.
+3. Build: `MANAGED_DIR=... BEPINEX_DIR=... DEPLOY_DIR=... SUIT_DIR=... tools/build-release.sh <version> <out dir>`.
    The script builds the plugin, copies all inputs and licenses and prints the ZIP path.
 4. Verify: `unzip -l` the ZIP and compare its file list with the previous release's ZIP (from the GitHub release or
    wherever the user keeps it). Expect the plugin DLL, `BepInEx/plugins/ShipbreakerVR/licenses/` (the `licenses/`

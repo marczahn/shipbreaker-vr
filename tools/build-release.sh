@@ -6,6 +6,8 @@
 #   MANAGED_DIR  game's Shipbreaker_Data/Managed (reference assemblies for the build)
 #   BEPINEX_DIR  unpacked BepInEx 5.4.23.3 (winhttp.dll, doorstop_config.ini, .doorstop_version, BepInEx/core)
 #   DEPLOY_DIR   output of the Unity helper project: plugin/, native/, subsys/, bundles/
+#   SUIT_DIR     the new body's files (Anzug-Koerper.suit, Anzug-Helm.suit, Anzug-Visier.suit, Anzug-Farbe.png,
+#                Anzug-Normal.png, Anzug-Maske.png); made for the mod, kept outside the repo for their size
 set -euo pipefail
 
 VERSION="${1:?version, e.g. 0.7.0}"
@@ -14,6 +16,11 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MANAGED_DIR="${MANAGED_DIR:?path to Shipbreaker_Data/Managed}"
 BEPINEX_DIR="${BEPINEX_DIR:?path to the unpacked BepInEx 5.4.23.3}"
 DEPLOY_DIR="${DEPLOY_DIR:?path to the Unity helper project output}"
+SUIT_DIR="${SUIT_DIR:?path to the files of the new body}"
+SUIT_FILES=(Anzug-Koerper.suit Anzug-Helm.suit Anzug-Visier.suit Anzug-Farbe.png Anzug-Normal.png Anzug-Maske.png)
+for f in "${SUIT_FILES[@]}"; do
+  [ -f "$SUIT_DIR/$f" ] || { echo "SUIT_DIR lacks $f" >&2; exit 1; }
+done
 
 grep -q "Version = \"$VERSION\"" "$ROOT/src/ShipbreakerVR/Plugin.cs" \
   || { echo "Plugin.cs does not declare version $VERSION" >&2; exit 1; }
@@ -34,6 +41,8 @@ cp "$DEPLOY_DIR/subsys/UnitySubsystemsManifest.json" "$STAGE/Shipbreaker_Data/Un
 find "$DEPLOY_DIR/plugin" -name 'Unity.*.dll' -exec cp {} "$PLUGIN/" \;
 cp "$DEPLOY_DIR/bundles/xrmanager" "$DEPLOY_DIR/bundles/xrmanager.manifest" "$PLUGIN/AssetBundles/"
 cp "$BUILD/ShipbreakerVR.dll" "$PLUGIN/"
+mkdir -p "$PLUGIN/Anzug"  # read by VrSuitLocal
+for f in "${SUIT_FILES[@]}"; do cp "$SUIT_DIR/$f" "$PLUGIN/Anzug/"; done
 cp "$ROOT"/licenses/* "$PLUGIN/licenses/"
 cp "$ROOT/LICENSE" "$ROOT/DISCLAIMER.md" "$PLUGIN/licenses/"
 cp "$ROOT/docs/INSTALL.md" "$ROOT/THIRD-PARTY-NOTICES.md" "$ROOT/DISCLAIMER.md" "$STAGE/"
