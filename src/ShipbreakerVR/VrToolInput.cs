@@ -459,6 +459,7 @@ namespace ShipbreakerVR
             // The demo charges behind the back and their detonator at the hip are one tool of the game's, in two modes.
             // With the charges placed the game's way, the detonator comes into the other hand beside them (VrSecondDetonator).
             if (zone == VrToolBelt.Zone.Detonator && !asTool && VrSecondDetonator.Take(hand.Input)) return true;
+            var detonatorOut = VrChargeByHand.DetonatorOut;
             if (tool == EquipmentController.Equipment.DemoCharge && !VrChargeByHand.Draws(zone == VrToolBelt.Zone.Detonator)) return true;
             if (VrDualTools.Second == tool)
             {
@@ -490,6 +491,10 @@ namespace ShipbreakerVR
                     : zone == VrToolBelt.Zone.DemoCharge || zone == VrToolBelt.Zone.Detonator ? Action.DemoCharge
                     : Action.Scanner)] = true;
             if (logs++ < 60) Plugin.Log.LogInfo($"Tool control: {hand.Name} hand {(taken ? "takes" : "draws")} the {tool}");
+            // Raik (2026-11-20): the charges taken by one hand while the other holds their detonator: that hand keeps
+            // it, as the detonator beside the charges (VrSecondDetonator), instead of it going back to the hip.
+            if (taken && zone == VrToolBelt.Zone.DemoCharge && detonatorOut && other.Vr == VrHand.GameToolHand && other.GripDown)
+                VrSecondDetonator.Keep(other.Input);
             VrHand.TakeGameTool(hand.Vr, tool);
             holsterPulses = 0;
             return true;

@@ -44,6 +44,10 @@ namespace ShipbreakerVR
         private const float HandOverTime = 1f;
 
         private static VrInput.Hand holder;
+        // A hand that held the game's detonator while the other took the charges: it takes the copy once the charges
+        // are in the other hand, within HandOverTime and while its grip stays closed (Keep).
+        private static VrInput.Hand keeping;
+        private static float keepingUntil;
         private static bool pulled;
         private static bool handing;
         private static float handingUntil;
@@ -58,8 +62,8 @@ namespace ShipbreakerVR
         // Whether that hand holds the copy (VrHand.Free, VrControls: the left trigger does not fly then).
         public static bool Holds(VrInput.Hand hand) => holder != null && holder == hand;
 
-        // A hand holds the copy (VrBeltGrapple: none shows at the hip then).
-        public static bool Active => holder != null;
+        // A hand holds the copy, or is about to (VrBeltGrapple: none shows at the hip then).
+        public static bool Active => holder != null || keeping != null;
 
         // The charges go off from the copy's trigger (VrDetonatorLights: blinking red).
         public static bool Detonating => detonating;
@@ -91,6 +95,28 @@ namespace ShipbreakerVR
             return true;
         }
 
+        // From VrToolInput.Draw: the other hand takes the charges while this one holds the game's detonator.
+        public static void Keep(VrInput.Hand hand)
+        {
+            if (!VrXr.IsRunning || !VrAim.Active || VrChargeByHand.Manual || holder != null) return;
+            keeping = hand;
+            keepingUntil = Time.unscaledTime + HandOverTime;
+            if (logs++ < 40) Plugin.Log.LogInfo($"Second detonator: the {hand.Name} hand keeps the detonator while the other takes the charges");
+        }
+
+        private static void TryKeep()
+        {
+            if (keeping == null) return;
+            string why = null;
+            if (!VrXr.IsRunning) why = "VR off";
+            else if (!keeping.Grip.Down) why = "let go";
+            else if (Take(keeping)) why = "";
+            else if (Time.unscaledTime > keepingUntil) why = "the charges did not come into the other hand";
+            if (why == null) return;
+            if (why.Length > 0 && logs++ < 40) Plugin.Log.LogInfo($"Second detonator: the {keeping.Name} hand does not keep the detonator ({why})");
+            keeping = null;
+        }
+
         // The game's charges in that hand, as its tool, held.
         private static bool Charges(VrHand hand) => hand.HoldsTool && hand.Tool == EquipmentController.Equipment.DemoCharge && hand.Input.Grip.Down;
 
@@ -98,6 +124,7 @@ namespace ShipbreakerVR
         public static void Update()
         {
             Settle();
+            TryKeep();
             if (holder == null)
             {
                 Show(false);
@@ -243,6 +270,7 @@ namespace ShipbreakerVR
         private static void Release()
         {
             holder = null;
+            keeping = null;
             handing = false;
             if (detonating && controller != null)
                 try { Game.RemoveSequence.Invoke(controller, null); }

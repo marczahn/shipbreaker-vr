@@ -3052,8 +3052,17 @@ namespace ShipbreakerVR
         // (read here while the game's detonator is out, each bone in that hand's own axes), mirrored for the left hand,
         // with the index and the middle finger on the lever and closing with the trigger (Squeeze). The game shows
         // that pose only while its own detonator is out, so the pose stays as read last; DetonatorFingers is the
-        // pose measured on Raik's install, for a session that has not had the detonator out yet.
-        private static readonly Vector3[] DetonatorFingers = null;
+        // pose measured on Raik's install (2026-11-20, three times alike), for a session that has not had the
+        // detonator out yet: index, middle, ring and little finger root to tip, then the thumb.
+        private static readonly Vector3[] DetonatorFingers =
+        {
+            new Vector3(-0.4657f, 0.1160f, 0.8773f), new Vector3(-0.8578f, 0.0991f, 0.5044f), new Vector3(-0.9695f, 0.1906f, 0.1542f),
+            new Vector3(-0.5182f, -0.1042f, 0.8489f), new Vector3(-0.8603f, -0.0612f, 0.5062f), new Vector3(-0.9904f, 0.0812f, 0.1115f),
+            new Vector3(-0.8875f, -0.1617f, 0.4314f), new Vector3(-0.9536f, 0.0684f, -0.2933f), new Vector3(-0.4528f, 0.2435f, -0.8577f),
+            new Vector3(-0.8483f, -0.3242f, 0.4187f), new Vector3(-0.9519f, -0.0272f, -0.3050f), new Vector3(-0.4649f, 0.1475f, -0.8730f),
+            new Vector3(-0.4940f, 0.6075f, 0.6220f), new Vector3(-0.6423f, 0.0457f, 0.7651f), new Vector3(-0.6777f, -0.0907f, 0.7297f),
+            Vector3.zero, Vector3.zero,
+        };
         private static readonly Vector3[] detonatorBones = new Vector3[17];
         private static bool detonatorBonesRead, detonatorBonesReading;
         private static int detonatorBonesLogs;
