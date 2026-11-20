@@ -2972,6 +2972,9 @@ namespace ShipbreakerVR
         // The hand's own axes: forward along the knuckles (wrist to middle finger), up towards the thumb side (little to
         // index finger), from the wrist. The same on either hand, so a pose relative to one hand mirrors onto the other by
         // negating x (the cross product of the two flips with the mirror).
+        // For VrSecondDetonator: that hand's wrist and axes in the world (Frame).
+        internal static bool HandFrame(bool left, out Vector3 wrist, out Quaternion frame) => Frame(left ? LeftArm : RightArm, out wrist, out frame);
+
         private static bool Frame(Arm arm, out Vector3 wrist, out Quaternion frame)
         {
             wrist = Vector3.zero;

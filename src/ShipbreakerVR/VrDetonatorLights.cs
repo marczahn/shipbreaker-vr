@@ -54,6 +54,7 @@ namespace ShipbreakerVR
         private static readonly Lit InHand = new Lit();
         private static readonly Lit AtHip = new Lit();
         private static readonly Lit Afloat = new Lit();
+        private static readonly Lit Beside = new Lit();
         private static readonly MaterialPropertyBlock Block = new MaterialPropertyBlock();
         private static DemoChargeController controller;
         private static float nextFind;
@@ -72,6 +73,7 @@ namespace ShipbreakerVR
             Paint(InHand, VrLooseTools.DetonatorModel, color);
             Paint(AtHip, VrBeltGrapple.DetonatorCopy, color);
             Paint(Afloat, VrLooseTools.DetonatorAfloat, color);
+            Paint(Beside, VrSecondDetonator.Copy, color);
             if (what != told)
             {
                 told = what;
@@ -92,7 +94,7 @@ namespace ShipbreakerVR
                 return Green;
             }
             var now = Time.unscaledTime;
-            if (State(controller) == DemoChargeState.Detonating)
+            if (State(controller) == DemoChargeState.Detonating || VrSecondDetonator.Detonating)
             {
                 if (now > redUntil)
                 {
@@ -150,6 +152,7 @@ namespace ShipbreakerVR
             Clear(InHand);
             Clear(AtHip);
             Clear(Afloat);
+            Clear(Beside);
             controller = null;
             told = null;
             redUntil = -10f;

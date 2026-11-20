@@ -145,7 +145,8 @@ namespace ShipbreakerVR
             var placed = prop != null && equipment != null && equipment.CanEquip(EquipmentController.Equipment.DemoCharge)
                 && VrHands.DetonatorRest(out inHandAt, out inHandTurn)
                 && VrToolModels.TrackingToWorld(neck + heading * (VrToolBelt.Sided(DetonatorAt) - VrToolBelt.ChargeRef), heading, out wrist, out frame);
-            var shows = placed && !VrLooseTools.DetonatorShowsInHand && !VrLooseTools.DetonatorLoose;
+            // Not while the other hand holds a copy of it beside the charges (VrSecondDetonator).
+            var shows = placed && !VrLooseTools.DetonatorShowsInHand && !VrLooseTools.DetonatorLoose && !VrSecondDetonator.Active;
             if (placed && (detonatorShown == null || detonatorOf != prop) && Time.unscaledTime >= nextDetonator)
             {
                 nextDetonator = Time.unscaledTime + 2f;
@@ -183,10 +184,24 @@ namespace ShipbreakerVR
             if (detonatorShown != null) Object.Destroy(detonatorShown);
             detonatorShown = null;
             detonatorOf = null;
-            var root = new GameObject("ShipbreakerVR detonator at the hip");
+            var root = CopyDetonator(prop, "ShipbreakerVR detonator at the hip", out var parts, out var middle);
+            if (root == null) return;
+            detonatorMiddle = middle;
+            detonatorSize = prop.lossyScale;
+            detonatorShown = root;
+            detonatorOf = prop;
+            Plugin.Log.LogInfo($"Belt grapple: the detonator shows at the hip, {parts} part(s) copied from '{prop.name}', its middle {detonatorMiddle.magnitude / VrCamera.WorldScale * 100f:0} cm from its origin, "
+                + $"hung at ({DetonatorAt.x:0.00}, {DetonatorAt.y:0.00}, {DetonatorAt.z:0.00}) m as its zone is measured");
+        }
+
+        // A copy of the detonator's meshes, its root at the prop's origin and turned as the prop (also for
+        // VrSecondDetonator); middle: the middle of its parts in the root's axes. Made inactive; null without parts.
+        internal static GameObject CopyDetonator(Transform prop, string name, out int parts, out Vector3 middle)
+        {
+            var root = new GameObject(name);
             root.transform.SetPositionAndRotation(prop.position, prop.rotation);
-            var parts = 0;
-            var middle = Vector3.zero;
+            parts = 0;
+            var sum = Vector3.zero;
             foreach (var filter in prop.GetComponentsInChildren<MeshFilter>(true))
             {
                 var source = filter.GetComponent<MeshRenderer>();
@@ -200,21 +215,18 @@ namespace ShipbreakerVR
                 shown.sharedMaterials = source.sharedMaterials;
                 shown.shadowCastingMode = source.shadowCastingMode;
                 shown.receiveShadows = source.receiveShadows;
-                middle += copy.transform.TransformPoint(filter.sharedMesh.bounds.center);
+                sum += copy.transform.TransformPoint(filter.sharedMesh.bounds.center);
                 parts++;
             }
+            middle = Vector3.zero;
             if (parts == 0)
             {
                 Object.Destroy(root);
-                return;
+                return null;
             }
-            detonatorMiddle = root.transform.InverseTransformPoint(middle / parts);
-            detonatorSize = prop.lossyScale;
+            middle = root.transform.InverseTransformPoint(sum / parts);
             root.SetActive(false);
-            detonatorShown = root;
-            detonatorOf = prop;
-            Plugin.Log.LogInfo($"Belt grapple: the detonator shows at the hip, {parts} part(s) copied from '{prop.name}', its middle {detonatorMiddle.magnitude / VrCamera.WorldScale * 100f:0} cm from its origin, "
-                + $"hung at ({DetonatorAt.x:0.00}, {DetonatorAt.y:0.00}, {DetonatorAt.z:0.00}) m as its zone is measured");
+            return root;
         }
 
         // Moves a tool's rest points so that the tool, once it lies on them, has its anchor (in its own axes) at the point

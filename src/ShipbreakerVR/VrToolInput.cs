@@ -173,7 +173,7 @@ namespace ShipbreakerVR
             if (chargesTo != null)
             {
                 if (!chargesTo.GripDown || Time.unscaledTime > chargesUntil) chargesTo = null;
-                else if (Draw(chargesTo, VrToolBelt.Zone.DemoCharge, true)) chargesTo = null;
+                else if (Draw(chargesTo, chargesZone, true)) chargesTo = null;
             }
             // Grip pressed right at the other hand's grip takes the tool out of that hand.
             foreach (var each in Hands)
@@ -457,6 +457,8 @@ namespace ShipbreakerVR
             // With the charges put on by hand, one comes out from behind the back as a thing of its own (VrChargeByHand).
             if (zone == VrToolBelt.Zone.DemoCharge && !asTool && VrChargeByHand.TakesOut(hand.Input)) return true;
             // The demo charges behind the back and their detonator at the hip are one tool of the game's, in two modes.
+            // With the charges placed the game's way, the detonator comes into the other hand beside them (VrSecondDetonator).
+            if (zone == VrToolBelt.Zone.Detonator && !asTool && VrSecondDetonator.Take(hand.Input)) return true;
             if (tool == EquipmentController.Equipment.DemoCharge && !VrChargeByHand.Draws(zone == VrToolBelt.Zone.Detonator)) return true;
             if (VrDualTools.Second == tool)
             {
@@ -501,9 +503,20 @@ namespace ShipbreakerVR
         private static Hand chargesTo;
         private static float chargesUntil;
 
+        private static VrToolBelt.Zone chargesZone = VrToolBelt.Zone.DemoCharge;
+
         public static void TakeCharges(VrInput.Hand input)
         {
             chargesTo = input.IsLeft ? LeftHand : RightHand;
+            chargesZone = VrToolBelt.Zone.DemoCharge;
+            chargesUntil = Time.unscaledTime + 1f;
+        }
+
+        // The same for the detonator (VrSecondDetonator: the charges left the other hand while this one held its copy).
+        public static void TakeDetonator(VrInput.Hand input)
+        {
+            chargesTo = input.IsLeft ? LeftHand : RightHand;
+            chargesZone = VrToolBelt.Zone.Detonator;
             chargesUntil = Time.unscaledTime + 1f;
         }
 
