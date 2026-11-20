@@ -1,0 +1,254 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Reflection;
+using System.Reflection.Emit;
+using System.Text;
+using HarmonyLib;
+using UnityEngine;
+
+namespace ShipbreakerVR
+{
+    // Test mode: what the scripts cost on the main thread, class by class. The frame profile (VrFrameProfile) only
+    // gives Unity's steps as a whole: ScriptRunBehaviourUpdate and ScriptRunBehaviourLateUpdate together take about
+    // 2.4 ms per frame in the bay, for every Update and LateUpdate of the game, its libraries and the mod. 'profile on'
+    // (VrTestScript) puts a timestamp at the start and before every return of each Update, LateUpdate and FixedUpdate
+    // that a loaded script class declares, with a transpiler, and the frame time line (VrPerformance, so name a stretch
+    // with 'stats') gets a "Script steps" line: the totals per message and the classes that take the most, in
+    // milliseconds per frame with their calls per frame. 'profile off', the end of the script and unloading take the
+    // timestamps out again.
+    // - A class's time is its own: what it spends in another timed method it calls (a base class's Update, a manager
+    //   that runs others) counts for that one.
+    // - Only the method's body is timed. Unity's call into it is not (count on some tenths of a microsecond per call,
+    //   which is what the call counts are for), and neither are other patches' prefixes and postfixes on it, the mod's
+    //   own among them.
+    // - The classes come from the script objects loaded at that moment, prefabs included; generic classes are left out
+    //   and named in the log. Run 'profile on' again to add what has been loaded since.
+    // - The timestamps cost time themselves, per call about what "Script profile: ..." logs, so the frame time of a
+    //   profiled stretch is not the game's.
+    internal static class VrTestProfile
+    {
+        static VrTestProfile() => VrSession.OnUnload("script profile", Stop);
+
+        private static readonly string[] Messages = { "Update", "LateUpdate", "FixedUpdate" };
+        private const BindingFlags Declared = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+        private const int Shown = 30;
+        private const double MinShownMs = 0.003;
+        internal const int MaxDepth = 32;
+        private static readonly double TickMs = 1000.0 / Stopwatch.Frequency;
+
+        private static Harmony harmony;
+        private static readonly Dictionary<MethodBase, int> Indexes = new Dictionary<MethodBase, int>();
+        private static string[] names = new string[0];
+        private static int[] messageOf = new int[0];
+        private static long[] ticks = new long[0];
+        private static int[] calls = new int[0];
+
+        // The timed methods that are running, innermost last, with their start and the time spent in timed methods
+        // they called.
+        private static readonly int[] RunningIndex = new int[MaxDepth];
+        private static readonly long[] RunningStart = new long[MaxDepth];
+        private static readonly long[] RunningInner = new long[MaxDepth];
+        private static int depth;
+
+        public static bool Running => harmony != null;
+
+        // From VrTestScript: profile on | off.
+        public static void Execute(string[] words)
+        {
+            var what = words.Length > 1 ? words[1].ToLowerInvariant() : "";
+            if (what == "on") Start();
+            else if (what == "off") Stop();
+            else Plugin.Log.LogWarning($"Test script: 'profile {what}' is neither on nor off");
+        }
+
+        private static void Start()
+        {
+            var types = new HashSet<Type>();
+            foreach (var behaviour in Resources.FindObjectsOfTypeAll<MonoBehaviour>())
+            {
+                if (behaviour == null) continue;
+                for (var type = behaviour.GetType(); type != null && type != typeof(MonoBehaviour); type = type.BaseType)
+                    if (!types.Add(type)) break;
+            }
+            var found = new List<MethodInfo>();
+            var skipped = new List<string>();
+            foreach (var type in types)
+                foreach (var message in Messages)
+                {
+                    MethodInfo method;
+                    try { method = type.GetMethod(message, Declared, null, Type.EmptyTypes, null); }
+                    catch (AmbiguousMatchException) { continue; }
+                    if (method == null || method.IsAbstract || method.ReturnType != typeof(void) || Indexes.ContainsKey(method)) continue;
+                    if (type.IsGenericType || method.GetMethodBody() == null) skipped.Add($"{type.Name}.{message}");
+                    else found.Add(method);
+                }
+
+            var first = names.Length;
+            Array.Resize(ref names, first + found.Count);
+            Array.Resize(ref messageOf, first + found.Count);
+            Array.Resize(ref ticks, first + found.Count);
+            Array.Resize(ref calls, first + found.Count);
+            if (harmony == null) harmony = new Harmony($"{Plugin.Guid}/profile/{typeof(Plugin).Assembly.GetName().Name}");
+            var transpiler = new HarmonyMethod(typeof(VrTestProfile), nameof(AddTimestamps));
+            var watch = Stopwatch.StartNew();
+            var failed = 0;
+            for (var i = 0; i < found.Count; i++)
+            {
+                var method = found[i];
+                names[first + i] = $"{method.DeclaringType.Name}.{method.Name}";
+                messageOf[first + i] = Array.IndexOf(Messages, method.Name);
+                Indexes[method] = first + i;
+                try { harmony.Patch(method, transpiler: transpiler); }
+                catch (Exception e)
+                {
+                    Indexes.Remove(method);
+                    if (failed++ < 5) Plugin.Log.LogWarning($"Script profile: {names[first + i]} cannot be timed: {e.Message}");
+                }
+            }
+            depth = 0;
+            Reset();
+            Plugin.Log.LogInfo($"Script profile: {found.Count - failed} methods of {types.Count} script classes timed ({Indexes.Count} in all, {failed} failed) " +
+                $"in {watch.ElapsedMilliseconds} ms, timing costs about {PairCost():0} ns per call" +
+                (skipped.Count > 0 ? $"; left out: {string.Join(", ", skipped.ToArray())}" : ""));
+        }
+
+        public static void Stop()
+        {
+            if (harmony == null) return;
+            var count = Indexes.Count;
+            harmony.UnpatchSelf();
+            Indexes.Clear();
+            harmony = null;
+            names = new string[0];
+            messageOf = new int[0];
+            ticks = new long[0];
+            calls = new int[0];
+            depth = 0;
+            Plugin.Log.LogInfo($"Script profile: off, {count} methods as they were");
+        }
+
+        // The messages' totals per frame over the given number of frames, then the classes that took the most. Resets.
+        public static string Describe(int frames)
+        {
+            if (!Running || frames <= 0) return null;
+            var text = Describe(frames, names, messageOf, ticks, calls, TickMs);
+            Reset();
+            return text;
+        }
+
+        internal static string Describe(int frames, string[] names, int[] messageOf, long[] ticks, int[] calls, double tickMs)
+        {
+            var text = new StringBuilder();
+            for (var m = 0; m < Messages.Length; m++)
+            {
+                var sum = 0L;
+                var count = 0L;
+                for (var i = 0; i < names.Length; i++)
+                    if (messageOf[i] == m)
+                    {
+                        sum += ticks[i];
+                        count += calls[i];
+                    }
+                text.Append(m > 0 ? ", " : "").Append($"{Messages[m]} {sum * tickMs / frames:0.00} ms in {(double)count / frames:0} calls");
+            }
+            var order = new List<int>();
+            for (var i = 0; i < names.Length; i++)
+                if (ticks[i] * tickMs / frames >= MinShownMs) order.Add(i);
+            order.Sort((a, b) => ticks[b].CompareTo(ticks[a]));
+            text.Append("; most:");
+            for (var n = 0; n < order.Count && n < Shown; n++)
+                text.Append($" {names[order[n]]} {ticks[order[n]] * tickMs / frames:0.000} x{(double)calls[order[n]] / frames:0.#}");
+            return text.ToString();
+        }
+
+        public static void Reset()
+        {
+            Array.Clear(ticks, 0, ticks.Length);
+            Array.Clear(calls, 0, calls.Length);
+        }
+
+        // What one timed call costs on top, in nanoseconds: start and end around nothing.
+        private static double PairCost()
+        {
+            if (ticks.Length == 0) return 0.0;
+            const int Pairs = 20000;
+            var start = Stopwatch.GetTimestamp();
+            for (var i = 0; i < Pairs; i++)
+            {
+                Enter(0);
+                Exit(0);
+            }
+            var cost = (Stopwatch.GetTimestamp() - start) * TickMs * 1e6 / Pairs;
+            Reset();
+            return cost;
+        }
+
+        // Called from the timed methods (AddTimestamps below).
+        public static void Enter(int index) => Enter(index, Stopwatch.GetTimestamp());
+        public static void Exit(int index) => Exit(index, Stopwatch.GetTimestamp());
+
+        internal static void Enter(int index, long now)
+        {
+            // A method that threw never reached its end and stays in the list; a full list starts over.
+            if (depth >= MaxDepth) depth = 0;
+            RunningIndex[depth] = index;
+            RunningStart[depth] = now;
+            RunningInner[depth] = 0;
+            depth++;
+        }
+
+        internal static void Exit(int index, long now)
+        {
+            // Normally the innermost; further out when methods called from this one threw.
+            var at = depth - 1;
+            while (at >= 0 && RunningIndex[at] != index) at--;
+            if (at < 0 || index >= ticks.Length) return;
+            var whole = now - RunningStart[at];
+            ticks[index] += whole - RunningInner[at];
+            calls[index]++;
+            depth = at;
+            if (at > 0) RunningInner[at - 1] += whole;
+        }
+
+        // For the tests: room for the given number of methods, nothing running.
+        internal static void Prepare(int count)
+        {
+            ticks = new long[count];
+            calls = new int[count];
+            depth = 0;
+        }
+
+        internal static long TicksOf(int index) => ticks[index];
+        internal static int CallsOf(int index) => calls[index];
+
+        private static readonly MethodInfo EnterMethod = typeof(VrTestProfile).GetMethod(nameof(Enter), new[] { typeof(int) });
+        private static readonly MethodInfo ExitMethod = typeof(VrTestProfile).GetMethod(nameof(Exit), new[] { typeof(int) });
+
+        private static IEnumerable<CodeInstruction> AddTimestamps(IEnumerable<CodeInstruction> instructions, MethodBase original)
+        {
+            if (original == null || !Indexes.TryGetValue(original, out var index))
+            {
+                foreach (var instruction in instructions) yield return instruction;
+                yield break;
+            }
+            yield return new CodeInstruction(OpCodes.Ldc_I4, index);
+            yield return new CodeInstruction(OpCodes.Call, EnterMethod);
+            foreach (var instruction in instructions)
+            {
+                if (instruction.opcode == OpCodes.Ret)
+                {
+                    // Jumps to the return have to pass the end call.
+                    var load = new CodeInstruction(OpCodes.Ldc_I4, index);
+                    load.labels.AddRange(instruction.labels);
+                    load.blocks.AddRange(instruction.blocks);
+                    instruction.labels.Clear();
+                    instruction.blocks.Clear();
+                    yield return load;
+                    yield return new CodeInstruction(OpCodes.Call, ExitMethod);
+                }
+                yield return instruction;
+            }
+        }
+    }
+}

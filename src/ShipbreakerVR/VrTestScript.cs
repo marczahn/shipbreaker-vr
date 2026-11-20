@@ -38,6 +38,8 @@ namespace ShipbreakerVR
     //   stats [LABEL]                      starts a stretch with frame time lines of its own, named LABEL (they are
     //                                      logged when the next stretch starts and every 30 s); without LABEL it ends
     //   bay ...                            switches parts of the bay's furnaces off and on to measure them (VrTestBay)
+    //   profile on|off                     times every script class's Update, LateUpdate and FixedUpdate; a stretch
+    //                                      named with 'stats' then gets a "Script steps" line (VrTestProfile)
     //   log TEXT                           writes TEXT into the log
     //   quit                               quits the game
     //   restart                            quits the game and starts it again (for changes to the OpenXR setup)
@@ -153,6 +155,7 @@ namespace ShipbreakerVR
             Plugin.Log.LogInfo($"Test {name} {how}");
             VrPerformance.Tag = null;
             VrTestBay.Restore();
+            VrTestProfile.Stop();
             VrTestXr.Reset();
             Glides.Clear();
             Releases.Clear();
@@ -279,6 +282,9 @@ namespace ShipbreakerVR
                     return;
                 case "bay":
                     VrTestBay.Execute(words);
+                    return;
+                case "profile":
+                    VrTestProfile.Execute(words);
                     return;
                 case "quit":
                 case "restart":

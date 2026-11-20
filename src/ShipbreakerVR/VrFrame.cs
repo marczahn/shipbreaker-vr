@@ -130,16 +130,18 @@ namespace ShipbreakerVR
             }
         }
 
-        // What the mod's own steps cost, with Debug/Diagnose or Anzeige/Leistungsanzeige on: every ReportEvery seconds the
-        // steps that took the most, in milliseconds per frame, as "Mod steps" (Raik asked what the mod's features cost
-        // against the game in VR without them). The steps run from Harmony patches inside the game's code are not in it.
+        // What the mod's own steps cost, with Debug/Diagnose or Anzeige/Leistungsanzeige on, and in a test script's 'stats'
+        // stretch: every ReportEvery seconds the steps that took the most, in milliseconds per frame, as "Mod steps" (Raik
+        // asked what the mod's features cost against the game in VR without them). The steps run from Harmony patches
+        // inside the game's code are not in it.
         private const float ReportEvery = 10f;
         private static readonly System.Collections.Generic.Dictionary<string, long> spent = new System.Collections.Generic.Dictionary<string, long>();
         private static int timedFrames;
         private static float nextReport;
 
         private static bool Timed => (VrSettings.Diagnostics != null && VrSettings.Diagnostics.Value)
-            || (VrSettings.PerformanceOverlay != null && VrSettings.PerformanceOverlay.Value);
+            || (VrSettings.PerformanceOverlay != null && VrSettings.PerformanceOverlay.Value)
+            || VrPerformance.Tag != null;
 
         private static void Report()
         {

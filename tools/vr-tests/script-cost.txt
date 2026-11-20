@@ -1,0 +1,17 @@
+# What the scripts cost on the main thread, class by class: the game's, its libraries' and the mod's Update,
+# LateUpdate and FixedUpdate. Start it in a shift (Test/Testmodus on; with Test/MockRuntime the frame rate is not
+# tied to a headset). In results\script-cost\log.txt, the "Script steps" lines give the messages' totals and the
+# classes that take the most, in milliseconds per frame with their calls per frame; "Mod steps" gives the mod's own
+# steps, "Frame steps" Unity's. The first stretch is without the timestamps, for the frame time they cost.
+head 0 1.7 0 0 0 0
+wait 2
+stats without profile
+wait 20
+profile on
+stats scripts
+wait 30
+profile off
+stats without profile again
+wait 15
+stats
+wait 1

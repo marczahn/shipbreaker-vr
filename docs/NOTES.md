@@ -1359,6 +1359,28 @@ The 50 physics steps a second are no cause of visible stutter at 72 or 90 frames
 interpolation on for every part that moves on its own (`HierarchyParent`, for bodies below the kinematic mass), and
 for the player's body.
 
+## What the scripts cost
+`VrFrameProfile` gives Unity's steps as a whole. In the bay the scripts' `Update` and `LateUpdate`
+(`Update.ScriptRunBehaviourUpdate`, `PreLateUpdate.ScriptRunBehaviourLateUpdate`) take about 1.2 ms each per frame, of
+5.7 ms game logic, and nothing said which classes that is: the game's, its libraries' (UI, Cinemachine, HDRP's light
+and decal components, the sound engine) or the mod's. `VrTestProfile` (test mode, script command `profile on|off`,
+example in `tools/vr-tests/script-cost.txt`) times every `Update`, `LateUpdate` and `FixedUpdate` a loaded script class
+declares: a transpiler puts a call with a timestamp at the method's start and before each return. A stretch named with
+`stats` then gets a `Script steps` line with the three messages' totals and the classes that take the most, in
+milliseconds per frame and calls per frame.
+- A class's time is its own; time in another timed method it calls counts for that one.
+- Only the method bodies are timed: Unity's call into each method is not (the call counts are there to estimate it),
+  and neither are prefixes and postfixes other patches put on the method, the mod's among them.
+- Generic classes are left out and named in the `Script profile: ...` line, which also gives what the timestamps cost
+  per call. The frame time of a profiled stretch is therefore not the game's; the example script has a stretch
+  without the timestamps before and after.
+
+In a `stats` stretch the `Mod steps` line (`VrFrame`, the mod's own steps per frame) is now logged as well, and
+`Render info` gives Unity's threading mode (`SystemInfo.renderingThreadingMode`) and the number of job workers next to
+`multithreaded rendering`, which reads False in this game although `Player.log` says `GfxDevice: creating device
+client; threaded=1`: `boot.config` asks for graphics jobs, and `graphicsMultiThreaded` is only true for the plain
+render thread mode.
+
 ## Roadmap
 1. Inventory – done
 2. Foundation (BepInEx, plugin, camera hook) – done

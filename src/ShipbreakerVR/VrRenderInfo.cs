@@ -50,7 +50,7 @@ namespace ShipbreakerVR
             var renderGraph = pipeline != null && RenderGraphEnabled != null ? RenderGraphEnabled.Invoke(pipeline, null) : null;
             Plugin.Log.LogInfo($"Render info: {SystemInfo.processorType} ({SystemInfo.processorCount} threads), {SystemInfo.systemMemorySize} MB RAM, " +
                 $"{SystemInfo.graphicsDeviceType}, render graph {renderGraph ?? "unknown"}, texture array slices {TextureXR.slices}, " +
-                $"multithreaded rendering {SystemInfo.graphicsMultiThreaded}");
+                $"multithreaded rendering {SystemInfo.graphicsMultiThreaded} (threading mode {SystemInfo.renderingThreadingMode}), job workers {Unity.Jobs.LowLevel.Unsafe.JobsUtility.JobWorkerCount}");
             Plugin.Log.LogInfo($"Render info: target frame rate {Application.targetFrameRate}, vSync {QualitySettings.vSyncCount}, max queued frames {QualitySettings.maxQueuedFrames}, " +
                 $"fixed step {Time.fixedDeltaTime * 1000f:0.0} ms, max step {Time.maximumDeltaTime * 1000f:0} ms, physics auto sync {Physics.autoSyncTransforms}, " +
                 $"incremental GC {GarbageCollector.isIncremental}, GC mode {GarbageCollector.GCMode}, quality level {QualitySettings.GetQualityLevel()} ({QualitySettings.names[QualitySettings.GetQualityLevel()]}), " +

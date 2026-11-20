@@ -335,6 +335,8 @@ namespace ShipbreakerVR
                     if (steps != null) Plugin.Log.LogInfo($"Frame steps ({statsLabel}), main thread per frame: {steps}");
                     var render = VrRenderProfile.Describe(cullFrames);
                     if (render != null) Plugin.Log.LogInfo($"Render steps ({statsLabel}), main thread per frame: {render}");
+                    var scripts = VrTestProfile.Describe(cullFrames);
+                    if (scripts != null) Plugin.Log.LogInfo($"Script steps ({statsLabel}), main thread per frame: {scripts}");
                 }
             }
             frames.Clear();
@@ -354,6 +356,7 @@ namespace ShipbreakerVR
             gpuEyeCount = 0;
             VrFrameProfile.Reset();
             VrRenderProfile.Reset();
+            if (VrTestProfile.Running) VrTestProfile.Reset();
         }
 
         // Share of frames that took 1.4 to 4 intervals of the given refresh rate: missed by the GPU, which the runtime
