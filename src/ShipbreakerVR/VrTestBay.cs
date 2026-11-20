@@ -20,7 +20,7 @@ namespace ShipbreakerVR
     //   bay triggers on|off [TEXT]    the acceptors' trigger boxes: nothing is accepted while they are off
     //   bay shadows on|off [TEXT]     the shadows of lights
     //   bay lights on|off [TEXT]      lights as a whole
-    //   bay effects on|off [TEXT]     visual effects (VFX Graph)
+    //   bay effects on|off [TEXT]     visual effects (VFX Graph): paused and not drawn
     //   bay feed N [TEXT]             moves up to N loose parts into the nearest acceptor. This changes the shift
     //                                 (the parts are salvaged or lost), so use a save that does not matter
     // TEXT narrows a command to objects whose path contains it (see 'bay survey' for names), * means all. Without it,
@@ -137,8 +137,22 @@ namespace ShipbreakerVR
                         if (Matches(light, text) && Off(light, undo)) names.Add(light.name);
                     break;
                 case "effects":
+                    // Paused and not drawn, not disabled: a disabled effect comes back empty, and the furnaces' gas
+                    // clouds then stayed empty (nothing sends them their start event a second time).
                     foreach (var effect in UnityEngine.Object.FindObjectsOfType<VisualEffect>())
-                        if (Matches(effect, text) && Off(effect, undo)) names.Add(effect.name);
+                    {
+                        if (!effect.enabled || effect.pause || !Matches(effect, text)) continue;
+                        var renderer = effect.GetComponent<Renderer>();
+                        var drawn = renderer != null && renderer.enabled;
+                        effect.pause = true;
+                        if (drawn) renderer.enabled = false;
+                        undo.Add(() =>
+                        {
+                            if (effect != null) effect.pause = false;
+                            if (drawn && renderer != null) renderer.enabled = true;
+                        });
+                        names.Add(effect.name);
+                    }
                     break;
             }
             return names;
@@ -224,7 +238,7 @@ namespace ShipbreakerVR
                 Plugin.Log.LogInfo($"  {light.type} '{VrUtil.Path(light.transform)}': range {light.range:0} m, intensity {light.intensity:0}{away}{shadows}");
             }
 
-            var effects = UnityEngine.Object.FindObjectsOfType<VisualEffect>().Where(e => e.enabled).OrderByDescending(e => e.aliveParticleCount).ToList();
+            var effects = UnityEngine.Object.FindObjectsOfType<VisualEffect>().Where(e => e.enabled && !e.pause).OrderByDescending(e => e.aliveParticleCount).ToList();
             text.Length = 0;
             foreach (var effect in effects.Take(Listed)) text.Append($", '{effect.name}' {effect.aliveParticleCount}");
             Plugin.Log.LogInfo($"Bay survey: {effects.Count} visual effects with {effects.Sum(e => (long)e.aliveParticleCount)} particles{text}");

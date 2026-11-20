@@ -1287,7 +1287,7 @@ Ideas not done yet, for after the measurements:
 ## What the furnaces cost
 Marc's question (2026-11-20): do the physics of the furnaces take a large part of the frame? The mod has no code for
 furnaces, processors or the barge, so whatever they cost is the game's. What follows is read from the game's code and
-the bay scene; **none of it is measured yet**. `tools/vr-tests/bay-cost.txt` measures it (see below).
+the bay scene; the idle cost is measured (below, "First run"), the cost per accepted part is not yet.
 
 What is there, per side of the bay (the bay has two sides, each with a furnace and a processor):
 - An acceptor per furnace and processor (`FurnaceVolume`, `ProcessorVolume`, both `SalvageAcceptorVolumeBase`): a
@@ -1331,7 +1331,33 @@ calls are in "Render steps". `bay survey` logs the flow volumes with the bodies 
 rigidbodies are awake, the lights with shadows and the effects' particles. `bay feed N` puts N loose parts into an
 acceptor at once for the cost per part (it changes the shift). Switching off: a flow volume loses its collider, its
 script and its list of bodies (a disabled trigger sends no exit, so the list would be stale); the acceptors lose only
-their colliders, as their coroutines must go on destroying what they took.
+their colliders, as their coroutines must go on destroying what they took. Effects are paused and not drawn: disabled
+and enabled again, the furnaces' gas clouds stayed empty for the rest of the first run.
+
+First run (2026-11-20, `bay-cost.txt` without the feed part, mock runtime so the frame rate is not tied to a headset,
+1.15x, eye sharing on, free play with a Mackerel in the bay, standing at the Hab 150 m from the furnaces and looking
+at the bay's side wall, 20 s per stretch, about 1,400 frames each). The main thread set the pace: 13.5-13.9 ms per
+frame, the same stretch measured twice differed by 0.4 ms, so smaller differences are noise.
+- **All of the physics take 0.23 ms per frame**, 1.7 % of it (`FixedUpdate` phase; `PhysicsFixedUpdate` 0.17 ms at
+  0.69 steps per frame, so 0.25 ms per step). With the 14 flow volumes off: 0.22 ms. With the acceptors' triggers
+  off: 0.25 ms. So the furnaces' physics cost nothing measurable while nothing is in them. The bay held 181
+  rigidbodies, 160 of them kinematic, 1 awake, and no body in any flow volume.
+- The furnaces' lights: no difference with their shadows off (13.7 ms) or the lights off (13.6 ms). Marc plays with
+  `Bild/LampenschattenNurNah`, so every lamp's shadows already ended at 24 m (20 m at world scale 1.2) and these
+  two were 146 and 153 m away.
+- The furnaces' two gas clouds hold 770 of the bay's 1,040 particles. Without them `PostLateUpdate.VFXUpdate` went
+  from 0.22 to 0.17 ms; the frame time did not change beyond noise. What they cost the GPU up close is not in these
+  numbers: the frame was limited by the main thread throughout.
+- All shadows off, the sun's included: 12.9 ms, 0.6-1.0 ms less. Shadow casters went from 1,300 to 0 and draw calls
+  from 4,110 to 3,490 (HDRP's render 6.4-6.6 to 5.8 ms, its Submits 2.0 to 1.6 ms). With the lamps already limited,
+  those 1,300 casters are nearly all the sun's.
+- Where the 13.7 ms go instead: HDRP's render 6.5 ms, the ECS simulation group 1.65, the scripts' `Update` 1.2 and
+  `LateUpdate` 1.2, the ECS presentation group 0.5 ms.
+Not measured yet: parts in a furnace (`bay feed`), and the view from close to a furnace mouth in the headset, where
+the GPU could be the limit.
+The 50 physics steps a second are no cause of visible stutter at 72 or 90 frames a second either: the game switches
+interpolation on for every part that moves on its own (`HierarchyParent`, for bodies below the kinematic mass), and
+for the player's body.
 
 ## Roadmap
 1. Inventory – done
