@@ -248,7 +248,9 @@ namespace ShipbreakerVR
             holdingAtHide = holding;
             // Also while the hands are the game's (the pause menu, Raik 2026-11-19: opening it, the hand suddenly held the
             // charges): the game's arm is in view in VR then too, and the pieces it carries unheld would show.
-            HideProps(VrXr.IsRunning && hand != null && holding != EquipmentController.Equipment.DemoCharge && FindArm(hand));
+            var shown = VrXr.IsRunning && hand != null && FindArm(hand);
+            HideProps(shown && holding != EquipmentController.Equipment.DemoCharge,
+                shown && holding == EquipmentController.Equipment.DemoCharge && VrChargeByHand.DetonatorMode);
 
             // The charge in the left hand: VrHands moves it over to that hand. The tool hand switches back to the right one
             // only once the charge is gone; a right hand that takes the charge over holds its grip.
@@ -326,7 +328,7 @@ namespace ShipbreakerVR
         private static float stowingSince = -1f;
         private static readonly List<Renderer> hiddenProps = new List<Renderer>();
         private static bool propsHidden;
-        private static int propLogs;
+        private static int propLogs, chargeOnlyLogs;
         // The charge's renderers on the hand bone (chargesOn), also those not showing yet.
         private static readonly List<Renderer> chargePieces = new List<Renderer>();
         private static Transform chargesOn;
@@ -339,9 +341,14 @@ namespace ShipbreakerVR
         // the grip lets go instead of riding along through the stow animation. They come back when the charge is drawn.
         // Checked every frame while hidden: at the start no piece was showing yet when they were first hidden, and the
         // charge appeared in the hand later anyway.
-        private static void HideProps(bool hide)
+        // The charge alone (chargeOnly) while the tool is out as the detonator (Raik, 2026-11-20, with Automatisch: a
+        // charge let go by the hand that held the charges, the hand with the detonator beside them gets the game's
+        // detonator, VrSecondDetonator; a charge showed in that hand for a frame and then jumped to the other). The game
+        // switches between the two on the hand with its animation, a few frames after the mode changed, and the charge
+        // still showed meanwhile.
+        private static void HideProps(bool hide, bool chargeOnly = false)
         {
-            if (!hide)
+            if (!hide && !chargeOnly)
             {
                 if (!propsHidden) return;
                 propsHidden = false;
@@ -363,13 +370,29 @@ namespace ShipbreakerVR
             var hid = new List<string>();
             foreach (var renderer in chargePieces)
             {
-                if (renderer == null || !renderer.enabled) continue;
+                if (renderer == null) continue;
+                // With the charge alone hidden, the detonator's pieces hidden before come back.
+                if (!hide && !OnChargeProp(renderer.transform))
+                {
+                    if (hiddenProps.Remove(renderer)) renderer.enabled = true;
+                    continue;
+                }
+                if (!renderer.enabled) continue;
                 renderer.enabled = false;
                 if (!hiddenProps.Contains(renderer)) hiddenProps.Add(renderer);
                 hid.Add(renderer.name);
             }
-            if (hid.Count > 0 && propLogs++ < 10)
-                Plugin.Log.LogInfo($"Tool in hand: hid {hid.Count} renderer(s) on the hand: {string.Join(", ", hid)} ({(holdingAtHide == EquipmentController.Equipment.None ? "nothing" : holdingAtHide.ToString())} held)");
+            if (hid.Count > 0 && (hide ? propLogs++ : chargeOnlyLogs++) < 10)
+                Plugin.Log.LogInfo($"Tool in hand: hid {hid.Count} renderer(s) on the hand: {string.Join(", ", hid)} "
+                    + (hide ? $"({(holdingAtHide == EquipmentController.Equipment.None ? "nothing" : holdingAtHide.ToString())} held)" : "(the charge alone: the tool is out as the detonator)"));
+        }
+
+        // A piece of the charge itself (PRF_Demo_Charge), not of the detonator.
+        private static bool OnChargeProp(Transform transform)
+        {
+            for (var t = transform; t != null && t != armTip; t = t.parent)
+                if (t.name.StartsWith("PRF_Demo_Charge", System.StringComparison.Ordinal)) return true;
+            return false;
         }
 
         // Only the charge's own pieces (SM_Props_Demo_Charge, PRF_Tool_ExplosiveChargeDetonator), not whatever else

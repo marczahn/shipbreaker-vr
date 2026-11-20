@@ -110,11 +110,15 @@ namespace ShipbreakerVR
         }
 
         // The game's charges are out in their other mode: the hand shows their detonator (VrLooseTools, VrToolFit).
-        public static bool DetonatorOut
+        public static bool DetonatorOut => ChargesInHand() && DetonatorMode;
+
+        // The game's tool is in its detonator mode, whether or not it is drawn yet (VrToolModels: the charge on the hand
+        // stays hidden then).
+        public static bool DetonatorMode
         {
             get
             {
-                if (controller == null || !ChargesInHand()) return false;
+                if (controller == null) return false;
                 var state = State(controller);
                 return state == DemoChargeState.Detonation || state == DemoChargeState.Detonating || state == DemoChargeState.DetonationFailed;
             }
