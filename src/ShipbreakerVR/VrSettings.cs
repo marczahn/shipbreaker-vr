@@ -20,6 +20,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> SeparateEyeTextures;
         public static ConfigEntry<bool> StartVrAtLaunch;
         public static ConfigEntry<bool> EyeSharing;
+        public static ConfigEntry<bool> ParallelTransformRead;
         public static ConfigEntry<bool> AlternateEyes;
         public static ConfigEntry<bool> NoVrUnfitEffects;
         public static ConfigEntry<bool> PerformanceOverlay;
@@ -116,6 +117,9 @@ namespace ShipbreakerVR
                 ("Works out what is in view and draws the shadows once for both eyes instead of once per eye. Saves processor time, most in the bay. Switch it off if objects appear late or are missing at the edge of one eye, or if shadows flicker or differ between the eyes.",
                     "Ermittelt einmal für beide Augen, was im Blickfeld ist, und zeichnet die Schatten nur einmal statt für jedes Auge. Spart Prozessorzeit, am meisten im Dock. Ausschalten, wenn am Rand eines Auges Objekte zu spät erscheinen oder fehlen, oder wenn Schatten flackern oder zwischen den Augen verschieden aussehen."),
                 "Tasten/AugenTeilen (F10) switches it while the game runs.");
+            ParallelTransformRead = Bind("Rendering", "LagenParallelLesen", true,
+                ("Reads where the ship's parts are on several processor cores at once instead of one after the other, each frame. Saves processor time, more with many loose parts. Switch it off if parts appear in the wrong place or the game misbehaves with it.",
+                    "Liest jeden Frame auf mehreren Prozessorkernen gleichzeitig aus, wo die Teile des Schiffs sind, statt nacheinander. Spart Prozessorzeit, mit vielen losen Teilen mehr. Ausschalten, wenn Teile an der falschen Stelle erscheinen oder das Spiel damit Probleme macht."));
             AlternateEyes = Bind("Rendering", "AugenAbwechselnd", true,
                 ("Draws only one eye per frame, the left and the right in turn; the other eye shows its last image, turned to where you look now. Saves about half of the rendering work on the processor. Fast-moving things (tools, hands, flying parts) can flicker slightly, because the eyes see them at different moments.",
                     "Zeichnet pro Bild nur ein Auge, abwechselnd links und rechts; das andere Auge zeigt sein letztes Bild, gedreht auf die aktuelle Blickrichtung. Spart etwa die Hälfte der Render-Arbeit des Prozessors. Schnell bewegte Dinge (Werkzeug, Hände, fliegende Teile) können leicht flimmern, weil die Augen sie zu verschiedenen Zeitpunkten sehen."),

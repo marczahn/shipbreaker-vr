@@ -1284,6 +1284,54 @@ Ideas not done yet, for after the measurements:
   low-res transparency, Stop NaNs) could be switched off in the VR camera's frame settings once the render info shows
   they are on and a scan shows no material needs them.
 
+## The parts' transforms, read on the job threads
+`VrTransformRead` (`[Rendering] LagenParallelLesen`, on by default; no row in the options, it is a switch for when
+something goes wrong). Of the game's about 340 entity systems, `LynxCopyTransformsSystem` takes the most main thread
+time: 0.6 ms per frame in a quiet bay, 1.2-1.4 ms with hundreds of loose parts (measured with the script profile of
+the furnace test branch, each system around Unity's `Update` of it). Each frame it reads position and rotation of the
+`Transform` of every entity with `LynxCopyTransformFromGameObject` (860-940 in a fresh bay, 1,500-1,750 after
+breaking a ship up), one after the other on the main thread and whether it moved or not
+(`EntityQuery.ToRigidTransformArray`, an addition of the game's to Unity's hybrid assembly), and then starts a Burst
+job that writes them to the entities. A transpiler swaps that one call for `VrTransformRead.Read`, which lets a
+read-only transform job (`IJobParallelForTransform.ScheduleReadOnly`) read them on all job threads while the main
+thread waits and works along. The result is the same array in the same order, so the game's job runs unchanged.
+
+What it took to make that a gain in a busy bay too (three versions, each measured against the game's read in the same
+shift, option on, off, on):
+- The job needs a `TransformAccessArray`. Unity's own `GetTransformAccessArray` builds one anew on every call in this
+  version of Entities. Building it costs 2-3 ms for 1,600 transforms, more than the read it saves.
+- The first version rebuilt it when the order version of `Transform` moved. That is raised for every entity with a
+  Transform that is added, removed or changes chunk, not only for these, and in a busy bay it moves every frame:
+  1.22 ms per frame against the game's 0.74.
+- The second compared the query's entities with the ones collected and rebuilt only on a difference. In a busy bay
+  the query really differs in two of five frames or more (parts are split, vaporized, taken by furnaces, or just
+  change chunk, which changes the order): 1.83 and 0.77 ms against the game's 1.39.
+- Now the array is kept in step (`SlotMap`): entities that left are removed (the last entry moves into the gap), new
+  ones are added at the end, and each slot knows where its entity stands in the query's order, which is where the
+  job writes its result. A few slots per frame are checked for still holding their entity's Transform.
+
+Measured (2026-11-21, free play, mock runtime, 1.15x; ms per frame on the main thread; each row is one shift, the
+loose rows with 250 parts taken off a ship and pushed, about 360 loose parts and 700 rigidbodies awake):
+
+| | game's read | on the job threads |
+|---|---|---|
+| `LynxCopyTransformsSystem`, quiet bay, 863 transforms | 0.60 | 0.21 |
+| `Update.SimulationSystemGroup`, quiet bay | 1.69 | 1.35 |
+| `LynxCopyTransformsSystem`, loose parts, 1,530-1,560 transforms | 1.22 | 0.68-0.69 |
+| `Update.SimulationSystemGroup`, loose parts | 4.38 | 3.71-3.74 |
+
+- So 0.35-0.4 ms per frame in a quiet bay (of 13.5) and 0.5-0.65 ms with loose parts (of 21). The frame time of the
+  quiet bay followed (13.4-13.5 against 13.8 ms); with loose parts the scene changes too much between the stretches
+  to read it off the frame time.
+- Of the 0.68 ms with loose parts, reading is 0.18-0.21 ms and looking for changes 0.44 ms: in that shift the
+  query's order changed in every frame (only 10 transforms added and 37 removed over 600 frames, so mostly entities
+  changing chunk). `SlotMap.Sync` looks every entity up in a dictionary then; an array by entity index would make
+  that cheaper and is left for later. In the quiet bay looking is 0.04 ms.
+- In test mode the result is compared with the game's own read every 120 frames: no difference in any check of the
+  runs, quiet or busy. `Transform read: ...` in the log every 600 frames gives the counts and times.
+- Not tested in a headset yet, nor over a whole shift or a change of shift (a new entity world starts everything
+  anew).
+
 ## Roadmap
 1. Inventory – done
 2. Foundation (BepInEx, plugin, camera hook) – done
