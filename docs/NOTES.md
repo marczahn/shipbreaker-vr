@@ -1398,6 +1398,55 @@ In a `stats` stretch the `Mod steps` line (`VrFrame`, the mod's own steps per fr
 client; threaded=1`: `boot.config` asks for graphics jobs, and `graphicsMultiThreaded` is only true for the plain
 render thread mode.
 
+## What loose parts cost
+Whether the physics of loose parts is what fills the main thread (Marc's guess, 2026-11-21). Test mode can now make
+the scene: `bay break N` takes N parts off the ship the way the game does it (`RemoveHierarchyJointsEvent`, which
+`BreakableJointComponent` and the vaporization post too: the hierarchy drops every joint of the part), `bay push`
+sets loose parts moving and `bay bodies` counts them. `VrTestProfile` also times the physics messages of script
+classes (`OnCollision...`, `OnTrigger...`) and every system of the entity worlds by its class, with prefixes and
+postfixes on `ComponentSystem.Update`, `JobComponentSystem.Update` and `SystemBase.Update`: that includes the wait for
+the jobs a system depends on, and not the jobs' own work on other threads. Example: `tools/vr-tests/busy-bay.txt`.
+
+Run in free play (0.32.0 with the profile and the lighter hands, mock runtime, 1.15x, eye sharing on, standing at the
+Hab, both hands empty; main thread, ms per frame; 196 methods and 346 systems timed at 61 ns per call, which changed
+neither the frame time nor a step of the idle scene):
+
+| | idle | 87-89 loose parts awake | 440-550 awake | 670-680 awake |
+|---|---|---|---|---|
+| frame time | 13.6 | 16.4 | 18.2 | 17.4 |
+| `FinishFrameRendering` (HDRP on the main thread) | 6.6 | 6.8 | 7.0 | 6.5 |
+| ECS simulation and presentation groups | 2.1 | 3.0 | 4.3 | 4.3 |
+| the systems themselves (339-342 per frame) | 2.3 | 3.2 | 4.5 | 4.9 |
+| scripts, `Update` and `LateUpdate` steps | 2.3 | 2.7 | 2.6 | 2.2 |
+| `PhysicsFixedUpdate` | 0.18 | 0.92 | 1.17 | 0.87 |
+| interpolation (`PhysicsResetInterpolatedTransformPosition`, `PreUpdate.PhysicsUpdate`) | below 0.2 | below 0.4 | 0.48 | 0.59 |
+| `ScriptRunBehaviourFixedUpdate` | below 0.1 | below 0.2 | below 0.2 | 0.56 |
+| draw calls | 4,065 | 5,200 | 3,549 | 3,748 |
+
+- The bay holds 765 parts on 183 rigidbodies, 160 of them kinematic, one awake. The first 50 parts taken off left 89
+  loose bodies, the next 200 made it 546, and at the end every part was off (677 loose bodies). About 100 parts were
+  gone by then (furnaces, processors). The parts were pushed at up to 2 m/s and drifted apart and out of sight, so
+  the two larger stages have fewer draw calls than the idle bay.
+- Physics is not the large item: 0.2 ms idle, 1.0 ms with 90 parts still close to the ship and each other, 1.7 ms
+  with 500 drifting freely, interpolation included. The cost goes with contacts more than with the number of bodies:
+  90 parts next to the ship cost nearly what 500 apart did. A pile of parts that lie against each other was not
+  measured and will cost more per part. Loose parts do not come to rest: 670 of 677 were still awake a minute later,
+  nothing slows them in the bay.
+- The game's systems grow more than the physics: from 2.3 to 4.5-4.9 ms. The largest is
+  `LynxCopyTransformsSystem`, 0.60 ms idle and 1.01-1.07 ms with the parts loose; it reads the position and rotation
+  of every entity's `Transform` on the main thread each frame, moving or not (`EntityQuery.ToRigidTransformArray`),
+  before its job writes them to the entities. Then `FreezableProximityHandlerSystem` (0 to 0.24),
+  `ObjectTrackerSystem` (0.05 to 0.19), `VitalitySystem` (0.11 to 0.17), `UpdateClusterDataSystem` (to 0.13),
+  `UpdateHierarchyParentsSystem` (0.45 in the last stage, in the fixed step) and `ECSGraphCommandBufferSystem`
+  (0.14); the other 330 take 0.03 ms or less each and about 1.5 ms together.
+- Scripts: `Update` 0.9-1.07 ms in about 1,000 calls, `LateUpdate` 0.8-1.1 ms of which the VR camera's (the mod's
+  late steps, the hands among them) is 0.75-1.06. The physics messages are nothing: 0.03 ms in 4 calls per frame.
+- Rendering on the main thread stays the largest item in every stage (6.4-7.0 ms, 37-48 % of the frame).
+- The mod: 1.13-1.37 ms per frame, the hands 0.70-0.84 (1.1 before the lighter hands, in the same pose).
+- The last stretch of the script, without the timestamps, is no comparison: it has no physics steps and no hands
+  (0.01 ms), so the game no longer ran the shift by then (not looked into; the idle stretch with and without the
+  timestamps is the comparison).
+
 ## Roadmap
 1. Inventory – done
 2. Foundation (BepInEx, plugin, camera hook) – done
