@@ -229,7 +229,8 @@ X opens the exit from anywhere. Look at a poster from close by and the triggers 
 stick can make you feel sick.
 
 **Own posters:** put PNG or JPG files into `BepInEx\ShipbreakerVR-Poster` in the game folder (the folder appears after
-your first visit to the station) and they join the pictures for the station's posters.
+your first visit to the station) and they join the pictures for the station's posters, once LYNX has allowed them by a
+message in the station's inbox after the tutorial shift.
 
 **Keyboard:** F3 turns VR on and off, F4 puts the view back in front of you. Both keys can be changed in the config file (section `[Tasten]`).
 

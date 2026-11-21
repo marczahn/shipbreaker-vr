@@ -36,6 +36,9 @@ namespace ShipbreakerVR
         // Pulled this long it comes off; a poster, light and only stuck on, sooner (Raik, 2026-11-11: 2 s and 1 s, from 3 s).
         private const float Hold = 2f;
         private const float PosterHold = 1f;
+        // An AI node sits fast: it takes a while, a little different each time (Raik, 2026-11-20: 5 to 6 s, at random).
+        private const float AiNodeHoldLeast = 5f;
+        private const float AiNodeHoldMost = 6f;
         private const float Fly = 0.18f;
         private const float Largest = 2.5f;
         private const float Mass = 4f;
@@ -52,6 +55,8 @@ namespace ShipbreakerVR
             public Vector3 Normal;
             public Vector3 Surface;
             public float Pulled;
+            // How long it has to be pulled to come off (HoldFor), chosen as the hand takes hold.
+            public float Needed;
             public float Angle;
             public Vector3 Contact;
             public bool Braced;
@@ -151,9 +156,13 @@ namespace ShipbreakerVR
             if (pull.Pulled >= HoldFor(pull)) Loosen(pull, hand);
         }
 
-        // How long it is pulled before it comes off: a poster (its part 'SM_Props_Signage_...', its use 'Pickup_Poster_...') sooner.
-        private static float HoldFor(Pull pull) =>
-            pull.Root.name.Contains("Signage") || pull.Thing.name.Contains("Poster") ? PosterHold : Hold;
+        // How long it is pulled before it comes off: a poster (its part 'SM_Props_Signage_...', its use 'Pickup_Poster_...')
+        // sooner, an AI node (VrAiNode) later, between AiNodeHoldLeast and AiNodeHoldMost.
+        private static float HoldFor(Pull pull) => pull.Needed;
+
+        private static float Needs(Transform root, Component thing) =>
+            VrAiNode.Is(root) ? Random.Range(AiNodeHoldLeast, AiNodeHoldMost)
+            : root.name.Contains("Signage") || thing.name.Contains("Poster") ? PosterHold : Hold;
 
         // The other hand holds on to something fixed (the ship, VrClimb.Braced), not to the thing. Before, only the very
         // body the thing is on counted, and the other hand on the wall next to a first aid kit never did (Raik, 2026-11-11).
@@ -175,7 +184,8 @@ namespace ShipbreakerVR
             control = VrClimb.PartInteractable(collider);
             if (Usable(control)) return control;
             var part = collider != null ? collider.GetComponentInParent<StructurePart>() : null;
-            if (part == null || !part.name.StartsWith(Collectible)) return null;
+            // Experiment: an AI node comes off by hand the same way (VrAiNode).
+            if (part == null || !(part.name.StartsWith(Collectible) || VrAiNode.Is(part))) return null;
             // Not one already off: its own body is the part, or it hangs on one made here with its group.
             var body = collider.attachedRigidbody;
             if (body == null || body.transform == part.transform || Made.Contains(body)) return null;
@@ -183,6 +193,9 @@ namespace ShipbreakerVR
         }
 
         // A thing to use, fixed on the ship: removed when used, not a lever or switch, on no loose part.
+        // A body the hand is pulling off or that flies into it (VrAiNode waits with it).
+        public static bool Busy(Rigidbody body) => body != null && (Left.Body == body || Right.Body == body);
+
         public static bool Usable(InteractableObject control) =>
             control != null && control.isActiveAndEnabled && control.DestroyOnComplete && !VrLever.Turnable(control)
             && !VrNacelle.Is(control) && !VrClimb.Loose(control);
@@ -197,9 +210,10 @@ namespace ShipbreakerVR
                 return false;
             }
             // Heavy things (the large coolant and fuel tanks, Raik 2026-11-19) come off with the grapple only, as in the
-            // game, with the game's own body and mass: the hand holds them as part of the wall.
+            // game, with the game's own body and mass: the hand holds them as part of the wall. The AI nodes come off by
+            // hand whatever they weigh, as they did when Raik tried the collection (VrAiNode).
             var mass = GameMass(root);
-            if (mass > HandMost)
+            if (mass > HandMost && !VrAiNode.Is(root))
             {
                 Refused.Add(control);
                 if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{root.name}' weighs {mass:0} kg, more than {HandMost:0} kg: only the grapple takes it off");
@@ -216,13 +230,14 @@ namespace ShipbreakerVR
             pull.Normal = normal.normalized;
             pull.Surface = root.InverseTransformPoint(surface);
             pull.Pulled = 0f;
+            pull.Needed = Needs(root, control);
             pull.Angle = 0f;
             pull.Braced = false;
             pull.Ship = ship;
             Gather(pull);
             // The hand goes with it as it tilts; it holds free only while the other hand holds the ship.
             VrClimb.Reanchor(pull.Input, root);
-            if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: {pull.Input.Name} hand holds '{control.name}', its part '{root.name}' ({Size(root):0.00} m, {mass:0.0} kg) on '{(root.parent != null ? root.parent.name : "-")}'"
+            if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: {pull.Input.Name} hand holds '{control.name}', its part '{root.name}' ({Size(root):0.00} m, {mass:0.0} kg) on '{(root.parent != null ? root.parent.name : "-")}', to pull {pull.Needed:0.0} s"
                 + (pull.Members.Count > 0 ? $", with {pull.Members.Count} more of its group: {Names(pull)}" : ""));
             return true;
         }
@@ -365,7 +380,7 @@ namespace ShipbreakerVR
                 foreach (var c in Colliders) if (!c.isTrigger) solid++;
                 var parts = new List<string>();
                 foreach (var component in root.GetComponents<Component>()) parts.Add(component.GetType().Name);
-                Plugin.Log.LogInfo($"Pull off: '{pull.Thing.name}' comes off after {HoldFor(pull):0} s, '{root.name}' with {solid} solid collider(s) of {Colliders.Count} flies into the {pull.Input.Name} hand; on it: {string.Join(", ", parts)}");
+                Plugin.Log.LogInfo($"Pull off: '{pull.Thing.name}' comes off after {HoldFor(pull):0.0} s, '{root.name}' with {solid} solid collider(s) of {Colliders.Count} flies into the {pull.Input.Name} hand; on it: {string.Join(", ", parts)}");
             }
         }
 
@@ -424,7 +439,7 @@ namespace ShipbreakerVR
         private static bool sparksSought;
 
         // What the game plays as the part's joint breaks: its own break sound and effect, and the grapple's sound.
-        private static void Break(Transform root, Rigidbody ship, Vector3 at, Vector3 normal)
+        internal static void Break(Transform root, Rigidbody ship, Vector3 at, Vector3 normal)
         {
             var joint = root.GetComponent<BreakableJointComponent>();
             var asset = joint != null ? joint.BreakableJointAsset : null;
