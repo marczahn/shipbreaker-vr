@@ -95,5 +95,17 @@ namespace ShipbreakerVR.Tests
             Assert.Contains(string.Format("LateUpdate {0:0.00} ms in 1 calls", 1.0), line);
             Assert.Contains(string.Format("named classes {0:0.00} ms in 4 calls; most: VrHands.Pose", 8.0), line);
         }
+
+        [Fact]
+        public void PhysicsMessagesAndSystemsHaveTotalsOfTheirOwn()
+        {
+            var names = new[] { "Main.FixedUpdate", "ForceVolume.OnTriggerStay", "LynxCopyTransformsSystem" };
+            var messageOf = new[] { 2, 4, 5 };
+            var ticks = new long[] { 10, 30, 50 };
+            var calls = new[] { 10, 400, 10 };
+            var line = VrTestProfile.Describe(10, names, messageOf, ticks, calls, 1.0);
+            Assert.DoesNotContain("named classes", line);
+            Assert.Contains(string.Format("physics messages {0:0.00} ms in 40 calls, systems {1:0.00} ms in 1 calls; most: LynxCopyTransformsSystem", 3.0, 5.0), line);
+        }
     }
 }

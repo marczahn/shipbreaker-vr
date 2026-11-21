@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Text;
 using HarmonyLib;
+using Unity.Entities;
 using UnityEngine;
 
 namespace ShipbreakerVR
@@ -17,6 +18,10 @@ namespace ShipbreakerVR
     // with 'stats') gets a "Script steps" line: the totals per message and the methods that take the most, in
     // milliseconds per frame with their calls per frame. 'profile off', the end of the script and unloading take the
     // timestamps out again.
+    // - The physics messages a script class declares (OnCollisionEnter, -Stay, -Exit, OnTriggerEnter, -Stay, -Exit) are
+    //   timed too, and so is every system of the game's entity worlds, by its class, around Unity's Update of it: with
+    //   the wait for the jobs it depends on, which is main thread time too, and without the jobs' own work on other
+    //   threads. A group's time is what it spends outside its systems.
     // - 'profile on CLASS ...' also times every method of the named classes (the mod's by their short name, others by
     //   their full name), to see where inside a step the time goes. Methods Mono inlined count for their caller.
     // - The line is only logged for a stretch that was timed from its start to its end, so begin the stretch after
@@ -35,9 +40,11 @@ namespace ShipbreakerVR
         static VrTestProfile() => VrSession.OnUnload("script profile", Stop);
 
         private static readonly string[] Messages = { "Update", "LateUpdate", "FixedUpdate" };
-        // The kinds the totals are given for: the three messages, then the methods of classes named with 'profile on'.
-        private static readonly string[] Kinds = { "Update", "LateUpdate", "FixedUpdate", "named classes" };
-        private const int Named = 3;
+        private static readonly string[] PhysicsMessages = { "OnCollisionEnter", "OnCollisionStay", "OnCollisionExit", "OnTriggerEnter", "OnTriggerStay", "OnTriggerExit" };
+        // The kinds the totals are given for: the three messages, the methods of classes named with 'profile on', the
+        // physics messages and the entity worlds' systems. The last three only where there were calls.
+        private static readonly string[] Kinds = { "Update", "LateUpdate", "FixedUpdate", "named classes", "physics messages", "systems" };
+        private const int Named = 3, Physics = 4, Systems = 5;
         private const BindingFlags Declared = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
         private const int Shown = 40;
         private const double MinShownMs = 0.003;
@@ -46,6 +53,7 @@ namespace ShipbreakerVR
 
         private static Harmony harmony;
         private static readonly Dictionary<MethodBase, int> Indexes = new Dictionary<MethodBase, int>();
+        private static readonly Dictionary<Type, int> SystemIndexes = new Dictionary<Type, int>();
         private static string[] names = new string[0];
         private static int[] messageOf = new int[0];
         private static long[] ticks = new long[0];
@@ -82,18 +90,14 @@ namespace ShipbreakerVR
                     if (!types.Add(type)) break;
             }
             var found = new List<MethodInfo>();
+            var kinds = new List<int>();
             var skipped = new List<string>();
             foreach (var type in types)
-                foreach (var message in Messages)
-                {
-                    MethodInfo method;
-                    try { method = type.GetMethod(message, Declared & ~BindingFlags.Static, null, Type.EmptyTypes, null); }
-                    catch (AmbiguousMatchException) { continue; }
-                    if (method == null || method.IsAbstract || method.ReturnType != typeof(void) || Indexes.ContainsKey(method)) continue;
-                    if (type.IsGenericType || method.GetMethodBody() == null) skipped.Add($"{type.Name}.{message}");
-                    else found.Add(method);
-                }
-            var messages = found.Count;
+            {
+                for (var m = 0; m < Messages.Length; m++) Find(type, Messages[m], Type.EmptyTypes, m, found, kinds, skipped);
+                foreach (var message in PhysicsMessages)
+                    Find(type, message, new[] { message.StartsWith("OnCollision") ? typeof(Collision) : typeof(Collider) }, Physics, found, kinds, skipped);
+            }
             for (var w = 2; w < words.Length; w++)
             {
                 var type = typeof(Plugin).Assembly.GetType($"{typeof(Plugin).Namespace}.{words[w]}", false, true) ?? AccessTools.TypeByName(words[w]);
@@ -104,15 +108,28 @@ namespace ShipbreakerVR
                 }
                 var before = found.Count;
                 AddMethods(type, found);
+                while (kinds.Count < found.Count) kinds.Add(Named);
                 Plugin.Log.LogInfo($"Script profile: {found.Count - before} methods of {type.FullName}");
+            }
+            var systems = new List<Type>();
+            for (var w = 0; w < World.All.Count; w++)
+            {
+                var all = World.All[w].Systems;
+                for (var s = 0; s < all.Count; s++)
+                {
+                    var type = all[s]?.GetType();
+                    if (type != null && !SystemIndexes.ContainsKey(type) && !systems.Contains(type)) systems.Add(type);
+                }
             }
 
             var first = names.Length;
-            Array.Resize(ref names, first + found.Count);
-            Array.Resize(ref messageOf, first + found.Count);
-            Array.Resize(ref ticks, first + found.Count);
-            Array.Resize(ref calls, first + found.Count);
-            if (harmony == null) harmony = new Harmony($"{Plugin.Guid}/profile/{typeof(Plugin).Assembly.GetName().Name}");
+            var count = found.Count + systems.Count;
+            Array.Resize(ref names, first + count);
+            Array.Resize(ref messageOf, first + count);
+            Array.Resize(ref ticks, first + count);
+            Array.Resize(ref calls, first + count);
+            var fresh = harmony == null;
+            if (fresh) harmony = new Harmony($"{Plugin.Guid}/profile/{typeof(Plugin).Assembly.GetName().Name}");
             var transpiler = new HarmonyMethod(typeof(VrTestProfile), nameof(AddTimestamps));
             var watch = Stopwatch.StartNew();
             var failed = 0;
@@ -120,7 +137,7 @@ namespace ShipbreakerVR
             {
                 var method = found[i];
                 names[first + i] = $"{method.DeclaringType.Name}.{method.Name}";
-                messageOf[first + i] = i < messages ? Array.IndexOf(Messages, method.Name) : Named;
+                messageOf[first + i] = kinds[i];
                 Indexes[method] = first + i;
                 try { harmony.Patch(method, transpiler: transpiler); }
                 catch (Exception e)
@@ -129,13 +146,57 @@ namespace ShipbreakerVR
                     if (failed++ < 5) Plugin.Log.LogWarning($"Script profile: {names[first + i]} cannot be timed: {e.Message}");
                 }
             }
+            for (var i = 0; i < systems.Count; i++)
+            {
+                names[first + found.Count + i] = systems[i].Name;
+                messageOf[first + found.Count + i] = Systems;
+                SystemIndexes[systems[i]] = first + found.Count + i;
+            }
+            // Unity runs every system through one of these three, whatever its class.
+            if (fresh)
+                foreach (var kind in new[] { typeof(ComponentSystem), typeof(JobComponentSystem), typeof(SystemBase) })
+                {
+                    try
+                    {
+                        harmony.Patch(kind.GetMethod("Update", Type.EmptyTypes),
+                            prefix: new HarmonyMethod(typeof(VrTestProfile), nameof(SystemEnter)), postfix: new HarmonyMethod(typeof(VrTestProfile), nameof(SystemExit)));
+                    }
+                    catch (Exception e) { Plugin.Log.LogWarning($"Script profile: the systems of {kind.Name} cannot be timed: {e.Message}"); }
+                }
             depth = 0;
             Reset();
             startedFrame = Time.frameCount;
             stoppedFrame = -1;
-            Plugin.Log.LogInfo($"Script profile: {found.Count - failed} methods of {types.Count} script classes timed ({Indexes.Count} in all, {failed} failed) " +
+            Plugin.Log.LogInfo($"Script profile: {found.Count - failed} methods of {types.Count} script classes and {systems.Count} systems timed " +
+                $"({Indexes.Count} methods and {SystemIndexes.Count} systems in all, {failed} failed) " +
                 $"in {watch.ElapsedMilliseconds} ms, timing costs about {PairCost():0} ns per call" +
                 (skipped.Count > 0 ? $"; left out: {string.Join(", ", skipped.ToArray())}" : ""));
+        }
+
+        // The message as the class itself declares it, if it has a body to put timestamps into.
+        private static void Find(Type type, string message, Type[] parameters, int kind, List<MethodInfo> found, List<int> kinds, List<string> skipped)
+        {
+            MethodInfo method;
+            try { method = type.GetMethod(message, Declared & ~BindingFlags.Static, null, parameters, null); }
+            catch (AmbiguousMatchException) { return; }
+            if (method == null || method.IsAbstract || method.ReturnType != typeof(void) || Indexes.ContainsKey(method)) return;
+            if (type.IsGenericType || method.GetMethodBody() == null) skipped.Add($"{type.Name}.{message}");
+            else
+            {
+                found.Add(method);
+                kinds.Add(kind);
+            }
+        }
+
+        private static void SystemEnter(ComponentSystemBase __instance, out int __state)
+        {
+            if (SystemIndexes.TryGetValue(__instance.GetType(), out __state)) Enter(__state);
+            else __state = -1;
+        }
+
+        private static void SystemExit(int __state)
+        {
+            if (__state >= 0) Exit(__state);
         }
 
         // The numbers stay for the stretch that ends in this frame or the next (Describe).
@@ -145,10 +206,11 @@ namespace ShipbreakerVR
             var count = Indexes.Count;
             harmony.UnpatchSelf();
             Indexes.Clear();
+            SystemIndexes.Clear();
             harmony = null;
             depth = 0;
             stoppedFrame = Time.frameCount;
-            Plugin.Log.LogInfo($"Script profile: off, {count} methods as they were");
+            Plugin.Log.LogInfo($"Script profile: off, {count} methods and the systems as they were");
         }
 
         private static void Forget()
@@ -200,7 +262,7 @@ namespace ShipbreakerVR
                         sum += ticks[i];
                         count += calls[i];
                     }
-                if (m == Named && count == 0) continue;
+                if (m >= Named && count == 0) continue;
                 text.Append(m > 0 ? ", " : "").Append($"{Kinds[m]} {sum * tickMs / frames:0.00} ms in {(double)count / frames:0} calls");
             }
             var order = new List<int>();

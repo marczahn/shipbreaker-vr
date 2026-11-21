@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using BBI.Unity.Game;
 using HarmonyLib;
+using Unity.Entities;
 using UnityEngine;
 using UnityEngine.Rendering.HighDefinition;
 using UnityEngine.VFX;
@@ -23,8 +24,12 @@ namespace ShipbreakerVR
     //   bay effects on|off [TEXT]     visual effects (VFX Graph): paused and not drawn
     //   bay feed N [TEXT]             moves up to N loose parts into the nearest acceptor. This changes the shift
     //                                 (the parts are salvaged or lost), so use a save that does not matter
+    //   bay break N [TEXT]            takes N parts of the ship off everything they are joined to, spread over the
+    //                                 ship, to measure a bay full of loose parts. Changes the shift like 'feed'
+    //   bay push SPEED [SIZE]         sets loose parts up to SIZE meters (6) moving, each its own way at up to SPEED m/s
+    //   bay bodies                    logs the rigidbodies (kinematic, awake) and how many of them are loose parts
     // TEXT narrows a command to objects whose path contains it (see 'bay survey' for names), * means all. Without it,
-    // flow and triggers take all, shadows, lights and effects those with "Furnace" in their path, feed "Trigger_Furnace".
+    // flow, triggers and break take all, shadows, lights and effects those with "Furnace" in their path, feed "Trigger_Furnace".
     // 'on' brings back everything the command switched off; so do the end of the script and unloading.
     internal static class VrTestBay
     {
@@ -40,7 +45,7 @@ namespace ShipbreakerVR
 
         public static void Execute(string[] words)
         {
-            if (words.Length < 2) throw new FormatException("bay needs survey, flow, triggers, shadows, lights, effects or feed");
+            if (words.Length < 2) throw new FormatException("bay needs survey, flow, triggers, shadows, lights, effects, feed, break, push or bodies");
             var what = words[1].ToLowerInvariant();
             switch (what)
             {
@@ -50,6 +55,21 @@ namespace ShipbreakerVR
                 case "feed":
                     if (words.Length < 3 || !int.TryParse(words[2], out var count) || count < 1) throw new FormatException("bay feed needs a number of parts");
                     Feed(count, words.Length > 3 ? words[3] : "Trigger_Furnace");
+                    return;
+                case "break":
+                    if (words.Length < 3 || !int.TryParse(words[2], out var parts) || parts < 1) throw new FormatException("bay break needs a number of parts");
+                    Break(parts, words.Length > 3 ? words[3] : "*");
+                    return;
+                case "push":
+                {
+                    if (words.Length < 3 || !TryNumber(words[2], out var speed) || speed <= 0f) throw new FormatException("bay push needs a speed in m/s");
+                    var size = 6f;
+                    if (words.Length > 3 && (!TryNumber(words[3], out size) || size <= 0f)) throw new FormatException($"'{words[3]}' is not a size in meters");
+                    Push(speed, size);
+                    return;
+                }
+                case "bodies":
+                    CountBodies();
                     return;
                 case "flow":
                 case "triggers":
@@ -182,6 +202,9 @@ namespace ShipbreakerVR
             return true;
         }
 
+        private static bool TryNumber(string word, out float value) =>
+            float.TryParse(word, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out value);
+
         private static bool Matches(Component component, string text) =>
             text == "*" || VrUtil.Path(component.transform).IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0;
 
@@ -300,6 +323,87 @@ namespace ShipbreakerVR
                 body.WakeUp();
             }
             Plugin.Log.LogInfo($"Bay feed: {fed} of {count} parts moved into '{VrUtil.Path(box.transform)}' ({loose.Count} loose parts up to {Largest:0.0} m among {moving} moving rigidbodies, {columns * rows} cells)");
+        }
+
+        // The game's own way of taking a part off (BreakableJointComponent and the vaporization do the same): the
+        // event makes the hierarchy drop every joint of the part, and the part and whatever hung on it alone become
+        // bodies of their own in the next physics steps. Every (parts / count)th part, sorted by its distance from the
+        // head, so the same script takes the same parts and they come from all over the ship.
+        private static void Break(int count, string text)
+        {
+            var world = World.DefaultGameObjectInjectionWorld;
+            if (world == null) throw new FormatException("no entity world yet");
+            var eye = VrCamera.Instance != null ? VrCamera.Instance.Camera.transform.position : Vector3.zero;
+            var parts = new List<StructurePart>();
+            foreach (var part in UnityEngine.Object.FindObjectsOfType<StructurePart>())
+                if (EntityBlueprintComponent.IsValid(part.EntityBlueprintComponent) && Matches(part, text)) parts.Add(part);
+            parts.Sort((x, y) => (x.transform.position - eye).sqrMagnitude.CompareTo((y.transform.position - eye).sqrMagnitude));
+            var buffer = world.GetOrCreateSystem<EndSimulationEntityCommandBufferSystem>().CreateCommandBuffer();
+            var broken = 0;
+            var failed = 0;
+            var step = Mathf.Max(1, parts.Count / count);
+            for (var i = step / 2; i < parts.Count && broken < count; i += step)
+            {
+                try
+                {
+                    Main.EventSystem.Post(RemoveHierarchyJointsEvent.GetEvent(parts[i], buffer));
+                    broken++;
+                }
+                catch (Exception e)
+                {
+                    if (failed++ < 3) Plugin.Log.LogWarning($"Bay break: '{parts[i].name}': {e.Message}");
+                }
+            }
+            Plugin.Log.LogInfo($"Bay break: {broken} of {parts.Count} parts ('{text}') taken off their joints{(failed > 0 ? $", {failed} failed" : "")}");
+        }
+
+        // Loose parts set moving, so they run into each other and the ship: what a bay looks like to the physics
+        // after cutting and a decompression. The same directions each time.
+        private static void Push(float speed, float size)
+        {
+            var random = new System.Random(1);
+            var skipped = LayerMask.GetMask("Ignore Raycast", "Surface_NoAttach", "Gameplay_Player", "Barge_Salvaged", "Static");
+            var pushed = 0;
+            foreach (var body in LooseParts(skipped))
+            {
+                if (!TryBounds(body, skipped, out var bounds) || Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z)) > size) continue;
+                var way = new Vector3((float)random.NextDouble() - 0.5f, (float)random.NextDouble() - 0.5f, (float)random.NextDouble() - 0.5f);
+                body.WakeUp();
+                body.AddForce(way * (2f * speed), ForceMode.VelocityChange);
+                pushed++;
+            }
+            Plugin.Log.LogInfo($"Bay push: {pushed} loose parts up to {size:0.#} m set moving at up to {speed:0.#} m/s");
+        }
+
+        private static void CountBodies()
+        {
+            var bodies = UnityEngine.Object.FindObjectsOfType<Rigidbody>();
+            var kinematic = 0;
+            var awake = 0;
+            foreach (var body in bodies)
+            {
+                if (body.isKinematic) kinematic++;
+                else if (!body.IsSleeping()) awake++;
+            }
+            var loose = 0;
+            var looseAwake = 0;
+            foreach (var body in LooseParts(LayerMask.GetMask("Ignore Raycast", "Surface_NoAttach", "Gameplay_Player", "Barge_Salvaged", "Static")))
+            {
+                loose++;
+                if (!body.IsSleeping()) looseAwake++;
+            }
+            Plugin.Log.LogInfo($"Bay bodies: {bodies.Length} rigidbodies ({kinematic} kinematic, {awake} awake), {loose} loose parts ({looseAwake} awake), " +
+                $"{UnityEngine.Object.FindObjectsOfType<Joint>().Length} joints, {UnityEngine.Object.FindObjectsOfType<StructurePart>().Length} parts");
+        }
+
+        // Moving rigidbodies with a part of a ship on them, on none of the layers to leave alone.
+        private static IEnumerable<Rigidbody> LooseParts(int skippedLayers)
+        {
+            foreach (var body in UnityEngine.Object.FindObjectsOfType<Rigidbody>())
+            {
+                if (body.isKinematic || (1 << body.gameObject.layer & skippedLayers) != 0) continue;
+                if (body.GetComponentInChildren<StructurePart>() != null) yield return body;
+            }
         }
 
         // The grid for a box of this size (meters along its own axes): which two axes it spans, the two wide ones, and
