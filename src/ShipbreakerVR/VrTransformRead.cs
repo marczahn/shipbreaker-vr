@@ -18,28 +18,34 @@ namespace ShipbreakerVR
     // main thread (EntityQuery.ToRigidTransformArray), whether the part moved or not, and only then starts the job that
     // writes them to the entities. With the option on, a read-only transform job reads them on all job threads, and the
     // main thread waits for it (and works along): the array is the same, in the same order, when the game's job starts.
-    // - The transforms are kept in a TransformAccessArray, in the order of the system's query, and collected again when
-    //   an entity with a Transform was added, removed or moved to another chunk (the order version of Transform, which
-    //   Unity raises for every type of an archetype on each of those) or when the query's count differs, and every
-    //   Recollect frames in any case, should an entity ever be given another Transform without either.
+    // - The transforms are kept in a TransformAccessArray, in the order of the system's query. Collecting them again
+    //   costs more than a frame's read (about 1 ms for 700 transforms), so it is only done when the query's entities
+    //   or their order changed: when Unity's order version of Transform moved (it is raised for every type of an
+    //   archetype whenever an entity is added to, removed from or moved between its chunks, so it also moves for
+    //   entities that are none of these parts, every frame in a busy bay) or the count differs, the query's entities
+    //   are compared with the ones the transforms were collected for. And every Recollect frames in any case, should
+    //   an entity ever be given another Transform without changing place.
     // - A Transform that is gone gives the identity, as in the game's own read.
     // - Should anything throw, the option is off until the next start and the game's read is used.
-    // - In test mode the result is compared with the game's own read every CheckEvery frames, and the log says how
-    //   many transforms differ ("Transform read check").
+    // - In test mode the result is compared with the game's own read every CheckEvery frames, and every LogEvery
+    //   frames the log says how often the transforms were collected again, what collecting and reading took and
+    //   whether the checks found a difference ("Transform read").
     internal static class VrTransformRead
     {
         static VrTransformRead() => VrSession.OnUnload("transform read", Release);
 
         private const int Batch = 32;
-        private const int Recollect = 30;
+        private const int Recollect = 600;
         private const int CheckEvery = 300;
+        private const int LogEvery = 600;
         private static TransformAccessArray transforms;
+        private static Entity[] entities = new Entity[0];
         private static int orderVersion;
         private static int collectedFrame;
-        private static int checks;
         private static bool failed;
-        // For the log: how often the transforms were read and how often collected again.
-        private static int reads, collected, logged;
+        // For the test mode's log line.
+        private static int reads, collected, compared, checks, differing;
+        private static long collectTicks, readTicks;
 
         private struct ReadJob : IJobParallelForTransform
         {
@@ -58,28 +64,30 @@ namespace ShipbreakerVR
             var result = default(NativeArray<RigidTransform>);
             try
             {
+                var test = VrSettings.TestMode.Value;
+                var start = test ? System.Diagnostics.Stopwatch.GetTimestamp() : 0L;
                 var version = system.EntityManager.GetComponentOrderVersion<Transform>();
                 var count = query.CalculateEntityCount();
-                if (!transforms.isCreated || version != orderVersion || transforms.length != count || Time.frameCount - collectedFrame >= Recollect)
+                if (!transforms.isCreated || transforms.length != count || Time.frameCount - collectedFrame >= Recollect
+                    || (version != orderVersion && !SameEntities(query)))
                 {
                     var all = query.ToComponentArray<Transform>();
                     if (transforms.isCreated) transforms.SetTransforms(all);
                     else transforms = new TransformAccessArray(all);
-                    orderVersion = version;
+                    var now = query.ToEntityArray(Allocator.Temp);
+                    if (entities.Length != now.Length) entities = new Entity[now.Length];
+                    now.CopyTo(entities);
+                    now.Dispose();
                     collectedFrame = Time.frameCount;
                     collected++;
                 }
+                orderVersion = version;
+                var read = test ? System.Diagnostics.Stopwatch.GetTimestamp() : 0L;
                 // Cleared: a job does not run for a Transform that is gone, and zeros turn and move nothing, like the
                 // identity the game writes there.
                 result = new NativeArray<RigidTransform>(transforms.length, allocator);
                 if (result.Length > 0) new ReadJob { Result = result }.ScheduleReadOnly(transforms, Batch).Complete();
-                if (VrSettings.TestMode.Value && checks < 40 && Time.frameCount % CheckEvery == 0) Check(query, result);
-                if (++reads >= 3600 && logged < 3)
-                {
-                    logged++;
-                    Plugin.Log.LogInfo($"Transform read: {result.Length} transforms per frame on the job threads, collected again in {collected} of {reads} frames");
-                    reads = collected = 0;
-                }
+                if (test) Log(query, result, start, read);
                 return result;
             }
             catch (Exception e)
@@ -89,6 +97,31 @@ namespace ShipbreakerVR
                 if (result.IsCreated) result.Dispose();
                 return query.ToRigidTransformArray(allocator);
             }
+        }
+
+        // Whether the query still holds the entities the transforms were collected for, in the same order.
+        private static bool SameEntities(EntityQuery query)
+        {
+            compared++;
+            var now = query.ToEntityArray(Allocator.Temp);
+            var same = now.Length == entities.Length;
+            for (var i = 0; same && i < now.Length; i++) same = now[i] == entities[i];
+            now.Dispose();
+            return same;
+        }
+
+        private static void Log(EntityQuery query, NativeArray<RigidTransform> result, long start, long read)
+        {
+            var end = System.Diagnostics.Stopwatch.GetTimestamp();
+            collectTicks += read - start;
+            readTicks += end - read;
+            if (Time.frameCount % CheckEvery == 0) Check(query, result);
+            if (++reads < LogEvery) return;
+            var ms = 1000.0 / System.Diagnostics.Stopwatch.Frequency / reads;
+            Plugin.Log.LogInfo($"Transform read: {result.Length} transforms on the job threads, over {reads} frames collected again in {collected} and compared in {compared}, " +
+                $"per frame {collectTicks * ms:0.000} ms looking and collecting and {readTicks * ms:0.000} ms reading; {checks} checks against the game's read, {differing} with differences");
+            reads = collected = compared = checks = differing = 0;
+            collectTicks = readTicks = 0;
         }
 
         private static void Check(EntityQuery query, NativeArray<RigidTransform> result)
@@ -109,8 +142,8 @@ namespace ShipbreakerVR
             }
             var theirs = own.Length;
             own.Dispose();
-            if (differ == 0) Plugin.Log.LogInfo($"Transform read check: {result.Length} transforms, all as the game reads them");
-            else Plugin.Log.LogError($"Transform read check: {(differ < 0 ? $"{result.Length} transforms where the game reads {theirs}" : $"{differ} of {result.Length} transforms differ, the furthest by {furthest:0.000} m")}");
+            if (differ == 0) return;
+            if (differing++ < 5) Plugin.Log.LogError($"Transform read check: {(differ < 0 ? $"{result.Length} transforms where the game reads {theirs}" : $"{differ} of {result.Length} transforms differ, the furthest by {furthest:0.000} m")}");
         }
 
         private static void Release()
