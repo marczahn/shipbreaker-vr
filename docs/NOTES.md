@@ -1438,7 +1438,7 @@ neither the frame time nor a step of the idle scene):
   before its job writes them to the entities. Then `FreezableProximityHandlerSystem` (0 to 0.24),
   `ObjectTrackerSystem` (0.05 to 0.19), `VitalitySystem` (0.11 to 0.17), `UpdateClusterDataSystem` (to 0.13),
   `UpdateHierarchyParentsSystem` (0.45 in the last stage, in the fixed step) and `ECSGraphCommandBufferSystem`
-  (0.14); the other 330 take 0.03 ms or less each and about 1.5 ms together.
+  (0.14). About 25 more take 0.03-0.1 ms each, and the remaining 300 about 1.2 ms together.
 - Scripts: `Update` 0.9-1.07 ms in about 1,000 calls, `LateUpdate` 0.8-1.1 ms of which the VR camera's (the mod's
   late steps, the hands among them) is 0.75-1.06. The physics messages are nothing: 0.03 ms in 4 calls per frame.
 - Rendering on the main thread stays the largest item in every stage (6.4-7.0 ms, 37-48 % of the frame).
