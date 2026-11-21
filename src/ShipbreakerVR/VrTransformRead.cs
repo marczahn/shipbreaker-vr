@@ -18,42 +18,55 @@ namespace ShipbreakerVR
     // main thread (EntityQuery.ToRigidTransformArray), whether the part moved or not, and only then starts the job that
     // writes them to the entities. With the option on, a read-only transform job reads them on all job threads, and the
     // main thread waits for it (and works along): the array is the same, in the same order, when the game's job starts.
-    // - The transforms are kept in a TransformAccessArray, in the order of the system's query. Collecting them again
-    //   costs more than a frame's read (about 1 ms for 700 transforms), so it is only done when the query's entities
-    //   or their order changed: when Unity's order version of Transform moved (it is raised for every type of an
-    //   archetype whenever an entity is added to, removed from or moved between its chunks, so it also moves for
-    //   entities that are none of these parts, every frame in a busy bay) or the count differs, the query's entities
-    //   are compared with the ones the transforms were collected for. And every Recollect frames in any case, should
-    //   an entity ever be given another Transform without changing place.
+    // - The transforms are kept in a TransformAccessArray. Building that anew costs 2 to 3 ms for 1,600 transforms,
+    //   several frames' worth of reading, and in a busy bay the system's query changes in two of five frames (parts
+    //   are split, vaporized, taken by the furnaces). So the array is kept in step instead (SlotMap): entities that
+    //   left the query leave it, new ones join at its end, and each slot knows where its entity stands in the query's
+    //   order, which is where the job writes its result.
+    // - When to look: Unity raises the order version of Transform for every entity with a Transform that is added,
+    //   removed or moved between chunks, so while it stands still and the count is the same, the query holds the
+    //   same entities in the same order. It moves for entities that are none of these parts too, in a busy bay every
+    //   frame; then the query's entities are compared with last frame's, and only a difference is acted on.
+    // - Each frame a few slots are checked for still holding their entity's Transform (Verified per frame, so every
+    //   slot within some seconds), should an entity ever be given another one without changing place.
     // - A Transform that is gone gives the identity, as in the game's own read.
     // - Should anything throw, the option is off until the next start and the game's read is used.
     // - In test mode the result is compared with the game's own read every CheckEvery frames, and every LogEvery
-    //   frames the log says how often the transforms were collected again, what collecting and reading took and
-    //   whether the checks found a difference ("Transform read").
+    //   frames the log says how often the query changed, what looking and reading took and whether the checks found
+    //   a difference ("Transform read").
     internal static class VrTransformRead
     {
         static VrTransformRead() => VrSession.OnUnload("transform read", Release);
 
         private const int Batch = 32;
-        private const int Recollect = 600;
-        private const int CheckEvery = 300;
+        private const int Verified = 8;
+        private const int CheckEvery = 120;
         private const int LogEvery = 600;
         private static TransformAccessArray transforms;
-        private static Entity[] entities = new Entity[0];
+        private static NativeArray<int> target;
+        private static readonly SlotMap<Entity> Slots = new SlotMap<Entity>();
+        // The query's entities in its order, as of the last look.
+        private static Entity[] order = new Entity[0];
+        private static int orderCount;
+        private static World world;
+        private static EntityManager manager;
         private static int orderVersion;
-        private static int collectedFrame;
+        private static int verifyNext;
+        private static int replaced;
         private static bool failed;
         // For the test mode's log line.
-        private static int reads, collected, compared, checks, differing;
-        private static long collectTicks, readTicks;
+        private static int reads, changed, compared, added, removed, checks, differing;
+        private static long lookTicks, readTicks;
 
         private struct ReadJob : IJobParallelForTransform
         {
+            [ReadOnly] public NativeArray<int> Target;
             [NativeDisableParallelForRestriction] public NativeArray<RigidTransform> Result;
 
             public void Execute(int index, TransformAccess transform)
             {
-                Result[index] = math.RigidTransform(transform.rotation, transform.position);
+                var at = Target[index];
+                if ((uint)at < (uint)Result.Length) Result[at] = math.RigidTransform(transform.rotation, transform.position);
             }
         }
 
@@ -66,27 +79,17 @@ namespace ShipbreakerVR
             {
                 var test = VrSettings.TestMode.Value;
                 var start = test ? System.Diagnostics.Stopwatch.GetTimestamp() : 0L;
-                var version = system.EntityManager.GetComponentOrderVersion<Transform>();
+                if (!ReferenceEquals(world, system.World)) Forget(system);
+                var version = manager.GetComponentOrderVersion<Transform>();
                 var count = query.CalculateEntityCount();
-                if (!transforms.isCreated || transforms.length != count || Time.frameCount - collectedFrame >= Recollect
-                    || (version != orderVersion && !SameEntities(query)))
-                {
-                    var all = query.ToComponentArray<Transform>();
-                    if (transforms.isCreated) transforms.SetTransforms(all);
-                    else transforms = new TransformAccessArray(all);
-                    var now = query.ToEntityArray(Allocator.Temp);
-                    if (entities.Length != now.Length) entities = new Entity[now.Length];
-                    now.CopyTo(entities);
-                    now.Dispose();
-                    collectedFrame = Time.frameCount;
-                    collected++;
-                }
+                if (version != orderVersion || count != orderCount) Look(query);
                 orderVersion = version;
+                Verify();
                 var read = test ? System.Diagnostics.Stopwatch.GetTimestamp() : 0L;
                 // Cleared: a job does not run for a Transform that is gone, and zeros turn and move nothing, like the
                 // identity the game writes there.
-                result = new NativeArray<RigidTransform>(transforms.length, allocator);
-                if (result.Length > 0) new ReadJob { Result = result }.ScheduleReadOnly(transforms, Batch).Complete();
+                result = new NativeArray<RigidTransform>(orderCount, allocator);
+                if (transforms.length > 0) new ReadJob { Target = target, Result = result }.ScheduleReadOnly(transforms, Batch).Complete();
                 if (test) Log(query, result, start, read);
                 return result;
             }
@@ -99,29 +102,90 @@ namespace ShipbreakerVR
             }
         }
 
-        // Whether the query still holds the entities the transforms were collected for, in the same order.
-        private static bool SameEntities(EntityQuery query)
+        // Another world (a hot reload, or the game made its world anew): everything from the start.
+        private static void Forget(ComponentSystemBase system)
+        {
+            Release();
+            world = system.World;
+            manager = system.EntityManager;
+            transforms = new TransformAccessArray(1024);
+            Slots.Clear();
+            orderCount = 0;
+            verifyNext = 0;
+        }
+
+        // The query's entities against the last look's; on a difference the transforms are brought in step.
+        private static void Look(EntityQuery query)
         {
             compared++;
             var now = query.ToEntityArray(Allocator.Temp);
-            var same = now.Length == entities.Length;
-            for (var i = 0; same && i < now.Length; i++) same = now[i] == entities[i];
+            var same = now.Length == orderCount;
+            if (order.Length < now.Length) order = new Entity[Mathf.NextPowerOfTwo(now.Length)];
+            for (var i = 0; i < now.Length; i++)
+            {
+                var entity = now[i];
+                same &= order[i] == entity;
+                order[i] = entity;
+            }
+            orderCount = now.Length;
             now.Dispose();
-            return same;
+            // Also while an entity's Transform could not be taken yet.
+            if (same && Slots.Count == orderCount) return;
+            changed++;
+            Slots.Sync(order, orderCount, AddTransform, RemoveTransform);
+            if (!target.IsCreated || target.Length < Slots.Target.Length)
+            {
+                if (target.IsCreated) target.Dispose();
+                target = new NativeArray<int>(Slots.Target.Length, Allocator.Persistent);
+            }
+            NativeArray<int>.Copy(Slots.Target, target, Slots.Count);
+        }
+
+        private static readonly Func<Entity, bool> AddTransform = Add;
+        private static readonly Action<int> RemoveTransform = Remove;
+
+        private static bool Add(Entity entity)
+        {
+            var transform = manager.GetComponentObject<Transform>(entity);
+            if (transform == null) return false;
+            transforms.Add(transform);
+            added++;
+            return true;
+        }
+
+        private static void Remove(int slot)
+        {
+            transforms.RemoveAtSwapBack(slot);
+            removed++;
+        }
+
+        private static void Verify()
+        {
+            for (var n = 0; n < Verified && Slots.Count > 0; n++)
+            {
+                if (verifyNext >= Slots.Count) verifyNext = 0;
+                var transform = manager.GetComponentObject<Transform>(Slots.KeyAt(verifyNext));
+                if (transform != null && !ReferenceEquals(transforms[verifyNext], transform))
+                {
+                    transforms[verifyNext] = transform;
+                    if (replaced++ < 5) Plugin.Log.LogInfo($"Transform read: '{transform.name}' is another Transform than before, taken");
+                }
+                verifyNext++;
+            }
         }
 
         private static void Log(EntityQuery query, NativeArray<RigidTransform> result, long start, long read)
         {
             var end = System.Diagnostics.Stopwatch.GetTimestamp();
-            collectTicks += read - start;
+            lookTicks += read - start;
             readTicks += end - read;
             if (Time.frameCount % CheckEvery == 0) Check(query, result);
             if (++reads < LogEvery) return;
             var ms = 1000.0 / System.Diagnostics.Stopwatch.Frequency / reads;
-            Plugin.Log.LogInfo($"Transform read: {result.Length} transforms on the job threads, over {reads} frames collected again in {collected} and compared in {compared}, " +
-                $"per frame {collectTicks * ms:0.000} ms looking and collecting and {readTicks * ms:0.000} ms reading; {checks} checks against the game's read, {differing} with differences");
-            reads = collected = compared = checks = differing = 0;
-            collectTicks = readTicks = 0;
+            Plugin.Log.LogInfo($"Transform read: {transforms.length} transforms for {result.Length} entities on the job threads, over {reads} frames the query was compared in {compared} and had changed in {changed} " +
+                $"({added} transforms added, {removed} removed), per frame {lookTicks * ms:0.000} ms looking and {readTicks * ms:0.000} ms reading; {checks} checks against the game's read, {differing} with differences");
+            reads = changed = compared = added = removed = checks = differing = 0;
+            lookTicks = readTicks = 0;
         }
 
         private static void Check(EntityQuery query, NativeArray<RigidTransform> result)
@@ -149,6 +213,8 @@ namespace ShipbreakerVR
         private static void Release()
         {
             if (transforms.isCreated) transforms.Dispose();
+            if (target.IsCreated) target.Dispose();
+            world = null;
         }
     }
 
