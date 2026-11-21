@@ -1,0 +1,63 @@
+# What a bay full of loose parts costs on the main thread: physics, the game's systems and the scripts. Start it in
+# a shift of a save that does not matter (free play): 'bay break' takes parts off the ship for good. Test/Testmodus
+# on; with Test/MockRuntime the frame rate is not tied to a headset. In results\busy-bay\log.txt each stretch has
+# its "Frame time", "Frame steps" (Unity's steps, FixedUpdate.PhysicsFixedUpdate among them), "Script steps" (the
+# scripts' messages and the systems, class by class) and "Mod steps" lines, and "Bay bodies" says how many loose
+# parts there were and how many of them were awake at its start and its end. The last stretch is without the
+# timestamps, for the frame time they cost.
+head 0 1.7 0 0 0 0
+wait 2
+bay bodies
+stats idle
+wait 20
+stats
+wait 1
+profile on
+wait 3
+stats idle profiled
+wait 20
+stats
+wait 1
+bay break 50
+wait 3
+bay push 2
+wait 3
+bay bodies
+screenshot loose50
+stats 50 parts off
+wait 20
+stats
+bay bodies
+wait 1
+bay break 200
+wait 3
+bay push 2
+wait 3
+bay bodies
+screenshot loose250
+stats 250 parts off
+wait 20
+stats
+bay bodies
+wait 1
+bay break 800
+wait 3
+bay push 2
+wait 3
+bay bodies
+screenshot loose1050
+stats 1050 parts off
+wait 20
+stats
+bay bodies
+wait 1
+profile off
+wait 3
+bay push 2
+wait 3
+bay bodies
+stats 1050 parts off without profile
+wait 20
+stats
+bay bodies
+wait 1

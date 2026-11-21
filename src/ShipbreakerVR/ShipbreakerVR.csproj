@@ -35,6 +35,7 @@
     <Reference Include="UnityEngine.XRModule" HintPath="$(ManagedDir)\UnityEngine.XRModule.dll" Private="false" />
     <Reference Include="Unity.RenderPipelines.HighDefinition.Runtime" HintPath="$(ManagedDir)\Unity.RenderPipelines.HighDefinition.Runtime.dll" Private="false" />
     <Reference Include="UnityEngine.PhysicsModule" HintPath="$(ManagedDir)\UnityEngine.PhysicsModule.dll" Private="false" />
+    <Reference Include="UnityEngine.VFXModule" HintPath="$(ManagedDir)\UnityEngine.VFXModule.dll" Private="false" />
     <Reference Include="InControl" HintPath="$(ManagedDir)\InControl.dll" Private="false" />
     <Reference Include="Cinemachine" HintPath="$(ManagedDir)\Cinemachine.dll" Private="false" />
     <Reference Include="Unity.RenderPipelines.Core.Runtime" HintPath="$(ManagedDir)\Unity.RenderPipelines.Core.Runtime.dll" Private="false" />

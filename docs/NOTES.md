@@ -1284,6 +1284,177 @@ Ideas not done yet, for after the measurements:
   low-res transparency, Stop NaNs) could be switched off in the VR camera's frame settings once the render info shows
   they are on and a scan shows no material needs them.
 
+## What the furnaces cost
+Marc's question (2026-11-20): do the physics of the furnaces take a large part of the frame? The mod has no code for
+furnaces, processors or the barge, so whatever they cost is the game's. What follows is read from the game's code and
+the bay scene; the idle cost is measured (below, "First run"), the cost per accepted part is not yet.
+
+What is there, per side of the bay (the bay has two sides, each with a furnace and a processor):
+- An acceptor per furnace and processor (`FurnaceVolume`, `ProcessorVolume`, both `SalvageAcceptorVolumeBase`): a
+  trigger box of 17.4 x 17.4 x 4.4 m across the mouth. A collider entering it is looked up to its part; a part (or its
+  group) is taken once.
+- Seven flow volumes (`ForceVolume`, trigger boxes): for each of furnace and processor a gentle one in front of the
+  mouth (10 m deep, strength 1 for the furnace, 3 for the processor), a moderate one in the mouth (4 m, strength 6) and
+  a heavy one behind it (45 m into the tunnel, strength 100), plus one counterflow at the far end of the tunnels
+  (strength -100). Every physics step (50 per second) a volume goes through the bodies inside it and pushes each along
+  its axis with its strength as an acceleration, until the body is as fast as the volume's target: 0.6 m/s here (the
+  volume's velocity of 1 in its own space, at the bay prefab's scale of 0.6). They take bodies of up to 17.5 t (the
+  ship itself is heavier), the player included. Ten more such volumes under "No No No Wrong Way" are inactive.
+- The barge has its own (`BargeForceVolume` and the `BargeSystem`).
+- The tunnels' walls are plain box colliders.
+
+What an object costs once it is accepted:
+- Furnace: the part gets a vaporization component and goes to the `Surface_NoAttach` layer. `VaporizationSystem`
+  heats it for 5 s and dissolves it for 5 s (a material property block per part and frame), then it is destroyed. At
+  the start of dissolving its colliders move to the Ignore Raycast layer, its joints to the rest are removed, and an
+  effect is spawned (at most 2 per frame, 50 at a time). The game also has a `PreFurnaceVolume` that starts a smoke
+  effect per part from the part's mesh points, but the bay scene's data shows none placed (`bay survey` counts them).
+- Processor: the part is marked and destroyed 15 s later by a coroutine of the acceptor.
+- Until then the part stays a full rigidbody that the heavy flow carries into the tunnel and that collides with the
+  walls and with the other parts in there. So the cost is per part and ends 10 or 15 s after it went in; a lot thrown
+  in at once can hitch (effects, joints, destruction), but nothing accumulates.
+
+Idle, the physics are next to nothing: 14 active flow volumes going through empty lists 50 times a second and a
+handful of static trigger boxes. A body floating in a flow volume never falls asleep (a force wakes it), but that is
+one body. What could cost all the time is rendering, not physics:
+- In each furnace sits a spot light (`.../Furnaces/FurnaceRight/Point Light`, `FurnaceLeft/Point Light (1)`: 22
+  degrees, range 90 m, shadows on, rendered every frame, fading only at 100 m) that shines out of the mouth across
+  the bay, so the ship is drawn once more into its shadow map each frame. Shadow casters are 1,100-2,500 of the
+  bay's 3,500-5,100 draw calls (see the performance audit), over 61 lights with shadows in the bay scene alone.
+  `Bild/LampenschattenNurNah` already cuts these two off beyond 20 m.
+- Two visual effects run in the furnaces' mouths all the time (`PRF_FX_Furnace_Idle`).
+
+Measuring (`VrTestBay`, test mode): `bay flow|triggers|shadows|lights|effects off [TEXT]` switches one of these off
+and `on` brings it back; `stats LABEL` starts a stretch whose frame time lines carry the label (`VrPerformance.Tag`),
+so stretches compare line by line: the `FixedUpdate` phase in "Frame steps" is the physics, shadow casters and draw
+calls are in "Render steps". `bay survey` logs the flow volumes with the bodies in them, the acceptors, how many
+rigidbodies are awake, the lights with shadows and the effects' particles. `bay feed N` puts N loose parts into an
+acceptor at once for the cost per part (it changes the shift). Switching off: a flow volume loses its collider, its
+script and its list of bodies (a disabled trigger sends no exit, so the list would be stale); the acceptors lose only
+their colliders, as their coroutines must go on destroying what they took. Effects are paused and not drawn: disabled
+and enabled again, the furnaces' gas clouds stayed empty for the rest of the first run.
+
+First run (2026-11-20, `bay-cost.txt` without the feed part, mock runtime so the frame rate is not tied to a headset,
+1.15x, eye sharing on, free play with a Mackerel in the bay, standing at the Hab 150 m from the furnaces and looking
+at the bay's side wall, 20 s per stretch, about 1,400 frames each). The main thread set the pace: 13.5-13.9 ms per
+frame, the same stretch measured twice differed by 0.4 ms, so smaller differences are noise.
+- **All of the physics take 0.23 ms per frame**, 1.7 % of it (`FixedUpdate` phase; `PhysicsFixedUpdate` 0.17 ms at
+  0.69 steps per frame, so 0.25 ms per step). With the 14 flow volumes off: 0.22 ms. With the acceptors' triggers
+  off: 0.25 ms. So the furnaces' physics cost nothing measurable while nothing is in them. The bay held 181
+  rigidbodies, 160 of them kinematic, 1 awake, and no body in any flow volume.
+- The furnaces' lights: no difference with their shadows off (13.7 ms) or the lights off (13.6 ms). Marc plays with
+  `Bild/LampenschattenNurNah`, so every lamp's shadows already ended at 24 m (20 m at world scale 1.2) and these
+  two were 146 and 153 m away.
+- The furnaces' two gas clouds hold 770 of the bay's 1,040 particles. Without them `PostLateUpdate.VFXUpdate` went
+  from 0.22 to 0.17 ms; the frame time did not change beyond noise. What they cost the GPU up close is not in these
+  numbers: the frame was limited by the main thread throughout.
+- All shadows off, the sun's included: 12.9 ms, 0.6-1.0 ms less. Shadow casters went from 1,300 to 0 and draw calls
+  from 4,110 to 3,490 (HDRP's render 6.4-6.6 to 5.8 ms, its Submits 2.0 to 1.6 ms). With the lamps already limited,
+  those 1,300 casters are nearly all the sun's.
+- Where the 13.7 ms go instead: HDRP's render 6.5 ms, the ECS simulation group 1.65, the scripts' `Update` 1.2 and
+  `LateUpdate` 1.2, the ECS presentation group 0.5 ms.
+Not measured yet: parts in a furnace (`bay feed`), and the view from close to a furnace mouth in the headset, where
+the GPU could be the limit.
+The 50 physics steps a second are no cause of visible stutter at 72 or 90 frames a second either: the game switches
+interpolation on for every part that moves on its own (`HierarchyParent`, for bodies below the kinematic mass), and
+for the player's body.
+
+## What the scripts cost
+`VrFrameProfile` gives Unity's steps as a whole. In the bay the scripts' `Update` and `LateUpdate`
+(`Update.ScriptRunBehaviourUpdate`, `PreLateUpdate.ScriptRunBehaviourLateUpdate`) take about 1.2 ms each per frame, of
+5.7 ms game logic, and nothing said which classes that is: the game's, its libraries' (UI, Cinemachine, HDRP's light
+and decal components, the sound engine) or the mod's. `VrTestProfile` (test mode, script command `profile on|off`,
+example in `tools/vr-tests/script-cost.txt`) times every `Update`, `LateUpdate` and `FixedUpdate` a loaded script class
+declares: a transpiler puts a call with a timestamp at the method's start and before each return. A stretch named with
+`stats` then gets a `Script steps` line with the three messages' totals and the classes that take the most, in
+milliseconds per frame and calls per frame.
+- A class's time is its own; time in another timed method it calls counts for that one.
+- Only the method bodies are timed: Unity's call into each method is not (the call counts are there to estimate it),
+  and neither are prefixes and postfixes other patches put on the method, the mod's among them.
+- Generic classes are left out and named in the `Script profile: ...` line, which also gives what the timestamps cost
+  per call. The frame time of a profiled stretch is therefore not the game's; the example script has a stretch
+  without the timestamps before and after.
+
+Runs in the bay (2026-11-21, 0.32.0 with this profile, mock runtime, 1.15x, both hands empty, standing at the Hab;
+15.3 ms per frame, 313 methods timed, 61 ns per timed call):
+- `Update`: 0.92 ms in 1,144 calls per frame; `LateUpdate`: 0.34 ms in 227 calls; `FixedUpdate`: 0.05 ms in 23 calls.
+  Unity's steps around them take 1.26 and 1.5 ms, so calling into the 1,144 `Update`s costs about 0.3 ms on top.
+- No script of the game stands out: `Main.Update` 0.16 ms, `LynxControls.Update` 0.09, `BayAnimatedLightManager.Update`
+  0.06 (8 calls), `ScrollRect.LateUpdate` 0.04, `EventSystem.Update` 0.04, everything else below 0.04 ms.
+  `TriggerableComponent.Update` runs 568 times per frame and does next to nothing (0.04 ms in all, most of it the
+  timestamps), `HDAdditionalLightData.LateUpdate` 194 times (0.02 ms).
+- The mod is the largest single item: `VrHands` 1.13 ms (all of it in `LateUpdate`, see "Performance audit" for its
+  parts), the VR camera's `LateUpdate` 0.26 ms and `Update` 0.15 ms for the other steps. `Mod steps` in the same run:
+  1.6 ms per frame, hands 1.1, lamp shadows 0.09, everything else below 0.05 ms.
+- Threading: `Render info` reports `LegacyJobified` with 7 job workers.
+A first run logged no `Script steps` for the profiled stretch (`profile off` threw the numbers away before the
+stretch's lines were logged), and its `Frame steps` seemed to show 1.6 ms more in `ScriptRunBehaviourUpdate` at the
+start of a shift: that was the stall of putting the timestamps in (2.1 s for 178 methods, 3.7 s for 313), which
+landed in the step totals of the stretch that ended in that frame, but not in its frame count.
+
+In a `stats` stretch the `Mod steps` line (`VrFrame`, the mod's own steps per frame) is now logged as well, and
+`Render info` gives Unity's threading mode (`SystemInfo.renderingThreadingMode`) and the number of job workers next to
+`multithreaded rendering`, which reads False in this game although `Player.log` says `GfxDevice: creating device
+client; threaded=1`: `boot.config` asks for graphics jobs, and `graphicsMultiThreaded` is only true for the plain
+render thread mode.
+
+## What loose parts cost
+Whether the physics of loose parts is what fills the main thread (Marc's guess, 2026-11-21). Test mode can now make
+the scene: `bay break N` takes N parts off the ship the way the game does it (`RemoveHierarchyJointsEvent`, which
+`BreakableJointComponent` and the vaporization post too: the hierarchy drops every joint of the part), `bay push`
+sets loose parts moving and `bay bodies` counts them. `VrTestProfile` also times the physics messages of script
+classes (`OnCollision...`, `OnTrigger...`) and every system of the entity worlds by its class, with prefixes and
+postfixes on `ComponentSystem.Update`, `JobComponentSystem.Update` and `SystemBase.Update`: that includes the wait for
+the jobs a system depends on, and not the jobs' own work on other threads. Example: `tools/vr-tests/busy-bay.txt`.
+
+Run in free play (0.32.0 with the profile and the lighter hands, mock runtime, 1.15x, eye sharing on, standing at the
+Hab, both hands empty; main thread, ms per frame; 196 methods and 346 systems timed at 61 ns per call, which changed
+neither the frame time nor a step of the idle scene):
+
+| | idle | 87-89 loose parts awake | 440-550 awake | 670-680 awake |
+|---|---|---|---|---|
+| frame time | 13.6 | 16.4 | 18.2 | 17.4 |
+| `FinishFrameRendering` (HDRP on the main thread) | 6.6 | 6.8 | 7.0 | 6.5 |
+| ECS simulation and presentation groups | 2.1 | 3.0 | 4.3 | 4.3 |
+| the systems themselves (339-342 per frame) | 2.3 | 3.2 | 4.5 | 4.9 |
+| scripts, `Update` and `LateUpdate` steps | 2.3 | 2.7 | 2.6 | 2.2 |
+| `PhysicsFixedUpdate` | 0.18 | 0.92 | 1.17 | 0.87 |
+| interpolation (`PhysicsResetInterpolatedTransformPosition`, `PreUpdate.PhysicsUpdate`) | below 0.2 | below 0.4 | 0.48 | 0.59 |
+| `ScriptRunBehaviourFixedUpdate` | below 0.1 | below 0.2 | below 0.2 | 0.56 |
+| draw calls | 4,065 | 5,200 | 3,549 | 3,748 |
+
+- The bay holds 765 parts on 183 rigidbodies, 160 of them kinematic, one awake. The first 50 parts taken off left 89
+  loose bodies, the next 200 made it 546, and at the end every part was off (677 loose bodies). About 100 parts were
+  gone by then (furnaces, processors). The parts were pushed at up to 2 m/s and drifted apart and out of sight, so
+  the two larger stages have fewer draw calls than the idle bay.
+- Physics is not the large item: 0.2 ms idle, 1.0 ms with 90 parts still close to the ship and each other, 1.7 ms
+  with 500 drifting freely, interpolation included. The cost goes with contacts more than with the number of bodies:
+  90 parts next to the ship cost nearly what 500 apart did. A pile of parts that lie against each other was not
+  measured and will cost more per part. Loose parts do not come to rest: 670 of 677 were still awake a minute later,
+  nothing slows them in the bay.
+- The game's systems grow more than the physics: from 2.3 to 4.5-4.9 ms. The largest is
+  `LynxCopyTransformsSystem`, 0.60 ms idle and 1.01-1.07 ms with the parts loose; it reads the position and rotation
+  of every entity's `Transform` on the main thread each frame, moving or not (`EntityQuery.ToRigidTransformArray`),
+  before its job writes them to the entities. Then `FreezableProximityHandlerSystem` (0 to 0.24),
+  `ObjectTrackerSystem` (0.05 to 0.19), `VitalitySystem` (0.11 to 0.17), `UpdateClusterDataSystem` (to 0.13),
+  `UpdateHierarchyParentsSystem` (0.45 in the last stage, in the fixed step) and `ECSGraphCommandBufferSystem`
+  (0.14). About 25 more take 0.03-0.1 ms each, and the remaining 300 about 1.2 ms together.
+- Scripts: `Update` 0.9-1.07 ms in about 1,000 calls, `LateUpdate` 0.8-1.1 ms of which the VR camera's (the mod's
+  late steps, the hands among them) is 0.75-1.06. The physics messages are nothing: 0.03 ms in 4 calls per frame.
+- Rendering on the main thread stays the largest item in every stage (6.4-7.0 ms, 37-48 % of the frame).
+- The mod: 1.13-1.37 ms per frame, the hands 0.70-0.84 (1.1 before the lighter hands, in the same pose).
+- Three more shifts the same night, each with another ship (free play makes a new one each time) and 250 parts
+  taken off, went further: 360 loose parts and 700 rigidbodies awake gave 20-26 ms per frame, with the systems at
+  5.5-7.6 ms (`LynxCopyTransformsSystem` 1.2-1.4, `UpdateHierarchyParentsSystem` 0.65, `ObjectTrackerSystem` 0.21,
+  `ECSGraphCommandBufferSystem` 0.18, `VitalitySystem` 0.18, the freezing and burning handlers 0.05-0.15 each),
+  `PhysicsFixedUpdate` 1.4-2.3 ms plus 0.65 of interpolation and 0.86 in the fixed step's scripts, and the rendering
+  at 7.4-7.9 ms. How much a ship costs once it is in pieces depends on the ship; the order of the items stayed the
+  same. Reading the parts' transforms on the job threads (`VrTransformRead`, on its own branch) takes 0.4-0.6 ms off
+  `LynxCopyTransformsSystem`.
+- The last stretch of the script, without the timestamps, is no comparison: it has no physics steps and no hands
+  (0.01 ms), so the game no longer ran the shift by then (not looked into; the idle stretch with and without the
+  timestamps is the comparison).
+
 ## Roadmap
 1. Inventory – done
 2. Foundation (BepInEx, plugin, camera hook) – done
