@@ -1443,6 +1443,14 @@ neither the frame time nor a step of the idle scene):
   late steps, the hands among them) is 0.75-1.06. The physics messages are nothing: 0.03 ms in 4 calls per frame.
 - Rendering on the main thread stays the largest item in every stage (6.4-7.0 ms, 37-48 % of the frame).
 - The mod: 1.13-1.37 ms per frame, the hands 0.70-0.84 (1.1 before the lighter hands, in the same pose).
+- Three more shifts the same night, each with another ship (free play makes a new one each time) and 250 parts
+  taken off, went further: 360 loose parts and 700 rigidbodies awake gave 20-26 ms per frame, with the systems at
+  5.5-7.6 ms (`LynxCopyTransformsSystem` 1.2-1.4, `UpdateHierarchyParentsSystem` 0.65, `ObjectTrackerSystem` 0.21,
+  `ECSGraphCommandBufferSystem` 0.18, `VitalitySystem` 0.18, the freezing and burning handlers 0.05-0.15 each),
+  `PhysicsFixedUpdate` 1.4-2.3 ms plus 0.65 of interpolation and 0.86 in the fixed step's scripts, and the rendering
+  at 7.4-7.9 ms. How much a ship costs once it is in pieces depends on the ship; the order of the items stayed the
+  same. Reading the parts' transforms on the job threads (`VrTransformRead`, on its own branch) takes 0.4-0.6 ms off
+  `LynxCopyTransformsSystem`.
 - The last stretch of the script, without the timestamps, is no comparison: it has no physics steps and no hands
   (0.01 ms), so the game no longer ran the shift by then (not looked into; the idle stretch with and without the
   timestamps is the comparison).
