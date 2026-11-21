@@ -13,16 +13,18 @@ using UnityEngine.Jobs;
 namespace ShipbreakerVR
 {
     // Rendering/LagenParallelLesen: the game's LynxCopyTransformsSystem is the largest of its 340 systems on the main
-    // thread, 0.6 ms per frame in a quiet bay and 1.1 ms with hundreds of loose parts (see docs/NOTES.md, "What loose
-    // parts cost"). Each frame it reads the position and rotation of every part's Transform one after the other on the
-    // main thread (EntityQuery.ToRigidTransformArray), whether the part moved or not, and only then starts the job that
-    // writes them to the entities. With the option on, a read-only transform job reads them on all job threads, and the
-    // main thread waits for it (and works along): the array is the same, in the same order, when the game's job starts.
+    // thread, 0.6 ms per frame in a quiet bay and 1.2 ms with hundreds of loose parts (see docs/NOTES.md, "The parts'
+    // transforms, read on the job threads", also for what this saves). Each frame it reads the position and rotation
+    // of every part's Transform one after the other on the main thread (EntityQuery.ToRigidTransformArray), whether
+    // the part moved or not, and only then starts the job that writes them to the entities. With the option on, a
+    // read-only transform job reads them on all job threads, and the main thread waits for it (and works along): the
+    // array is the same, in the same order, when the game's job starts.
     // - The transforms are kept in a TransformAccessArray. Building that anew costs 2 to 3 ms for 1,600 transforms,
-    //   several frames' worth of reading, and in a busy bay the system's query changes in two of five frames (parts
-    //   are split, vaporized, taken by the furnaces). So the array is kept in step instead (SlotMap): entities that
-    //   left the query leave it, new ones join at its end, and each slot knows where its entity stands in the query's
-    //   order, which is where the job writes its result.
+    //   several frames' worth of reading, and in a busy bay the system's query changes in many frames, in some
+    //   shifts in every one (parts are split, vaporized, taken by the furnaces, or change chunk and with it their
+    //   place). So the array is kept in step instead (SlotMap): entities that left the query leave it, new ones join
+    //   at its end, and each slot knows where its entity stands in the query's order, which is where the job writes
+    //   its result.
     // - When to look: Unity raises the order version of Transform for every entity with a Transform that is added,
     //   removed or moved between chunks, so while it stands still and the count is the same, the query holds the
     //   same entities in the same order. It moves for entities that are none of these parts too, in a busy bay every
