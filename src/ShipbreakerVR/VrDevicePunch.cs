@@ -13,8 +13,11 @@ namespace ShipbreakerVR
     // the controller's own swing against the body, not the body's flight, and into its surface. The hand is on the device
     // when the controller is within Fist of a solid shape on the device's body and of a shape of the device itself (its
     // 'VOL_Interactable', which is what a hand holds of it). A grip closed only as the hand arrives takes hold instead
-    // (VrClimb.CatchTime), so the fist is made before. Each blow: a buzz, harder each time, the game's sparks of metal on
-    // metal and the sound of a part breaking off (VrPullOff.Blow). Experimente/GeraeteSchlag switches it off.
+    // (VrClimb.CatchTime), so the fist is made before. Each blow: a buzz, harder and longer each time, the game's sparks
+    // of metal on metal and the sound of a part breaking off (VrPullOff.Blow). Experimente/GeraeteSchlag switches it off.
+    // Raik's test (2026-11-22): the blows work, but he felt and heard nothing. The buzz was one impulse of 0.12 s; it is
+    // now sent anew each frame for its time, as the buzz of pulling is, which he feels. A sound for the blow is a thing
+    // for the next release (he and Marc think of one).
     internal static class VrDevicePunch
     {
         // Blows it takes.
@@ -27,6 +30,9 @@ namespace ShipbreakerVR
         private const float Fist = 0.09f;
         // The same hand strikes again only after this long, in seconds.
         private const float Again = 0.25f;
+        // A blow's buzz: how long for the first blow and for the last, in seconds.
+        private const float BuzzFirst = 0.18f;
+        private const float BuzzLast = 0.35f;
 
         private sealed class Arm
         {
@@ -35,6 +41,8 @@ namespace ShipbreakerVR
             public float Speed;
             public bool On;
             public float BlowAt = -10f;
+            public float BuzzUntil;
+            public float BuzzStrength;
         }
 
         private static readonly Arm[] Arms = { new Arm(), new Arm() };
@@ -72,6 +80,8 @@ namespace ShipbreakerVR
 
         private static void Step(VrInput.Hand input, Arm arm)
         {
+            // A blow is felt for its time, whatever the hand does after it.
+            if (Time.time < arm.BuzzUntil) input.Buzz(arm.BuzzStrength, 0.05f);
             var vr = VrCamera.Instance;
             var rig = vr != null ? vr.transform.parent : null;
             var dt = Time.deltaTime;
@@ -130,7 +140,10 @@ namespace ShipbreakerVR
             }
             arm.BlowAt = Time.time;
             var blows = before + 1;
-            input.Buzz(Mathf.Lerp(0.5f, 1f, (blows - 1) / (Blows - 1f)), 0.12f);
+            var share = (blows - 1) / (Blows - 1f);
+            arm.BuzzStrength = Mathf.Lerp(0.7f, 1f, share);
+            arm.BuzzUntil = Time.time + Mathf.Lerp(BuzzFirst, BuzzLast, share);
+            input.Buzz(arm.BuzzStrength, 0.05f);
             VrPullOff.Blow(device, ship, hit.point, hit.normal);
             if (logs++ < 60)
                 Plugin.Log.LogInfo($"Device punch: {input.Name} fist strikes '{name}' at {fastest:0.0} m/s, blow {blows} of {Blows}, {Punch.Left(blows, Blows) * 100f:0} % of it left");
@@ -161,6 +174,7 @@ namespace ShipbreakerVR
             Gone.Clear();
             Arms[0].Known = Arms[1].Known = false;
             Arms[0].On = Arms[1].On = false;
+            Arms[0].BuzzUntil = Arms[1].BuzzUntil = 0f;
             System.Array.Clear(Found, 0, Found.Length);
         }
     }
