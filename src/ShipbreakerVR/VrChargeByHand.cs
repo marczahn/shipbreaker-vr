@@ -910,6 +910,20 @@ namespace ShipbreakerVR
         // Each label with the mod's text in it and its own text (a HUD may have more than one of these controllers; each
         // switches its own labels).
         private static readonly Dictionary<TMPro.TMP_Text, string> Hinted = new Dictionary<TMPro.TMP_Text, string>();
+        // The warning's own colour got lost against the scene (Raik, 2026-11-23: "the writing must be a good deal
+        // brighter, it is lost in the background"): the mod's text is written in WarnColor, bold, and the label's own
+        // colour and style are put back with its text.
+        private static readonly Color WarnColor = new Color(1f, 0.97f, 0.88f, 1f);
+        private static readonly Dictionary<TMPro.TMP_Text, (Color Color, TMPro.FontStyles Style)> Looks =
+            new Dictionary<TMPro.TMP_Text, (Color, TMPro.FontStyles)>();
+
+        private static void OwnLook(TMPro.TMP_Text text)
+        {
+            if (!Looks.TryGetValue(text, out var look)) return;
+            text.color = look.Color;
+            text.fontStyle = look.Style;
+            Looks.Remove(text);
+        }
 
         private sealed class Fading
         {
@@ -948,6 +962,7 @@ namespace ShipbreakerVR
                 text.text = was;
                 Hinted.Remove(text);
             }
+            OwnLook(text);
             var group = label.GetComponent<CanvasGroup>();
             for (var i = Fades.Count - 1; i >= 0; i--)
                 if (Fades[i].Group == null || Fades[i].Group == group) Fades.RemoveAt(i);
@@ -957,6 +972,10 @@ namespace ShipbreakerVR
             was = text.text;
             Hinted[text] = was;
             text.text = LimitText(limit, warnHint);
+            var own = text.color;
+            Looks[text] = (own, text.fontStyle);
+            text.color = WarnColor;
+            text.fontStyle |= TMPro.FontStyles.Bold;
             if (group == null)
             {
                 group = label.AddComponent<CanvasGroup>();
@@ -971,7 +990,7 @@ namespace ShipbreakerVR
                 if (shown != null) WarnTimeLeft(shown) = WarnShow + WarnFade;
                 Fades.Add(new Fading { Group = group, Until = Time.time + WarnShow + WarnFade });
             }
-            if (hintLogs++ < 5) Plugin.Log.LogInfo($"Charge by hand: the limit of {limit} charges is reached, told in the place of the game's warning '{was}' for {WarnShow:0} s, fading within {WarnFade:0.0} s");
+            if (hintLogs++ < 5) Plugin.Log.LogInfo($"Charge by hand: the limit of {limit} charges is reached, told in the place of the game's warning '{was}' for {WarnShow:0} s, fading within {WarnFade:0.0} s; its own colour was {own}, the mod's text is {WarnColor}, bold");
         }
 
         // Each frame: the warnings fade towards their end (the game's clock, as its own count of the time left).
@@ -1394,6 +1413,13 @@ namespace ShipbreakerVR
             foreach (var pair in Hinted)
                 if (pair.Key != null) pair.Key.text = pair.Value;
             Hinted.Clear();
+            foreach (var pair in Looks)
+                if (pair.Key != null)
+                {
+                    pair.Key.color = pair.Value.Color;
+                    pair.Key.fontStyle = pair.Value.Style;
+                }
+            Looks.Clear();
             Fades.Clear();
             foreach (var group in OwnGroups)
                 if (group != null) Object.Destroy(group);
