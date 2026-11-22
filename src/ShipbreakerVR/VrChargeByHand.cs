@@ -837,9 +837,10 @@ namespace ShipbreakerVR
 
         // How many charges may be out at once. The game's own number (IDemoChargeControllerData.InWorldLimit) is 15 in
         // its data, with 5 carried (more with upgrades): it is only reached after buying more charges at the kiosk in
-        // the same shift. In VR the limit is OwnLimit (Raik, 2026-11-22: "LYNX gives a most of 6 active charges"),
-        // never more than the game's; Experimente/SprengsatzLimit sets another number (0: the game's).
-        private const int OwnLimit = 6;
+        // the same shift. Experimente/SprengsatzLimit sets a smaller number (0: the game's). For a day the mod's own
+        // limit was 6 (Raik, 2026-11-22: "LYNX gives a most of 6 active charges"); he took that lock out again on
+        // 2026-11-23 ("for now"), so the game's number holds unless the config says otherwise.
+        private const int OwnLimit = 0;
         private static ConfigEntry<int> ownLimit;
         private static int limitLogged = -1;
 
@@ -853,7 +854,7 @@ namespace ShipbreakerVR
             catch (System.Exception) { return false; }
             if (ownLimit == null && VrSettings.File != null)
                 ownLimit = VrSettings.Bind("Experimente", "SprengsatzLimit", OwnLimit,
-                    "How many demo charges may be out at once in VR (on walls and afloat), at most the game's own limit (15). 0: the game's limit.");
+                    "How many demo charges may be out at once in VR (on walls and afloat), at most the game's own limit (15). 0: the game's limit, no limit of the mod's own.");
             limit = ownLimit != null && ownLimit.Value > 0 ? Mathf.Min(ownLimit.Value, data.InWorldLimit) : data.InWorldLimit;
             if (limit != limitLogged)
             {
