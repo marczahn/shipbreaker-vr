@@ -530,7 +530,8 @@ namespace ShipbreakerVR
             public float Reach = float.MaxValue;
         }
 
-        private static readonly RaycastHit[] Hits = new RaycastHit[16];
+        // For the short ray from the charge's back to the wall (a few centimetres): room for all that can lie in it.
+        private static readonly RaycastHit[] Hits = new RaycastHit[32];
         private static readonly FieldInfo PreviewField = AccessTools.Field(typeof(DemoChargeController), "m_Preview");
         private static readonly FieldInfo DataField = AccessTools.Field(typeof(DemoChargeController), "mData");
         private static readonly FieldInfo JointSetup = AccessTools.Field(typeof(DemoChargeController), "mCachedJSA");
@@ -682,20 +683,31 @@ namespace ShipbreakerVR
             var data = Data(controller);
             if (!Auto || data == null || !AimRay(hand, out var ray)) return;
             // The first thing the ray meets, as with the game's ray from the camera: a wall behind a pipe is not reached.
-            count = Physics.RaycastNonAlloc(ray, Hits, data.RaycastDistance, mask, QueryTriggerInteraction.Ignore);
-            var first = -1;
-            nearest = float.MaxValue;
-            for (var i = 0; i < count; i++)
-                if (Hits[i].distance < nearest && !Ours(Hits[i].collider, frame))
-                {
-                    nearest = Hits[i].distance;
-                    first = i;
-                }
-            if (first < 0) return;
-            var aimed = Hits[first].collider.GetComponent<StructurePart>();
+            if (!FirstHit(ray, data.RaycastDistance, mask, frame, out var met)) return;
+            var aimed = met.collider.GetComponent<StructurePart>();
             if (!Fits(aimed, part)) return;
-            Found(held, aimed, Hits[first], frame);
+            Found(held, aimed, met, frame);
             held.Aimed = true;
+        }
+
+        // The nearest thing along a ray that is not ours (Ours). Asked for one hit at a time, going on behind each of
+        // our own: Physics.RaycastNonAlloc fills its array with any of the hits along the ray, not the nearest ones, so
+        // with more things along the ray than the array holds (16; in tight rooms full of pipes and panels, over the
+        // game's whole reach) the wall in front could be missing from it, and the preview went to one behind.
+        private static bool FirstHit(Ray ray, float reach, LayerMask mask, Transform charge, out RaycastHit hit)
+        {
+            var from = ray.origin;
+            for (var own = 0; own < 8 && reach > 0f; own++)
+            {
+                if (!Physics.Raycast(from, ray.direction, out hit, reach, mask, QueryTriggerInteraction.Ignore)) return false;
+                if (!Ours(hit.collider, charge)) return true;
+                // On from just inside that one, which a ray starting within it does not meet again.
+                var step = hit.distance + 0.001f;
+                from += ray.direction * step;
+                reach -= step;
+            }
+            hit = default;
+            return false;
         }
 
         // ---- The preview and the trigger (Auto) ----
