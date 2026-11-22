@@ -350,10 +350,37 @@ namespace ShipbreakerVR
             var part = device.GetComponentInParent<StructurePart>();
             var name = part != null ? part.name : device.name;
             device.Complete();
+            // The part itself comes from that event, as with the prompt (InteractionController posts the same after
+            // Complete): the device's TriggerableOnInteractProgressComplete hears it and sets off its
+            // SpaceTruckPartExtractionController (the device counts as stripped) and its TriggerableCurrencyChange (the
+            // part is added to the profile, and SpaceTruckPartCollectionEvent tells of it). The log says what came of it.
+            Main.EventSystem.RemoveHandler<SpaceTruckPartCollectionEvent>(Credited);
+            Main.EventSystem.AddHandler<SpaceTruckPartCollectionEvent>(Credited);
+            credited = 0;
             ((Carbon.Core.Events.IEventBroadcaster)Main.EventSystem).Post(InteractionEvent.GetEvent(InteractionEvent.InteractionType.ProgressComplete, device));
             input.Buzz(1f, 0.15f);
-            if (stripLogs++ < 60) Plugin.Log.LogInfo($"Pull off: '{name}' stripped for its part by the {input.Name} hand {how}");
+            if (stripLogs++ < 60)
+                Plugin.Log.LogInfo($"Pull off: '{name}' stripped for its part by the {input.Name} hand {how}; "
+                    + (credited > 0 ? "the game added its part to the truck's parts" : "the game added no part by now (one added later is told by its own line)"));
             return true;
+        }
+
+        private static int credited;
+
+        static VrPullOff() => VrSession.OnUnload("pull off", Release);
+
+        // The game's event system forgets the mod's listener.
+        private static void Release()
+        {
+            if (Main.EventSystem != null) Main.EventSystem.RemoveHandler<SpaceTruckPartCollectionEvent>(Credited);
+        }
+
+        // The game tells that a part of the truck was collected (TriggerableCurrencyChange).
+        private static void Credited(SpaceTruckPartCollectionEvent collected)
+        {
+            credited++;
+            var part = collected != null ? collected.SpaceTruckPart : null;
+            if (stripLogs++ < 60) Plugin.Log.LogInfo($"Pull off: the game adds a part of the truck: '{(part != null ? part.name : "-")}'");
         }
 
         private static void EndStrip(Pull pull, InteractableObject device)
