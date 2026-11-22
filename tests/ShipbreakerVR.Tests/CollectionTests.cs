@@ -54,11 +54,13 @@ namespace ShipbreakerVR.Tests
             Assert.Equal("A", VrCollection.WithKinds("A", new string[0]));
         }
 
-        [Fact]
-        public void TheRadiosBuiltInPlaceIsAPlace()
+        [Theory]
+        [InlineData(VrRadio.BuiltInPlace, 4)]
+        [InlineData(VrAiNode.LargeBuiltIn, 3)]
+        public void TheBuiltInPlacesArePlaces(string place, int numbers)
         {
-            var parts = VrRadio.BuiltInPlace.Split(';');
-            Assert.Equal(4, parts.Length);
+            var parts = place.Split(';');
+            Assert.Equal(numbers, parts.Length);
             foreach (var part in parts)
                 Assert.True(float.TryParse(part.Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _));
         }

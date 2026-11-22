@@ -69,8 +69,17 @@ namespace ShipbreakerVR
         // hard crate and the barrels, leaning on the crate's side towards them (Raik looked down there, at 133.2 118.3).
         // Both measured on their models in the room (Measure): the survey's boxes are too large, as the Hab stands turned
         // (the large one floated beside the crate's middle, the long one stood off the crate).
-        private const string WhiteCrate = "PRF_Hab_Prop_StorageTower";
         private const string BlackCrate = "PRF_Hab_Crate_Hard";
+        // The places as the last test in Raik's Hab had them (log of 2026-11-16, the Hab's floor at 21.516 in the room's
+        // axes): the white storage tower ('PRF_Hab_Prop_StorageTower') measured from (129.28, 21.51, 119.95) to
+        // (130.03, 22.49, 120.95), so the middle of its top is at 129.65, 0.97 above the floor, 120.45; the large round
+        // node rested there with its own middle at (129.65, 1.07, 120.45). The black hard crate measured from
+        // (132.88, 21.52, 117.19) to (133.54, 22.53, 117.69); the long node leaned on it at (133.40, 0.25, 117.81).
+        // The Hab is the same for everyone, so these are built in: the large one's place for good, the black crate's
+        // box for when it cannot be measured.
+        internal const string LargeBuiltIn = "129.65; 0.97; 120.45";
+        private static readonly Vector3 BlackCrateMin = new Vector3(132.88f, 0.004f, 117.19f);
+        private static readonly Vector3 BlackCrateMax = new Vector3(133.54f, 1.014f, 117.69f);
         private const string Floor = "PRF_Hab_Rev_03/SM_Hab_Interior_Floor";
         private const float LeanAngle = 14f;
         private const float LeanTurn = 20f;
@@ -160,7 +169,7 @@ namespace ShipbreakerVR
             Fine = VrSettings.Bind("Experimente", "KiKnotenStrafe", true,
                 "Experiment: an AI node put in the backpack is fined by the game as one thrown into the processor (at the end of the shift).");
             LargePlace = VrSettings.Bind("Experimente", "KiKnotenPlatzGross", "",
-                "Experiment: where the large round AI node rests in the Hab, 'x; y; z' in the room's axes as a hand snapshot writes them (y above the floor), its bottom's middle. Empty: on the white crate's top as measured.");
+                "Experiment: where the large round AI node rests in the Hab, 'x; y; z' in the room's axes as a hand snapshot writes them (y above the floor), its bottom's middle. Empty: on the white crate's top (" + LargeBuiltIn + ").");
             BenchLight = VrSettings.Bind("Experimente", "KiKnotenAufhellung", 40f,
                 "Experiment: a small light above the AI node on the workbench, in lumen, as the lamps above the bench light the bench (0: none).");
         }
@@ -613,12 +622,11 @@ namespace ShipbreakerVR
             var wall = Vector3.ProjectOnPlane(room.TransformDirection(TowardsWall), up).normalized;
             var spot = room.TransformPoint(new Vector3(Spot.x, floor + BenchTop, Spot.y));
             var tools = GameObject.Find("SM_Hab_Prop_WorkbenchTool_Scissors");
-            // On the white crate's top, in its middle; without it, on the bench.
-            var crate = Measure(room, WhiteCrate, out var white)
-                ? room.TransformPoint(new Vector3(white.center.x, white.max.y, white.center.z))
-                : spot;
-            // Shown by hand (Raik 2026-11-15: the crate's measured top lay below its drawn one, the node inside it).
-            if (TryPlace(LargePlace, room, floor, out var placed)) crate = placed;
+            // On the white crate's top, in its middle: the built-in place, as measured in Raik's Hab (LargeBuiltIn), so
+            // it does not hang on a measuring at run time. Experimente/KiKnotenPlatzGross goes first where it is set
+            // (shown by hand, Raik 2026-11-15: the crate's top measured then lay below its drawn one, the node inside it).
+            var crate = spot;
+            if (TryPlace(LargePlace, room, floor, out var placed) || TryPlace(LargeBuiltIn, room, floor, out placed, out _)) crate = placed;
             // A measuring gone wrong must not put a node out of the room (Raik 2026-11-15: two of three not to be seen).
             if (Vector3.Distance(crate, spot) > FarOff)
             {
@@ -706,8 +714,9 @@ namespace ShipbreakerVR
             // middle, on the floor's own top where it is measured.
             if (!Measure(room, BlackCrate, out var crate))
             {
-                Plugin.Log.LogWarning($"AI node: '{BlackCrate}' not found, the long one stands by the bench");
-                crate = new Bounds(new Vector3(Spot.x - 0.5f, floor + 0.5f, Spot.y - 0.5f), Vector3.one * 0.6f);
+                Plugin.Log.LogWarning($"AI node: '{BlackCrate}' not found, the long one leans where the crate was measured before");
+                crate = default;
+                crate.SetMinMax(BlackCrateMin + Vector3.up * floor, BlackCrateMax + Vector3.up * floor);
             }
             var ground = floor;
             if (Measure(room, Floor, out var floorBox) && Mathf.Abs(floorBox.max.y - floor) < 0.15f) ground = floorBox.max.y;
