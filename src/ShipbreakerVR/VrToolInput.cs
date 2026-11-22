@@ -436,9 +436,10 @@ namespace ShipbreakerVR
         }
 
         // Grip pressed at a zone of the tool belt: that tool goes into this hand. Through the game's own selection keys
-        // (EquipmentController.Update), which check whether the tool may change; a tool that is already out (in the other
-        // hand) only changes hands. With the cutter or the grapple in the other hand, the other one of the two joins it
-        // in this hand (VrDualTools).
+        // (EquipmentController.Update), which check whether the tool may change. A tool the other hand holds is not at
+        // its place: the reach takes nothing (HeldByOther); one that is out but not held (let go, afloat) comes into
+        // this hand. With the cutter or the grapple in the other hand, the other one of the two joins it in this hand
+        // (VrDualTools).
         // asTool: the demo charges as the game's tool, also with the charges put on by hand. False if the game does not let
         // the tool change now.
         private static bool Draw(Hand hand, VrToolBelt.Zone zone, bool asTool = false)
@@ -456,6 +457,11 @@ namespace ShipbreakerVR
             if (!equipment.CanEquip(tool) || equipment.IsEquipmentBlocked(tool)) return false;
             // With the charges put on by hand, one comes out from behind the back as a thing of its own (VrChargeByHand).
             if (zone == VrToolBelt.Zone.DemoCharge && !asTool && VrChargeByHand.TakesOut(hand.Input)) return true;
+            if (HeldByOther(hand, zone, tool))
+            {
+                if (logs++ < 60) Plugin.Log.LogInfo($"Tool control: {hand.Name} hand reaches for the {zone}'s place, but the other hand holds it: nothing taken");
+                return true;
+            }
             // The demo charges behind the back and their detonator at the hip are one tool of the game's, in two modes.
             if (tool == EquipmentController.Equipment.DemoCharge && !VrChargeByHand.Draws(zone == VrToolBelt.Zone.Detonator)) return true;
             if (VrDualTools.Second == tool)
@@ -491,6 +497,21 @@ namespace ShipbreakerVR
             VrHand.TakeGameTool(hand.Vr, tool);
             holsterPulses = 0;
             return true;
+        }
+
+        // The tool that place gives is in the other hand, held there with its grip: the place is empty then (Raik,
+        // 2026-11-22: reaching for the detonator's or the cutter's place with the other hand made the tool jump into
+        // that hand; a tool goes from hand to hand by taking hold of the tool itself). Not the charges behind the
+        // back: there is another one as long as there are any.
+        private static bool HeldByOther(Hand hand, VrToolBelt.Zone zone, EquipmentController.Equipment tool)
+        {
+            if (zone == VrToolBelt.Zone.DemoCharge) return false;
+            var other = hand == LeftHand ? RightHand : LeftHand;
+            if (!other.GripDown) return false;
+            if (VrDualTools.Second == tool) return VrDualTools.SecondNode == other.Node;
+            if (equipment.IsNothingEquipped || equipment.CurrentEquipment != tool || other.Vr != VrHand.GameToolHand) return false;
+            // The game's one tool for charges and detonator: only the detonator counts as its place's tool.
+            return zone != VrToolBelt.Zone.Detonator || VrChargeByHand.DetonatorOut;
         }
 
         // With the charges placed the game's way (Sprengsatzplatzierung = Automatisch): a hand that closed round a demo
