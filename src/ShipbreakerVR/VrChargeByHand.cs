@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Reflection;
 using BBI.Unity.Game;
 using BepInEx.Configuration;
@@ -547,7 +548,20 @@ namespace ShipbreakerVR
             var entity = part.EntityBlueprintComponent.Entity;
             if (!manager.Exists(entity) || !manager.HasComponent<HierarchyMember>(entity)) return;
             var parent = manager.GetComponentData<HierarchyMember>(entity).Parent;
-            if (!manager.Exists(parent) || !manager.HasComponent<Sticky>(parent)) return;
+            if (!manager.Exists(parent)) return;
+            if (!manager.HasComponent<Sticky>(parent))
+            {
+                // Let go at the game's limit before (LeaveLoose): what it would cling with is remembered, and it is
+                // given back when it is let go again below the limit (Restick).
+                if (!held.StickyOff && LeftLoose.TryGetValue(parent, out var kept))
+                {
+                    LeftLoose.Remove(parent);
+                    held.StickyMask = kept;
+                    held.StickyOn = parent;
+                    held.StickyOff = true;
+                }
+                return;
+            }
             held.StickyMask = manager.GetComponentData<Sticky>(parent).LayerMask;
             held.StickyOn = parent;
             held.StickyOff = true;
@@ -564,6 +578,17 @@ namespace ShipbreakerVR
             var manager = world.EntityManager;
             if (manager.Exists(held.StickyOn) && !manager.HasComponent<Sticky>(held.StickyOn))
                 manager.AddComponentData(held.StickyOn, new Sticky { LayerMask = held.StickyMask });
+        }
+
+        // Charges afloat that were let go with the game's limit of charges reached: they do not cling by themselves,
+        // and what they would cling with (their parent's Sticky mask) is kept here until a hand takes them again.
+        private static readonly Dictionary<Entity, LayerMask> LeftLoose = new Dictionary<Entity, LayerMask>();
+
+        private static void LeaveLoose(Afloat held)
+        {
+            if (!held.StickyOff) return;
+            held.StickyOff = false;
+            LeftLoose[held.StickyOn] = held.StickyMask;
         }
 
         private static DemoChargePreview Preview() => controller != null && PreviewField != null ? PreviewField.GetValue(controller) as DemoChargePreview : null;
@@ -722,18 +747,54 @@ namespace ShipbreakerVR
             return true;
         }
 
-        // The game's limit of charges in the world reached: its warning. The charge in the hand is one of them, and goes
+        // The game's limit of charges in the world reached (IDemoChargeControllerData.InWorldLimit, as the game's own
+        // placing asks before it puts one on or throws one). The charge in the hand is one of those counted, and goes
         // back to the stock as the new one is made.
-        private static bool LimitReached()
+        private static bool AtLimit()
         {
-            var data = Data(controller);
+            var data = controller != null ? Data(controller) : null;
             if (data == null) return false;
             int count;
             try { count = ChargeQuery(controller).CalculateEntityCount(); }
             catch (System.Exception) { return false; }
-            if (count - 1 < data.InWorldLimit) return false;
+            return count - 1 >= data.InWorldLimit;
+        }
+
+        // The same with the game's warning for it (its sound and its line on the HUD), and the mod's hint under that
+        // line (LimitShown).
+        private static bool LimitReached()
+        {
+            if (!AtLimit()) return false;
+            hintUntil = Time.unscaledTime + HintWindow;
             LimitWarning?.Invoke(controller, null);
             return true;
+        }
+
+        // With the game's warning of the charges' limit, what to do about it (Marc, 2026-11-22): the charge in the hand
+        // does not go on and does not cling, so it is to be put back, and one left behind is charged for as any lost
+        // charge. Two short lines under the game's own ('Maximum number of demo charges reached'), in its label, for
+        // as long as the game shows that; the label's own text is put back when the game switches its warnings next.
+        private const float HintWindow = 1f;
+        private static float hintUntil = -1f;
+        private static TMPro.TMP_Text hinted;
+        private static string hintedWas;
+        private static int hintLogs;
+
+        // From ChargeLimitHintPatch (InWorldLimitUIController.ToggleWarnings): the game switched its limit warnings.
+        public static void LimitShown(List<GameObject> labels, InWorldLimitType type)
+        {
+            if (hinted != null && hintedWas != null) hinted.text = hintedWas;
+            hinted = null;
+            hintedWas = null;
+            if (type != InWorldLimitType.DemoCharges || !VrXr.IsRunning || Time.unscaledTime > hintUntil) return;
+            var label = labels != null && (int)type < labels.Count ? labels[(int)type] : null;
+            var text = label != null ? label.GetComponentInChildren<TMPro.TMP_Text>(true) : null;
+            if (text == null) return;
+            hintedWas = text.text;
+            hinted = text;
+            text.text = hintedWas + "\n" + VrOptions.L("Stow the charge again.\nLost charges will be billed.",
+                "Ladung wieder verstauen.\nVerlorene Ladungen werden in Rechnung gestellt.");
+            if (hintLogs++ < 5) Plugin.Log.LogInfo($"Charge by hand: the limit of charges is reached, hint shown under the game's warning '{hintedWas}'");
         }
 
         // The charge afloat goes back to the stock the game's way and one from the stock goes on the wall, as the game
@@ -847,22 +908,26 @@ namespace ShipbreakerVR
             return true;
         }
 
-        // Let go at the wall its preview showed: on it goes. With the preview (Auto) not where it calls the place taken,
-        // nor with the game's limit of charges reached.
-        private static bool PutOn(VrInput.Hand hand, Afloat held, DemoChargeRetrievalController charge)
+        // Let go at the wall its preview showed: on it goes. With the preview (Auto) not where it calls the place taken;
+        // and with either way of placing not with the game's limit of charges reached (atLimit: then it is not to cling
+        // by itself either). Until 0.32.0 the limit was asked with Auto only, and by hand (Manuell) any number went on.
+        private static bool PutOn(VrInput.Hand hand, Afloat held, DemoChargeRetrievalController charge, out bool atLimit)
         {
             var near = held.Near;
             var shown = held.Shown;
             held.Near = held.Aimed = held.Shown = false;
             if (!near || held.Target == null || controller == null || Instantiate == null)
             {
+                atLimit = AtLimit();
                 if (logs++ < 60) Plugin.Log.LogInfo($"Charge by hand: a charge afloat let go by the {hand.Name} hand with no wall within {Reach * 100f:0} cm of its back");
                 return false;
             }
-            if (Auto && ((shown && Refused()) || LimitReached()))
+            var taken = Auto && shown && Refused();
+            atLimit = taken ? AtLimit() : LimitReached();
+            if (taken || atLimit)
             {
                 hand.Buzz(0.3f, 0.1f);
-                if (logs++ < 60) Plugin.Log.LogInfo($"Charge by hand: a charge let go by the {hand.Name} hand at a wall does not go on (the place is taken or too many charges are out)");
+                if (logs++ < 60) Plugin.Log.LogInfo($"Charge by hand: a charge let go by the {hand.Name} hand at a wall does not go on ({(taken ? "the place is taken" : "the game's limit of charges out is reached")})");
                 return false;
             }
             Place(hand, charge, held.Point, held.Turn, held.Target);
@@ -1033,15 +1098,18 @@ namespace ShipbreakerVR
             var away = !wasAt && !VrToolBelt.Stows(VrToolBelt.Zone.DemoCharge, hand);
             if (away)
             {
-                if (PutOn(hand, held, was))
+                if (PutOn(hand, held, was, out var atLimit))
                 {
                     held.StickyOff = false;
                     return;
                 }
                 if (Floats)
                 {
-                    Restick(held);
-                    if (logs++ < 40) Plugin.Log.LogInfo($"Charge by hand: a charge afloat let go by the {hand.Name} hand at {VrToolBelt.ChargePlace(hand)}, not behind the back: it floats");
+                    // With the game's limit reached it does not cling by itself where it drifts, and can be taken
+                    // and put back behind the back.
+                    if (atLimit) LeaveLoose(held);
+                    else Restick(held);
+                    if (logs++ < 40) Plugin.Log.LogInfo($"Charge by hand: a charge afloat let go by the {hand.Name} hand at {VrToolBelt.ChargePlace(hand)}, not behind the back: it floats{(atLimit ? " and does not cling (limit of charges reached)" : "")}");
                     return;
                 }
             }
@@ -1077,6 +1145,10 @@ namespace ShipbreakerVR
             mesh = null;
             meshRenderer = null;
             controller = null;
+            if (hinted != null && hintedWas != null) hinted.text = hintedWas;
+            hinted = null;
+            hintedWas = null;
+            LeftLoose.Clear();
         }
     }
 
@@ -1120,6 +1192,20 @@ namespace ShipbreakerVR
     internal static class ChargePreviewRoomPatch
     {
         private static bool Prefix(DemoChargePreview __instance) => !VrChargeByHand.TestsRoom(__instance);
+    }
+
+    // The game's HUD switches its limit warnings: the mod's hint goes under the charges' one (VrChargeByHand.LimitShown).
+    [HarmonyPatch(typeof(InWorldLimitUIController), "ToggleWarnings")]
+    internal static class ChargeLimitHintPatch
+    {
+        private static readonly AccessTools.FieldRef<InWorldLimitUIController, List<GameObject>> Labels =
+            AccessTools.FieldRefAccess<InWorldLimitUIController, List<GameObject>>("m_WarningLabels");
+
+        private static void Postfix(InWorldLimitUIController __instance, InWorldLimitType type)
+        {
+            try { VrChargeByHand.LimitShown(Labels(__instance), type); }
+            catch (System.Exception e) { Plugin.Log.LogWarning($"Charge by hand: the limit hint failed ({e.Message})"); }
+        }
     }
 
     [HarmonyPatch(typeof(DemoChargeAsset), nameof(DemoChargeAsset.SetComponentData))]
