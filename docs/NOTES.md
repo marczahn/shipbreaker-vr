@@ -1398,3 +1398,23 @@ joints and the arms' caps on the bones of the body it first dressed; kept for th
 destroyed bones and did not draw. It now remembers the `geo_suit` it was built on and builds again for another one
 (log: `Local suit: a new body, the suit is built again on its bones`). Materials and textures do not depend on the
 body and are kept.
+
+## VTOL: the thrust reference turns with the body (experiment)
+With VTOL the thrust is the left hand's offset from where it was when the trigger went down. That reference was a
+point in the room (tracking space): turning round physically with the trigger held, the hand goes round with the body
+and away from it, which gave thrust and turned it (Raik, 2026-11-22). A reference that follows the headset instead
+would turn with every look to the side.
+
+`VrControls.TurnReference` tells the body's turn from the head and the left controller together, since there is no
+tracker on the body: each one's turn about the up axis since the trigger went down (the twist of its rotation,
+counted on from frame to frame), and of the two the smaller one where they go the same way. By that angle the
+reference goes round the neck (below the tracked head, `VrTorso.NeckFromEye`), and the reference pose for rolling turns
+with it. Only while that angle changes faster than 8 degrees a second does the reference also move along with the
+neck; it does not follow the head otherwise, because the thrust's deadzone can be a centimetre (Raik's) and every
+sway of the head would be thrust. `VrTorso`'s heading was not used: it follows the hands with a 10 degree dead band
+and stays within 40 degrees of the head, so it lags a turn and moves with a long look aside.
+
+Known to fool it: head and left wrist turning the same way without the body (the reference then goes round by the
+smaller of the two), and rolling the hand with the controller pointing steeply up or down while the head turns the
+same way. `Experimente/SchubReferenzDrehtMit = false` gives the reference in the room back. The log says how far the
+reference went round when the trigger is let go after more than 15 degrees (`Controls: with the thrust held ...`).

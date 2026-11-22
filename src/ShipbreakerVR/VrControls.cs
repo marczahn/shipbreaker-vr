@@ -77,6 +77,90 @@ namespace ShipbreakerVR
         private static bool held;
         private static Vector3 heldPosition;
         private static Quaternion heldRotation;
+
+        // The reference turns with the body (Raik, 2026-11-22: turning round physically with the trigger held, the hand
+        // goes round with the body, away from a reference that stayed in the room, and that gave thrust and turned it).
+        // There is no tracker on the body, so its turn is told from what the head and the left controller do together
+        // since the trigger went down: each one's turn about the up axis, and of the two the smaller where they turn the
+        // same way (CommonTurn). Looking round with a still hand, or turning the wrist with a still head, is no turn of
+        // the body. By that angle the reference goes round the neck, below the tracked head, and the reference pose for
+        // rolling turns with it; while the body turns it also moves along with the neck. It does not follow the head
+        // otherwise: with a deadzone of a centimetre or two every sway of the head would be thrust.
+        // Experimente/SchubReferenzDrehtMit switches it off (the reference stays in the room, as before 0.32.1).
+        private static BepInEx.Configuration.ConfigEntry<bool> referenceTurns;
+        // Turning faster than this (degrees per second), the body counts as turning: the reference moves with the neck.
+        private const float TurningFrom = 8f;
+        private static Vector3 reference;
+        private static Quaternion referenceRotation = Quaternion.identity;
+        private static Quaternion headWas = Quaternion.identity, handWas = Quaternion.identity;
+        private static float headTwist, handTwist, headTurn, handTurn, bodyTurn, mostTurn;
+        private static Vector3 neckWas;
+        private static int turnLogs;
+
+        // The turn about the up axis in a rotation (its twist), in degrees, -180 to 180.
+        internal static float TwistAboutUp(Quaternion rotation) =>
+            VrTorso.Wrap(2f * Mathf.Atan2(rotation.y, rotation.w) * Mathf.Rad2Deg);
+
+        // What two turns have in common: nothing if they go opposite ways, else the smaller one.
+        internal static float CommonTurn(float one, float other)
+        {
+            if (one * other <= 0f) return 0f;
+            return Mathf.Abs(one) < Mathf.Abs(other) ? one : other;
+        }
+
+        // A point turned about the up axis through a pivot, by degrees (as Quaternion.AngleAxis about up turns it).
+        internal static Vector3 TurnedAbout(Vector3 point, Vector3 pivot, float degrees)
+        {
+            var angle = degrees * Mathf.Deg2Rad;
+            var sin = Mathf.Sin(angle);
+            var cos = Mathf.Cos(angle);
+            var x = point.x - pivot.x;
+            var z = point.z - pivot.z;
+            return new Vector3(pivot.x + x * cos + z * sin, point.y, pivot.z - x * sin + z * cos);
+        }
+
+        // The trigger just went down: the reference is where the hand is, and the turns are counted from here.
+        private static void StartReference(Quaternion head, Vector3 neck)
+        {
+            reference = heldPosition;
+            referenceRotation = heldRotation;
+            headWas = Quaternion.Inverse(head);
+            handWas = Quaternion.Inverse(heldRotation);
+            headTwist = handTwist = headTurn = handTurn = bodyTurn = mostTurn = 0f;
+            neckWas = neck;
+        }
+
+        // While the trigger is held: the reference goes round with the body.
+        private static void TurnReference(Quaternion head, Vector3 neck, Quaternion hand)
+        {
+            // Counted on from frame to frame, so a turn of more than half round does not jump.
+            var twist = TwistAboutUp(head * headWas);
+            headTurn += VrTorso.Wrap(twist - headTwist);
+            headTwist = twist;
+            twist = TwistAboutUp(hand * handWas);
+            handTurn += VrTorso.Wrap(twist - handTwist);
+            handTwist = twist;
+            var turned = CommonTurn(headTurn, handTurn);
+            var step = turned - bodyTurn;
+            if (step != 0f)
+            {
+                var from = reference;
+                if (Mathf.Abs(step) > TurningFrom * Time.unscaledDeltaTime) from += neck - neckWas;
+                reference = TurnedAbout(from, neck, step);
+                referenceRotation = Quaternion.AngleAxis(turned, Vector3.up) * heldRotation;
+                bodyTurn = turned;
+                if (Mathf.Abs(turned) > Mathf.Abs(mostTurn)) mostTurn = turned;
+            }
+            neckWas = neck;
+        }
+
+        // The trigger let go: said in the log when the reference went a good way round, to check it in the headset.
+        private static void EndReference()
+        {
+            if (Mathf.Abs(mostTurn) < 15f || turnLogs >= 30) return;
+            turnLogs++;
+            Plugin.Log.LogInfo($"Controls: with the thrust held the body turned up to {mostTurn:0}° and the reference went round with it (at the end: head {headTurn:0}°, left controller {handTurn:0}°, taken as the body's {bodyTurn:0}°)");
+        }
         // The hand this frame, for the flight globe.
         private static Vector3 handPosition;
         private static Quaternion handRotation;
@@ -157,11 +241,23 @@ namespace ShipbreakerVR
 
             var trigger = left.Trigger.Down;
             if (!trigger) triggerFromTool = false;
-            if (!Hold(trigger && !triggerFromTool, position, rotation)) return;
-            var offset = position - heldPosition;
+            var head = VrCamera.Instance.HeadRotation;
+            var neck = VrCamera.Instance.transform.localPosition + head * VrTorso.NeckFromEye;
+            var wasHeld = held;
+            if (!Hold(trigger && !triggerFromTool, position, rotation))
+            {
+                if (held) StartReference(head, neck);
+                else if (wasHeld) EndReference();
+                return;
+            }
+            if (referenceTurns == null && VrSettings.File != null)
+                referenceTurns = VrSettings.Bind("Experimente", "SchubReferenzDrehtMit", true,
+                    "Experiment: with VTOL, the point the thrust is measured from turns with your body when you turn round physically while holding the trigger (told from head and left controller turning together). Off: it stays where it was in the room.");
+            if (referenceTurns != null && referenceTurns.Value) TurnReference(head, neck, rotation);
+            var offset = position - reference;
             // The wrist is an estimate and the arm moves along when the hand tilts, so a tilt still shifts it: as far as a tilt
             // can do that, the offset does not count as thrust. Moving the hand further still does.
-            var moved = ThrustOffset(offset.magnitude, Quaternion.Angle(heldRotation, rotation));
+            var moved = ThrustOffset(offset.magnitude, Quaternion.Angle(referenceRotation, rotation));
             var strength = Ramp(moved, MoveDeadzone, FullOffset);
             if (strength > 0f) thrust = playspace * offset.normalized * strength;
             RollFromReference(rotation, playspace);
@@ -199,7 +295,7 @@ namespace ShipbreakerVR
         // forward axis). Unity's signs line up: hand tilted left rolls the body left.
         private static void RollFromReference(Quaternion rotation, Quaternion playspace)
         {
-            var hand = (Quaternion.Inverse(heldRotation) * rotation).eulerAngles;
+            var hand = (Quaternion.Inverse(referenceRotation) * rotation).eulerAngles;
             var roll = Rate(hand.z);
             if (roll != 0f) turn = Quaternion.AngleAxis(roll, playspace * VrCamera.Instance.HeadRotation * Vector3.forward) * turn;
         }
@@ -310,8 +406,8 @@ namespace ShipbreakerVR
                 rotation = Quaternion.AngleAxis(shooterRoll, Vector3.forward);
                 return true;
             }
-            offset = held ? handPosition - heldPosition : Vector3.zero;
-            rotation = held ? Quaternion.Inverse(heldRotation) * handRotation : Quaternion.identity;
+            offset = held ? handPosition - reference : Vector3.zero;
+            rotation = held ? Quaternion.Inverse(referenceRotation) * handRotation : Quaternion.identity;
             return held;
         }
 
