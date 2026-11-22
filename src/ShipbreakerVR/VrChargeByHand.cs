@@ -1020,7 +1020,8 @@ namespace ShipbreakerVR
         // Sticky. The normal the game hands over is the same for both parts of a contact, so its sign tells nothing:
         // which side met the wall is told by where the contact lies against the charge's middle (its origin lies
         // between its back and its front, 3 cm before the back).
-        private const float DefaultTilt = 35f;
+        // 35 degrees at first; Raik's test (2026-11-23): 45.
+        private const float DefaultTilt = 45f;
         private static ConfigEntry<float> mostTilt;
         private static int clingLogs;
 
