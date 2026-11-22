@@ -13,10 +13,11 @@ using UnityEngine.ResourceManagement.AsyncOperations;
 namespace ShipbreakerVR
 {
     // Collection (Raik 2026-11-15, in 0.32.0): the AI nodes of the ghost ships
-    // ('SM_Props_AI_Node_...', structure parts fixed on walls and cargo) come off with the grapple, and by hand as a
-    // first aid kit does (VrPullOff). Held in a hand and let go over the left shoulder they go into the backpack like the
-    // things to collect (VrShoulderStow): removed as the game removes a completed thing (PendingDestruction on its entity,
-    // InteractableObject.DestroyObjectOnComplete).
+    // ('SM_Props_AI_Node_...', structure parts fixed on walls and cargo) come off with the grapple held on them for a
+    // while (Grapple). Not by hand: in 0.32.0 a hand pulled them off as it does a first aid kit (VrPullOff), which made
+    // taking one too easy (Raik, 2026-11-22). Once off, held in a hand and let go over the left shoulder they go into
+    // the backpack like the things to collect (VrShoulderStow): removed as the game removes a completed thing
+    // (PendingDestruction on its entity, InteractableObject.DestroyObjectOnComplete).
     // A small collection: there are three kinds (Regular, LargeRound, LargeWide). Each kind collected the first time
     // lies in the Hab, for good, each kind at a place of its own (Lay); one of a kind already there adds nothing, as
     // with the pink bunny. The first one collected also brings LYNX's warning (VrAiNodeMail). All of it is kept in the
@@ -46,7 +47,6 @@ namespace ShipbreakerVR
             foreach (var handle in Prefabs.Values)
                 if (handle.IsValid()) Addressables.Release(handle);
             Prefabs.Clear();
-            Loosened.Clear();
             NotLoading.Clear();
             grappled = null;
             Left.Body = Right.Body = null;
@@ -138,17 +138,6 @@ namespace ShipbreakerVR
             return node != null && body.gameObject.activeInHierarchy ? node : null;
         }
 
-        // Nodes off the ship on a body the mod gave them, until the game made them a loose object of their own (Separate).
-        private class Loose
-        {
-            public Rigidbody Body;
-            public StructurePart Part;
-            public float AskedAt = -1f;
-        }
-
-        private static readonly List<Loose> Loosened = new List<Loose>();
-        private const float SplitWait = 3f;
-
         private static readonly Held Left = new Held();
         private static readonly Held Right = new Held();
 
@@ -164,7 +153,7 @@ namespace ShipbreakerVR
         public static void Bind()
         {
             if (GrappleTime != null || VrSettings.File == null) return;
-            GrappleTime = VrSettings.Bind("Experimente", "KiKnotenGreiferSekunden", 6f,
+            GrappleTime = VrSettings.Bind("Experimente", "KiKnotenGreiferSekunden", 4f,
                 "Experiment: how long the grapple has to hold on to an AI node fixed on a wall or crate before it comes off (seconds).");
             Fine = VrSettings.Bind("Experimente", "KiKnotenStrafe", true,
                 "Experiment: an AI node put in the backpack is fined by the game as one thrown into the processor (at the end of the shift).");
@@ -283,16 +272,15 @@ namespace ShipbreakerVR
                 Check(VrInput.Left, Left, shoulder);
                 Check(VrInput.Right, Right, shoulder);
             }
-            // Whatever the way into the backpack is: a node pulled off and let go leaves its ship (0.32.0 did this
-            // only with the shoulder stow on, so without it a node thrown into the barge lit the whole ship red).
-            Separate();
         }
 
         // The grapple on a node still fixed on a wall or crate: held on it long enough, it comes off (Raik 2026-11-15: at
-        // once was far too quick, the cutter takes a while to dissolve one too). Off it comes the way the game lets a
-        // part go whose joints broke (Separate): a loose object of its own, which the grapple then holds as any small
-        // thing (GrapplingHook.OnHierarchyJointReparented), pulled in like the others. The grapple's hand buzzes, the
-        // harder the nearer it is to coming off.
+        // once was far too quick, the cutter takes a while to dissolve one too; 6 s at first, 4 s since Raik's test of
+        // 2026-11-22). Off it comes the way the game lets a part go whose joints broke (SplitOff): a loose object of its
+        // own, in a hierarchy of its own and no longer part of the ship's structure (still part of it, a node thrown
+        // into the barge lit the whole ship red), which the grapple then holds as any small thing
+        // (GrapplingHook.OnHierarchyJointReparented), pulled in like the others. The grapple's hand buzzes, the harder
+        // the nearer it is to coming off.
         private static StructurePart grappled;
         private static float grappledSince;
 
@@ -350,7 +338,7 @@ namespace ShipbreakerVR
             finally { commands.Dispose(); }
         }
 
-        // A node's body: its own (the mod's, just off the ship) or the game's loose object holding it alone.
+        // A node's body: its own, or the game's loose object holding it alone.
         private static StructurePart NodeOf(Rigidbody body)
         {
             if (body == null || !body.gameObject.activeInHierarchy) return null;
@@ -372,68 +360,12 @@ namespace ShipbreakerVR
             return alone;
         }
 
-        private static void Track(Rigidbody body, StructurePart part)
-        {
-            foreach (var loose in Loosened) if (loose.Body == body) return;
-            Loosened.Add(new Loose { Body = body, Part = part });
-        }
-
-        // Off the ship, the node still belongs to it for the game: its place in the ship's structure (the graph of
-        // parts joined) and the ship's hierarchy (HierarchyMember). Thrown into the barge, the whole ship lit up red
-        // (Raik 2026-11-15). Pulled off by hand, once no hand holds it any more, its joints in the structure are removed as when the game
-        // breaks a part's joints (RemoveHierarchyJointsEvent, BreakableJointComponent): the game makes it a loose object
-        // of its own, in a hierarchy parent of its own, which a grapple on it follows (GrapplingHook
-        // .OnHierarchyJointReparented). The mod's body on it then gives way to the parent's, moving on as it moved.
-        private static void Separate()
-        {
-            for (var i = Loosened.Count - 1; i >= 0; i--)
-            {
-                var loose = Loosened[i];
-                if (loose.Body == null || loose.Part == null)
-                {
-                    Loosened.RemoveAt(i);
-                    continue;
-                }
-                if (loose.AskedAt < 0f)
-                {
-                    if (VrClimb.HeldBody(VrInput.Left) == loose.Body || VrClimb.HeldBody(VrInput.Right) == loose.Body || VrPullOff.Busy(loose.Body)) continue;
-                    if (!SplitOff(loose.Part))
-                    {
-                        Loosened.RemoveAt(i);
-                        continue;
-                    }
-                    loose.AskedAt = Time.time;
-                    if (logs++ < 40) Plugin.Log.LogInfo($"AI node: '{loose.Part.name}' let go, its joints to the ship removed");
-                    continue;
-                }
-                var parent = loose.Part.transform.parent;
-                var parentBody = parent != null ? parent.GetComponent<Rigidbody>() : null;
-                if (parentBody != null && parentBody != loose.Body)
-                {
-                    parentBody.velocity = loose.Body.velocity;
-                    parentBody.angularVelocity = loose.Body.angularVelocity;
-                    Object.Destroy(loose.Body);
-                    Loosened.RemoveAt(i);
-                    if (logs++ < 40)
-                        Plugin.Log.LogInfo($"AI node: '{loose.Part.name}' is a loose object of its own now, in '{parent.name}' ({parentBody.mass:0.0} kg), after {Time.time - loose.AskedAt:0.00} s");
-                    continue;
-                }
-                if (Time.time > loose.AskedAt + SplitWait)
-                {
-                    Plugin.Log.LogWarning($"AI node: '{loose.Part.name}' got no hierarchy of its own from the game within {SplitWait:0} s, stays on the mod's body");
-                    Loosened.RemoveAt(i);
-                }
-            }
-        }
-
         private static void Check(VrInput.Hand hand, Held held, bool shoulder)
         {
             var body = VrClimb.HeldBody(hand);
             var node = Node(held, body);
             if (node != null)
             {
-                // Pulled off by hand (VrPullOff): on the mod's body, to be separated from its ship once let go.
-                if (body.transform == node.transform) Track(body, node);
                 if (!shoulder)
                 {
                     // Without the shoulder stow: A or X of the hand that holds it, as the game's things to collect

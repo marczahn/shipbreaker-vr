@@ -1344,10 +1344,11 @@ the file as orphans. Settings that are not a save's state stay under `[Experimen
 The inventory row counts booked nodes only.
 
 **AI nodes.** A node's part is called `SM_Props_AI_Node_Regular` whatever its kind; the kind is told by its drawn
-mesh and size against the three prefabs. Off the ship by hand (`VrPullOff`) the node sits on a body of the mod's own
-and still belongs to the ship's structure; once no hand holds it, `RemoveHierarchyJointsEvent` makes the game give it
-a hierarchy of its own (otherwise the barge lights the whole ship red). 0.32.1 does that whether or not the shoulder
-stow is on. Over the shoulder is asked as for the things to collect (`VrShoulderStow.Over`: the zone sits on the body
+mesh and size against the three prefabs. A node comes off with the grapple held on it for
+`Experimente/KiKnotenGreiferSekunden` (4 s; 6 s in 0.32.0): `RemoveHierarchyJointsEvent` makes the game give it a
+hierarchy of its own, so it is no longer part of the ship's structure (otherwise the barge lights the whole ship
+red). In 0.32.0 a hand also pulled a node off (`VrPullOff`, 5 to 6 s); that made taking one too easy and is gone
+(Raik, 2026-11-22), and with it the mod's own body for a node and its later separation. Over the shoulder is asked as for the things to collect (`VrShoulderStow.Over`: the zone sits on the body
 and the held thing reaching into it is enough); 0.32.0 asked for the hand in a zone that turned with the head. With
 the shoulder stow off, the primary button of the holding hand collects. A kind whose prefab does not load is left out
 until the game starts again and stays in the save's collection.

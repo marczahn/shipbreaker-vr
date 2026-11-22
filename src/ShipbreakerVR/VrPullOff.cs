@@ -36,9 +36,6 @@ namespace ShipbreakerVR
         // Pulled this long it comes off; a poster, light and only stuck on, sooner (Raik, 2026-11-11: 2 s and 1 s, from 3 s).
         private const float Hold = 2f;
         private const float PosterHold = 1f;
-        // An AI node sits fast: it takes a while, a little different each time (Raik, 2026-11-20: 5 to 6 s, at random).
-        private const float AiNodeHoldLeast = 5f;
-        private const float AiNodeHoldMost = 6f;
         private const float Fly = 0.18f;
         private const float Largest = 2.5f;
         private const float Mass = 4f;
@@ -161,12 +158,11 @@ namespace ShipbreakerVR
         }
 
         // How long it is pulled before it comes off: a poster (its part 'SM_Props_Signage_...', its use 'Pickup_Poster_...')
-        // sooner, an AI node (VrAiNode) later, between AiNodeHoldLeast and AiNodeHoldMost.
+        // sooner.
         private static float HoldFor(Pull pull) => pull.Needed;
 
         private static float Needs(Transform root, Component thing) =>
-            VrAiNode.Is(root) ? Random.Range(AiNodeHoldLeast, AiNodeHoldMost)
-            : root.name.Contains("Signage") || thing.name.Contains("Poster") ? PosterHold : Hold;
+            root.name.Contains("Signage") || thing.name.Contains("Poster") ? PosterHold : Hold;
 
         // The other hand holds on to something fixed (the ship, VrClimb.Braced), not to the thing. Before, only the very
         // body the thing is on counted, and the other hand on the wall next to a first aid kit never did (Raik, 2026-11-11).
@@ -188,8 +184,9 @@ namespace ShipbreakerVR
             control = VrClimb.PartInteractable(collider);
             if (Usable(control)) return control;
             var part = collider != null ? collider.GetComponentInParent<StructurePart>() : null;
-            // Experiment: an AI node comes off by hand the same way (VrAiNode).
-            if (part == null || !(part.name.StartsWith(Collectible) || VrAiNode.Is(part))) return null;
+            // Not an AI node (VrAiNode): in 0.32.0 it came off by hand as well, which made taking one too easy (Raik,
+            // 2026-11-22); it takes the grapple now.
+            if (part == null || !part.name.StartsWith(Collectible) || VrAiNode.Is(part)) return null;
             // Not one already off: its own body is the part, or it hangs on one made here with its group.
             var body = collider.attachedRigidbody;
             if (body == null || body.transform == part.transform || Made.Contains(body)) return null;
@@ -197,9 +194,6 @@ namespace ShipbreakerVR
         }
 
         // A thing to use, fixed on the ship: removed when used, not a lever or switch, on no loose part.
-        // A body the hand is pulling off or that flies into it (VrAiNode waits with it).
-        public static bool Busy(Rigidbody body) => body != null && (Left.Body == body || Right.Body == body);
-
         public static bool Usable(InteractableObject control) =>
             control != null && control.isActiveAndEnabled && control.DestroyOnComplete && !VrLever.Turnable(control)
             && !VrNacelle.Is(control) && !VrClimb.Loose(control);
@@ -214,10 +208,9 @@ namespace ShipbreakerVR
                 return false;
             }
             // Heavy things (the large coolant and fuel tanks, Raik 2026-11-19) come off with the grapple only, as in the
-            // game, with the game's own body and mass: the hand holds them as part of the wall. The AI nodes come off by
-            // hand whatever they weigh, as they did when Raik tried the collection (VrAiNode).
+            // game, with the game's own body and mass: the hand holds them as part of the wall.
             var mass = GameMass(root);
-            if (mass > HandMost && !VrAiNode.Is(root))
+            if (mass > HandMost)
             {
                 Refused.Add(control);
                 if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{root.name}' weighs {mass:0} kg, more than {HandMost:0} kg: only the grapple takes it off");
