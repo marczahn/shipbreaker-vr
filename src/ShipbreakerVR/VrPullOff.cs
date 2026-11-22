@@ -74,8 +74,15 @@ namespace ShipbreakerVR
         // hand on the ship, the other holds the device and pulls away from it, for ExtractHold seconds; then the
         // interaction completes as the game completes it, and the game hands the part out and wrecks the device. The
         // device neither tilts nor comes off. The button does nothing for a device a hand holds (VrToolInput).
+        // A second way (Raik after his test, 2026-11-22: "not that one has to hold the ship, that stays as a variant"):
+        // one hand holds the device, the other, its grip closed, is close to it (PairWithin between the two controllers
+        // as the two come together; Raik: "at most 20 cm" between the hands), on the device as well or beside it, and
+        // then the two go apart: one holds, the other pulls the part out, whichever of them.
+        // And a third (VrDevicePunch): three blows of the fist.
         private const string ExtractKind = "SalvageShort_InteractionTypeAsset";
         private const float ExtractHold = 3f;
+        // Between the controllers, which sit in the palms: about 20 cm between the hands themselves.
+        private const float PairWithin = 0.25f;
         private static readonly AccessTools.FieldRef<InteractableObject, InteractableObjectAsset> AssetOf =
             AccessTools.FieldRefAccess<InteractableObject, InteractableObjectAsset>("m_Asset");
         // Whether an interaction's kind is the stripping one, looked up once for each kind (its name is a new string
@@ -133,8 +140,13 @@ namespace ShipbreakerVR
             // A part on a joint that gives way (Yank): the pull still owed to the joint, and when its joints broke.
             public float YankDue;
             public float BrokeAt = -1f;
-            // A device stripped for its part (Extract): pulled at, it stays as it is.
+            // A device stripped for its part (Extract): pulled at, it stays as it is. Since when the hand holds it; how
+            // far apart the two controllers were as the other hand came close with its grip closed (StripPull.Unpaired
+            // without one, StripPull.TooFar with one too far away), in m at world scale 1; and how it is held, for the log.
             public bool Extract;
+            public float Since;
+            public float PairFrom = StripPull.Unpaired;
+            public string Mode = "";
             public float Angle;
             public Vector3 Contact;
             public bool Braced;
@@ -175,6 +187,7 @@ namespace ShipbreakerVR
         private static readonly HashSet<Component> Refused = new HashSet<Component>();
         private const string Collectible = "SM_Collectible_";
         private static int logs;
+        private static int stripLogs;
 
         // From VrFrame once the rig is placed, after the hands took hold or let go.
         public static void Update()
@@ -215,6 +228,11 @@ namespace ShipbreakerVR
             if (!Controller(pull.Input, out var hand)) return;
             var joint = pull.Thing as BreakableJointComponent;
             if (joint != null && Broke(pull, joint)) return;
+            if (pull.Extract)
+            {
+                Strip(pull, hand);
+                return;
+            }
             var braced = OnWall(pull);
             if (braced != pull.Braced)
             {
@@ -226,11 +244,6 @@ namespace ShipbreakerVR
             {
                 // The game tilts the part as its joint gives way; the mod neither tilts it nor puts it back.
                 if (braced) Yank(pull, joint, hand);
-                return;
-            }
-            if (pull.Extract)
-            {
-                Strip(pull, braced, hand);
                 return;
             }
             if (!braced)
@@ -257,34 +270,96 @@ namespace ShipbreakerVR
             else Loosen(pull, hand);
         }
 
-        // The hand pulls at a device to strip it: from Enough away from the hold on it counts, the buzz growing with
-        // how far it is along, and after ExtractHold seconds the device's interaction completes.
-        private static void Strip(Pull pull, bool braced, Vector3 hand)
+        // The hand holds a device to strip it. It pulls at it in one of two ways: the other hand holds the ship, and this
+        // one goes away from its hold on the device; or the other hand is close with its grip closed (PairWithin), and
+        // the two go apart. From Enough on it counts, the buzz growing with how far it is along, and after ExtractHold
+        // seconds the device is stripped. With the other hand on the ship this hand is held free of the body, as with
+        // everything pulled off. With both hands on the device, the one that came later is: it pulls without pulling the
+        // body about, and the first is the body's hold. (Pulled with the first instead, the body goes towards the
+        // device; the two hands go apart all the same.)
+        private static void Strip(Pull pull, Vector3 hand)
         {
-            if (!braced)
-            {
-                pull.Pulled = 0f;
-                return;
-            }
+            var other = pull.Input.Other;
+            var twin = pull == Left ? Right : Left;
             var scale = VrCamera.WorldScale;
-            var away = Vector3.Dot(hand - pull.Root.TransformPoint(pull.Surface), pull.Normal);
-            var hard = away >= Enough * scale;
+            var both = twin.Extract && twin.Thing == pull.Thing;
+            var onShip = !both && OnWall(pull);
+            var apart = 0f;
+            if (other.Grip.Down && !VrHand.Of(other.Node).HoldsTool && Controller(other, out var second))
+            {
+                var between = Vector3.Distance(hand, second) / scale;
+                if (pull.PairFrom == StripPull.Unpaired) pull.PairFrom = StripPull.Begin(between, PairWithin);
+                if (pull.PairFrom >= 0f) apart = between - pull.PairFrom;
+            }
+            else pull.PairFrom = StripPull.Unpaired;
+            var paired = pull.PairFrom >= 0f;
+            var mode = onShip ? (paired ? "the other hand holds the ship, close by" : "the other hand holds the ship")
+                : paired ? (both ? "both hands on it" : "the other hand closed beside it")
+                : pull.PairFrom == StripPull.TooFar ? "the other hand is closed, but came further away than it counts" : "";
+            if (mode != pull.Mode)
+            {
+                pull.Mode = mode;
+                if (mode != "" && stripLogs++ < 60)
+                    Plugin.Log.LogInfo($"Pull off: the device in the {pull.Input.Name} hand: {mode}"
+                        + (paired ? $" ({pull.PairFrom * 100f:0} cm between the hands, {PairWithin * 100f:0} cm at most)" : ""));
+            }
+            var free = onShip || (both && paired && pull.Since > twin.Since);
+            if (free != pull.Braced)
+            {
+                pull.Braced = free;
+                VrClimb.SetFree(pull.Input, free, false);
+            }
+            var away = Vector3.Dot(hand - pull.Root.TransformPoint(pull.Surface), pull.Normal) / scale;
+            var far = StripPull.Far(onShip, away, paired, apart);
+            var hard = far >= Enough;
             pull.Pulled = hard ? pull.Pulled + Time.deltaTime : 0f;
-            if (hard) pull.Input.Buzz(Mathf.Lerp(0.25f, 0.9f, pull.Pulled / pull.Needed), 0.05f);
-            else if (away > Start * scale) pull.Input.Buzz(0.1f, 0.05f);
+            if (hard)
+            {
+                var buzz = Mathf.Lerp(0.25f, 0.9f, pull.Pulled / pull.Needed);
+                pull.Input.Buzz(buzz, 0.05f);
+                // The other hand feels it too where the two pull against each other.
+                if (paired && apart >= Enough) other.Buzz(buzz, 0.05f);
+            }
+            else if (far > Start) pull.Input.Buzz(0.1f, 0.05f);
             if (pull.Pulled < pull.Needed) return;
-            var device = pull.Thing as InteractableObject;
-            var input = pull.Input;
-            var pulled = pull.Pulled;
-            Clear(pull);
-            // The hand is a hold on the device again, not free of the body.
-            VrClimb.SetFree(input, false, false);
-            if (!Extractable(device)) return;
-            var name = device.name;
+            StripNow(pull.Thing as InteractableObject, pull.Input, $"after {pull.Pulled:0.0} s of pulling ({mode})");
+        }
+
+        // The device is stripped as the game does it at the end of its prompt: the interaction completes (the part comes
+        // out, the device is wrecked) and the game's listeners hear of it. The hands that held it to strip it are plain
+        // holds on it again. False if it is not one to strip (any more).
+        internal static bool StripNow(InteractableObject device, VrInput.Hand input, string how)
+        {
+            EndStrip(Left, device);
+            EndStrip(Right, device);
+            if (!Extractable(device)) return false;
+            var part = device.GetComponentInParent<StructurePart>();
+            var name = part != null ? part.name : device.name;
             device.Complete();
             ((Carbon.Core.Events.IEventBroadcaster)Main.EventSystem).Post(InteractionEvent.GetEvent(InteractionEvent.InteractionType.ProgressComplete, device));
             input.Buzz(1f, 0.15f);
-            if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{name}' stripped for its part by the {input.Name} hand after {pulled:0.0} s of pulling");
+            if (stripLogs++ < 60) Plugin.Log.LogInfo($"Pull off: '{name}' stripped for its part by the {input.Name} hand {how}");
+            return true;
+        }
+
+        private static void EndStrip(Pull pull, InteractableObject device)
+        {
+            if (!pull.Extract || pull.Thing != device) return;
+            var input = pull.Input;
+            Clear(pull);
+            // The hand is a hold on the device again, not free of the body.
+            VrClimb.SetFree(input, false, false);
+        }
+
+        // A blow on a device (VrDevicePunch): the game's sparks of metal on metal where it lands, and the sound the game
+        // plays as the grapple breaks a part off, on the device's part (heard through the suit).
+        internal static void Blow(InteractableObject device, Rigidbody ship, Vector3 at, Vector3 normal)
+        {
+            var effect = Sparks(ship);
+            if (effect != null && GameSession.SpawnPoolManager != null)
+                GameSession.SpawnPoolManager.SpawnObject(effect, at, Quaternion.LookRotation(normal), null, null);
+            var settings = Main.Instance != null && Main.Instance.MainSettings != null ? Main.Instance.MainSettings.BreakableSettings : null;
+            if (settings != null) Play(settings.GrappleBreakJointSuccessSFX, device.GetComponentInParent<EntityBlueprintComponent>(), at);
         }
 
         private static bool BeginStrip(Pull pull, InteractableObject device)
@@ -306,8 +381,11 @@ namespace ShipbreakerVR
             pull.Braced = false;
             pull.Ship = device.GetComponentInParent<Rigidbody>();
             pull.Extract = true;
+            pull.Since = Time.time;
+            pull.PairFrom = StripPull.Unpaired;
+            pull.Mode = "";
             pull.Members.Clear();
-            if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: {pull.Input.Name} hand holds '{device.name}', a device to strip for its part: pulled for {ExtractHold:0} s with the other hand on the ship");
+            if (stripLogs++ < 60) Plugin.Log.LogInfo($"Pull off: {pull.Input.Name} hand holds '{device.name}', a device to strip for its part: pulled for {ExtractHold:0} s, with the other hand on the ship or the two hands going apart");
             return true;
         }
 
@@ -775,6 +853,8 @@ namespace ShipbreakerVR
                 PutBack(pull);
                 if (pull.Angle > 0f && logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{pull.Thing.name}' let go after {pull.Pulled:0.0} s, back on the wall");
             }
+            // A hand still on a device it held free is a plain hold on it again.
+            if (pull.Extract && pull.Braced) VrClimb.SetFree(pull.Input, false, false);
             Clear(pull);
         }
 
@@ -793,6 +873,25 @@ namespace ShipbreakerVR
             pull.YankDue = 0f;
             pull.BrokeAt = -1f;
             pull.Extract = false;
+            pull.PairFrom = StripPull.Unpaired;
+            pull.Mode = "";
         }
+    }
+
+    // Stripping a device with two hands close together (VrPullOff.Strip), the part that is plain numbers.
+    internal static class StripPull
+    {
+        // No second hand with its grip closed; one that came too far away to count.
+        public const float Unpaired = -1f;
+        public const float TooFar = -2f;
+
+        // The other hand closes its grip, 'between' from this one: from then on the two count as a pair, their distance
+        // then the measure, or not at all until that grip opens again.
+        public static float Begin(float between, float within) => between <= within ? between : TooFar;
+
+        // How far the device is pulled at: away from the hold on it with the other hand on the ship, or the two hands
+        // apart from where they came together, whichever is more.
+        public static float Far(bool onShip, float away, bool paired, float apart) =>
+            Mathf.Max(onShip ? away : 0f, paired ? apart : 0f);
     }
 }

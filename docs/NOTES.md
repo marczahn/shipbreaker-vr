@@ -1406,3 +1406,22 @@ joints and the arms' caps on the bones of the body it first dressed; kept for th
 destroyed bones and did not draw. It now remembers the `geo_suit` it was built on and builds again for another one
 (log: `Local suit: a new body, the suit is built again on its bones`). Materials and textures do not depend on the
 body and are kept.
+
+## Stripping devices by hand (experiment)
+The devices one strips for a part of the truck (computer terminal, data bank, comms array, power junction and the
+like) are interactables of the kind `SalvageShort_InteractionTypeAsset`: the prompt's button held for a second
+completes the interaction, the part comes out and the device is wrecked. What a hand holds of such a device is its
+`VOL_Interactable`, a trigger volume, not its mesh. `VrPullOff` completes the same interaction (`StripNow`:
+`Complete()` and the `ProgressComplete` event) in three ways, and the button does nothing while a hand holds the
+device:
+
+- one hand on the ship, the other holds the device and pulls away from its hold, 3 s;
+- one hand on the device, the other closed within 25 cm between the controllers (about 20 cm between the hands), on
+  the device as well or beside it, and the two go apart by 8 cm for 3 s, whichever of them pulls. With both on the
+  device, the hand that came later is held free of the body, so it pulls without moving the body;
+- three blows of the fist (`VrDevicePunch`, `Experimente/GeraeteSchlag`): a closed, empty hand that comes onto the
+  device at 1.5 m/s or more, measured in the rig so the body's flight does not count. The fist has to be closed before
+  it arrives: a grip closed within 0.25 s of touching takes hold instead (`VrClimb.CatchTime`).
+
+The log names each step (`Pull off: the device in the ... hand: ...`, `Device punch: ...`), also a fist that came on
+too slowly, with its speed.
