@@ -243,6 +243,49 @@ namespace ShipbreakerVR
                 interactOnce = false;
             }
             LogChanges();
+            ReelWatch();
+        }
+
+        // The game switches the grapple's reeling in on and off only at the moment its action is pressed or released
+        // (GrapplingHook.Update: mIsRetracting is set from the action's state at those two edges). A release it does
+        // not get leaves the reel running: the rope goes on shortening and pulls ever harder (Raik, 2026-11-22: holding
+        // a part and pulling himself to the station, a short press went on reeling and seemed to speed up). Why a
+        // release should go missing is not found; so here the reel is stopped when the game still reels a tenth of a
+        // second after neither the hand that works the grapple nor a key or gamepad holds the action, and the log says
+        // how the hands stood, to find the cause.
+        private static readonly AccessTools.FieldRef<GrapplingHook, bool> Reeling = AccessTools.FieldRefAccess<GrapplingHook, bool>("mIsRetracting");
+        private const float ReelGrace = 0.1f;
+        private static float reelLooseSince = -1f;
+        private static int reelLogs;
+
+        private static void ReelWatch()
+        {
+            var hook = GameRefs.Grapple;
+            if (hook == null || !hook.IsRetracting)
+            {
+                reelLooseSince = -1f;
+                return;
+            }
+            var second = VrDualTools.Second == EquipmentController.Equipment.GrappleHook;
+            var hand = Of(second ? VrHand.SecondHand : VrHand.GameToolHand);
+            var held = hand != null && hand.Now[(int)Action.Retract];
+            var keyed = LynxControls.Instance != null && LynxControls.Instance.GetInputIsPressed(GameplayActions.GameplayActionSet.RetractionModifier);
+            if (held || keyed)
+            {
+                reelLooseSince = -1f;
+                return;
+            }
+            if (reelLooseSince < 0f)
+            {
+                reelLooseSince = Time.unscaledTime;
+                return;
+            }
+            if (Time.unscaledTime - reelLooseSince < ReelGrace) return;
+            reelLooseSince = -1f;
+            Reeling(hook) = false;
+            if (reelLogs++ < 20)
+                Plugin.Log.LogWarning($"Tool control: the grapple went on reeling in with its button released, stopped (grapple {(second ? "as the second tool" : "as the game's tool")} in the {(hand != null ? hand.Name : "no")} hand, "
+                    + $"left hand {VrHand.Left.State}, right hand {VrHand.Right.State}, B {(hand != null && hand.Input.Secondary.Down ? "down" : "up")}, trigger {(hand != null && hand.Trigger ? "down" : "up")})");
         }
 
         // The tool actions of one hand's buttons, for the tool it holds.
