@@ -130,9 +130,29 @@ namespace ShipbreakerVR
         public static int NotedNodes => NotedKinds.Count;
         public static bool RadioNoted => notedRadio;
 
-        public static void NoteNode(string kind) => NotedKinds.Add(kind);
+        public static void NoteNode(string kind)
+        {
+            NotedKinds.Add(kind);
+            BookNowWithoutPatches();
+        }
 
-        public static void NoteRadio() => notedRadio = true;
+        public static void NoteRadio()
+        {
+            notedRadio = true;
+            BookNowWithoutPatches();
+        }
+
+        // Should a game update break one of the two patches that tell how a shift ends, collecting still works: booked
+        // at once, as 0.32.0 did, rather than never or with the wrong shift.
+        private static bool warnedPatches;
+
+        private static void BookNowWithoutPatches()
+        {
+            if (!PatchReport.IsBroken(nameof(CollectionBookPatch)) && !PatchReport.IsBroken(nameof(CollectionDropPatch))) return;
+            if (!warnedPatches) Plugin.Log.LogWarning("Collection: the patches for the shift's end did not apply, so what goes into the backpack is booked at once");
+            warnedPatches = true;
+            Book();
+        }
 
         // The shift ended as the game ends it: what was noted is the save's now. One write of the config for all of it.
         public static void Book()

@@ -28,12 +28,13 @@ namespace ShipbreakerVR
         // (Ship: the answer kept for the ship says it has it).
         private static void Release()
         {
-            Discard(ref shown);
-            Discard(ref floating);
+            Discard(ref shown, ref shownMaterial);
+            Discard(ref floating, ref floatingMaterial);
             shownIn = null;
             shownPlace = null;
             shipKey = null;
             shipSave = null;
+            shipPreview = null;
             scannableDone = null;
             driveLook = null;
             if (drive.IsValid()) Addressables.Release(drive);
@@ -75,6 +76,7 @@ namespace ShipbreakerVR
         private static GameObject floating;
         private static string shipKey;
         private static VrCollection.Save shipSave;
+        private static ShipPreview shipPreview;
         private static float readySince = -1f;
         private static bool handled;
 
@@ -111,16 +113,17 @@ namespace ShipbreakerVR
             }
         }
 
-        // The radio and the material made for it (VrRadioModel.MaterialFrom) go together.
-        private static void Discard(ref GameObject radio)
+        // The radio and the material made for it (VrRadioModel.MaterialFrom) go together. The material is kept by its
+        // own reference: what the radio's renderer draws with may be the game's (its scanner swaps materials).
+        private static Material shownMaterial;
+        private static Material floatingMaterial;
+
+        private static void Discard(ref GameObject radio, ref Material material)
         {
-            if (radio != null)
-            {
-                var renderer = radio.GetComponent<MeshRenderer>();
-                if (renderer != null && renderer.sharedMaterial != null) Object.Destroy(renderer.sharedMaterial);
-                Object.Destroy(radio);
-            }
+            if (radio != null) Object.Destroy(radio);
+            if (material != null) Object.Destroy(material);
             radio = null;
+            material = null;
         }
 
         // ---- In the ship ----
@@ -135,15 +138,21 @@ namespace ShipbreakerVR
         {
             var service = ModuleService.Instance;
             var preview = service != null ? service.CurrentShipPreview : null;
-            var key = preview != null && save != null ? $"{preview.Seed}:{preview.ShipName}" : null;
-            if (key != shipKey || save != shipSave)
+            // The ship's key is put together when the game has another ship or save, not each frame.
+            if (!ReferenceEquals(preview, shipPreview) || save != shipSave)
             {
-                Discard(ref floating);
-                shipKey = key;
+                var now = preview != null && save != null ? $"{preview.Seed}:{preview.ShipName}" : null;
+                if (now != shipKey || save != shipSave)
+                {
+                    Discard(ref floating, ref floatingMaterial);
+                    shipKey = now;
+                    readySince = -1f;
+                    handled = false;
+                }
+                shipPreview = preview;
                 shipSave = save;
-                readySince = -1f;
-                handled = false;
             }
+            var key = shipKey;
             if (key == null) return;
             var ready = service.CurrentManifest != Entity.Null && !service.ShipSpawningInProgress && !service.ShipSpawningFromSaveInProgress
                 && !service.ShipDespawningInProgress;
@@ -216,6 +225,7 @@ namespace ShipbreakerVR
             body.interpolation = RigidbodyInterpolation.Interpolate;
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
             floating = radio;
+            floatingMaterial = material;
             Scannable(radio);
             radio.SetActive(true);
             body.angularVelocity = Random.insideUnitSphere * 0.3f;
@@ -467,7 +477,7 @@ namespace ShipbreakerVR
                 AudioViewSystem.RequestOneShotSFX(new WwiseShortID(hand.IsLeft ? VrShoulderStow.GrabSoundLeft : VrShoulderStow.GrabSoundRight), head);
             ((Carbon.Core.Events.IEventBroadcaster)Main.EventSystem).Post(MasterSFXEvent.GetEvent(new WwiseShortID(VrShoulderStow.RattleSound)));
             hand.Buzz(1f, 0.15f);
-            Discard(ref floating);
+            Discard(ref floating, ref floatingMaterial);
             // Noted only: it is the save's once the shift is over (VrCollection.Book), and nothing is written now.
             VrCollection.NoteRadio();
             Plugin.Log.LogInfo($"Radio: put in the backpack by the {hand.Name} hand, noted until the shift is over; then it stands in the Hab");
@@ -488,7 +498,7 @@ namespace ShipbreakerVR
             // frame (0.32.0 measured the Hab's tables and wrote to the log every frame while the model or a material
             // for it was missing).
             if (want && shownIn == room && shownPlace == place) return;
-            Discard(ref shown);
+            Discard(ref shown, ref shownMaterial);
             shownIn = null;
             shownPlace = null;
             if (!want) return;
@@ -533,6 +543,7 @@ namespace ShipbreakerVR
             if (onTable) VrContactShadow.AddFromLamp(radio, mesh, room.up, lamp, room, tableBox, "the radio");
             else VrContactShadow.Add(radio, mesh, room.up, "the radio");
             shown = radio;
+            shownMaterial = material;
             var local = room.InverseTransformPoint(at);
             Plugin.Log.LogInfo($"Radio: in the Hab at ({local.x:0.00}, {local.y - floor:0.00}, {local.z:0.00}), turned {turn:0}°");
         }

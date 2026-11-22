@@ -24,6 +24,9 @@ namespace ShipbreakerVR
         // From VrSession, when a patch class could not be applied.
         public static void Failed(string patchClass) => Broken.Add(patchClass);
 
+        // Whether that patch class could not be applied (or that transpiler came out incomplete).
+        public static bool IsBroken(string patch) => Broken.Contains(patch);
+
         // Each transpiler, with the number of methods it reached with game 1.3.0.1263554. Fewer means a part of the
         // feature silently stopped working.
         private static readonly Dictionary<string, int> Expected = new Dictionary<string, int>
