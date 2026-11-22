@@ -226,8 +226,8 @@ By default you move between the station's spots with a stick, as in the flat gam
 
 **Walk in the station** is an option in the VR options, off by default, and replaces the spots. Sitting on the bed, A
 stands up. The left stick walks, the right stick turns in steps. Near a screen or the exit, A uses it and B leaves it;
-X opens the exit from anywhere. Look at a poster from close by and the triggers change its picture. Walking with a
-stick can make you feel sick.
+X opens the exit from anywhere (a line at the top of your view says so while you walk). Look at a poster from close by
+and the triggers change its picture. Walking with a stick can make you feel sick.
 
 **Own posters:** put PNG or JPG files into `BepInEx\ShipbreakerVR-Poster` in the game folder (the folder appears after
 your first visit to the station) and they join the pictures for the station's posters, once LYNX has allowed them by a

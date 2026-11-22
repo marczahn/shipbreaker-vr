@@ -9,6 +9,9 @@ namespace ShipbreakerVR
     // The Hab's screens and exit while walking (VrHabWalk). Near one that one looks at, a prompt shows and A opens it with
     // the game's own way to it, from wherever the game is; X opens the exit from anywhere. The rig stays where it stands.
     // When the screen closes the game goes back to the bed, where it waits while one walks.
+    // While one walks, a smaller line near the top of the view says so the whole time ('[X] Exit'; Raik, 2026-11-22:
+    // nothing told that X does that). For it to be in view wherever one walks and looks, the canvas stays in front of
+    // the head while walking (VrUi), as the visor does in a shift.
     internal static class VrHabStations
     {
         private const float Reach = 1.6f;
@@ -40,6 +43,12 @@ namespace ShipbreakerVR
         private static Station near;
         private static bool nearRadio;
         private static TextMeshProUGUI prompt;
+        // The standing line for X, above the prompt, and its words (built with the stations, Find).
+        private static TextMeshProUGUI hint;
+        private static string hintText = "";
+        private const float HintHeight = 300f;
+        private const float HintSize = 0.7f;
+        private const float HintAlpha = 0.75f;
         private static string target;
         private static bool opened;
         private static bool closing;
@@ -78,6 +87,7 @@ namespace ShipbreakerVR
             }
             Plugin.Log.LogInfo($"Hab: {stations.Count} station(s), way home {(home != null ? "found" : "missing")}");
             MakePrompt(sample);
+            hintText = exit != null ? $"[X] {exit.Name}" : "";
         }
 
         private static Station promptFor;
@@ -109,6 +119,7 @@ namespace ShipbreakerVR
                 promptText = nearRadio ? RadioPrompt() : near != null ? $"[A] {near.Name}" : "";
             }
             Show(promptText);
+            ShowHint(hintText);
             if (Time.unscaledTime < lockedUntil) return;
             if (nearRadio)
             {
@@ -159,11 +170,16 @@ namespace ShipbreakerVR
         public static void ShowStandUp()
         {
             HideNavigation(true);
+            ShowHint("");
             Show($"[A] {VrOptions.L("Stand up", "Aufstehen")}");
             if (VrUi.Instance != null) VrUi.Instance.Recenter();
         }
 
-        public static void Clear() => Show("");
+        public static void Clear()
+        {
+            Show("");
+            ShowHint("");
+        }
 
         public static void Stop()
         {
@@ -172,6 +188,7 @@ namespace ShipbreakerVR
             nearRadio = false;
             promptText = null;
             Show("");
+            ShowHint("");
             HideNavigation(false);
         }
 
@@ -234,6 +251,7 @@ namespace ShipbreakerVR
             waitingSince = Time.unscaledTime;
             near = null;
             Show("");
+            ShowHint("");
             location.Navigate(station.Way);
         }
 
@@ -248,6 +266,11 @@ namespace ShipbreakerVR
         private static void Show(string text)
         {
             if (prompt != null && prompt.text != text) prompt.text = text;
+        }
+
+        private static void ShowHint(string text)
+        {
+            if (hint != null && hint.text != text) hint.text = text;
         }
 
         // The prompt's words, not its button symbol, which is text too.
@@ -281,6 +304,24 @@ namespace ShipbreakerVR
             prompt.alignment = TextAlignmentOptions.Center;
             prompt.raycastTarget = false;
             prompt.text = "";
+            // The standing line for X: the same writing, smaller and a little see-through, as far above the middle as the
+            // prompt is below it.
+            var above = new GameObject("VR station hint", typeof(RectTransform));
+            above.layer = line.layer;
+            var aboveRect = (RectTransform)above.transform;
+            aboveRect.SetParent(rect.parent, false);
+            aboveRect.sizeDelta = rect.sizeDelta;
+            aboveRect.anchoredPosition = new Vector2(0f, HintHeight);
+            hint = above.AddComponent<TextMeshProUGUI>();
+            hint.font = prompt.font;
+            hint.fontSharedMaterial = prompt.fontSharedMaterial;
+            hint.fontSize = prompt.fontSize * HintSize;
+            hint.fontStyle = prompt.fontStyle;
+            hint.characterSpacing = prompt.characterSpacing;
+            hint.color = new Color(prompt.color.r, prompt.color.g, prompt.color.b, HintAlpha);
+            hint.alignment = TextAlignmentOptions.Center;
+            hint.raycastTarget = false;
+            hint.text = "";
             Plugin.Log.LogInfo($"Hab: station prompt in the style of '{sample.name}', '{sample.font.name}', size {prompt.fontSize:0}, {sample.fontStyle}");
         }
     }
