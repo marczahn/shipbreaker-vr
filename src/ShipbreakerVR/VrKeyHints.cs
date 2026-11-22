@@ -3,14 +3,19 @@ using System.Reflection;
 using BBI.Unity.Game;
 using HarmonyLib;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace ShipbreakerVR
 {
-    // The game's HUD names the key for the flashlight and the scanner (ContextualButtonPrompt: a key's picture and its
-    // label, for an action of the gameplay controls). In VR neither has a key: the flashlight is switched with the
-    // left hand at the left of the helmet, the scanner is taken from the right of the helmet (VrToolBelt), so the hints
-    // told something that does not work (Raik's list of 2026-11-21, point 7). While VR runs those two hints are made
-    // unseen, by their scale, so the game's own switching of them stays as it is; with VR off they are back.
+    // The game's HUD names the key for the flashlight and the scanner (ContextualButtonPrompt: a key's picture in a
+    // bracket and the word beside it, for an action of the gameplay controls). In VR neither has a key: the flashlight is
+    // switched with the left hand at the left of the helmet, the scanner is taken from the right of the helmet
+    // (VrToolBelt), so the hints named keys that do nothing (Raik's list of 2026-11-21, point 7).
+    // While VR runs the key and its bracket are not drawn at all, and the word comes up in its place on the HUD only
+    // while a hand is at that thing's place at the helmet (Raik, 2026-11-22: "the word springs up when the hand is at
+    // the right place"): it tells what the hand would take there. Drawn or not by the alpha of their canvas renderers,
+    // set each frame, so the game's own switching, colours and layout of the hints stay as they are; with VR off they
+    // are back.
     internal static class VrKeyHints
     {
         static VrKeyHints() => VrSession.OnUnload("key hints", Release);
@@ -19,12 +24,12 @@ namespace ShipbreakerVR
 
         private sealed class Hint
         {
-            public bool Hides;
-            public bool Hidden;
-            public Vector3 Scale;
-            // Its label, where that is not a part of the prompt itself.
-            public Transform Label;
-            public Vector3 LabelScale;
+            // The place at the helmet it belongs to; None for any other hint, which is left alone.
+            public VrToolBelt.Zone Zone;
+            // The hint's word, and everything else of it (the key, its bracket).
+            public readonly List<Graphic> Word = new List<Graphic>();
+            public readonly List<Graphic> Key = new List<Graphic>();
+            public bool Changed;
         }
 
         private static readonly Dictionary<MonoBehaviour, Hint> Hints = new Dictionary<MonoBehaviour, Hint>();
@@ -43,30 +48,32 @@ namespace ShipbreakerVR
                 hint = Read(prompt);
                 Hints[prompt] = hint;
             }
-            if (!hint.Hides) return;
-            var hide = VrXr.IsRunning;
-            if (hide == hint.Hidden) return;
-            hint.Hidden = hide;
-            if (hide)
+            if (hint.Zone == VrToolBelt.Zone.None) return;
+            if (!VrXr.IsRunning)
             {
-                hint.Scale = prompt.transform.localScale;
-                prompt.transform.localScale = Vector3.zero;
-                if (hint.Label != null)
-                {
-                    hint.LabelScale = hint.Label.localScale;
-                    hint.Label.localScale = Vector3.zero;
-                }
+                if (hint.Changed) Show(hint);
+                return;
             }
-            else Show(prompt, hint);
+            hint.Changed = true;
+            var there = VrToolBelt.Last(true) == hint.Zone || VrToolBelt.Last(false) == hint.Zone;
+            Draw(hint.Key, 0f);
+            Draw(hint.Word, there ? 1f : 0f);
         }
 
-        private static void Show(MonoBehaviour prompt, Hint hint)
+        private static void Draw(List<Graphic> graphics, float alpha)
         {
-            if (prompt != null) prompt.transform.localScale = hint.Scale;
-            if (hint.Label != null) hint.Label.localScale = hint.LabelScale;
+            foreach (var graphic in graphics)
+                if (graphic != null) graphic.canvasRenderer.SetAlpha(alpha);
         }
 
-        // Which action the hint is for, read once for each hint.
+        private static void Show(Hint hint)
+        {
+            hint.Changed = false;
+            Draw(hint.Key, 1f);
+            Draw(hint.Word, 1f);
+        }
+
+        // Which action the hint is for and what it is made of, read once for each hint.
         private static Hint Read(MonoBehaviour prompt)
         {
             var hint = new Hint();
@@ -83,11 +90,29 @@ namespace ShipbreakerVR
             // The fourth of the hint's own sets of controls is the gameplay's (its enum is private).
             if (set.GetValue(prompt).ToString() != "Controls_Gameplay") return hint;
             var what = (GameplayActions.GameplayActionSet)action.GetValue(prompt);
-            if (what != GameplayActions.GameplayActionSet.ToggleFlashlight && what != GameplayActions.GameplayActionSet.ActivateScanner) return hint;
-            hint.Hides = true;
-            var text = label != null ? label.GetValue(prompt) as Component : null;
-            if (text != null && !text.transform.IsChildOf(prompt.transform)) hint.Label = text.transform;
-            if (logs++ < 6) Plugin.Log.LogInfo($"Key hints: the hint for {what} ('{VrUtil.Path(prompt.transform)}') is not shown while VR runs");
+            if (what == GameplayActions.GameplayActionSet.ToggleFlashlight) hint.Zone = VrToolBelt.Zone.Flashlight;
+            else if (what == GameplayActions.GameplayActionSet.ActivateScanner) hint.Zone = VrToolBelt.Zone.Scanner;
+            else return hint;
+            // The whole hint: the nearest thing above the key's picture that also holds the word (in the game's HUD
+            // '<name> Toggle Container', over 'Bracket/ControlSprite'); without a word, the picture's bracket.
+            var word = label != null ? label.GetValue(prompt) as Component : null;
+            var whole = prompt.transform;
+            if (word != null)
+            {
+                for (var up = 0; up < 3 && whole.parent != null && !word.transform.IsChildOf(whole); up++) whole = whole.parent;
+                // A word somewhere else on the HUD: only the picture is the hint's own then.
+                if (!word.transform.IsChildOf(whole)) whole = prompt.transform;
+            }
+            else if (whole.parent != null) whole = whole.parent;
+            foreach (var graphic in whole.GetComponentsInChildren<Graphic>(true))
+            {
+                if (word != null && graphic.transform.IsChildOf(word.transform)) hint.Word.Add(graphic);
+                else hint.Key.Add(graphic);
+            }
+            if (word != null && hint.Word.Count == 0)
+                foreach (var graphic in word.GetComponentsInChildren<Graphic>(true)) hint.Word.Add(graphic);
+            if (logs++ < 6)
+                Plugin.Log.LogInfo($"Key hints: the hint for {what} ('{VrUtil.Path(whole)}'): its key ({hint.Key.Count} part(s)) is not shown while VR runs, its word ({hint.Word.Count} part(s)) while a hand is at the {hint.Zone}'s place");
             return hint;
         }
 
@@ -101,8 +126,8 @@ namespace ShipbreakerVR
         // On unload (hot reload): the hints are back.
         private static void Release()
         {
-            foreach (var pair in Hints)
-                if (pair.Value.Hidden) Show(pair.Key, pair.Value);
+            foreach (var hint in Hints.Values)
+                if (hint.Changed) Show(hint);
             Hints.Clear();
         }
     }
