@@ -835,8 +835,9 @@ namespace ShipbreakerVR
 
         // How many charges may be out at once. The game's own number (IDemoChargeControllerData.InWorldLimit) is 15 in
         // its data, with 5 carried (more with upgrades): it is only reached after buying more charges at the kiosk in
-        // the same shift. Experimente/SprengsatzLimit sets another number (0: the game's), to try the limit with the
-        // charges one carries.
+        // the same shift. In VR the limit is OwnLimit (Raik, 2026-11-22: "LYNX gives a most of 6 active charges"),
+        // never more than the game's; Experimente/SprengsatzLimit sets another number (0: the game's).
+        private const int OwnLimit = 6;
         private static ConfigEntry<int> ownLimit;
         private static int limitLogged = -1;
 
@@ -849,9 +850,9 @@ namespace ShipbreakerVR
             try { count = ChargeQuery(controller).CalculateEntityCount(); }
             catch (System.Exception) { return false; }
             if (ownLimit == null && VrSettings.File != null)
-                ownLimit = VrSettings.Bind("Experimente", "SprengsatzLimit", 0,
-                    "Experiment: how many demo charges may be out at once (on walls and afloat). 0: the game's own limit (15).");
-            limit = ownLimit != null && ownLimit.Value > 0 ? ownLimit.Value : data.InWorldLimit;
+                ownLimit = VrSettings.Bind("Experimente", "SprengsatzLimit", OwnLimit,
+                    "How many demo charges may be out at once in VR (on walls and afloat), at most the game's own limit (15). 0: the game's limit.");
+            limit = ownLimit != null && ownLimit.Value > 0 ? Mathf.Min(ownLimit.Value, data.InWorldLimit) : data.InWorldLimit;
             if (limit != limitLogged)
             {
                 limitLogged = limit;
@@ -881,27 +882,60 @@ namespace ShipbreakerVR
             return true;
         }
 
-        // The game's warning of the limit, with or without the mod's hint to stow the charge under it.
+        // The game's warning of the limit (its sound, and its line on the HUD with the mod's text in it, LimitShown), with
+        // or without the hint to stow the charge under it.
         private static void Warn(bool hint)
         {
-            hintUntil = hint ? Time.unscaledTime + HintWindow : -1f;
+            warnAsked = Time.unscaledTime;
+            warnHint = hint;
             LimitWarning?.Invoke(controller, null);
         }
 
-        // With the game's warning of the charges' limit, what to do about it (Marc, 2026-11-22): the charge in the hand
-        // does not go on and does not cling, so it is to be put back, and one left behind is charged for as any lost
-        // charge. Two short lines under the game's own ('Maximum number of demo charges reached'), in its label, for
-        // as long as the game shows that; the label's own text is put back when the game switches its warnings next.
-        private const float HintWindow = 1f;
-        private static float hintUntil = -1f;
-        // Each label with the hint in it and its own text (a HUD may have more than one of these controllers; each
+        // The warning on the HUD (Raik, 2026-11-22): taking a charge beyond the limit into the hand tells that LYNX
+        // gives a most of so many active charges and that further ones are not armed for the time. It is there for
+        // WarnShow seconds and then fades within WarnFade, not gone at once. Under it, with a charge that came into the
+        // hand all the same (Manuell), what to do about it (Marc, 2026-11-22): the charge does not go on and does not
+        // cling, so it is to be put back, and one left behind is charged for as any lost charge.
+        // The text is written into the game's own label for its warning ('Maximum number of demo charges reached'),
+        // whose time on the screen is set to the mod's; the fading is a CanvasGroup on that label. The label's own
+        // text and look are put back when the game switches its warnings next.
+        private const float WarnShow = 3f;
+        private const float WarnFade = 0.5f;
+        // The game switches its label on in the same call as the warning; a warning of its own later is left as it is.
+        private const float WarnWindow = 1f;
+        private static float warnAsked = -1f;
+        private static bool warnHint;
+        // Each label with the mod's text in it and its own text (a HUD may have more than one of these controllers; each
         // switches its own labels).
         private static readonly Dictionary<TMPro.TMP_Text, string> Hinted = new Dictionary<TMPro.TMP_Text, string>();
+
+        private sealed class Fading
+        {
+            public CanvasGroup Group;
+            public float Until;
+        }
+
+        private static readonly List<Fading> Fades = new List<Fading>();
+        // The groups the mod put on the game's labels, to take them off again when it is unloaded.
+        private static readonly List<CanvasGroup> OwnGroups = new List<CanvasGroup>();
+        private static readonly AccessTools.FieldRef<InWorldLimitUIController, float> WarnTimeLeft =
+            AccessTools.FieldRefAccess<InWorldLimitUIController, float>("mRemainingTime");
         private static int hintLogs;
+
+        // What the warning says, for that limit.
+        internal static string LimitText(int limit, bool hint)
+        {
+            var text = VrOptions.L($"LYNX allows at most {limit} active demo charges.\nFurther charges are not armed for now.",
+                $"LYNX gibt höchstens {limit} aktive Sprengsätze vor.\nWeitere Sprengsätze werden in dieser Zeit nicht aktiv geschaltet.");
+            if (hint)
+                text += "\n" + VrOptions.L("Stow the charge again. Lost charges will be billed.",
+                    "Sprengsatz wieder verstauen. Verlorene Sprengsätze werden in Rechnung gestellt.");
+            return text;
+        }
 
         // From ChargeLimitHintPatch (InWorldLimitUIController.ToggleWarnings): that controller switched its limit
         // warnings.
-        public static void LimitShown(List<GameObject> labels, InWorldLimitType type)
+        public static void LimitShown(InWorldLimitUIController shown, List<GameObject> labels, InWorldLimitType type)
         {
             const int charges = (int)InWorldLimitType.DemoCharges;
             var label = labels != null && charges < labels.Count ? labels[charges] : null;
@@ -912,13 +946,49 @@ namespace ShipbreakerVR
                 text.text = was;
                 Hinted.Remove(text);
             }
-            if (type != InWorldLimitType.DemoCharges || !VrXr.IsRunning || Time.unscaledTime > hintUntil) return;
+            var group = label.GetComponent<CanvasGroup>();
+            for (var i = Fades.Count - 1; i >= 0; i--)
+                if (Fades[i].Group == null || Fades[i].Group == group) Fades.RemoveAt(i);
+            if (group != null && OwnGroups.Contains(group)) group.alpha = 1f;
+            if (type != InWorldLimitType.DemoCharges || !VrXr.IsRunning || Time.unscaledTime > warnAsked + WarnWindow) return;
+            if (!Out(out _, out var limit)) return;
             was = text.text;
             Hinted[text] = was;
-            text.text = was + "\n" + VrOptions.L("Stow the charge again.\nLost charges will be billed.",
-                "Ladung wieder verstauen.\nVerlorene Ladungen werden in Rechnung gestellt.");
-            if (hintLogs++ < 5) Plugin.Log.LogInfo($"Charge by hand: the limit of charges is reached, hint shown under the game's warning '{was}'");
+            text.text = LimitText(limit, warnHint);
+            if (group == null)
+            {
+                group = label.AddComponent<CanvasGroup>();
+                group.interactable = false;
+                group.blocksRaycasts = false;
+                OwnGroups.Add(group);
+            }
+            // Only a label the mod may fade is kept longer and faded; one with a group of the game's is left to the game.
+            if (OwnGroups.Contains(group))
+            {
+                group.alpha = 1f;
+                if (shown != null) WarnTimeLeft(shown) = WarnShow + WarnFade;
+                Fades.Add(new Fading { Group = group, Until = Time.time + WarnShow + WarnFade });
+            }
+            if (hintLogs++ < 5) Plugin.Log.LogInfo($"Charge by hand: the limit of {limit} charges is reached, told in the place of the game's warning '{was}' for {WarnShow:0} s, fading within {WarnFade:0.0} s");
         }
+
+        // Each frame: the warnings fade towards their end (the game's clock, as its own count of the time left).
+        private static void FadeWarnings()
+        {
+            for (var i = Fades.Count - 1; i >= 0; i--)
+            {
+                var fading = Fades[i];
+                if (fading.Group == null)
+                {
+                    Fades.RemoveAt(i);
+                    continue;
+                }
+                fading.Group.alpha = FadeOut(fading.Until - Time.time, WarnFade);
+            }
+        }
+
+        // How much of the warning shows with that long left of it: all of it until its last 'fade' seconds.
+        internal static float FadeOut(float left, float fade) => fade <= 0f ? (left > 0f ? 1f : 0f) : Mathf.Clamp01(left / fade);
 
         // The charge afloat goes back to the stock the game's way and one from the stock goes on the wall, as the game
         // places one.
@@ -1136,6 +1206,7 @@ namespace ShipbreakerVR
             Check(VrInput.Left, afloat[0]);
             Check(VrInput.Right, afloat[1]);
             Reactivate();
+            FadeWarnings();
             ShowPreview();
             Reload();
             Fit();
@@ -1273,6 +1344,10 @@ namespace ShipbreakerVR
             foreach (var pair in Hinted)
                 if (pair.Key != null) pair.Key.text = pair.Value;
             Hinted.Clear();
+            Fades.Clear();
+            foreach (var group in OwnGroups)
+                if (group != null) Object.Destroy(group);
+            OwnGroups.Clear();
             try { GiveBackSticky(); }
             catch (System.Exception e) { Plugin.Log.LogWarning($"Charge by hand: giving the loose charges their cling back on unload failed ({e.Message})"); }
         }
@@ -1320,7 +1395,7 @@ namespace ShipbreakerVR
         private static bool Prefix(DemoChargePreview __instance) => !VrChargeByHand.TestsRoom(__instance);
     }
 
-    // The game's HUD switches its limit warnings: the mod's hint goes under the charges' one (VrChargeByHand.LimitShown).
+    // The game's HUD switches its limit warnings: the charges' one gets the mod's text and time (VrChargeByHand.LimitShown).
     [HarmonyPatch(typeof(InWorldLimitUIController), "ToggleWarnings")]
     internal static class ChargeLimitHintPatch
     {
@@ -1329,7 +1404,7 @@ namespace ShipbreakerVR
 
         private static void Postfix(InWorldLimitUIController __instance, InWorldLimitType type)
         {
-            try { VrChargeByHand.LimitShown(Labels(__instance), type); }
+            try { VrChargeByHand.LimitShown(__instance, Labels(__instance), type); }
             catch (System.Exception e) { Plugin.Log.LogWarning($"Charge by hand: the limit hint failed ({e.Message})"); }
         }
     }
