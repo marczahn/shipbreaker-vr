@@ -50,6 +50,8 @@ namespace ShipbreakerVR
             NotLoading.Clear();
             grappled = null;
             Left.Body = Right.Body = null;
+            Left.Seen = Right.Seen = null;
+            Left.SeenNode = Right.SeenNode = null;
         }
 
         private const string Name = "SM_Props_AI_Node";
@@ -96,6 +98,35 @@ namespace ShipbreakerVR
             public Rigidbody Body;
             public bool Over;
             public float OverSince;
+            // What the hand holds now and whether that is a node (Node), looked up when it changes and now and then.
+            public Rigidbody Seen;
+            public StructurePart SeenNode;
+            public float SeenAt;
+        }
+
+        // A body's parts are counted again this often while a hand keeps holding it (a piece cut off it may leave a
+        // node alone on it).
+        private const float LookAgain = 0.5f;
+        private static readonly List<StructurePart> PartsOn = new List<StructurePart>();
+
+        // The node the hand holds, or null. Until 0.32.0 every part of the held body was listed each frame: holding
+        // on to a ship's hull, that is the whole ship, each frame and into a new array.
+        private static StructurePart Node(Held held, Rigidbody body)
+        {
+            if (body == null)
+            {
+                held.Seen = null;
+                held.SeenNode = null;
+                return null;
+            }
+            if (body != held.Seen || Time.time >= held.SeenAt + LookAgain)
+            {
+                held.Seen = body;
+                held.SeenAt = Time.time;
+                held.SeenNode = NodeOf(body);
+            }
+            var node = held.SeenNode;
+            return node != null && body.gameObject.activeInHierarchy ? node : null;
         }
 
         // Nodes off the ship on a body the mod gave them, until the game made them a loose object of their own (Separate).
@@ -316,13 +347,21 @@ namespace ShipbreakerVR
             if (body == null || !body.gameObject.activeInHierarchy) return null;
             var part = body.GetComponent<StructurePart>();
             if (Is(part)) return part;
-            var parts = body.GetComponentsInChildren<StructurePart>();
-            return parts.Length == 1 && Is(parts[0]) ? parts[0] : null;
+            body.GetComponentsInChildren(PartsOn);
+            var only = PartsOn.Count == 1 && Is(PartsOn[0]) ? PartsOn[0] : null;
+            PartsOn.Clear();
+            return only;
         }
 
         // The game's own loose object of this node alone.
-        private static bool OwnObject(Rigidbody body, StructurePart part) =>
-            part.transform.parent == body.transform && body.GetComponentsInChildren<StructurePart>().Length == 1;
+        private static bool OwnObject(Rigidbody body, StructurePart part)
+        {
+            if (part.transform.parent != body.transform) return false;
+            body.GetComponentsInChildren(PartsOn);
+            var alone = PartsOn.Count == 1;
+            PartsOn.Clear();
+            return alone;
+        }
 
         private static void Track(Rigidbody body, StructurePart part)
         {
@@ -381,7 +420,7 @@ namespace ShipbreakerVR
         private static void Check(VrInput.Hand hand, Held held, bool shoulder)
         {
             var body = VrClimb.HeldBody(hand);
-            var node = NodeOf(body);
+            var node = Node(held, body);
             if (node != null)
             {
                 // Pulled off by hand (VrPullOff): on the mod's body, to be separated from its ship once let go.
