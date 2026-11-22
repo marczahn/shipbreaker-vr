@@ -515,7 +515,7 @@ namespace ShipbreakerVR
                 var closing = hand.Input.Grip.Down && Time.unscaledTime - GripClosedAt[h] <= LineCatch;
                 if (!Pulling || rig == null || !closing || !hand.Free || HaulsAny(h)) continue;
                 if (!hand.Input.TryGetPosition(out var local)) continue;
-                if (!VrToolLine.Take(tool.Index, h, rig.TransformPoint(local), FistAxis(hand, rig), LineReach * VrCamera.WorldScale)) continue;
+                if (!VrToolLine.Take(tool.Index, h, FistMiddle(hand, rig.TransformPoint(local)), FistAxis(hand, rig), LineReach * VrCamera.WorldScale)) continue;
                 GripClosedAt[h] = -10f;
                 tool.Hauls[h] = true;
                 tool.PullKnown[h] = false;
@@ -540,6 +540,11 @@ namespace ShipbreakerVR
             }
             return hand.Input.TryGetGripPose(out _, out var grip) ? rig.rotation * grip * Vector3.forward : rig.up;
         }
+
+        // Where the line lies in that hand's fist, from the controller's place: in the hollow between the palm and the
+        // closed fingers (VrClimb.PalmPoint: just above the palm, towards the finger tips). At the controller's own
+        // place, which lies within the hand, the line ran through the palm (Raik's screenshot, 2026-11-23).
+        private static Vector3 FistMiddle(VrHand hand, Vector3 controller) => VrClimb.PalmPoint(hand.Input, controller);
 
         private static bool HaulsAny(int h)
         {
@@ -579,7 +584,7 @@ namespace ShipbreakerVR
             for (var h = 0; h < 2; h++)
             {
                 if (!tool.Hauls[h] || !VrHand.Both[h].Input.TryGetPosition(out var local)) continue;
-                var at = rig.TransformPoint(local);
+                var at = FistMiddle(VrHand.Both[h], rig.TransformPoint(local));
                 VrToolLine.Carry(tool.Index, h, at, FistAxis(VrHand.Both[h], rig));
                 // The hand pulls at the tool from where the line leaves its fist.
                 if (VrToolLine.ToolSide(tool.Index, h, out var leaves)) at = leaves;
