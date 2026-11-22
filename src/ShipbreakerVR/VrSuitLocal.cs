@@ -75,6 +75,10 @@ namespace ShipbreakerVR
         private static float nextSearch;
         // geo_suit's bones and the arm bones it lacks (Build)
         private static Transform[] suitBones;
+        // The body the meshes were built on (Build): their bones, the joints of the suit's own and the arms' caps are
+        // that body's. A later shift brings a new player with new bones, and the suit is built again on them; kept, it
+        // hung on the first shift's destroyed bones and did not draw (0.31.5: no suit from the second shift on).
+        private static SkinnedMeshRenderer builtFor;
         // Originalarme: the game's arms draw a copy of their mesh with plain caps at the shoulders (PlainCaps)
         private static Mesh capsMesh;
         private static Mesh armsOwnMesh;
@@ -115,6 +119,11 @@ namespace ShipbreakerVR
                 if (found.name != BodyName || found.sharedMesh == null) continue;
                 try
                 {
+                    if (bodyMesh != null && builtFor != found)
+                    {
+                        Plugin.Log.LogInfo("Local suit: a new body, the suit is built again on its bones");
+                        Forget();
+                    }
                     if (bodyMesh == null) Build(found);
                     Dress(found);
                 }
@@ -1243,6 +1252,7 @@ namespace ShipbreakerVR
             if (File.Exists(helmetFile)) helmetMesh = Read(helmetFile, names, bindposes);
             var visorFile = Path.Combine(Folder, "Anzug-Visier.suit");
             if (File.Exists(visorFile)) visorMesh = Read(visorFile, names, bindposes);
+            builtFor = target;
             Plugin.Log.LogInfo($"Local suit: from '{Path.GetFileName(Folder)}', body {bodyMesh.vertexCount} vertices, helmet {(helmetMesh != null ? helmetMesh.vertexCount : 0)}, visor {(visorMesh != null ? visorMesh.vertexCount : 0)}, bounds {bodyMesh.bounds.min} to {bodyMesh.bounds.max}");
         }
 
@@ -1325,15 +1335,24 @@ namespace ShipbreakerVR
             return mesh;
         }
 
-        private static void Release()
+        // What was built on one body's bones goes; the materials and their textures do not depend on the body and stay.
+        private static void Forget()
         {
             Undress();
-            Backpack.Release();
-            foreach (var o in new Object[] { bodyMesh, helmetMesh, visorMesh, capsMesh, material, visorMaterial, colour, normal, mask })
+            foreach (var o in new Object[] { bodyMesh, helmetMesh, visorMesh, capsMesh })
                 if (o != null) Object.Destroy(o);
             bodyMesh = helmetMesh = visorMesh = capsMesh = null;
             OwnJoints.Clear();
             suitBones = null;
+            builtFor = null;
+        }
+
+        private static void Release()
+        {
+            Forget();
+            Backpack.Release();
+            foreach (var o in new Object[] { material, visorMaterial, colour, normal, mask })
+                if (o != null) Object.Destroy(o);
             material = visorMaterial = null;
             colour = normal = mask = null;
             failed = checkedFiles = false;
