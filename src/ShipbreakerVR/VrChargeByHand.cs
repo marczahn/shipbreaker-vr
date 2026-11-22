@@ -496,11 +496,23 @@ namespace ShipbreakerVR
                 if (logs++ < 40) Plugin.Log.LogInfo("Charge by hand: no demo charges left behind the back");
                 return true;
             }
+            // As many out as may be (Raik, 2026-11-22): with Automatisch no further charge comes into the hand, as the
+            // game hands out none; with Manuell it does, with the warning, to be held and thrown as the thing it is,
+            // but it goes on nowhere and does not cling until there is room for it (PutOn, Reactivate).
+            var full = Out(out var count, out var limit) && count >= limit;
+            if (full && Auto)
+            {
+                Warn(false);
+                hand.Buzz(0.3f, 0.1f);
+                if (logs++ < 60) Plugin.Log.LogInfo($"Charge by hand: {count} of {limit} charges are out, none comes into the {hand.Name} hand (Automatisch)");
+                return true;
+            }
             var part = LetGoFromStock(origin, turned);
             if (part == null) return false;
             VrChargeDisarm.Give(part, hand, true);
             hand.Buzz(0.4f, 0.05f);
-            if (logs++ < 40) Plugin.Log.LogInfo($"Charge by hand: {hand.Name} hand takes a charge out from behind the back, as a thing of its own");
+            if (full) Warn(true);
+            if (logs++ < 40) Plugin.Log.LogInfo($"Charge by hand: {hand.Name} hand takes a charge out from behind the back, as a thing of its own{(full ? $" ({count} of {limit} are out: it will not go on)" : "")}");
             return true;
         }
 
@@ -554,12 +566,13 @@ namespace ShipbreakerVR
             {
                 // Let go at the game's limit before (LeaveLoose): what it would cling with is remembered, and it is
                 // given back when it is let go again below the limit (Restick).
-                if (!held.StickyOff && LeftLoose.TryGetValue(parent, out var kept))
+                var left = held.StickyOff ? -1 : LeftLoose.FindIndex(loose => loose.On == parent);
+                if (left >= 0)
                 {
-                    LeftLoose.Remove(parent);
-                    held.StickyMask = kept;
+                    held.StickyMask = LeftLoose[left].Mask;
                     held.StickyOn = parent;
                     held.StickyOff = true;
+                    LeftLoose.RemoveAt(left);
                 }
                 return;
             }
@@ -581,15 +594,47 @@ namespace ShipbreakerVR
                 manager.AddComponentData(held.StickyOn, new Sticky { LayerMask = held.StickyMask });
         }
 
-        // Charges afloat that were let go with the game's limit of charges reached: they do not cling by themselves,
-        // and what they would cling with (their parent's Sticky mask) is kept here until a hand takes them again.
-        private static readonly Dictionary<Entity, LayerMask> LeftLoose = new Dictionary<Entity, LayerMask>();
+        // Charges afloat that were let go with the limit of charges reached: they do not cling by themselves, and
+        // what they would cling with (their parent's Sticky mask) is kept here, in the order they were left, until a
+        // hand takes them again or fewer charges than the limit are out (Reactivate).
+        private static readonly List<(Entity On, LayerMask Mask)> LeftLoose = new List<(Entity, LayerMask)>();
 
         private static void LeaveLoose(Afloat held)
         {
             if (!held.StickyOff) return;
             held.StickyOff = false;
-            LeftLoose[held.StickyOn] = held.StickyMask;
+            var on = held.StickyOn;
+            LeftLoose.RemoveAll(loose => loose.On == on);
+            LeftLoose.Add((on, held.StickyMask));
+        }
+
+        // Fewer charges out than the limit again (one taken back, or gone): the charge left loose longest clings
+        // again as the game has it, by itself, wherever it drifts (Raik, 2026-11-22: a surplus charge thrown away
+        // becomes live once there is room for it, and one has to mind where it went). Looked at twice a second.
+        // What it does not do: the game sets off every charge that is out, the loose ones among them, so setting the
+        // others off does not leave a loose one behind to become live.
+        private static float nextReactivate;
+
+        private static void Reactivate()
+        {
+            if (LeftLoose.Count == 0 || Time.unscaledTime < nextReactivate) return;
+            nextReactivate = Time.unscaledTime + 0.5f;
+            var world = World.DefaultGameObjectInjectionWorld;
+            if (world == null || !Out(out var count, out var limit)) return;
+            var manager = world.EntityManager;
+            LeftLoose.RemoveAll(loose => !manager.Exists(loose.On));
+            var inHands = 0;
+            foreach (var hand in afloat)
+                if (hand.Charge != null) inHands++;
+            var live = count - LeftLoose.Count - inHands;
+            while (LeftLoose.Count > 0 && live < limit)
+            {
+                var (on, mask) = LeftLoose[0];
+                LeftLoose.RemoveAt(0);
+                if (!manager.HasComponent<Sticky>(on)) manager.AddComponentData(on, new Sticky { LayerMask = mask });
+                live++;
+                if (logs++ < 60) Plugin.Log.LogInfo($"Charge by hand: a charge left loose clings again, {live} of {limit} charges are live now");
+            }
         }
 
         // A hand's hold on a charge ended without the grip opening (lost by tracking, taken by the other hand, the hand
@@ -607,9 +652,9 @@ namespace ShipbreakerVR
             if (world != null)
             {
                 var manager = world.EntityManager;
-                foreach (var pair in LeftLoose)
-                    if (manager.Exists(pair.Key) && !manager.HasComponent<Sticky>(pair.Key))
-                        manager.AddComponentData(pair.Key, new Sticky { LayerMask = pair.Value });
+                foreach (var (on, mask) in LeftLoose)
+                    if (manager.Exists(on) && !manager.HasComponent<Sticky>(on))
+                        manager.AddComponentData(on, new Sticky { LayerMask = mask });
             }
             LeftLoose.Clear();
         }
@@ -782,21 +827,43 @@ namespace ShipbreakerVR
             return true;
         }
 
-        // The game's limit of charges in the world reached (IDemoChargeControllerData.InWorldLimit, as the game's own
-        // placing asks before it puts one on or throws one), for that charge: it is one of those the game counts, and so
-        // is a charge the other hand holds, which is not out yet either (with one free place and a charge in each
-        // hand, the first let go still goes on).
-        private static bool AtLimit(DemoChargeRetrievalController charge)
+        // How many charges may be out at once. The game's own number (IDemoChargeControllerData.InWorldLimit) is 15 in
+        // its data, with 5 carried (more with upgrades): it is only reached after buying more charges at the kiosk in
+        // the same shift. Experimente/SprengsatzLimit sets another number (0: the game's), to try the limit with the
+        // charges one carries.
+        private static ConfigEntry<int> ownLimit;
+        private static int limitLogged = -1;
+
+        // How many charges are out (on walls, afloat, in the hands: all the game counts) and how many may be.
+        private static bool Out(out int count, out int limit)
         {
+            count = limit = 0;
             var data = controller != null ? Data(controller) : null;
             if (data == null) return false;
-            int count;
             try { count = ChargeQuery(controller).CalculateEntityCount(); }
             catch (System.Exception) { return false; }
+            if (ownLimit == null && VrSettings.File != null)
+                ownLimit = VrSettings.Bind("Experimente", "SprengsatzLimit", 0,
+                    "Experiment: how many demo charges may be out at once (on walls and afloat). 0: the game's own limit (15).");
+            limit = ownLimit != null && ownLimit.Value > 0 ? ownLimit.Value : data.InWorldLimit;
+            if (limit != limitLogged)
+            {
+                limitLogged = limit;
+                Plugin.Log.LogInfo($"Charge by hand: at most {limit} charges out at once (the game's limit {data.InWorldLimit}, {data.MaxCarryAmount} carried)");
+            }
+            return true;
+        }
+
+        // The limit of charges out reached (as the game's own placing asks before it puts one on or throws one), for
+        // that charge: it is one of those the game counts, and so is a charge the other hand holds, which is not out
+        // yet either (with one free place and a charge in each hand, the first let go still goes on).
+        private static bool AtLimit(DemoChargeRetrievalController charge)
+        {
+            if (!Out(out var count, out var limit)) return false;
             var inHands = 1;
             foreach (var other in afloat)
                 if (other.Charge != null && other.Charge != charge) inHands++;
-            return count - inHands >= data.InWorldLimit;
+            return count - inHands >= limit;
         }
 
         // The same with the game's warning for it (its sound and its line on the HUD), and the mod's hint under that
@@ -804,9 +871,15 @@ namespace ShipbreakerVR
         private static bool LimitReached(DemoChargeRetrievalController charge)
         {
             if (!AtLimit(charge)) return false;
-            hintUntil = Time.unscaledTime + HintWindow;
-            LimitWarning?.Invoke(controller, null);
+            Warn(true);
             return true;
+        }
+
+        // The game's warning of the limit, with or without the mod's hint to stow the charge under it.
+        private static void Warn(bool hint)
+        {
+            hintUntil = hint ? Time.unscaledTime + HintWindow : -1f;
+            LimitWarning?.Invoke(controller, null);
         }
 
         // With the game's warning of the charges' limit, what to do about it (Marc, 2026-11-22): the charge in the hand
@@ -1056,6 +1129,7 @@ namespace ShipbreakerVR
             }
             Check(VrInput.Left, afloat[0]);
             Check(VrInput.Right, afloat[1]);
+            Reactivate();
             ShowPreview();
             Reload();
             Fit();

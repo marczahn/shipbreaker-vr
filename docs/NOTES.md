@@ -1375,6 +1375,14 @@ none of LYNX's messages yet has no such group, and the read mod message is then 
 Proposal, not built: keep it among the new messages until the group exists.
 
 ## Demo charges: the game's limit (0.32.1)
+In the game's data (`Default_DemoChargeControllerAsset`) the limit is 15 and 5 charges are carried (`MaxCarryAmount`,
+raised by upgrades; the limit is not), so the limit is only reached after buying more charges at the kiosk in the same
+shift. `Experimente/SprengsatzLimit` sets another number for the mod's own check, to try it. With as many out as may
+be, *Automatisch* hands out no further charge (`TakesOut`); *Manuell* does, with the warning, and that charge stays
+loose until fewer are out again (`Reactivate`, the oldest loose one first). The game's detonation sequence
+(`DemoChargeDetonationSequenceSystem`) takes every entity with `DemoCharge`, oldest first, so a loose surplus charge
+goes off with the others; keeping it out of that is not built.
+
 The game allows `IDemoChargeControllerData.InWorldLimit` charges out at once and asks before it places or throws one
 (`DemoChargeController`: `mDemoChargeQuery.CalculateEntityCount() >= InWorldLimit` gives `InWorldLimitReached`: a
 sound and the HUD's line for it, `InWorldLimitUIController`). A charge taken into the hand as a thing of its own
