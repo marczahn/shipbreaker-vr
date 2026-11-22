@@ -20,7 +20,7 @@ By installing you accept the [disclaimer](../DISCLAIMER.md). Back up your save g
 - **F4** (or holding the **left stick** in for 1.2 seconds on the controllers) recenters the view on the headset: position, and in menus also view direction and the menu canvas.
   Menus always appear at eye height, also when you look up or down.
   The row "Center view" at the top of the VR options does the same.
-- Own posters: put PNG or JPG files into `BepInExShipbreakerVR-Poster`, the folder appears after the first visit to the station. They join the pictures you can choose for the posters there.
+- Own posters: put PNG or JPG files into `BepInEx\ShipbreakerVR-Poster`, the folder appears after the first visit to the station. They join the pictures you can choose for the posters there, once LYNX has allowed them by a message in the station's inbox after the tutorial shift.
 - **F7** at one of the station's monitors switches its screen look.
 - For bug reports, set `Diagnose = true` under `[Debug]` in `BepInEx\config\de.marczahn.shipbreakervr.cfg`. Then
   **F8** or **B and Y together** writes what is drawn around you into the log, and load screens and frame times are logged too.
