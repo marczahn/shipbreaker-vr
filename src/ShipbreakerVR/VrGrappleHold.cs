@@ -39,6 +39,10 @@ namespace ShipbreakerVR
         private static Quaternion lastRotation = Quaternion.identity;
         private static float lastAt = -10f;
         private const float Recent = 0.5f;
+        // An aim the rope is about to take over, since when, and how long it waits for it to be where it belongs.
+        private static Transform changingTo;
+        private static float changingSince;
+        private const float Settle = 0.15f;
         private static int logs;
 
         // From GrapplingHook.SetHookPoint, when the rope has caught something.
@@ -47,6 +51,7 @@ namespace ShipbreakerVR
             rope = caught;
             hand = null;
             lastAt = -10f;
+            changingTo = null;
             if (TryGetHand(out var aim)) Attach(aim, caught.StartAnchorData.Anchor.transform.position, caught.StartAnchorData.Anchor.rotation);
         }
 
@@ -71,9 +76,30 @@ namespace ShipbreakerVR
                 // the part jumped by the way between the hands (Raik's list of 2026-11-21, point 10). Without a recent
                 // pose (the hand did not aim for a while), from where the body is.
                 var body = anchor.Anchor.transform;
-                if (hand != null && Time.unscaledTime - lastAt < Recent) Attach(aim, lastPosition, lastRotation);
+                if (hand != null && Time.unscaledTime - lastAt < Recent)
+                {
+                    // The new aim is not where it will be at once: as a second tool is put away the grapple becomes
+                    // the game's tool again and aims through the game's aim camera, which is still as the other tool
+                    // left it for a moment. Taken over at once, the part shifted by a few degrees when the camera came
+                    // to the grapple's hand (Raik, 2026-11-22, and the log: drawing the cutter was fine, putting it
+                    // away was not). So the rope keeps the pose it last had for a moment, and takes the new aim then.
+                    if (aim != changingTo)
+                    {
+                        changingTo = aim;
+                        changingSince = Time.unscaledTime;
+                    }
+                    if (Time.unscaledTime - changingSince < Settle)
+                    {
+                        position = lastPosition;
+                        rotation = lastRotation;
+                        lastAt = Time.unscaledTime;
+                        return true;
+                    }
+                    Attach(aim, lastPosition, lastRotation);
+                }
                 else Attach(aim, body.position, body.rotation);
             }
+            changingTo = null;
             rotation = aim.rotation * offsetRotation;
             position = aim.position + aim.rotation * offsetPosition;
             lastPosition = position;
