@@ -47,6 +47,14 @@ namespace ShipbreakerVR
         // And it lifts off the wall only a little while pulled (Raik, 2026-11-22: the 7 degrees of the things on walls
         // were far too much for it; about 3, then it comes off).
         private const float ChargeTilt = 3f;
+        // A demo charge stays on its sticky side while pulled (Raik, 2026-11-22: "pulling lifts the mine off until it
+        // comes loose, that is a bit silly"): it tips about its edge at the wrist, which stays on the wall, and the edge
+        // at the finger tips comes off by ChargeLift only (m at world scale 1, "a few millimetres"), until its time is
+        // up. Before, it tipped about a point 1.7 m beside it and so came off the wall whole, by 9 cm at 3 degrees: the
+        // size it was measured by (Size, all its renderers) is 4.95 m with what the charge draws around itself. Its
+        // size is now that of its own mesh.
+        private const float ChargeLift = 0.005f;
+        private const string ChargeMesh = "SM_Props_Demo_Charge";
 
         // Taking things apart by hand (Raik's list of 2026-11-21, point 12: "pulling apart"; his test of 2026-11-22:
         // the computers do not come apart by hand). Many parts sit on the ship by a joint that gives way to pulling
@@ -140,6 +148,12 @@ namespace ShipbreakerVR
             // A part on a joint that gives way (Yank): the pull still owed to the joint, and when its joints broke.
             public float YankDue;
             public float BrokeAt = -1f;
+            // A demo charge tips about one edge of its own (Edge): a point on that edge, the way to the edge that comes
+            // off and the way out of the wall, all in the charge's own space as it sits.
+            public bool Edge;
+            public Vector3 Hinge;
+            public Vector3 LiftWay;
+            public Vector3 Out;
             // A device stripped for its part (Extract): pulled at, it stays as it is. Since when the hand holds it; how
             // far apart the two controllers were as the other hand came close with its grip closed (StripPull.Unpaired
             // without one, StripPull.TooFar with one too far away), in m at world scale 1; and how it is held, for the log.
@@ -549,6 +563,8 @@ namespace ShipbreakerVR
             pull.Pulled = 0f;
             pull.Needed = Needs(root, control);
             pull.Tilt = control is DemoChargeRetrievalController ? ChargeTilt : Tilt;
+            pull.Edge = false;
+            if (control is DemoChargeRetrievalController) SetEdge(pull);
             pull.Angle = 0f;
             pull.Braced = false;
             pull.Ship = ship;
@@ -652,7 +668,16 @@ namespace ShipbreakerVR
             if (pull.Parent == null) return;
             pull.Root.localPosition = pull.RestPosition;
             pull.Root.localRotation = pull.RestRotation;
-            if (pull.Angle <= 0.01f) return;
+            if (pull.Angle <= 0.001f) return;
+            if (pull.Edge)
+            {
+                var edge = pull.Root.TransformPoint(pull.Hinge);
+                var up = pull.Root.TransformDirection(pull.Out);
+                var lifted = pull.Root.TransformDirection(pull.LiftWay);
+                pull.Root.RotateAround(edge, Vector3.Cross(up, lifted), -pull.Angle);
+                pull.Contact = edge;
+                return;
+            }
             var center = pull.Root.position;
             var along = Vector3.ProjectOnPlane(hand - center, pull.Normal);
             if (along.sqrMagnitude < 1e-6f) along = Vector3.ProjectOnPlane(Vector3.up, pull.Normal);
@@ -663,6 +688,57 @@ namespace ShipbreakerVR
             pull.Root.RotateAround(hinge, axis, -pull.Angle);
             // Where it still touches its mount: that edge, on the wall behind it.
             pull.Contact = OnWallBehind(pull.Root, pull.Normal, hinge);
+        }
+
+        // The edge a demo charge tips about, from its own mesh as it sits: the edge at the wrist of the hand that holds
+        // it (opposite the way from the wrist to the knuckles, along the wall), on its sticky side. The angle is the one
+        // that lifts the opposite edge by ChargeLift. The charge's mesh looks out of the wall along its forward (its
+        // origin lies 3 cm before its back, VrChargeByHand.BackOfMesh).
+        private static void SetEdge(Pull pull)
+        {
+            var root = pull.Root;
+            var filter = root.GetComponent<MeshFilter>();
+            if (filter == null)
+                foreach (var each in root.GetComponentsInChildren<MeshFilter>())
+                    if (each.name == ChargeMesh) { filter = each; break; }
+            var mesh = filter != null ? filter.sharedMesh : null;
+            if (mesh == null)
+            {
+                if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: the demo charge '{root.name}' has no mesh of its own to tip by, it tips as other things do");
+                return;
+            }
+            var frame = filter.transform;
+            var bounds = mesh.bounds;
+            var outward = frame.forward;
+            var agrees = Vector3.Dot(outward, pull.Normal);
+            if (agrees < -0.3f) outward = -outward;
+            var lift = Vector3.zero;
+            var by = "the hand, from the wrist to the knuckles";
+            if (VrHands.TryGetArm(pull.Input.IsLeft, out _, out _, out var wrist, out var knuckles))
+                lift = Vector3.ProjectOnPlane(knuckles - wrist, outward);
+            if (lift.sqrMagnitude < 1e-6f)
+            {
+                lift = Vector3.ProjectOnPlane(frame.up, outward);
+                by = "its own up, the hand lies square to the wall or is not drawn";
+            }
+            if (lift.sqrMagnitude < 1e-6f) return;
+            lift.Normalize();
+            var size = Mathf.Abs(frame.lossyScale.x);
+            var e = bounds.extents;
+            var along = frame.InverseTransformDirection(lift);
+            var deep = frame.InverseTransformDirection(outward);
+            var half = (Mathf.Abs(along.x) * e.x + Mathf.Abs(along.y) * e.y + Mathf.Abs(along.z) * e.z) * size;
+            var depth = (Mathf.Abs(deep.x) * e.x + Mathf.Abs(deep.y) * e.y + Mathf.Abs(deep.z) * e.z) * size;
+            if (half < 1e-4f) return;
+            var hinge = frame.TransformPoint(bounds.center) - lift * half - outward * depth;
+            pull.Hinge = root.InverseTransformPoint(hinge);
+            pull.LiftWay = root.InverseTransformDirection(lift).normalized;
+            pull.Out = root.InverseTransformDirection(outward).normalized;
+            pull.Tilt = Mathf.Min(ChargeTilt, Mathf.Atan2(ChargeLift * VrCamera.WorldScale, 2f * half) * Mathf.Rad2Deg);
+            pull.Edge = true;
+            if (logs++ < 40)
+                Plugin.Log.LogInfo($"Pull off: the demo charge tips about its edge at the wrist, by {pull.Tilt:0.00} degrees: {2f * half * 100f:0} cm across that way, {2f * depth * 100f:0.0} cm deep, "
+                    + $"the far edge comes off by {ChargeLift * 1000f:0} mm (the way by {by}; its forward and the hold's normal agree by {agrees:0.00})");
         }
 
         // Off the ship: its own body, then into the hand.
@@ -873,6 +949,7 @@ namespace ShipbreakerVR
             pull.YankDue = 0f;
             pull.BrokeAt = -1f;
             pull.Extract = false;
+            pull.Edge = false;
             pull.PairFrom = StripPull.Unpaired;
             pull.Mode = "";
         }
