@@ -39,7 +39,8 @@ namespace ShipbreakerVR
         private static readonly Color LaserColor = new Color(2.5f, 0.25f, 0.15f);
         // The bright middle of the dots, so that they stay red too.
         private static readonly Color DotCoreColor = new Color(2.5f, 1.2f, 1f);
-        // The grapple's laser and dots, in both its modes; the ring and the traced tether stay orange.
+        // The grapple's laser and dots, in both its modes, and the tether mode's ring; the traced tether and the line
+        // of the tether being placed stay orange.
         private static readonly Color GrappleColor = new Color(0.9f, 2.0f, 2.5f);
         private static readonly Color GrappleCoreColor = new Color(2.2f, 2.5f, 2.5f);
         private static readonly Color TetherColor = new Color(1f, 0.6f, 0.15f);
@@ -83,6 +84,9 @@ namespace ShipbreakerVR
         private static bool beamHit;
         private static Vector3 beamStart;
         private static Vector3 beamEnd;
+        // The surface's normal where each laser meets something (zero where it meets nothing), for the tether mode's ring.
+        private static Vector3 beamNormal;
+        private static Vector3 secondBeamNormal;
         private static bool secondBeamVisible;
         private static bool secondBeamHit;
         // In the tether mode: the tether each laser points at (VrTetherMode.Targeted), traced in orange.
@@ -344,9 +348,9 @@ namespace ShipbreakerVR
             var pointing = !Busy(tool);
             var secondPointing = !Busy(secondTool);
             if (tool != EquipmentController.Equipment.DemoCharge && pointing)
-                DrawBeam(cmd, eye, scale, beamStart, beamEnd, beamHit, tethers, handNode, beamTether, tool);
+                DrawBeam(cmd, eye, scale, beamStart, beamEnd, beamHit, beamNormal, tethers, handNode, beamTether, tool);
             if (secondBeamVisible && secondTool != EquipmentController.Equipment.DemoCharge && secondPointing)
-                DrawBeam(cmd, eye, scale, secondBeamStart, secondBeamEnd, secondBeamHit, secondTethers, VrDualTools.SecondNode, secondBeamTether, secondTool);
+                DrawBeam(cmd, eye, scale, secondBeamStart, secondBeamEnd, secondBeamHit, secondBeamNormal, secondTethers, VrDualTools.SecondNode, secondBeamTether, secondTool);
             foreach (var point in cutPoints) DrawImpact(cmd, eye, scale, point, beamMaterial, coreMaterial);
             if (beamDot && pointing) DrawImpact(cmd, eye, scale, beamEnd, Beam(tool), Core(tool));
             if (secondBeamDot && secondPointing) DrawImpact(cmd, eye, scale, secondBeamEnd, Beam(secondTool), Core(secondTool));
@@ -367,7 +371,7 @@ namespace ShipbreakerVR
             return hook != null && (hook.GrappledRigidbody != null || hook.IsSwinging);
         }
 
-        private static void DrawBeam(CommandBuffer cmd, Vector3 eye, float scale, Vector3 start, Vector3 end, bool hit, bool tethers, XRNode node, Tether target, EquipmentController.Equipment tool)
+        private static void DrawBeam(CommandBuffer cmd, Vector3 eye, float scale, Vector3 start, Vector3 end, bool hit, Vector3 normal, bool tethers, XRNode node, Tether target, EquipmentController.Equipment tool)
         {
             DrawLine(cmd, eye, scale, start, end, Beam(tool));
             if (!tethers) return;
@@ -375,8 +379,11 @@ namespace ShipbreakerVR
             if (target != null) DrawLine(cmd, eye, scale * TraceWidth, target.WorldStartAttachPoint, target.WorldEndAttachPoint, material);
             if (VrTetherMode.TryGetStart(node, out var tetherStart)) DrawLine(cmd, eye, scale, tetherStart, end, material);
             if (!hit) return;
+            // The ring lies flat on what the laser meets, in the grapple's own blue (Raik: it faced the eye, in orange),
+            // a little above the surface.
             var size = RingSize * Vector3.Distance(eye, end);
-            cmd.DrawMesh(ringMesh, Matrix4x4.TRS(end, Quaternion.LookRotation(end - eye), Vector3.one * size), material, 0, 0);
+            var facing = normal.sqrMagnitude > 1e-6f ? normal.normalized : (eye - end).normalized;
+            cmd.DrawMesh(ringMesh, Matrix4x4.TRS(end + facing * (0.1f * size), Quaternion.LookRotation(-facing), Vector3.one * size), grappleMaterial, 0, 0);
         }
 
         // A laser's dot: a glow in its color with a white core, of a size in the world.
@@ -424,7 +431,12 @@ namespace ShipbreakerVR
             var rotation = Quaternion.identity;
             var secondRotation = Quaternion.identity;
             secondBeamVisible = Active && VrDualTools.TryGetAim(out secondBeamStart, out secondRotation);
-            if (secondBeamVisible) secondBeamHit = Cast(secondBeamStart, secondRotation, out secondBeamEnd, out _);
+            secondBeamNormal = Vector3.zero;
+            if (secondBeamVisible)
+            {
+                secondBeamHit = Cast(secondBeamStart, secondRotation, out secondBeamEnd, out var secondHit);
+                if (secondBeamHit) secondBeamNormal = secondHit.normal;
+            }
             secondBeamTether = secondBeamVisible && VrTetherMode.Applies(VrDualTools.Second)
                 ? VrTetherMode.Targeted(secondBeamStart, secondRotation * Vector3.forward) : null;
             secondBeamDot = secondBeamVisible && secondBeamHit && Dotted(VrDualTools.Second);
@@ -444,6 +456,7 @@ namespace ShipbreakerVR
                 return;
             }
             beamHit = Cast(beamStart, rotation, out beamEnd, out var hit);
+            beamNormal = beamHit ? hit.normal : Vector3.zero;
             beamDot = beamHit && Dotted(VrToolModels.Equipped);
             if (VrToolModels.Equipped == EquipmentController.Equipment.CuttingTool) VrStingerDots.Add(cutPoints, beamStart);
             if (VrToolModels.Equipped == EquipmentController.Equipment.CuttingTool && VrDualTools.Second != EquipmentController.Equipment.CuttingTool)

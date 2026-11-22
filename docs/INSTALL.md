@@ -130,7 +130,7 @@ B switches the grapple between two modes. The controller buzzes twice when the t
 grappling comes back.
 - Grappling (light blue laser, a bright dot where it hits): the trigger grapples, as in the flat game. B only switches to
   the tether mode, however long you hold it; tethers are placed and recalled there.
-- Placing tethers (light blue laser, an orange ring where it points): pull the trigger at the start of the tether and let go at
+- Placing tethers (light blue laser, a blue ring lying where it points): pull the trigger at the start of the tether and let go at
   the end; a line shows the tether meanwhile. The tether you point at lights up orange, and a tap on A removes it;
   pointing at no tether, A uses what you point at. Hold A to recall all tethers. B switches back to grappling however
   long you hold it.
