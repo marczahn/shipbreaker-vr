@@ -72,6 +72,8 @@ namespace ShipbreakerVR
         private static string shownPlace;
         private static bool warned;
         private static bool warmed;
+        // The try to set it up in this room at this place failed: not made again until room or place change.
+        private static bool habFailed;
 
         private static GameObject floating;
         private static string shipKey;
@@ -497,10 +499,11 @@ namespace ShipbreakerVR
             // Shown, or tried, in this room at this place: nothing to do. A try that failed is not made again each
             // frame (0.32.0 measured the Hab's tables and wrote to the log every frame while the model or a material
             // for it was missing).
-            if (want && shownIn == room && shownPlace == place) return;
+            if (want && shownIn == room && shownPlace == place && (shown != null || habFailed)) return;
             Discard(ref shown, ref shownMaterial);
             shownIn = null;
             shownPlace = null;
+            habFailed = false;
             if (!want) return;
             shownIn = room;
             shownPlace = place;
@@ -525,6 +528,7 @@ namespace ShipbreakerVR
             if (mesh == null || material == null)
             {
                 Plugin.Log.LogWarning("Radio: no model or material for it, not shown in the Hab this time");
+                habFailed = true;
                 return;
             }
             var radio = new GameObject("ShipbreakerVR Radio");

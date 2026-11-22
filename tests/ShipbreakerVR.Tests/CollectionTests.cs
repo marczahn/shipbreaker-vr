@@ -10,9 +10,10 @@ namespace ShipbreakerVR.Tests
         [InlineData("Raik", "Sammlung Raik")]
         [InlineData("  Marc  ", "Sammlung Marc")]
         [InlineData("FreeMode", "Sammlung FreeMode")]
-        [InlineData("a=b[c]d", "Sammlung a_b_c_d")]
-        [InlineData("quo\"te's\\", "Sammlung quo_te_s_")]
-        [InlineData("tab\tline\nbreak", "Sammlung tab_line_break")]
+        [InlineData("a=b[c]d", "Sammlung a%3Db%5Bc%5Dd")]
+        [InlineData("quo\"te's\\", "Sammlung quo%22te%27s%5C")]
+        [InlineData("tab\tline\nbreak", "Sammlung tab%09line%0Abreak")]
+        [InlineData("100%", "Sammlung 100%25")]
         public void AProfilesSectionKeepsItsNameWithoutWhatTheConfigCannotTake(string profile, string section)
         {
             Assert.Equal(section, VrCollection.Section(profile));
@@ -32,10 +33,14 @@ namespace ShipbreakerVR.Tests
             Assert.StartsWith("Sammlung", definition.Section);
         }
 
-        [Fact]
-        public void TwoProfilesHaveSectionsOfTheirOwn()
+        [Theory]
+        [InlineData("Raik", "Raik 2")]
+        [InlineData("a=b", "a_b")]
+        [InlineData("x[1]", "x_1_")]
+        [InlineData("a=b", "a%3Db")]
+        public void TwoProfilesHaveSectionsOfTheirOwn(string one, string other)
         {
-            Assert.NotEqual(VrCollection.Section("Raik"), VrCollection.Section("Raik 2"));
+            Assert.NotEqual(VrCollection.Section(one), VrCollection.Section(other));
         }
 
         [Fact]

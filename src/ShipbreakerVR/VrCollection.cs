@@ -68,7 +68,21 @@ namespace ShipbreakerVR
             }
         }
 
-        private static Save Bind(string section) => new Save
+        // One write of the config for a profile's eight entries, not one for each.
+        private static Save Bind(string section)
+        {
+            var file = VrSettings.File;
+            var saveOnSet = file.SaveOnConfigSet;
+            file.SaveOnConfigSet = false;
+            try { return Entries(section); }
+            finally
+            {
+                file.SaveOnConfigSet = saveOnSet;
+                file.Save();
+            }
+        }
+
+        private static Save Entries(string section) => new Save
         {
             Nodes = VrSettings.Bind(section, "KiKnoten", "",
                 "The kinds of AI node this save brought home, in the order collected, comma separated. Empty clears their places in the Hab."),
@@ -92,13 +106,19 @@ namespace ShipbreakerVR
             $"{save.NodeCount.Value} AI node(s) of {Kinds(save.Nodes.Value).Count} kind(s), radio {(save.Radio.Value ? "collected" : "not collected")}";
 
         // The config section of a profile. BepInEx takes no section with one of =, [, ], ", ', a backslash, a tab or
-        // a line break in it, nor one starting or ending in a blank: those become '_'.
+        // a line break in it, nor one starting or ending in a blank: those are written as '%' and their code (and '%'
+        // itself likewise), so two names never share a section.
         internal static string Section(string profileName)
         {
-            var name = (profileName ?? "").Trim().ToCharArray();
-            for (var i = 0; i < name.Length; i++)
-                if ("=[]\"'\\\t\r\n".IndexOf(name[i]) >= 0 || char.IsControl(name[i])) name[i] = '_';
-            return name.Length > 0 ? SectionStart + " " + new string(name) : SectionStart;
+            var name = (profileName ?? "").Trim();
+            if (name.Length == 0) return SectionStart;
+            var section = new System.Text.StringBuilder(SectionStart).Append(' ');
+            foreach (var c in name)
+            {
+                if ("%=[]\"'\\".IndexOf(c) >= 0 || char.IsControl(c)) section.Append('%').Append(((int)c).ToString("X2"));
+                else section.Append(c);
+            }
+            return section.ToString();
         }
 
         // The kinds in a list as it is kept: trimmed, each once, in order.
@@ -158,6 +178,13 @@ namespace ShipbreakerVR
         public static void Book()
         {
             if (NotedKinds.Count == 0 && !notedRadio) return;
+            // Only a career has a station to bring things home to. Free play and the weekly ship end at the title: booked
+            // there, the radio would count as collected for good and never float in a free play ship again.
+            if (GameSession.CurrentSessionType != GameSession.SessionType.Career)
+            {
+                Drop($"a {GameSession.CurrentSessionType} shift has no station to bring it to");
+                return;
+            }
             var save = Current;
             if (save == null)
             {

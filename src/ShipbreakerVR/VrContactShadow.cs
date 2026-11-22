@@ -369,6 +369,8 @@ namespace ShipbreakerVR
             foreach (var material in Resources.FindObjectsOfTypeAll<Material>())
             {
                 if (material == null || material.shader == null || material.shader.name != "HDRP/Unlit") continue;
+                // None of the mod's own: the patches' materials are copies of the template and would be found first.
+                if (material.name.StartsWith("ShipbreakerVR")) continue;
                 if (!material.IsKeywordEnabled("_SURFACE_TYPE_TRANSPARENT")) continue;
                 if (material.HasProperty("_BlendMode") && Mathf.RoundToInt(material.GetFloat("_BlendMode")) != 0) continue;
                 if (material.IsKeywordEnabled("_ALPHATEST_ON") || !material.HasProperty("_UnlitColorMap")) continue;

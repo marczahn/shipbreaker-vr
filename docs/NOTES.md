@@ -1315,7 +1315,7 @@ one is not handed to `NarrativeItemSystem.ProcessOpenedNarrativeMessage`.
 **For each save on its own (0.32.1).** A profile is known by `PlayerProfile.ProfileName`: the game keeps the names
 unique (`PlayerProfileSaveLoadManager.IsProfileNameUnique`) and names the save's file after it
 (`SaveFile.MakePlayerProfileFilePath`), and there is no other id in the profile. Each profile has a config section
-`Sammlung <name>` (`VrCollection.Section` replaces what BepInEx does not take in a section name). A profile deleted
+`Sammlung <name>` (`VrCollection.Section` writes what BepInEx does not take in a section name as `%` and its code). A profile deleted
 and made again under the same name finds the old one's collection. Free play runs on a profile named `FreeMode`.
 The keys 0.32.0 kept for all saves under `[Experimente]` (`KiKnotenSammlung`, `KiKnotenImRucksack`,
 `KiKnotenAbmahnung...`, `RadioGesammelt`, `RadioWurf`, `MoralMitteilung...`) are bound no more; BepInEx leaves them in
@@ -1337,8 +1337,10 @@ the file as orphans. Settings that are not a save's state stay under `[Experimen
   on the ship again, and the radio is put back (below).
 - Free play and the weekly ship have no Hab: `EndShiftAndLoadHabAsync` loads it only for
   `GameSession.SessionType.Career`, and no other caller asks for a Hab start but a career profile's load
-  (`TeleportUtils`, `LevelSelectButton.m_ForceHabStart`, which is serialized and was not checked in the assets). The
-  notes are still booked there, into the `FreeMode` profile's section, where nothing shows them.
+  (`TeleportUtils`, `LevelSelectButton.m_ForceHabStart`, which is serialized and was not checked in the assets). So
+  the notes are booked in a career only (`GameSession.CurrentSessionType`), and dropped at the end of any other shift:
+  booked into the `FreeMode` profile, the radio would count as collected for good and never float in a free play
+  ship again.
 The inventory row counts booked nodes only.
 
 **AI nodes.** A node's part is called `SM_Props_AI_Node_Regular` whatever its kind; the kind is told by its drawn

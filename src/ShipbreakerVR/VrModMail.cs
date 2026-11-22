@@ -315,16 +315,20 @@ namespace ShipbreakerVR
             public readonly List<(VrModMail Mail, NarrativeCategoryAsset Category)> Mails = new List<(VrModMail, NarrativeCategoryAsset)>();
         }
 
-        private static void Prefix(out Put __state)
+        // What this call of the inbox put in. Kept here, not handed on as Harmony's __state: the game's UI runs on one
+        // thread, and a finalizer with a state of a private type is one thing less to go wrong when patching.
+        private static Put current;
+
+        private static void Prefix()
         {
-            __state = null;
+            TakeOut();
             var profile = PlayerProfileService.Instance != null ? PlayerProfileService.Instance.Profile : null;
             if (profile == null || profile.NarrativeInventory == null) return;
-            __state = new Put { Inventory = profile.NarrativeInventory };
+            current = new Put { Inventory = profile.NarrativeInventory };
             try
             {
                 VrMoraleMail.Check(profile);
-                VrModMail.PutIn(__state.Inventory, __state.Mails);
+                VrModMail.PutIn(current.Inventory, current.Mails);
             }
             catch (Exception e)
             {
@@ -336,14 +340,19 @@ namespace ShipbreakerVR
         // list building throws. Left in, they would be written to the save with the profile (0.32.0 took them out in
         // a postfix, which an exception skips). The inventory they went into is the one they come out of, whatever
         // profile is loaded by then.
-        private static Exception Finalizer(Exception __exception, Put __state)
+        private static Exception Finalizer(Exception __exception)
         {
-            if (__state != null && __state.Mails.Count > 0)
-            {
-                try { VrModMail.TakeOut(__state.Inventory, __state.Mails); }
-                catch (Exception e) { Plugin.Log.LogError($"Mod mail: taking the mod's messages out of the inbox failed ({e})"); }
-            }
+            TakeOut();
             return __exception;
+        }
+
+        private static void TakeOut()
+        {
+            var put = current;
+            current = null;
+            if (put == null || put.Mails.Count == 0) return;
+            try { VrModMail.TakeOut(put.Inventory, put.Mails); }
+            catch (Exception e) { Plugin.Log.LogError($"Mod mail: taking the mod's messages out of the inbox failed ({e})"); }
         }
     }
 
