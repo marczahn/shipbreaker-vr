@@ -744,6 +744,8 @@ namespace ShipbreakerVR
                 if (hit.distance >= nearest || Ours(hit.collider, frame)) continue;
                 var target = hit.collider.GetComponent<StructurePart>();
                 if (!Fits(target, part)) continue;
+                // Put on by hand it goes on with its back, as it clings (ClingsBackOn): not held on edge to the wall.
+                if (BackOnly && !ChargeCling.BackOn(Vector3.Dot(frame.forward, hit.normal), -1f, MostTilt)) continue;
                 nearest = hit.distance;
                 Found(held, target, hit, frame);
             }
@@ -983,12 +985,60 @@ namespace ShipbreakerVR
                     Fades.RemoveAt(i);
                     continue;
                 }
-                fading.Group.alpha = FadeOut(fading.Until - Time.time, WarnFade);
+                fading.Group.alpha = ChargeWarning.FadeOut(fading.Until - Time.time, WarnFade);
             }
         }
 
-        // How much of the warning shows with that long left of it: all of it until its last 'fade' seconds.
-        internal static float FadeOut(float left, float fade) => fade <= 0f ? (left > 0f ? 1f : 0f) : Mathf.Clamp01(left / fade);
+        // ---- Only the back clings (Manuell) ----
+
+        // Put on by hand (Manuell), a charge clings with its back only (Raik, 2026-11-22: "so people do not just throw
+        // stuff about"): one that meets a wall with its front, with its side, or tilted more than MostTilt against
+        // the wall bounces off, and may cling at a later touch. With Automatisch a charge clings wherever it meets a
+        // fitting surface, as in the game (Raik).
+        // The game makes a clinging part fast in HierarchyCollisionListener.HandleECSCollisions: a part whose hierarchy
+        // parent has Sticky is turned to the contact's normal, set on the surface and jointed, whichever side met it.
+        // That call is left out for a charge that did not meet the wall back on (ChargeClingPatch); it keeps its
+        // Sticky. The normal the game hands over is the same for both parts of a contact, so its sign tells nothing:
+        // which side met the wall is told by where the contact lies against the charge's middle (its origin lies
+        // between its back and its front, 3 cm before the back).
+        private const float DefaultTilt = 35f;
+        private static ConfigEntry<float> mostTilt;
+        private static int clingLogs;
+
+        private static float MostTilt
+        {
+            get
+            {
+                if (mostTilt == null && VrSettings.File != null)
+                    mostTilt = VrSettings.Bind("Experimente", "SprengsatzHaftWinkel", DefaultTilt,
+                        "With demo charges placed by hand (Manuell): a charge clings only with its back, tilted at most this many degrees against the wall. 0: any side clings, as in the game.");
+                return mostTilt != null ? mostTilt.Value : DefaultTilt;
+            }
+        }
+
+        private static bool BackOnly => On && !Auto && MostTilt > 0f;
+
+        // From ChargeClingPatch: whether the game may make that part fast where it met the other. False for a demo
+        // charge that still clings by itself and met the wall other than back on.
+        public static bool ClingsBackOn(StructurePart part, Vector3 position, Vector3 normal, StructurePart otherPart)
+        {
+            if (!BackOnly || part == null || otherPart == null) return true;
+            var blueprint = part.EntityBlueprintComponent;
+            if (!EntityBlueprintComponent.IsValid(blueprint)) return true;
+            var manager = blueprint.EntityManager;
+            var entity = blueprint.Entity;
+            if (!manager.HasComponent<DemoCharge>(entity)) return true;
+            if (!manager.HasComponent<HierarchyMember>(entity)) return true;
+            var parent = manager.GetComponentData<HierarchyMember>(entity).Parent;
+            if (!manager.Exists(parent) || !manager.HasComponent<Sticky>(parent)) return true;
+            var frame = part.transform;
+            var along = Vector3.Dot(frame.forward, normal.normalized);
+            var side = Vector3.Dot(position - frame.position, frame.forward);
+            if (ChargeCling.BackOn(along, side, MostTilt)) return true;
+            if (clingLogs++ < 40)
+                Plugin.Log.LogInfo($"Charge by hand: a charge meets '{otherPart.name}' {(side > 0f ? "with its front" : "with its back")}, tilted {ChargeCling.Tilt(along):0}° against it (at most {MostTilt:0}° and back on): it does not cling");
+            return false;
+        }
 
         // The charge afloat goes back to the stock the game's way and one from the stock goes on the wall, as the game
         // places one.
@@ -1407,6 +1457,46 @@ namespace ShipbreakerVR
             try { VrChargeByHand.LimitShown(__instance, Labels(__instance), type); }
             catch (System.Exception e) { Plugin.Log.LogWarning($"Charge by hand: the limit hint failed ({e.Message})"); }
         }
+    }
+
+    // The game makes a clinging part fast where it met another: not a demo charge that did not meet it back on
+    // (VrChargeByHand.ClingsBackOn). The rest of that call is for frozen parts, which a charge is not.
+    [HarmonyPatch]
+    internal static class ChargeClingPatch
+    {
+        private static System.Reflection.MethodBase TargetMethod() =>
+            AccessTools.Method(typeof(HierarchyCollisionListener), "HandleECSCollisions");
+
+        private static bool Prefix(StructurePart part, Vector3 position, Vector3 normal, StructurePart otherPart)
+        {
+            try { return VrChargeByHand.ClingsBackOn(part, position, normal, otherPart); }
+            catch (System.Exception e)
+            {
+                if (failed++ < 3) Plugin.Log.LogWarning($"Charge by hand: the test for a charge meeting a wall back on failed ({e.Message}), it clings as in the game");
+                return true;
+            }
+        }
+
+        private static int failed;
+    }
+
+    // Whether a demo charge met a wall with its back, the part that is plain numbers.
+    internal static class ChargeCling
+    {
+        // How far the charge is tilted against the wall, in degrees: 0 flat on it (either face), 90 on edge. along is
+        // the cosine between the charge's forward and the wall's normal, whichever way that normal points.
+        public static float Tilt(float along) => Mathf.Acos(Mathf.Clamp01(Mathf.Abs(along))) * Mathf.Rad2Deg;
+
+        // Back on: the contact lies behind the charge's middle (side, along its forward, negative) and the charge is
+        // tilted no more than most degrees.
+        public static bool BackOn(float along, float side, float most) => side <= 0f && Tilt(along) <= most;
+    }
+
+    // The limit warning's fading, the part that is plain numbers.
+    internal static class ChargeWarning
+    {
+        // How much of the warning shows with that long left of it: all of it until its last 'fade' seconds.
+        public static float FadeOut(float left, float fade) => fade <= 0f ? (left > 0f ? 1f : 0f) : Mathf.Clamp01(left / fade);
     }
 
     [HarmonyPatch(typeof(DemoChargeAsset), nameof(DemoChargeAsset.SetComponentData))]

@@ -1398,6 +1398,15 @@ go at a wall, since 0.32.1 with either way of placing (before, only *Automatisch
   (`mRemainingTime`) to 3.5 s; a `CanvasGroup` the mod puts on the label fades it over the last half second. The
   label's own text is put back at the game's next call of it.
 
+### Only the back clings (Manuell)
+The game makes a clinging part fast in `HierarchyCollisionListener.HandleECSCollisions`: a part whose hierarchy parent
+has `Sticky` is turned to the contact's normal, set on the surface and jointed, whichever side met it. With the
+charges placed by hand (*Manuell*) a prefix leaves that call out for a demo charge that did not meet the wall with its
+back, or tilted more than 35 degrees against it (`Experimente/SprengsatzHaftWinkel`, 0: any side): it bounces off and
+keeps its `Sticky` for a later touch. The normal handed over is the same for both parts of a contact, so which side
+met the wall is told by where the contact lies against the charge's origin, which lies between back and front. A
+charge held to a wall by hand goes on under the same rule. With *Automatisch* nothing changes.
+
 `Physics.RaycastNonAlloc` returns any of the hits along a ray, not the nearest ones: with more colliders along the
 ray than its array holds, the nearest can be missing. The charges' aimed ray over the game's whole reach
 (`VrChargeByHand.FirstHit`) therefore asks `Physics.Raycast` for one hit at a time and goes on behind the mod's own
