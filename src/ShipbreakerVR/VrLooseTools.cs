@@ -542,9 +542,34 @@ namespace ShipbreakerVR
         }
 
         // Where the line lies in that hand's fist, from the controller's place: in the hollow between the palm and the
-        // closed fingers (VrClimb.PalmPoint: just above the palm, towards the finger tips). At the controller's own
-        // place, which lies within the hand, the line ran through the palm (Raik's screenshot, 2026-11-23).
-        private static Vector3 FistMiddle(VrHand hand, Vector3 controller) => VrClimb.PalmPoint(hand.Input, controller);
+        // closed fingers. At the controller's own place, which lies within the hand, the line ran through the palm
+        // (Raik's screenshot, 2026-11-23); at VrClimb.PalmPoint (5.5 cm out along the palm's normal, where an open
+        // hand takes hold) it ran through the closed fingers (his next ones: about 2 cm too far out, seen along the
+        // fist). So FistOut out along the palm's normal and FistToFingers towards the finger tips, in meters at world
+        // scale 1; Experimente/LeineFaustTiefe and LeineFaustZuFingern (in cm) to fine-tune it in the headset.
+        private const float FistOut = 0.035f;
+        private const float FistToFingers = 0.015f;
+        private static ConfigEntry<float> fistOut, fistToFingers;
+
+        private static Vector3 FistMiddle(VrHand hand, Vector3 controller)
+        {
+            if (fistOut == null && VrSettings.File != null)
+            {
+                fistOut = VrSettings.Bind("Experimente", "LeineFaustTiefe", FistOut * 100f,
+                    "Where a tool's line lies in the fist that holds it: this many cm out from the controller's place along the palm's normal (0: in the palm, 5.5: in the closed fingers).");
+                fistToFingers = VrSettings.Bind("Experimente", "LeineFaustZuFingern", FistToFingers * 100f,
+                    "Where a tool's line lies in the fist that holds it: this many cm from the controller's place towards the finger tips (negative: towards the wrist).");
+            }
+            if (!VrClimb.TryGetPalm(hand.Input, out var palm)) return controller;
+            var scale = VrCamera.WorldScale;
+            var point = controller + palm * ((fistOut != null ? fistOut.Value * 0.01f : FistOut) * scale);
+            if (VrHands.TryGetArm(hand.IsLeft, out _, out _, out var wrist, out var knuckles))
+            {
+                var fingers = Vector3.ProjectOnPlane(knuckles - wrist, palm);
+                if (fingers.sqrMagnitude > 1e-6f) point += fingers.normalized * ((fistToFingers != null ? fistToFingers.Value * 0.01f : FistToFingers) * scale);
+            }
+            return point;
+        }
 
         private static bool HaulsAny(int h)
         {

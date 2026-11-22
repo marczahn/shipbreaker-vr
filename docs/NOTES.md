@@ -1410,8 +1410,9 @@ body and are kept.
 ## The tool line runs through the fist
 A hand that held a tool's line held one point of the chain (`ToolLine`), at the controller, and the line bent right in
 the hand. A fist is now a tube for it (Raik, 2026-11-22): two points next to each other are held, 5 cm either side
-of the fist's middle (the hollow between palm and closed fingers, `VrClimb.PalmPoint`; at the controller's own place the
-line ran through the palm) along the way through the fist, which is across the drawn hand (square to the palm's normal and
+of the fist's middle (the hollow between palm and closed fingers: 3.5 cm out from the controller's place along the
+palm's normal and 1.5 cm towards the finger tips, `Experimente/LeineFaustTiefe` and `LeineFaustZuFingern`; at the
+controller's own place the line ran through the palm, at `VrClimb.PalmPoint` through the closed fingers) along the way through the fist, which is across the drawn hand (square to the palm's normal and
 to wrist-to-knuckles; without the drawn hand the grip pose's forward, OpenXR's axis of the closed fingers). Which
 end is towards the hip is fixed as the hand takes hold, by the way the line lies there. The link between the two
 points is not worked on (both are held) and is drawn straight instead of as part of the Catmull-Rom curve; the line
