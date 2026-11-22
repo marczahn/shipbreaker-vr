@@ -51,7 +51,8 @@ namespace ShipbreakerVR
             {
                 var service = PlayerProfileService.Instance;
                 var profile = service != null ? service.Profile : null;
-                var name = profile != null ? profile.ProfileName : null;
+                // Before a save is loaded the game has a stand-in profile ('Unknown', PlayerProfileType.Invalid).
+                var name = profile != null && profile.PlayerProfileType != PlayerProfileType.Invalid ? profile.ProfileName : null;
                 if (string.IsNullOrEmpty(name) || VrSettings.File == null) return null;
                 if (name == lastName) return last;
                 var section = Section(name);
