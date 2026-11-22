@@ -40,6 +40,9 @@ namespace ShipbreakerVR
         // four seconds, in place of the game's little game of timing; VrChargeDisarm).
         private const float ChargeHoldLeast = 3f;
         private const float ChargeHoldMost = 4f;
+        // And it lifts off the wall only a little while pulled (Raik, 2026-11-22: the 7 degrees of the things on walls
+        // were far too much for it; about 3, then it comes off).
+        private const float ChargeTilt = 3f;
         private const float Fly = 0.18f;
         private const float Largest = 2.5f;
         private const float Mass = 4f;
@@ -58,6 +61,8 @@ namespace ShipbreakerVR
             public float Pulled;
             // How long it has to be pulled to come off (HoldFor), chosen as the hand takes hold.
             public float Needed;
+            // How far it tilts off the wall while pulled hard, in degrees.
+            public float Tilt = VrPullOff.Tilt;
             public float Angle;
             public Vector3 Contact;
             public bool Braced;
@@ -142,7 +147,7 @@ namespace ShipbreakerVR
             if (!braced)
             {
                 pull.Pulled = 0f;
-                pull.Angle = Mathf.MoveTowards(pull.Angle, 0f, Tilt / TiltTime * Time.deltaTime);
+                pull.Angle = Mathf.MoveTowards(pull.Angle, 0f, pull.Tilt / TiltTime * Time.deltaTime);
                 Pose(pull, hand);
                 return;
             }
@@ -155,8 +160,8 @@ namespace ShipbreakerVR
             var hard = away >= Enough * scale;
             pull.Pulled = hard ? pull.Pulled + Time.deltaTime : 0f;
             // Tilted off the wall while pulled hard, back while not.
-            var wanted = hard ? Tilt : 0f;
-            pull.Angle = Mathf.MoveTowards(pull.Angle, wanted, Tilt / TiltTime * Time.deltaTime);
+            var wanted = hard ? pull.Tilt : 0f;
+            pull.Angle = Mathf.MoveTowards(pull.Angle, wanted, pull.Tilt / TiltTime * Time.deltaTime);
             Pose(pull, hand);
             if (pull.Pulled < HoldFor(pull)) return;
             if (pull.Thing is DemoChargeRetrievalController charge) TakeOff(pull, charge);
@@ -254,6 +259,7 @@ namespace ShipbreakerVR
             pull.Surface = root.InverseTransformPoint(surface);
             pull.Pulled = 0f;
             pull.Needed = Needs(root, control);
+            pull.Tilt = control is DemoChargeRetrievalController ? ChargeTilt : Tilt;
             pull.Angle = 0f;
             pull.Braced = false;
             pull.Ship = ship;
