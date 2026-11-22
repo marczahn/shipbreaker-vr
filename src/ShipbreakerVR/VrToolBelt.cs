@@ -287,6 +287,21 @@ namespace ShipbreakerVR
             return HeadLocal(controller, out var head) && Stows(zone, head);
         }
 
+        // The same for a point in tracking space, measured against the body: whether something there is at that zone's
+        // place (a part of a tool afloat that a hand holds by its housing, VrLooseTools). The places on the body only:
+        // the helmet's are for the hand.
+        internal static bool StowsAt(Zone zone, Vector3 tracking)
+        {
+            if (!BodyFrame(out var neck, out var heading)) return false;
+            var fromNeck = Quaternion.Inverse(heading) * (tracking - neck);
+            if (zone == Zone.Grapple) return Stows(zone, Sided(fromNeck + HipRef));
+            if (zone == Zone.Detonator) return ChargeBox(Sided(fromNeck + ChargeRef), ChargeStowWider);
+            if (zone == Zone.DemoCharge) return LowerBack(Sided(fromNeck + ShoulderRef), BackStowWider);
+            if (zone != Zone.Cutter) return false;
+            var wide = Sided(fromNeck + ShoulderRef);
+            return wide.y > CutterAbove - CutterStowLower && wide.z < CutterBehindBody + CutterStowForward && wide.x > CutterInside - CutterStowInside;
+        }
+
         public static void Reset() => announced[0] = announced[1] = Zone.None;
     }
 }
