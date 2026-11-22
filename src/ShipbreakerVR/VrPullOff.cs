@@ -3,6 +3,7 @@ using BBI.Unity.Game;
 using BepInEx.Configuration;
 using Carbon.Audio;
 using Carbon.Core.Unity;
+using HarmonyLib;
 using Unity.Collections;
 using Unity.Entities;
 using UnityEngine;
@@ -66,6 +67,39 @@ namespace ShipbreakerVR
         private const float YankLooseWait = 1f;
         private static ConfigEntry<bool> yankOn;
 
+        // Stripping a device for a part of the truck (Raik, 2026-11-22: "the computers, terminals and so on that one
+        // strips for spare parts"). In the game these have a prompt: its button held for a second takes the part out
+        // and leaves the device wrecked (their interaction's kind is 'SalvageShort': computer terminal, data bank,
+        // comms array, power junction, tool arm, hoist and the like). In VR the hand does it instead of the button: one
+        // hand on the ship, the other holds the device and pulls away from it, for ExtractHold seconds; then the
+        // interaction completes as the game completes it, and the game hands the part out and wrecks the device. The
+        // device neither tilts nor comes off. The button does nothing for a device a hand holds (VrToolInput).
+        private const string ExtractKind = "SalvageShort_InteractionTypeAsset";
+        private const float ExtractHold = 3f;
+        private static readonly AccessTools.FieldRef<InteractableObject, InteractableObjectAsset> AssetOf =
+            AccessTools.FieldRefAccess<InteractableObject, InteractableObjectAsset>("m_Asset");
+        // Whether an interaction's kind is the stripping one, looked up once for each kind (its name is a new string
+        // every time it is asked for).
+        private static readonly Dictionary<InteractionTypeAsset, bool> ExtractKinds = new Dictionary<InteractionTypeAsset, bool>();
+
+        // A device that can still be stripped for its part.
+        public static bool Extractable(InteractableObject device)
+        {
+            if (device == null || !device.isActiveAndEnabled || !device.IsInteractable || !device.HasUsesRemaining) return false;
+            var asset = AssetOf(device);
+            var kind = asset != null ? asset.Data.InteractionType : null;
+            if (kind == null) return false;
+            if (!ExtractKinds.TryGetValue(kind, out var strips))
+            {
+                strips = kind.name == ExtractKind;
+                ExtractKinds[kind] = strips;
+            }
+            return strips;
+        }
+
+        // True while a hand holds a device to strip it: its prompt's button is left out then (VrToolInput).
+        public static bool Extracting => Left.Extract || Right.Extract;
+
         private static bool YankOn
         {
             get
@@ -99,6 +133,8 @@ namespace ShipbreakerVR
             // A part on a joint that gives way (Yank): the pull still owed to the joint, and when its joints broke.
             public float YankDue;
             public float BrokeAt = -1f;
+            // A device stripped for its part (Extract): pulled at, it stays as it is.
+            public bool Extract;
             public float Angle;
             public Vector3 Contact;
             public bool Braced;
@@ -192,6 +228,11 @@ namespace ShipbreakerVR
                 if (braced) Yank(pull, joint, hand);
                 return;
             }
+            if (pull.Extract)
+            {
+                Strip(pull, braced, hand);
+                return;
+            }
             if (!braced)
             {
                 pull.Pulled = 0f;
@@ -214,6 +255,60 @@ namespace ShipbreakerVR
             if (pull.Pulled < HoldFor(pull)) return;
             if (pull.Thing is DemoChargeRetrievalController charge) TakeOff(pull, charge);
             else Loosen(pull, hand);
+        }
+
+        // The hand pulls at a device to strip it: from Enough away from the hold on it counts, the buzz growing with
+        // how far it is along, and after ExtractHold seconds the device's interaction completes.
+        private static void Strip(Pull pull, bool braced, Vector3 hand)
+        {
+            if (!braced)
+            {
+                pull.Pulled = 0f;
+                return;
+            }
+            var scale = VrCamera.WorldScale;
+            var away = Vector3.Dot(hand - pull.Root.TransformPoint(pull.Surface), pull.Normal);
+            var hard = away >= Enough * scale;
+            pull.Pulled = hard ? pull.Pulled + Time.deltaTime : 0f;
+            if (hard) pull.Input.Buzz(Mathf.Lerp(0.25f, 0.9f, pull.Pulled / pull.Needed), 0.05f);
+            else if (away > Start * scale) pull.Input.Buzz(0.1f, 0.05f);
+            if (pull.Pulled < pull.Needed) return;
+            var device = pull.Thing as InteractableObject;
+            var input = pull.Input;
+            var pulled = pull.Pulled;
+            Clear(pull);
+            // The hand is a hold on the device again, not free of the body.
+            VrClimb.SetFree(input, false, false);
+            if (!Extractable(device)) return;
+            var name = device.name;
+            device.Complete();
+            ((Carbon.Core.Events.IEventBroadcaster)Main.EventSystem).Post(InteractionEvent.GetEvent(InteractionEvent.InteractionType.ProgressComplete, device));
+            input.Buzz(1f, 0.15f);
+            if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{name}' stripped for its part by the {input.Name} hand after {pulled:0.0} s of pulling");
+        }
+
+        private static bool BeginStrip(Pull pull, InteractableObject device)
+        {
+            var held = VrClimb.HeldCollider(pull.Input);
+            if (held == null || !VrClimb.TryGetSurface(pull.Input, out var surface) || !VrClimb.TryGetGrip(pull.Input, out _, out var normal)) return false;
+            var root = held.transform;
+            pull.Thing = device;
+            pull.Root = root;
+            pull.Parent = root.parent;
+            pull.RestPosition = root.localPosition;
+            pull.RestRotation = root.localRotation;
+            pull.Normal = normal.normalized;
+            pull.Surface = root.InverseTransformPoint(surface);
+            pull.Pulled = 0f;
+            pull.Needed = ExtractHold;
+            pull.Tilt = 0f;
+            pull.Angle = 0f;
+            pull.Braced = false;
+            pull.Ship = device.GetComponentInParent<Rigidbody>();
+            pull.Extract = true;
+            pull.Members.Clear();
+            if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: {pull.Input.Name} hand holds '{device.name}', a device to strip for its part: pulled for {ExtractHold:0} s with the other hand on the ship");
+            return true;
         }
 
         // The hand's pull on a joint that gives way, as the grapple's rope gives it (LaserRope: ApplyForce each physics
@@ -320,10 +415,10 @@ namespace ShipbreakerVR
             var charge = VrChargeDisarm.OnWall(input);
             if (charge != null) return charge;
             var control = VrClimb.HeldControl(input);
-            if (Usable(control)) return control;
+            if (Extractable(control) || Usable(control)) return control;
             var collider = VrClimb.HeldCollider(input);
             control = VrClimb.PartInteractable(collider);
-            if (Usable(control)) return control;
+            if (Extractable(control) || Usable(control)) return control;
             var part = collider != null ? collider.GetComponentInParent<StructurePart>() : null;
             // Not an AI node (VrAiNode): in 0.32.0 it came off by hand as well, which made taking one too easy (Raik,
             // 2026-11-22); it takes the grapple now.
@@ -344,6 +439,7 @@ namespace ShipbreakerVR
 
         private static bool Begin(Pull pull, Component control)
         {
+            if (control is InteractableObject device && Extractable(device)) return BeginStrip(pull, device);
             var root = control is DemoChargeRetrievalController onWall && onWall.DemoCharge != null ? onWall.DemoCharge.transform : Root(control);
             if (root == null)
             {
@@ -672,7 +768,7 @@ namespace ShipbreakerVR
         private static void Reset(Pull pull)
         {
             if (pull.FlyStart >= 0f) return;
-            if (pull.Thing != null && pull.Root != null && pull.Parent != null && !(pull.Thing is BreakableJointComponent))
+            if (pull.Thing != null && pull.Root != null && pull.Parent != null && !(pull.Thing is BreakableJointComponent) && !pull.Extract)
             {
                 pull.Root.localPosition = pull.RestPosition;
                 pull.Root.localRotation = pull.RestRotation;
@@ -696,6 +792,7 @@ namespace ShipbreakerVR
             pull.FlyStart = -1f;
             pull.YankDue = 0f;
             pull.BrokeAt = -1f;
+            pull.Extract = false;
         }
     }
 }
