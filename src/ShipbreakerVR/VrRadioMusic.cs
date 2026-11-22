@@ -24,6 +24,32 @@ namespace ShipbreakerVR
     // Nothing of it is saved; the radio is off whenever the Hab is entered.
     internal static class VrRadioMusic
     {
+        static VrRadioMusic() => VrSession.OnUnload("radio music", Release);
+
+        // On unload (hot reload): the music stops, Wwise's states are as they were and the Hab's background is back up.
+        // The emitter and the listener go with the radio they hang on (VrRadio).
+        private static void Release()
+        {
+            try
+            {
+                if (On)
+                {
+                    Stop(false);
+                    RestoreStates();
+                }
+                Dampen(false);
+            }
+            catch (System.Exception e)
+            {
+                Plugin.Log.LogWarning($"Radio: switching off on unload failed ({e.Message})");
+            }
+            if (emitter != null) Object.Destroy(emitter);
+            emitter = null;
+            ears = null;
+            HabRadios.Clear();
+            StatesWere.Clear();
+        }
+
         public static ConfigEntry<float> HabMusic;
         public static ConfigEntry<float> Loudness;
 

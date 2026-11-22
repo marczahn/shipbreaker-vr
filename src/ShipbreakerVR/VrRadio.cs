@@ -21,6 +21,28 @@ namespace ShipbreakerVR
     // backpack.
     internal static class VrRadio
     {
+        static VrRadio() => VrSession.OnUnload("radio", Release);
+
+        // On unload (hot reload): the radio in the Hab and the one in the ship go with their materials, the scanner
+        // look's loads are given back. The next instance sets the Hab's one up again and puts the ship's one back in
+        // (Ship: the answer kept for the ship says it has it).
+        private static void Release()
+        {
+            Discard(ref shown);
+            Discard(ref floating);
+            shownIn = null;
+            shownPlace = null;
+            shipKey = null;
+            shipSave = null;
+            scannableDone = null;
+            driveLook = null;
+            if (drive.IsValid()) Addressables.Release(drive);
+            if (pickup.IsValid()) Addressables.Release(pickup);
+            drive = default;
+            pickup = default;
+            driveAsked = driveFailed = pickupFailed = lookedLoaded = false;
+        }
+
         public static ConfigEntry<string> Place;
         public static ConfigEntry<float> Chance;
         public static ConfigEntry<int> FromLevel;

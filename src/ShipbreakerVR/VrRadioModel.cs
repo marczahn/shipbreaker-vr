@@ -19,9 +19,25 @@ namespace ShipbreakerVR
         // The radio without its antenna, in the mesh's axes: for its collider and where it is centred.
         public static Bounds Body { get; private set; }
 
+        static VrRadioModel() => VrSession.OnUnload("radio model", Release);
+
         private static Mesh mesh;
         private static Texture2D texture;
         private static bool failed;
+
+        // On unload (hot reload): the mesh and the texture made from the DLL's files, and the lit material where the mod
+        // had to make one itself. A material found among the game's is the game's.
+        private static void Release()
+        {
+            if (mesh != null) Object.Destroy(mesh);
+            if (texture != null) Object.Destroy(texture);
+            if (lit != null && litOwn) Object.Destroy(lit);
+            mesh = null;
+            texture = null;
+            lit = null;
+            litOwn = false;
+            failed = false;
+        }
 
         // The mesh: y up, its front towards +z, its bottom's middle at its origin, in metres.
         public static Mesh Mesh
@@ -70,10 +86,12 @@ namespace ShipbreakerVR
         // them (0.32.0 looked once, and then drew the radio with the caller's template for the rest of the game).
         private const string LitShader = "HDRP/Lit";
         private static Material lit;
+        private static bool litOwn;
 
         public static Material LitTemplate()
         {
             if (lit != null) return lit;
+            litOwn = false;
             foreach (var material in Resources.FindObjectsOfTypeAll<Material>())
             {
                 if (material == null || material.shader == null || material.shader.name != LitShader) continue;
@@ -92,7 +110,11 @@ namespace ShipbreakerVR
             if (lit == null)
             {
                 var shader = Shader.Find(LitShader);
-                if (shader != null) lit = new Material(shader) { name = "ShipbreakerVR Radio lit" };
+                if (shader != null)
+                {
+                    lit = new Material(shader) { name = "ShipbreakerVR Radio lit" };
+                    litOwn = true;
+                }
             }
             Plugin.Log.LogInfo(lit != null ? $"Radio: drawn with shader '{lit.shader.name}' from material '{lit.name}' (queue {lit.renderQueue}, opaque {Opaque(lit)})" : $"Radio: no solid '{LitShader}' material found, the template's own shader is used");
             return lit;

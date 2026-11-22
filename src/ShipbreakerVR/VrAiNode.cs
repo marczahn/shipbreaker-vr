@@ -31,6 +31,27 @@ namespace ShipbreakerVR
     // Its entity is removed only a moment later (Settle), so the accounting has seen it first.
     internal static class VrAiNode
     {
+        static VrAiNode() => VrSession.OnUnload("AI nodes", Release);
+
+        // On unload (hot reload): the copies in the Hab go, the prefabs are given back, and nodes fined a moment ago are
+        // removed now rather than left hidden in the ship.
+        private static void Release()
+        {
+            Clear();
+            shownIn = null;
+            shownRaw = null;
+            for (var i = 0; i < Settling.Count; i++) Settling[i] = (Settling[i].Thing, 0f);
+            try { Remove(); }
+            catch (System.Exception e) { Plugin.Log.LogWarning($"AI node: removing the nodes in the backpack on unload failed ({e.Message})"); }
+            foreach (var handle in Prefabs.Values)
+                if (handle.IsValid()) Addressables.Release(handle);
+            Prefabs.Clear();
+            Loosened.Clear();
+            NotLoading.Clear();
+            grappled = null;
+            Left.Body = Right.Body = null;
+        }
+
         private const string Name = "SM_Props_AI_Node";
         // The node of a kind: 'SM_Props_AI_Node_LargeWide' comes from 'PRF_Props_AI_Node_LargeWide.prefab'.
         private const string PrefabFolder = "Assets/Content/Prefabs/Objects/GhostShip/";

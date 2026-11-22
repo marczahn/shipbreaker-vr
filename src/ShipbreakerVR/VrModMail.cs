@@ -18,6 +18,21 @@ namespace ShipbreakerVR
         private static readonly List<VrModMail> all = new List<VrModMail>();
         private static bool registered;
 
+        static VrModMail() => VrSession.OnUnload("mod mails", Release);
+
+        // On unload (hot reload): the message assets made at run time go. They are in the game's inventory only while
+        // the inbox builds its list (ModMailListPatch), so nothing of the game's holds them.
+        private static void Release()
+        {
+            foreach (var mail in all)
+            {
+                if (mail.message == null) continue;
+                if (mail.message.MessageTextAsset != null) UnityEngine.Object.Destroy(mail.message.MessageTextAsset);
+                UnityEngine.Object.Destroy(mail.message);
+                mail.message = null;
+            }
+        }
+
         // Every mail of the mod, each made by its own class the first time.
         public static List<VrModMail> All
         {

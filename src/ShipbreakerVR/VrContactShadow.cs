@@ -36,9 +36,34 @@ namespace ShipbreakerVR
         private const float Lift = 0.0015f;
         private const int Texels = 128;
 
+        static VrContactShadow() => VrSession.OnUnload("contact shadows", Release);
+
         private static Material template;
-        private static bool templateLooked;
         private static bool usesUnlit;
+        // Each patch with the mesh, material and texture made for it: they go when the patch is gone (with the thing it
+        // lies under, as the Hab is left), and all of them on unload. Until 0.32.0 they were made anew on every visit
+        // to the Hab and never freed.
+        private static readonly List<(GameObject Patch, Object[] Made)> Patches = new List<(GameObject, Object[])>();
+
+        private static void Sweep(bool all)
+        {
+            for (var i = Patches.Count - 1; i >= 0; i--)
+            {
+                var (patch, made) = Patches[i];
+                if (patch != null && !all) continue;
+                foreach (var o in made) if (o != null) Object.Destroy(o);
+                if (patch != null) Object.Destroy(patch);
+                Patches.RemoveAt(i);
+            }
+        }
+
+        // On unload (hot reload).
+        private static void Release()
+        {
+            Sweep(true);
+            if (template != null && !usesUnlit) Object.Destroy(template);
+            template = null;
+        }
 
         // ---- Under the foot ----
 
@@ -293,6 +318,7 @@ namespace ShipbreakerVR
                 var sz = c >= 2 ? 0.5f : -0.5f;
                 corners[c] = thing.transform.InverseTransformPoint(center + ax * (sx * size.x) + az * (sz * size.y));
             }
+            Sweep(false);
             var quad = new Mesh { name = "ShipbreakerVR Shadow" };
             quad.vertices = corners;
             quad.uv = new[] { new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(0f, 1f) };
@@ -328,15 +354,18 @@ namespace ShipbreakerVR
                 material.SetInt("unity_GUIZTestMode", (int)CompareFunction.LessEqual);
             }
             drawn.sharedMaterial = material;
+            Patches.Add((shadow, new Object[] { quad, material, texture }));
         }
 
         // A see-through material that draws the patch as it is (black, its alpha the darkness): one of the game's own
         // transparent unlit HDRP materials blending by alpha, so the build has its shader; else the UI shader, which HDRP
         // also draws.
+        // Looked for again whenever the one found before is gone: it belongs to a scene's assets and is unloaded with
+        // them (0.32.0 looked once, and things set down later in the game got no shadow).
         private static Material Template()
         {
-            if (template != null || templateLooked) return template;
-            templateLooked = true;
+            if (template != null) return template;
+            usesUnlit = false;
             foreach (var material in Resources.FindObjectsOfTypeAll<Material>())
             {
                 if (material == null || material.shader == null || material.shader.name != "HDRP/Unlit") continue;

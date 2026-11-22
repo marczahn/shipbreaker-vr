@@ -36,6 +36,9 @@ namespace ShipbreakerVR
             public ConfigEntry<string> RadioRoll;
         }
 
+        // On unload (hot reload) in the middle of a shift, what was noted is lost with this instance: said in the log.
+        static VrCollection() => VrSession.OnUnload("collection", () => Drop("the mod was unloaded"));
+
         private const string SectionStart = "Sammlung";
         private static readonly Dictionary<string, Save> Saves = new Dictionary<string, Save>();
         private static string lastName;

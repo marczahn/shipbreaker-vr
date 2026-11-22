@@ -14,6 +14,23 @@ namespace ShipbreakerVR
     {
         public const string ItemName = "SBVR_AINODE_ITEM";
 
+        static VrAiNodeInventory() => VrSession.OnUnload("AI node row", Release);
+
+        // On unload (hot reload): the rows put into the game's lists and the icon drawn for them go.
+        private static void Release()
+        {
+            foreach (var row in Rows.Values)
+                if (row != null) Object.Destroy(row.gameObject);
+            Rows.Clear();
+            if (icon != null)
+            {
+                var texture = icon.texture;
+                Object.Destroy(icon);
+                if (texture != null) Object.Destroy(texture);
+            }
+            icon = null;
+        }
+
         private static readonly AccessTools.FieldRef<InventoryScreenController, CurrencyItemController> RowPrefab =
             AccessTools.FieldRefAccess<InventoryScreenController, CurrencyItemController>("m_InventoryListItemPrefab");
         private static readonly AccessTools.FieldRef<InventoryScreenController, Transform> List =
