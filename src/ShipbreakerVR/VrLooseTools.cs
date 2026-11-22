@@ -95,7 +95,6 @@ namespace ShipbreakerVR
 
         private static ConfigEntry<bool> enabled, exact, lineInHand, shaded, pulling;
         private static int missLogs;
-        private static ConfigEntry<float> lineLength;
         private static bool bound, closing;
 
         private static void Bind()
@@ -108,8 +107,6 @@ namespace ShipbreakerVR
                 "Experiment: with extended tool physics, the tool in the hand meets things with the shape of its model instead of boxes around its parts.");
             lineInHand = VrSettings.Bind("Experimente", "LeineInDerHand", true,
                 "Experiment: the line from the hip also shows while the tool is in the hand.");
-            lineLength = VrSettings.Bind("Experimente", "LeinenLaenge", 5f,
-                "Experiment: how long a tool's line is, in meters.", new AcceptableValueRange<float>(1f, 15f));
             shaded = VrSettings.Bind("Experimente", "LeineSchattiert", true,
                 "Experiment: the line is shaded by the sun, round against it and dark in shadow, instead of evenly bright.");
             pulling = VrSettings.Bind("Experimente", "LeineZiehen", true,
@@ -151,7 +148,8 @@ namespace ShipbreakerVR
         public static bool On { get { Bind(); return enabled != null && enabled.Value && !closing && VrSettings.ToolPhysics != null && VrSettings.ToolPhysics.Value; } }
         public static bool Exact { get { Bind(); return exact != null && exact.Value; } }
         public static bool LineInHand { get { Bind(); return lineInHand == null || lineInHand.Value; } }
-        public static float Length { get { Bind(); return lineLength != null ? lineLength.Value : 5f; } }
+        // Steuerung in the VR options, Gameplay: the line's length (VrSettings.ToolLineLength, 1 to 5 m).
+        public static float Length => VrSettings.ToolLineLength != null ? Mathf.Clamp(VrSettings.ToolLineLength.Value, 1f, 5f) : 5f;
         public static bool Shaded { get { Bind(); return shaded == null || shaded.Value; } }
         private static bool Pulling { get { Bind(); return pulling == null || pulling.Value; } }
 

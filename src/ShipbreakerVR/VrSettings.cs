@@ -60,6 +60,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<float> ThrustFull;
         public static ConfigEntry<float> HandTilt;
         public static ConfigEntry<float> ToolWeight;
+        public static ConfigEntry<float> ToolLineLength;
         public static ConfigEntry<VrFlightGlobe.Mode> FlightGlobe;
         public static ConfigEntry<float> FlightGlobeSize;
         public static ConfigEntry<float> FlightGlobeX;
@@ -291,6 +292,11 @@ namespace ShipbreakerVR
                 ("With extended tool physics, how heavy the cutter and the grapple are in your hand: moved fast they lag behind the controller and settle, and your hand stays on them. 0 for none.",
                     "Mit erweiterter Werkzeugphysik: wie schwer Cutter und Grappler in der Hand sind. Schnell bewegt hängen sie dem Controller nach und pendeln aus, deine Hand bleibt an ihnen. 0 für keins."),
                 "In kg.", Between(0f, 20f));
+            // The key is where the line's experiment had it (0.31.0), so a length already set stays; its range was 1 to 15.
+            ToolLineLength = Bind("Experimente", "LeinenLaenge", 5f,
+                ("With extended tool physics, how long the line is that keeps a tool you let go on your hip. A short line keeps the tool close, a long one lets it drift further before it holds.",
+                    "Mit erweiterter Werkzeugphysik: wie lang die Leine ist, die ein losgelassenes Werkzeug an deiner Hüfte hält. Eine kurze Leine hält das Werkzeug nah, eine lange lässt es weiter treiben, bevor sie hält."),
+                "In meters.", Between(1f, 5f));
             FreeWalking = Bind("Station", "FreiGehen", false,
                 "Walk through the station instead of hopping between its spots. Replaces the spots: sitting on the bed A stands up, the left stick walks, the right stick turns in steps, the triggers change the poster you look at, and A uses the screen or door you stand at. Walking with a stick can make you feel sick.");
             MonitorLook = Bind("Anzeige", "MonitorEffekt", true,
