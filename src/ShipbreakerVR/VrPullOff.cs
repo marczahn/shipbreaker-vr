@@ -1,7 +1,10 @@
 using System.Collections.Generic;
 using BBI.Unity.Game;
+using BepInEx.Configuration;
 using Carbon.Audio;
 using Carbon.Core.Unity;
+using Unity.Collections;
+using Unity.Entities;
 using UnityEngine;
 
 namespace ShipbreakerVR
@@ -43,6 +46,34 @@ namespace ShipbreakerVR
         // And it lifts off the wall only a little while pulled (Raik, 2026-11-22: the 7 degrees of the things on walls
         // were far too much for it; about 3, then it comes off).
         private const float ChargeTilt = 3f;
+
+        // Taking things apart by hand (Raik's list of 2026-11-21, point 12: "pulling apart"; his test of 2026-11-22:
+        // the computers do not come apart by hand). Many parts sit on the ship by a joint that gives way to pulling
+        // (BreakableJointComponent: what the grapple yanks off, computers and their parts among them). The game adds
+        // up the pull on such a joint, each physics step between 1 and 1.5 whatever the force (its assets clamp it),
+        // until the joint's durability is used up (50 for what yanks off easily, 200 otherwise); on the way the part
+        // tilts and creaks, and then its joints break and it is a loose part. A hand that holds such a part, with the
+        // other hand on the ship, and pulls it away gives the joint the same pull, YankRate times a second (the
+        // grapple: 50), so an easy part takes two to three seconds of hard pulling and a firm one about ten. The game
+        // does the rest: which joints break, the tilt, the sounds. Experimente/HandZerlegen switches it off.
+        private const float YankRate = 15f;
+        private const float YankForce = 1.5f;
+        // The heaviest part a hand takes apart, by the game's own mass of what breaks off (kg).
+        private const float YankMost = 60f;
+        // After its joints broke, the game makes the part a loose object within this long; then the hand holds that.
+        private const float YankLooseWait = 1f;
+        private static ConfigEntry<bool> yankOn;
+
+        private static bool YankOn
+        {
+            get
+            {
+                if (yankOn == null && VrSettings.File != null)
+                    yankOn = VrSettings.Bind("Experimente", "HandZerlegen", true,
+                        "Experiment: a part that the grapple can yank off (computers and the like) also comes off by hand: hold the ship with one hand, the part with the other, and pull it away.");
+                return yankOn == null || yankOn.Value;
+            }
+        }
         private const float Fly = 0.18f;
         private const float Largest = 2.5f;
         private const float Mass = 4f;
@@ -63,6 +94,9 @@ namespace ShipbreakerVR
             public float Needed;
             // How far it tilts off the wall while pulled hard, in degrees.
             public float Tilt = VrPullOff.Tilt;
+            // A part on a joint that gives way (Yank): the pull still owed to the joint, and when its joints broke.
+            public float YankDue;
+            public float BrokeAt = -1f;
             public float Angle;
             public Vector3 Contact;
             public bool Braced;
@@ -125,7 +159,11 @@ namespace ShipbreakerVR
                 return;
             }
             var thing = Held(pull.Input);
-            if (thing != pull.Thing)
+            // A part whose joints just broke is no longer one to pull off, but the hand's business with it is not over
+            // (Broke): it stays the hand's thing while the grip is held.
+            var breaking = pull.Thing is BreakableJointComponent was && was != null && pull.Root != null && pull.Input.Grip.Down
+                && (pull.BrokeAt >= 0f || was.IsBroken);
+            if (thing != pull.Thing && !breaking)
             {
                 Reset(pull);
                 if (thing == null || Refused.Contains(thing) || !Begin(pull, thing)) return;
@@ -137,12 +175,20 @@ namespace ShipbreakerVR
                 return;
             }
             if (!Controller(pull.Input, out var hand)) return;
+            var joint = pull.Thing as BreakableJointComponent;
+            if (joint != null && Broke(pull, joint)) return;
             var braced = OnWall(pull);
             if (braced != pull.Braced)
             {
                 pull.Braced = braced;
                 VrClimb.SetFree(pull.Input, braced, false);
                 if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{pull.Thing.name}' {(braced ? "can be pulled off, the other hand holds the ship" : "is a hold to climb on again")}");
+            }
+            if (joint != null)
+            {
+                // The game tilts the part as its joint gives way; the mod neither tilts it nor puts it back.
+                if (braced) Yank(pull, joint, hand);
+                return;
             }
             if (!braced)
             {
@@ -166,6 +212,68 @@ namespace ShipbreakerVR
             if (pull.Pulled < HoldFor(pull)) return;
             if (pull.Thing is DemoChargeRetrievalController charge) TakeOff(pull, charge);
             else Loosen(pull, hand);
+        }
+
+        // The hand's pull on a joint that gives way, as the grapple's rope gives it (LaserRope: ApplyForce each physics
+        // step): from Enough away from the hold on, YankRate times a second.
+        private static void Yank(Pull pull, BreakableJointComponent joint, Vector3 hand)
+        {
+            var from = pull.Root.TransformPoint(pull.Surface);
+            var away = Vector3.Dot(hand - from, pull.Normal) - SurfaceExtra * VrCamera.WorldScale;
+            var scale = VrCamera.WorldScale;
+            if (away < Enough * scale)
+            {
+                pull.YankDue = 0f;
+                if (away > Start * scale) pull.Input.Buzz(0.1f, 0.05f);
+                return;
+            }
+            // The nearer to breaking, the harder the buzz.
+            pull.Input.Buzz(Mathf.Lerp(0.25f, 0.9f, 1f - joint.GetJointDurability), 0.05f);
+            pull.YankDue += YankRate * Time.deltaTime;
+            var times = Mathf.Min((int)pull.YankDue, 3);
+            if (times <= 0) return;
+            pull.YankDue -= times;
+            var part = pull.Root.GetComponent<StructurePart>();
+            var blueprint = part != null ? part.EntityBlueprintComponent : null;
+            if (!EntityBlueprintComponent.IsValid(blueprint)) return;
+            var way = (hand - from).sqrMagnitude > 1e-6f ? (hand - from).normalized : pull.Normal;
+            var commands = new EntityCommandBuffer(Allocator.TempJob);
+            try
+            {
+                for (var i = 0; i < times; i++) joint.ApplyForce(YankForce, way, BreakableJointComponent.ForceAppliedBy.Grapple, commands);
+                commands.Playback(blueprint.EntityManager);
+            }
+            catch (System.Exception e)
+            {
+                Refused.Add(joint);
+                Plugin.Log.LogWarning($"Pull off: pulling '{pull.Root.name}' apart by hand failed ({e.Message}), it is left alone");
+            }
+            finally { commands.Dispose(); }
+        }
+
+        // The joints of the part broke: once the game has made it a loose object of its own, the hand that pulled holds
+        // that. True while this is all there is to do for the hand.
+        private static bool Broke(Pull pull, BreakableJointComponent joint)
+        {
+            if (pull.BrokeAt < 0f)
+            {
+                if (!joint.IsBroken) return false;
+                pull.BrokeAt = Time.time;
+                pull.Input.Buzz(0.9f, 0.12f);
+                if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{pull.Root.name}' comes apart from the ship by the {pull.Input.Name} hand");
+            }
+            var body = pull.Root.GetComponentInParent<Rigidbody>();
+            var loose = body != null && body != pull.Ship;
+            if (!loose && Time.time < pull.BrokeAt + YankLooseWait) return true;
+            var input = pull.Input;
+            var held = loose ? Solid(pull.Root) : null;
+            Clear(pull);
+            if (held != null && input.Grip.Down)
+            {
+                var holds = VrClimb.TakeHold(input, held);
+                if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: the part that came apart {(holds ? "is in" : "did not get into")} the {input.Name} hand");
+            }
+            return true;
         }
 
         // A demo charge pulled long enough: back as it sat on the wall, then off the game's way, into the hand that
@@ -217,11 +325,14 @@ namespace ShipbreakerVR
             var part = collider != null ? collider.GetComponentInParent<StructurePart>() : null;
             // Not an AI node (VrAiNode): in 0.32.0 it came off by hand as well, which made taking one too easy (Raik,
             // 2026-11-22); it takes the grapple now.
-            if (part == null || !part.name.StartsWith(Collectible) || VrAiNode.Is(part)) return null;
+            if (part == null || VrAiNode.Is(part)) return null;
             // Not one already off: its own body is the part, or it hangs on one made here with its group.
             var body = collider.attachedRigidbody;
             if (body == null || body.transform == part.transform || Made.Contains(body)) return null;
-            return part;
+            if (part.name.StartsWith(Collectible)) return part;
+            // A part on a joint that gives way to pulling (Yank), if the game lets the grapple break it.
+            if (!YankOn || !StructureHelpers.TryGetBreakableJointComponent(part, BreakableJointComponent.ForceAppliedBy.Grapple, out var joint)) return null;
+            return joint != null && !joint.IsBroken ? joint : null;
         }
 
         // A thing to use, fixed on the ship: removed when used, not a lever or switch, on no loose part.
@@ -240,11 +351,13 @@ namespace ShipbreakerVR
             }
             // Heavy things (the large coolant and fuel tanks, Raik 2026-11-19) come off with the grapple only, as in the
             // game, with the game's own body and mass: the hand holds them as part of the wall.
-            var mass = GameMass(root);
-            if (mass > HandMost)
+            var yanked = control as BreakableJointComponent;
+            var mass = yanked != null ? yanked.GetMassOfBreakable() : GameMass(root);
+            var most = yanked != null ? YankMost : HandMost;
+            if (mass > most)
             {
                 Refused.Add(control);
-                if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{root.name}' weighs {mass:0} kg, more than {HandMost:0} kg: only the grapple takes it off");
+                if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{root.name}' weighs {mass:0} kg, more than {most:0} kg: only the grapple takes it off");
                 return false;
             }
             var ship = control.GetComponentInParent<Rigidbody>();
@@ -263,9 +376,14 @@ namespace ShipbreakerVR
             pull.Angle = 0f;
             pull.Braced = false;
             pull.Ship = ship;
-            Gather(pull);
+            pull.YankDue = 0f;
+            pull.BrokeAt = -1f;
+            // The game moves a group's parts itself as their joint gives way.
+            if (yanked == null) Gather(pull);
+            else pull.Members.Clear();
             // The hand goes with it as it tilts; it holds free only while the other hand holds the ship.
             VrClimb.Reanchor(pull.Input, root);
+            if (yanked != null && logs++ < 40) Plugin.Log.LogInfo($"Pull off: '{root.name}' sits on a joint that gives way to pulling ({yanked.GetJointDurability * 100f:0} % of its durability left)");
             if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: {pull.Input.Name} hand holds '{control.name}', its part '{root.name}' ({Size(root):0.00} m, {mass:0.0} kg) on '{(root.parent != null ? root.parent.name : "-")}', to pull {pull.Needed:0.0} s"
                 + (pull.Members.Count > 0 ? $", with {pull.Members.Count} more of its group: {Names(pull)}" : ""));
             return true;
@@ -552,7 +670,7 @@ namespace ShipbreakerVR
         private static void Reset(Pull pull)
         {
             if (pull.FlyStart >= 0f) return;
-            if (pull.Thing != null && pull.Root != null && pull.Parent != null)
+            if (pull.Thing != null && pull.Root != null && pull.Parent != null && !(pull.Thing is BreakableJointComponent))
             {
                 pull.Root.localPosition = pull.RestPosition;
                 pull.Root.localRotation = pull.RestRotation;
@@ -574,6 +692,8 @@ namespace ShipbreakerVR
             pull.Braced = false;
             pull.Ship = null;
             pull.FlyStart = -1f;
+            pull.YankDue = 0f;
+            pull.BrokeAt = -1f;
         }
     }
 }
