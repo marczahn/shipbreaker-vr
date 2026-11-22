@@ -55,7 +55,9 @@ namespace ShipbreakerVR
         // tilts and creaks, and then its joints break and it is a loose part. A hand that holds such a part, with the
         // other hand on the ship, and pulls it away gives the joint the same pull, YankRate times a second (the
         // grapple: 50), so an easy part takes two to three seconds of hard pulling and a firm one about ten. The game
-        // does the rest: which joints break, the tilt, the sounds. Experimente/HandZerlegen switches it off.
+        // does the rest: which joints break, the tilt, the sounds. Off unless Experimente/HandZerlegen is switched on:
+        // Raik meant something else by taking computers apart (the devices stripped for the truck's parts, Extract),
+        // and this lets a hand take off everything the grapple can.
         private const float YankRate = 15f;
         private const float YankForce = 1.5f;
         // The heaviest part a hand takes apart, by the game's own mass of what breaks off (kg).
@@ -69,9 +71,9 @@ namespace ShipbreakerVR
             get
             {
                 if (yankOn == null && VrSettings.File != null)
-                    yankOn = VrSettings.Bind("Experimente", "HandZerlegen", true,
+                    yankOn = VrSettings.Bind("Experimente", "HandZerlegen", false,
                         "Experiment: a part that the grapple can yank off (computers and the like) also comes off by hand: hold the ship with one hand, the part with the other, and pull it away.");
-                return yankOn == null || yankOn.Value;
+                return yankOn != null && yankOn.Value;
             }
         }
         private const float Fly = 0.18f;
