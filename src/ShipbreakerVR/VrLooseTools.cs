@@ -87,7 +87,12 @@ namespace ShipbreakerVR
         private const float FitAfter = 0.5f;
         // A free hand takes hold of a line within LineReach of it. Its own speed counts up to MostPullSpeed, and a line
         // stretched Slip past its length (the tool is caught on something) runs through the hand.
-        private const float LineReach = 0.12f;
+        // Raik (2026-11-22): taking the line was fiddly, above all in movement. The reach was 12 cm and only the very
+        // frame the grip closed counted; now 18 cm, and a grip that closed up to LineCatch seconds ago still takes the
+        // line it comes to (as a hand catches a hold, VrClimb.CatchTime).
+        private const float LineReach = 0.18f;
+        private const float LineCatch = 0.25f;
+        private static readonly float[] GripClosedAt = { -10f, -10f };
         private const float MostPullSpeed = 6f;
         private const float Slip = 0.6f;
         private const string GripName = "RHandTarget";
@@ -506,9 +511,12 @@ namespace ShipbreakerVR
                     else if (hand.State != HandState.Empty) Drop(tool, h, "the hand took something else");
                     continue;
                 }
-                if (!Pulling || rig == null || !hand.Input.Grip.Pressed || !hand.Free || HaulsAny(h)) continue;
+                if (hand.Input.Grip.Pressed) GripClosedAt[h] = Time.unscaledTime;
+                var closing = hand.Input.Grip.Down && Time.unscaledTime - GripClosedAt[h] <= LineCatch;
+                if (!Pulling || rig == null || !closing || !hand.Free || HaulsAny(h)) continue;
                 if (!hand.Input.TryGetPosition(out var local)) continue;
-                if (!VrToolLine.Take(tool.Index, h, rig.TransformPoint(local), LineReach * VrCamera.WorldScale)) continue;
+                if (!VrToolLine.Take(tool.Index, h, rig.TransformPoint(local), FistAxis(hand, rig), LineReach * VrCamera.WorldScale)) continue;
+                GripClosedAt[h] = -10f;
                 tool.Hauls[h] = true;
                 tool.PullKnown[h] = false;
                 tool.PullSpeed[h] = Vector3.zero;
@@ -518,6 +526,19 @@ namespace ShipbreakerVR
                     Plugin.Log.LogInfo($"Loose tools: the {hand.Name} hand takes the {tool.Name}'s line{(tool.Hauls[1 - h] ? " as well" : "")}"
                         + $"{(tool.Loose ? "" : " (the tool is in the other hand)")}, {rest / VrCamera.WorldScale:0.00} m of it from the last hand to the tool");
             }
+        }
+
+        // The way through that hand's fist, in the world: across the hand, from the little finger's side to the
+        // thumb's, as the hand is drawn (square to its palm's normal and to the way from the wrist to the knuckles);
+        // without the drawn hand, the controller's grip axis (OpenXR: the axis of the tube the closed fingers form).
+        private static Vector3 FistAxis(VrHand hand, Transform rig)
+        {
+            if (VrClimb.TryGetPalm(hand.Input, out var palm) && VrHands.TryGetArm(hand.IsLeft, out _, out _, out var wrist, out var knuckles))
+            {
+                var across = Vector3.Cross(palm, knuckles - wrist);
+                if (across.sqrMagnitude > 1e-8f) return across.normalized;
+            }
+            return hand.Input.TryGetGripPose(out _, out var grip) ? rig.rotation * grip * Vector3.forward : rig.up;
         }
 
         private static bool HaulsAny(int h)
@@ -559,12 +580,14 @@ namespace ShipbreakerVR
             {
                 if (!tool.Hauls[h] || !VrHand.Both[h].Input.TryGetPosition(out var local)) continue;
                 var at = rig.TransformPoint(local);
+                VrToolLine.Carry(tool.Index, h, at, FistAxis(VrHand.Both[h], rig));
+                // The hand pulls at the tool from where the line leaves its fist.
+                if (VrToolLine.ToolSide(tool.Index, h, out var leaves)) at = leaves;
                 var from = at - player.transform.position;
                 if (tool.PullKnown[h] && dt > 1e-5f)
                     tool.PullSpeed[h] = Vector3.ClampMagnitude(Vector3.Lerp(tool.PullSpeed[h], (from - tool.PullFromBody[h]) / dt, 0.5f), MostPullSpeed * VrCamera.WorldScale);
                 tool.PullFromBody[h] = from;
                 tool.PullKnown[h] = true;
-                VrToolLine.Carry(tool.Index, h, at);
             }
             if (!VrToolLine.Outer(tool.Index, out tool.Outer, out tool.Rest)) tool.Outer = -1;
             // The line felt in the hand while it pulls at the tool.
