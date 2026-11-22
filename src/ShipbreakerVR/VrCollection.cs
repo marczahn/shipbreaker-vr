@@ -36,7 +36,7 @@ namespace ShipbreakerVR
             public ConfigEntry<string> RadioRoll;
         }
 
-        private const string SectionStart = "Sammlung ";
+        private const string SectionStart = "Sammlung";
         private static readonly Dictionary<string, Save> Saves = new Dictionary<string, Save>();
         private static string lastName;
         private static Save last;
@@ -94,7 +94,7 @@ namespace ShipbreakerVR
             var name = (profileName ?? "").Trim().ToCharArray();
             for (var i = 0; i < name.Length; i++)
                 if ("=[]\"'\\\t\r\n".IndexOf(name[i]) >= 0 || char.IsControl(name[i])) name[i] = '_';
-            return SectionStart + new string(name);
+            return name.Length > 0 ? SectionStart + " " + new string(name) : SectionStart;
         }
 
         // The kinds in a list as it is kept: trimmed, each once, in order.

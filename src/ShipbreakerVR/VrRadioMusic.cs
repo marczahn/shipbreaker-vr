@@ -1,8 +1,6 @@
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text.RegularExpressions;
 using BepInEx.Configuration;
 using HarmonyLib;
 using UnityEngine;
@@ -20,6 +18,7 @@ namespace ShipbreakerVR
     //  - The Hab's own steady background sound (the hum and groans 'state_mainFlow_HAB' starts, on the emitter it is
     //    posted on; also 'sfx_HAB_start_radio' should it play) is turned down while the radio plays and back up when it
     //    stops. Its emitter is seen when the game posts the event (PostEventSeen).
+    //    Wwise's states are logged by their ids (Main_Flow 'Level' and so on are not looked up).
     //  - The music is meant for the whole room (no distance in Wwise): it is made quieter here by the distance from the
     //    radio, as a radio's would be.
     // Nothing of it is saved; the radio is off whenever the Hab is entered.
@@ -69,6 +68,8 @@ namespace ShipbreakerVR
         private static AkChannelConfig speakers;
         private static float[] speakerAngles;
         private static float[] offsets;
+        // Worked out each frame while the radio plays (Aim), kept so no array is made each frame.
+        private static float[] gains;
 
         public static void Bind()
         {
@@ -136,10 +137,11 @@ namespace ShipbreakerVR
         private static void Aim(float side)
         {
             if (speakerAngles == null) return;
-            var gains = new float[speakerAngles.Length];
+            if (gains == null || gains.Length != speakerAngles.Length) gains = new float[speakerAngles.Length];
             var most = 0f;
             for (var i = 0; i < gains.Length; i++)
             {
+                gains[i] = 0f;
                 if (float.IsNaN(speakerAngles[i])) continue;
                 var off = Mathf.DeltaAngle(side, speakerAngles[i]) * Mathf.Deg2Rad;
                 gains[i] = Mathf.Max(Away, 0.5f + 0.5f * Mathf.Cos(off));
@@ -232,7 +234,7 @@ namespace ShipbreakerVR
                 AkSoundEngine.GetState(groupId, out var was);
                 StatesWere.Add((groupId, was));
                 AkSoundEngine.SetState(group, value);
-                text.Add($"{group} {StateName(was)} -> {value}");
+                text.Add($"{group} {was} -> {value}");
             }
             Plugin.Log.LogInfo($"Radio: music states set: {string.Join(", ", text)}");
         }
@@ -241,7 +243,7 @@ namespace ShipbreakerVR
         {
             if (StatesWere.Count == 0) return;
             foreach (var (group, was) in StatesWere) AkSoundEngine.SetState(group, was);
-            Plugin.Log.LogInfo($"Radio: music states back ({string.Join(", ", StatesWere.Select(s => StateName(s.Was)))})");
+            Plugin.Log.LogInfo($"Radio: music states back ({string.Join(", ", StatesWere.Select(s => s.Was))})");
             StatesWere.Clear();
         }
 
@@ -308,64 +310,16 @@ namespace ShipbreakerVR
 
         // ---- The game's sounds ----
 
-        private static Dictionary<uint, string> names;
-        private static int traced;
-        private const int TraceLines = 150;
-
-        // Every event the game posts on an emitter: the Hab's music remembered, and while in the Hab, the first ones logged
-        // by name (to find what plays there).
+        // Every event the game posts on an emitter: the emitters of the Hab's own background are remembered, to turn
+        // them down while the radio plays. (0.32.0 also wrote the first 150 sounds in the Hab to the log by name, read
+        // from the game's SoundbanksInfo.xml, to find what plays there; that is found, and gone.)
         internal static void PostEventSeen(uint id, GameObject on)
         {
             if (habRadioId == 0) habRadioId = AkSoundEngine.GetIDFromString(HabRadioEvent);
             if (habAmbienceId == 0) habAmbienceId = AkSoundEngine.GetIDFromString(HabAmbienceEvent);
-            if ((id == habRadioId || id == habAmbienceId) && on != null && HabRadios.Add(on))
-            {
-                Plugin.Log.LogInfo($"Radio: the Hab's background '{Name(id)}' plays on '{on.name}' (id {on.GetInstanceID()})");
-                if (dampened && Listener() != null) AkSoundEngine.SetGameObjectOutputBusVolume(on, Listener(), Mathf.Clamp01(HabMusic.Value));
-            }
-            if (VrHab.Room == null || traced >= TraceLines) return;
-            traced++;
-            Plugin.Log.LogInfo($"Radio: Hab sound '{Name(id)}' on '{(on != null ? on.name : "none")}'");
-        }
-
-        private static Dictionary<uint, string> stateNames;
-
-        private static string StateName(uint id)
-        {
-            if (stateNames == null)
-            {
-                stateNames = new Dictionary<uint, string>();
-                try
-                {
-                    var path = Path.Combine(Application.streamingAssetsPath, "Audio", "GeneratedSoundBanks", "Windows", "SoundbanksInfo.xml");
-                    foreach (Match m in Regex.Matches(File.ReadAllText(path), "<State Id=\"(\\d+)\" Name=\"([^\"]+)\""))
-                        stateNames[uint.Parse(m.Groups[1].Value)] = m.Groups[2].Value;
-                }
-                catch (System.Exception e)
-                {
-                    Plugin.Log.LogWarning($"Radio: the state names could not be read ({e.Message})");
-                }
-            }
-            return stateNames.TryGetValue(id, out var name) ? name : id.ToString();
-        }
-
-        private static string Name(uint id)
-        {
-            if (names == null)
-            {
-                names = new Dictionary<uint, string>();
-                try
-                {
-                    var path = Path.Combine(Application.streamingAssetsPath, "Audio", "GeneratedSoundBanks", "Windows", "SoundbanksInfo.xml");
-                    foreach (Match m in Regex.Matches(File.ReadAllText(path), "<Event Id=\"(\\d+)\" Name=\"([^\"]+)\""))
-                        names[uint.Parse(m.Groups[1].Value)] = m.Groups[2].Value;
-                }
-                catch (System.Exception e)
-                {
-                    Plugin.Log.LogWarning($"Radio: the sound names could not be read ({e.Message})");
-                }
-            }
-            return names.TryGetValue(id, out var name) ? name : id.ToString();
+            if ((id != habRadioId && id != habAmbienceId) || on == null || !HabRadios.Add(on)) return;
+            Plugin.Log.LogInfo($"Radio: the Hab's background '{(id == habRadioId ? HabRadioEvent : HabAmbienceEvent)}' plays on '{on.name}' (id {on.GetInstanceID()})");
+            if (dampened && Listener() != null) AkSoundEngine.SetGameObjectOutputBusVolume(on, Listener(), Mathf.Clamp01(HabMusic.Value));
         }
     }
 

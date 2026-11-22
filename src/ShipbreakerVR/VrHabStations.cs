@@ -80,6 +80,11 @@ namespace ShipbreakerVR
             MakePrompt(sample);
         }
 
+        private static Station promptFor;
+        private static bool promptRadio;
+        private static bool promptRadioOn;
+        private static string promptText;
+
         public static void Update(Transform head, float scale)
         {
             if (home == null) return;
@@ -94,7 +99,16 @@ namespace ShipbreakerVR
                 // In front of the head, as one may stand turned away from the canvas's place.
                 if ((near != null || nearRadio) && VrUi.Instance != null) VrUi.Instance.Recenter();
             }
-            Show(nearRadio ? RadioPrompt() : near != null ? $"[A] {near.Name}" : "");
+            // Its text is built when what it says changes, not each frame.
+            var radioOn = nearRadio && VrRadioMusic.On;
+            if (near != promptFor || nearRadio != promptRadio || radioOn != promptRadioOn || promptText == null)
+            {
+                promptFor = near;
+                promptRadio = nearRadio;
+                promptRadioOn = radioOn;
+                promptText = nearRadio ? RadioPrompt() : near != null ? $"[A] {near.Name}" : "";
+            }
+            Show(promptText);
             if (Time.unscaledTime < lockedUntil) return;
             if (nearRadio)
             {
@@ -156,6 +170,7 @@ namespace ShipbreakerVR
             Done();
             near = null;
             nearRadio = false;
+            promptText = null;
             Show("");
             HideNavigation(false);
         }

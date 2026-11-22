@@ -250,11 +250,10 @@ namespace ShipbreakerVR
         }
 
         // While the inbox builds its list: every mail sent is put in, unread at the top of the reconciled messages, read in
-        // LYNX's group of read messages. Returns what was put in, to take out again right after (the inventory is saved
-        // with the profile).
-        public static List<(VrModMail Mail, NarrativeCategoryAsset Category)> PutIn(NarrativeInventory inventory)
+        // LYNX's group of read messages. What was put in is added to 'put' as it goes in, to take out again right after
+        // (the inventory is saved with the profile), also when this or the game's list building throws.
+        public static void PutIn(NarrativeInventory inventory, List<(VrModMail Mail, NarrativeCategoryAsset Category)> put)
         {
-            var put = new List<(VrModMail, NarrativeCategoryAsset)>();
             NarrativeCategoryAsset category = null;
             var adopted = false;
             var lynx = false;
@@ -279,7 +278,6 @@ namespace ShipbreakerVR
                     new NarrativeInventory.CollectedMessageData { Asset = asset, TimeCollected = mail.ReadAt });
                 put.Add((mail, category));
             }
-            return put;
         }
 
         public static void TakeOut(NarrativeInventory inventory, List<(VrModMail Mail, NarrativeCategoryAsset Category)> put)
@@ -296,19 +294,41 @@ namespace ShipbreakerVR
     [HarmonyPatch(typeof(HabNarrativeMessageButtonController), "RefreshMessages")]
     internal static class ModMailListPatch
     {
-        private static void Prefix(out List<(VrModMail Mail, NarrativeCategoryAsset Category)> __state)
+        private sealed class Put
+        {
+            public NarrativeInventory Inventory;
+            public readonly List<(VrModMail Mail, NarrativeCategoryAsset Category)> Mails = new List<(VrModMail, NarrativeCategoryAsset)>();
+        }
+
+        private static void Prefix(out Put __state)
         {
             __state = null;
             var profile = PlayerProfileService.Instance != null ? PlayerProfileService.Instance.Profile : null;
             if (profile == null || profile.NarrativeInventory == null) return;
-            VrMoraleMail.Check(profile);
-            __state = VrModMail.PutIn(profile.NarrativeInventory);
+            __state = new Put { Inventory = profile.NarrativeInventory };
+            try
+            {
+                VrMoraleMail.Check(profile);
+                VrModMail.PutIn(__state.Inventory, __state.Mails);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning($"Mod mail: putting the mod's messages in the inbox failed ({e})");
+            }
         }
 
-        private static void Postfix(List<(VrModMail Mail, NarrativeCategoryAsset Category)> __state)
+        // A finalizer, not a postfix: the mod's messages come out of the game's inventory again also when the game's
+        // list building throws. Left in, they would be written to the save with the profile (0.32.0 took them out in
+        // a postfix, which an exception skips). The inventory they went into is the one they come out of, whatever
+        // profile is loaded by then.
+        private static Exception Finalizer(Exception __exception, Put __state)
         {
-            if (__state == null || __state.Count == 0) return;
-            VrModMail.TakeOut(PlayerProfileService.Instance.Profile.NarrativeInventory, __state);
+            if (__state != null && __state.Mails.Count > 0)
+            {
+                try { VrModMail.TakeOut(__state.Inventory, __state.Mails); }
+                catch (Exception e) { Plugin.Log.LogError($"Mod mail: taking the mod's messages out of the inbox failed ({e})"); }
+            }
+            return __exception;
         }
     }
 
