@@ -80,6 +80,10 @@ namespace ShipbreakerVR
             public Transform Parent;
             public Vector3 Position;
             public Quaternion Rotation;
+            // Hung on the part pulled, Unity gives it another local scale wherever that part is scaled or turned against
+            // it (it keeps its size in the world); back on its own parent it needs its own again, or cap and valve sit
+            // there in another size than before.
+            public Vector3 Scale;
         }
 
         // The bodies made here for things pulled off: a part on one of them is no longer on the ship.
@@ -259,7 +263,7 @@ namespace ShipbreakerVR
                 var known = false;
                 foreach (var member in pull.Members) if (member.Part == other.transform) known = true;
                 if (known) continue;
-                pull.Members.Add(new Member { Part = other.transform, Parent = other.transform.parent, Position = other.transform.localPosition, Rotation = other.transform.localRotation });
+                pull.Members.Add(new Member { Part = other.transform, Parent = other.transform.parent, Position = other.transform.localPosition, Rotation = other.transform.localRotation, Scale = other.transform.localScale });
             }
             foreach (var member in pull.Members) member.Part.SetParent(pull.Root, true);
         }
@@ -280,6 +284,7 @@ namespace ShipbreakerVR
                 member.Part.SetParent(member.Parent, false);
                 member.Part.localPosition = member.Position;
                 member.Part.localRotation = member.Rotation;
+                member.Part.localScale = member.Scale;
             }
             pull.Members.Clear();
         }
