@@ -113,11 +113,12 @@ namespace ShipbreakerVR
         // Over the shoulder: the hand, or the thing it holds touching the zone (Raik, 2026-11-19: the small fuel cans and
         // the repair kits went in only with the hand right in the zone; the thing reaching into it is to be enough). Of
         // the thing's own shapes (its structure part's, else its body's) the point nearest the middle of the zone counts,
-        // PackMiddle, behind the left shoulder.
+        // PackMiddle, behind the left shoulder. Also for the collection's AI nodes and radio (VrAiNode, VrRadio), which
+        // have no interactable: their body's shapes count.
         private static readonly Vector3 PackMiddle = new Vector3(-0.15f, 0.05f, -0.25f);
         private static readonly System.Collections.Generic.List<Collider> Shapes = new System.Collections.Generic.List<Collider>();
 
-        private static bool Over(VrInput.Hand hand, Rigidbody body, InteractableObject thing)
+        internal static bool Over(VrInput.Hand hand, Rigidbody body, InteractableObject thing)
         {
             if (VrToolBelt.ShoulderLocal(hand, out var local) && VrToolBelt.OverLeftShoulder(local)) return true;
             var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;

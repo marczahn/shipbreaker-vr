@@ -20,7 +20,9 @@ namespace ShipbreakerVR
     // A small collection: there are three kinds (Regular, LargeRound, LargeWide). Each kind collected the first time
     // lies in the Hab, for good, each kind at a place of its own (Lay); one of a kind already there adds nothing, as
     // with the pink bunny. The first one collected also brings LYNX's warning (VrAiNodeMail). All of it is kept in the
-    // mod's own config (section Experimente), not in the save, so the save never changes.
+    // mod's own config, for each save on its own (VrCollection), not in the save, so the save never changes. A node
+    // in the backpack counts once its shift is over (VrCollection.Book).
+    // With Steuerung/UeberDieSchulterEinpacken off, A or X of the hand that holds a node puts it in the backpack.
     // The game counts AI nodes for the ghost ship's objectives (salvaged correctly or not): one in the backpack is gone
     // and counts for none. With Experimente/KiKnotenStrafe (Raik 2026-11-15) the game also fines it as it fines a node
     // thrown into the processor: it is marked destroyed by the processor (SalvageableUtility.MarkStructurePartAsDestroyed,
@@ -59,12 +61,6 @@ namespace ShipbreakerVR
         private const float OverStrength = 0.08f;
         private const float OverTime = 0.1f;
 
-        // The kinds collected, in order, comma separated.
-        public static ConfigEntry<string> Collection;
-        public static ConfigEntry<int> Count;
-        // LYNX's warning in the Hab's inbox (VrAiNodeMail), for the first one: 0 none yet, 1 waiting unread, 2 read.
-        public static ConfigEntry<int> Warning;
-        public static ConfigEntry<long> WarningRead;
         public static ConfigEntry<bool> Fine;
         public static ConfigEntry<float> GrappleTime;
         public static ConfigEntry<string> LargePlace;
@@ -106,15 +102,7 @@ namespace ShipbreakerVR
 
         public static void Bind()
         {
-            if (Collection != null || VrSettings.File == null) return;
-            Collection = VrSettings.Bind("Experimente", "KiKnotenSammlung", "",
-                "Experiment: the kinds of AI node on the Hab's workbench (their parts' names), in the order collected, comma separated. Empty clears the workbench.");
-            Warning = VrSettings.Bind("Experimente", "KiKnotenAbmahnung", 0,
-                "Experiment: LYNX's warning for taking an AI node home. 0 not sent, 1 waiting unread in the Hab's inbox, 2 read.");
-            WarningRead = VrSettings.Bind("Experimente", "KiKnotenAbmahnungGelesen", 0L,
-                "Experiment: when LYNX's warning was read (Unix seconds), its place among LYNX's read messages.");
-            Count = VrSettings.Bind("Experimente", "KiKnotenImRucksack", 0,
-                "Experiment: how many AI nodes went into the backpack, shown in the inventory list.");
+            if (GrappleTime != null || VrSettings.File == null) return;
             GrappleTime = VrSettings.Bind("Experimente", "KiKnotenGreiferSekunden", 6f,
                 "Experiment: how long the grapple has to hold on to an AI node fixed on a wall or crate before it comes off (seconds).");
             Fine = VrSettings.Bind("Experimente", "KiKnotenStrafe", true,
@@ -144,17 +132,15 @@ namespace ShipbreakerVR
             return true;
         }
 
+        // The kinds the loaded save has collected, in order (VrCollection).
         public static List<string> Kinds()
         {
-            var kinds = new List<string>();
-            if (Collection == null) return kinds;
-            foreach (var kind in Collection.Value.Split(','))
-            {
-                var k = kind.Trim();
-                if (k.StartsWith(Name) && !kinds.Contains(k)) kinds.Add(k);
-            }
+            var kinds = VrCollection.Kinds(Kept);
+            kinds.RemoveAll(kind => !kind.StartsWith(Name));
             return kinds;
         }
+
+        private static string Kept => VrCollection.Current != null ? VrCollection.Current.Nodes.Value : "";
 
         // The three kinds, as their prefabs are named. The part in a ship is called 'SM_Props_AI_Node_Regular' whatever
         // its kind (Raik 2026-11-15: large and long ones collected, all logged as Regular), so the kind is told by its
@@ -229,13 +215,15 @@ namespace ShipbreakerVR
             Preload();
             Bench();
             Grapple();
-            if (VrSettings.ShoulderStow == null || !VrSettings.ShoulderStow.Value || VrSettings.Climbing == null || !VrSettings.Climbing.Value)
+            if (VrSettings.Climbing == null || !VrSettings.Climbing.Value) Left.Body = Right.Body = null;
+            else
             {
-                Left.Body = Right.Body = null;
-                return;
+                var shoulder = VrSettings.ShoulderStow != null && VrSettings.ShoulderStow.Value;
+                Check(VrInput.Left, Left, shoulder);
+                Check(VrInput.Right, Right, shoulder);
             }
-            Check(VrInput.Left, Left);
-            Check(VrInput.Right, Right);
+            // Whatever the way into the backpack is: a node pulled off and let go leaves its ship (0.32.0 did this
+            // only with the shoulder stow on, so without it a node thrown into the barge lit the whole ship red).
             Separate();
         }
 
@@ -264,7 +252,8 @@ namespace ShipbreakerVR
                 if (logs++ < 40) Plugin.Log.LogInfo($"AI node: grapple on '{part.name}' on '{body.name}', comes off in {GrappleTime.Value:0.0} s");
             }
             var held = Time.time - grappledSince;
-            var hand = VrHand.GameToolHand.Input;
+            // The hand that works the grapple (with two tools out, not always the game's tool hand).
+            var hand = (VrToolHaptics.Holding(EquipmentController.Equipment.GrappleHook) ?? VrHand.GameToolHand).Input;
             if (held < GrappleTime.Value)
             {
                 hand.Buzz(0.05f + 0.35f * held / Mathf.Max(0.1f, GrappleTime.Value), 0.05f);
@@ -368,7 +357,7 @@ namespace ShipbreakerVR
             }
         }
 
-        private static void Check(VrInput.Hand hand, Held held)
+        private static void Check(VrInput.Hand hand, Held held, bool shoulder)
         {
             var body = VrClimb.HeldBody(hand);
             var node = NodeOf(body);
@@ -376,9 +365,23 @@ namespace ShipbreakerVR
             {
                 // Pulled off by hand (VrPullOff): on the mod's body, to be separated from its ship once let go.
                 if (body.transform == node.transform) Track(body, node);
+                if (!shoulder)
+                {
+                    // Without the shoulder stow: A or X of the hand that holds it, as the game's things to collect
+                    // are taken with their prompt's button.
+                    held.Body = null;
+                    held.Over = false;
+                    if (!hand.Primary.Pressed) return;
+                    VrClimb.Drop(hand, "AI node collected with its button");
+                    Stow(hand, body);
+                    return;
+                }
                 var wasOver = held.Body == body && held.Over;
                 held.Body = body;
-                held.Over = VrToolBelt.HeadLocal(hand, out var local) && VrToolBelt.OverLeftShoulder(local);
+                // Over the shoulder as the things to collect are (VrShoulderStow.Over): the zone sits on the body,
+                // and the node reaching into it is enough. 0.32.0 asked for the hand in a zone that turned with the
+                // head, which missed with the head turned to the shoulder.
+                held.Over = VrShoulderStow.Over(hand, body, null);
                 if (held.Over && !wasOver)
                 {
                     held.OverSince = Time.time;
@@ -391,9 +394,9 @@ namespace ShipbreakerVR
             var over = held.Over;
             held.Body = null;
             held.Over = false;
-            if (was == null || hand.Grip.Down || !was.gameObject.activeInHierarchy) return;
+            if (!shoulder || was == null || hand.Grip.Down || !was.gameObject.activeInHierarchy) return;
             if (VrClimb.HeldBody(hand.IsLeft ? VrInput.Right : VrInput.Left) == was) return;
-            if (!over && !(VrToolBelt.HeadLocal(hand, out var at) && VrToolBelt.OverLeftShoulder(at))) return;
+            if (!over && !VrShoulderStow.Over(hand, was, null)) return;
             Stow(hand, was);
         }
 
@@ -416,21 +419,11 @@ namespace ShipbreakerVR
             if (body.gameObject != thing) body.gameObject.SetActive(false);
             ((Carbon.Core.Events.IEventBroadcaster)Main.EventSystem).Post(MasterSFXEvent.GetEvent(new WwiseShortID(VrShoulderStow.RattleSound)));
             hand.Buzz(1f, 0.15f);
-            Count.Value++;
+            // Noted only: it is the save's once the shift is over (VrCollection.Book), and nothing is written now.
             var kind = KindOf(thing, out var seen);
-            var kinds = Kinds();
-            var added = !kinds.Contains(kind);
-            if (added)
-            {
-                kinds.Add(kind);
-                Collection.Value = string.Join(",", kinds);
-            }
-            // Only the very first one brings LYNX's warning (Raik: three at once would be too much).
-            if (Warning.Value == 0) Warning.Value = 1;
-            VrSettings.File.Save();
-            VrAiNodeInventory.Changed();
+            VrCollection.NoteNode(kind);
             Plugin.Log.LogInfo($"AI node: '{name}' ({seen}, a {kind.Substring(Name.Length + 1)}) put in the backpack by the {hand.Name} hand, "
-                + (added ? $"a new kind, {kinds.Count} of 3 on the workbench" : $"its kind lies on the workbench already ({kinds.Count} of 3)")
+                + $"noted until the shift is over ({VrCollection.NotedNodes} noted, its kind {(Kinds().Contains(kind) ? "in the Hab already" : "new")})"
                 + (blueprint != null ? "" : " (no entity found, only hidden)") + (fined ? ", fined as thrown into the processor" : ""));
         }
 
@@ -475,16 +468,32 @@ namespace ShipbreakerVR
         private static void Bench()
         {
             var room = VrHab.Room;
-            // Nothing changed: nothing to do, without building lists each frame.
-            if (room != null && shownIn == room && Shown.Count > 0 && Collection.Value == shownRaw && Shown.TrueForAll(o => o != null)) return;
-            var kinds = room != null ? Kinds() : new List<string>();
+            if (room == null)
+            {
+                // Not in the Hab (a whole shift long): nothing lies anywhere, and no list is built each frame.
+                if (Shown.Count > 0) Clear();
+                shownIn = null;
+                return;
+            }
+            // Nothing changed, also with nothing collected: nothing to do.
+            var kept = Kept;
+            if (shownIn == room && kept == shownRaw && Shown.TrueForAll(o => o != null)) return;
+            var kinds = Kinds();
+            // A kind whose prefab did not load is left out for this run of the game; the save keeps it.
+            kinds.RemoveAll(kind => NotLoading.Contains(kind));
             var collection = string.Join(",", kinds);
             if (kinds.Count == 0)
             {
                 Clear();
+                shownIn = room;
+                shownRaw = kept;
                 return;
             }
-            if (Shown.Count > 0 && shownIn == room && shownCollection == collection && Shown.TrueForAll(o => o != null)) return;
+            if (Shown.Count > 0 && shownIn == room && shownCollection == collection && Shown.TrueForAll(o => o != null))
+            {
+                shownRaw = kept;
+                return;
+            }
             // Every kind's prefab loaded first, then all are laid out at once.
             var ready = true;
             foreach (var kind in kinds)
@@ -516,7 +525,7 @@ namespace ShipbreakerVR
             Lay(room, kinds);
             shownIn = room;
             shownCollection = collection;
-            shownRaw = Collection.Value;
+            shownRaw = Kept;
         }
 
         private static void Clear()
@@ -526,14 +535,15 @@ namespace ShipbreakerVR
             shownCollection = null;
         }
 
-        // A kind that does not load leaves the collection, so the others still lie there.
+        // A kind that does not load is left out until the game starts again, so the others still lie there. What the
+        // save collected stays as it is: 0.32.0 took the kind out of the collection for good.
+        private static readonly HashSet<string> NotLoading = new HashSet<string>();
+
         private static void Drop(string kind, string why)
         {
-            Plugin.Log.LogWarning($"AI node: '{PrefabKey(kind)}' did not load ({why}), left off the workbench");
+            Plugin.Log.LogWarning($"AI node: '{PrefabKey(kind)}' did not load ({why}), left out of the Hab for now; the save keeps it");
             Prefabs.Remove(kind);
-            var kinds = Kinds();
-            kinds.Remove(kind);
-            Collection.Value = string.Join(",", kinds);
+            NotLoading.Add(kind);
         }
 
         private static void Lay(Transform room, List<string> kinds)
@@ -724,9 +734,6 @@ namespace ShipbreakerVR
             }
             return low;
         }
-
-        // The point moved up or down to the bench top.
-        private static Vector3 Flat(Vector3 point, Vector3 up, float height) => point + up * (height - Vector3.Dot(point, up));
     }
 
 }

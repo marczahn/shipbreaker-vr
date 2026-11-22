@@ -112,7 +112,7 @@ namespace ShipbreakerVR
         }
 
         // The hand that works that tool, or null.
-        private static VrHand Holding(EquipmentController.Equipment tool)
+        internal static VrHand Holding(EquipmentController.Equipment tool)
         {
             foreach (var hand in VrHand.Both)
                 if (hand.HoldsTool && hand.Tool == tool) return hand;

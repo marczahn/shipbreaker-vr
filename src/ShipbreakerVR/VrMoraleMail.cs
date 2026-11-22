@@ -1,5 +1,4 @@
 using BBI.Unity.Game;
-using BepInEx.Configuration;
 
 namespace ShipbreakerVR
 {
@@ -7,25 +6,15 @@ namespace ShipbreakerVR
     // (PlayerProfile.TutorialCompleted), LYNX's department for employee satisfaction writes to the Hab's inbox (VrModMail):
     // keeping up morale matters, so everyone may now hang their own posters in their quarters. Only from then on the
     // mod's own pictures (VrHabCustomPosters, BepInEx\ShipbreakerVR-Poster) are among the posters' pictures; before,
-    // the posters have the game's own only. Kept in the mod's config (Experimente/MoralMitteilung), not in the save.
+    // the posters have the game's own only. Kept in the mod's config for each save (VrCollection, MoralMitteilung), not
+    // in the save. Only a career has a Hab: free play and the weekly ship start in the bay and end at the title (the
+    // game's SceneLoader loads the Hab for a career only), so there is nothing to send or to hang there.
     internal static class VrMoraleMail
     {
-        private static ConfigEntry<int> state;
-        private static ConfigEntry<long> readAt;
-
         public static readonly VrModMail Mail = new VrModMail("SBVR_MORALE_MAIL_", "8c3d61f0a2b94e7d95c4e0b7a1f2d3c8", "morale notice",
-            () => { Bind(); return state; },
-            () => { Bind(); return readAt; },
+            () => VrCollection.Current?.Morale,
+            () => VrCollection.Current?.MoraleRead,
             "Moral-Mitteilung");
-
-        private static void Bind()
-        {
-            if (state != null || VrSettings.File == null) return;
-            state = VrSettings.Bind("Experimente", "MoralMitteilung", 0,
-                "Experiment: LYNX's notice after the tutorial that own posters may hang in the Hab. 0 not sent, 1 waiting unread in the Hab's inbox, 2 read. Own posters only from 1 on.");
-            readAt = VrSettings.Bind("Experimente", "MoralMitteilungGelesen", 0L,
-                "Experiment: when LYNX's morale notice was read (Unix seconds), its place among LYNX's read messages.");
-        }
 
         // The tutorial done: the notice is sent, once.
         public static void Check(PlayerProfile profile)

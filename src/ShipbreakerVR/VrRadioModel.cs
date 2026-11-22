@@ -33,8 +33,17 @@ namespace ShipbreakerVR
             }
         }
 
+        // Its model and texture read from the DLL now, where a short halt does not show (VrRadio: as a save is
+        // loaded), not in the middle of a shift when a ship turns out to have the radio.
+        public static void Warm()
+        {
+            if (failed) return;
+            if (mesh == null) Load();
+            if (texture == null && !failed) LoadTexture();
+        }
+
         // A material for it, made from one of the scene's lit materials (so it is lit as the things around it are), with
-        // the radio's colours and no maps of the template's own.
+        // the radio's colours and no maps of the template's own. The caller owns it and destroys it with the radio.
         public static Material MaterialFrom(Material template)
         {
             var lit = LitTemplate();
@@ -57,14 +66,14 @@ namespace ShipbreakerVR
         // A material of the plain HDRP lit shader from among those loaded, one with no wire of its own: the ship's parts
         // draw with a shader of the game's that has its own wire (blue edges, Raik 2026-11-16) and reads its colour map
         // otherwise (the radio came out green). Null when none is loaded, and the caller's template is used.
+        // Looked for again whenever the one found before is gone: it belongs to a scene's assets and is unloaded with
+        // them (0.32.0 looked once, and then drew the radio with the caller's template for the rest of the game).
         private const string LitShader = "HDRP/Lit";
         private static Material lit;
-        private static bool litLooked;
 
         public static Material LitTemplate()
         {
-            if (lit != null || litLooked) return lit;
-            litLooked = true;
+            if (lit != null) return lit;
             foreach (var material in Resources.FindObjectsOfTypeAll<Material>())
             {
                 if (material == null || material.shader == null || material.shader.name != LitShader) continue;

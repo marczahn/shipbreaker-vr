@@ -14,16 +14,22 @@ namespace ShipbreakerVR
     // Collection (Raik 2026-11-15, "Sammelkampagne", in 0.32.0): a radio, collected as the AI nodes and the
     // game's pink bunny are. From ship level 2 on, a ship has it floating loose somewhere inside now and then
     // (Experimente/RadioChance); put in the backpack over the left shoulder, it stands in the Hab on the table left of
-    // the message computer from then on (Experimente/RadioGesammelt, Experimente/RadioPlatz). Its model is Raik's own
-    // (VrRadioModel). In the ship it is the mod's own loose body (no entity of the game's: the hands hold it as any loose
-    // thing, the game's tools and the barge do not know it). Kept in the mod's config, not in the save.
+    // the message computer once that shift is over (VrCollection: kept for each save, Radio; Experimente/RadioPlatz).
+    // Its model is Raik's own (VrRadioModel). In the ship it is the mod's own loose body (no entity of the game's: the
+    // hands hold it as any loose thing, the game's tools and the barge do not know it). Kept in the mod's config, not
+    // in the save. With Steuerung/UeberDieSchulterEinpacken off, A or X of the hand that holds it puts it in the
+    // backpack.
     internal static class VrRadio
     {
-        public static ConfigEntry<bool> Collected;
         public static ConfigEntry<string> Place;
         public static ConfigEntry<float> Chance;
         public static ConfigEntry<int> FromLevel;
-        public static ConfigEntry<string> Rolled;
+
+        // Where it stands unless Experimente/RadioPlatz says otherwise: on the table by the window, left of the message
+        // computer, as Raik placed it (2026-11-16). Built in, not the entry's default: BepInEx keeps an empty value
+        // once written to the cfg whatever the default is, and 0.32.0 wrote an empty one, with which the radio was
+        // not shown at all.
+        internal const string BuiltInPlace = "128.69; 1.00; 113.52; 66";
 
         // Its body: the mass of a full portable radio, kept a little from drifting as the game's loose things are.
         private const float Mass = 4f;
@@ -42,84 +48,111 @@ namespace ShipbreakerVR
         private static Transform shownIn;
         private static string shownPlace;
         private static bool warned;
+        private static bool warmed;
 
         private static GameObject floating;
         private static string shipKey;
+        private static VrCollection.Save shipSave;
         private static float readySince = -1f;
         private static bool handled;
 
         public static void Bind()
         {
-            if (Collected != null || VrSettings.File == null) return;
-            Collected = VrSettings.Bind("Experimente", "RadioGesammelt", false,
-                "Experiment: the radio was collected from a ship and stands in the Hab.");
+            if (Place != null || VrSettings.File == null) return;
             Place = VrSettings.Bind("Experimente", "RadioPlatz", "",
-                "Experiment: where the radio stands in the Hab, 'x; y; z; turn' in the room's axes as a hand snapshot writes them (y above the floor), its bottom's middle, turn in degrees about up. Empty: not shown.");
+                "Experiment: where the radio stands in the Hab, 'x; y; z; turn' in the room's axes as a hand snapshot writes them (y above the floor), its bottom's middle, turn in degrees about up. Empty: on the table by the window (" + BuiltInPlace + ").");
             Chance = VrSettings.Bind("Experimente", "RadioChance", 0.1f,
                 "Experiment: the chance that a ship from RadioAbStufe on has the radio floating inside (0 to 1), while it is not collected yet.");
             FromLevel = VrSettings.Bind("Experimente", "RadioAbStufe", 2,
                 "Experiment: the lowest ship level (the job's ship class grade) the radio can be found in.");
-            Rolled = VrSettings.Bind("Experimente", "RadioWurf", "",
-                "Experiment: the last ship asked whether it has the radio and the answer, so loading it again does not ask anew.");
         }
 
         public static void Update()
         {
             Bind();
-            if (Collected == null) return;
-            Hab();
-            Ship();
+            if (Place == null) return;
+            var save = VrCollection.Current;
+            if (save != null && !warmed)
+            {
+                // A save was just loaded, the loading screen is up or about to be.
+                warmed = true;
+                VrRadioModel.Warm();
+            }
+            Hab(save);
+            Ship(save);
             if (floating != null && floating != scannableDone) Scannable(floating);
             if (floating != null && VrXr.IsRunning)
             {
-                Check(VrInput.Left, Left);
-                Check(VrInput.Right, Right);
+                var shoulder = VrSettings.ShoulderStow != null && VrSettings.ShoulderStow.Value;
+                Check(VrInput.Left, Left, shoulder);
+                Check(VrInput.Right, Right, shoulder);
             }
+        }
+
+        // The radio and the material made for it (VrRadioModel.MaterialFrom) go together.
+        private static void Discard(ref GameObject radio)
+        {
+            if (radio != null)
+            {
+                var renderer = radio.GetComponent<MeshRenderer>();
+                if (renderer != null && renderer.sharedMaterial != null) Object.Destroy(renderer.sharedMaterial);
+                Object.Destroy(radio);
+            }
+            radio = null;
         }
 
         // ---- In the ship ----
 
         // Once a ship is finished spawning, new or from the save: asked once whether it has the radio (from its level on,
         // by chance), and if so the radio floats in one of its rooms. Gone with the ship.
-        private static void Ship()
+        // Each time the ship stands again it is looked at anew: the same ship built again (a shift left for the title
+        // and its save loaded again, the game's ship then as before that shift) has the radio back where the answer
+        // kept for it says so and the radio is neither there nor the save's. 0.32.0 looked once for each ship, so the
+        // radio was gone from a ship built a second time.
+        private static void Ship(VrCollection.Save save)
         {
             var service = ModuleService.Instance;
             var preview = service != null ? service.CurrentShipPreview : null;
-            var key = preview != null ? $"{preview.Seed}:{preview.ShipName}" : null;
-            if (key != shipKey)
+            var key = preview != null && save != null ? $"{preview.Seed}:{preview.ShipName}" : null;
+            if (key != shipKey || save != shipSave)
             {
-                if (floating != null) Object.Destroy(floating);
-                floating = null;
+                Discard(ref floating);
                 shipKey = key;
+                shipSave = save;
                 readySince = -1f;
                 handled = false;
             }
-            if (preview == null || handled) return;
-            LoadDriveLook();
+            if (key == null) return;
             var ready = service.CurrentManifest != Entity.Null && !service.ShipSpawningInProgress && !service.ShipSpawningFromSaveInProgress
                 && !service.ShipDespawningInProgress;
             if (!ready)
             {
                 readySince = -1f;
+                handled = false;
+                LoadDriveLook();
                 return;
             }
+            if (handled) return;
+            LoadDriveLook();
             if (readySince < 0f) readySince = Time.time;
             if (Time.time < readySince + SettleTime) return;
             handled = true;
+            // Still floating in it from before: the ship only stood by for a moment.
+            if (floating != null) return;
             var grade = preview.ShipClassAsset != null ? preview.ShipClassAsset.ShipGrade : -1;
-            if (Collected.Value)
+            if (save.Radio.Value || VrCollection.RadioNoted)
             {
-                Plugin.Log.LogInfo($"Radio: ship '{preview.ShipName}' (grade {grade}) ready, the radio is collected already");
+                Plugin.Log.LogInfo($"Radio: ship '{preview.ShipName}' (grade {grade}) ready, the radio is {(save.Radio.Value ? "collected already" : "in the backpack since this shift")}");
                 return;
             }
             bool has;
-            if (Rolled.Value.StartsWith(key + "="))
-                has = Rolled.Value.EndsWith("=1");
+            var rolled = save.RadioRoll;
+            if (rolled.Value.StartsWith(key + "="))
+                has = rolled.Value.EndsWith("=1");
             else
             {
                 has = grade >= FromLevel.Value && Random.value < Chance.Value;
-                Rolled.Value = key + "=" + (has ? "1" : "0");
-                VrSettings.File.Save();
+                rolled.Value = key + "=" + (has ? "1" : "0");
             }
             Plugin.Log.LogInfo($"Radio: ship '{preview.ShipName}' grade {grade} ({(preview.ShipClassAsset != null ? preview.ShipClassAsset.name : "no class")}), "
                 + (has ? "has the radio" : grade < FromLevel.Value ? $"below grade {FromLevel.Value}, no radio" : "no radio this time"));
@@ -138,6 +171,7 @@ namespace ShipbreakerVR
             }
             if (!FreePlace(out var at, out var room))
             {
+                Object.Destroy(material);
                 Plugin.Log.LogWarning("Radio: no free place in the ship's rooms found, not put in the ship");
                 return;
             }
@@ -365,15 +399,27 @@ namespace ShipbreakerVR
         private static readonly Held Left = new Held();
         private static readonly Held Right = new Held();
 
-        private static void Check(VrInput.Hand hand, Held held)
+        private static void Check(VrInput.Hand hand, Held held, bool shoulder)
         {
             var body = floating != null ? floating.GetComponent<Rigidbody>() : null;
             if (body == null) return;
             if (VrClimb.HeldBody(hand) == body)
             {
+                if (!shoulder)
+                {
+                    // Without the shoulder stow: A or X of the hand that holds it, as with the AI nodes.
+                    held.Holding = false;
+                    held.Over = false;
+                    if (!hand.Primary.Pressed) return;
+                    VrClimb.Drop(hand, "radio collected with its button");
+                    Stow(hand);
+                    return;
+                }
                 var wasOver = held.Holding && held.Over;
                 held.Holding = true;
-                held.Over = VrToolBelt.HeadLocal(hand, out var local) && VrToolBelt.OverLeftShoulder(local);
+                // Over the shoulder as the things to collect are (VrShoulderStow.Over): the zone on the body, the
+                // radio reaching into it is enough.
+                held.Over = VrShoulderStow.Over(hand, body, null);
                 if (held.Over && !wasOver)
                 {
                     held.OverSince = Time.time;
@@ -386,9 +432,9 @@ namespace ShipbreakerVR
             var over = held.Over;
             held.Holding = false;
             held.Over = false;
-            if (!was || hand.Grip.Down) return;
+            if (!shoulder || !was || hand.Grip.Down) return;
             if (VrClimb.HeldBody(hand.IsLeft ? VrInput.Right : VrInput.Left) == body) return;
-            if (!over && !(VrToolBelt.HeadLocal(hand, out var at) && VrToolBelt.OverLeftShoulder(at))) return;
+            if (!over && !VrShoulderStow.Over(hand, body, null)) return;
             Stow(hand);
         }
 
@@ -399,32 +445,39 @@ namespace ShipbreakerVR
                 AudioViewSystem.RequestOneShotSFX(new WwiseShortID(hand.IsLeft ? VrShoulderStow.GrabSoundLeft : VrShoulderStow.GrabSoundRight), head);
             ((Carbon.Core.Events.IEventBroadcaster)Main.EventSystem).Post(MasterSFXEvent.GetEvent(new WwiseShortID(VrShoulderStow.RattleSound)));
             hand.Buzz(1f, 0.15f);
-            Object.Destroy(floating);
-            floating = null;
-            Collected.Value = true;
-            VrSettings.File.Save();
-            Plugin.Log.LogInfo($"Radio: put in the backpack by the {hand.Name} hand, it stands in the Hab from now on");
+            Discard(ref floating);
+            // Noted only: it is the save's once the shift is over (VrCollection.Book), and nothing is written now.
+            VrCollection.NoteRadio();
+            Plugin.Log.LogInfo($"Radio: put in the backpack by the {hand.Name} hand, noted until the shift is over; then it stands in the Hab");
         }
 
         // ---- In the Hab ----
 
+        // The place as it counts: Experimente/RadioPlatz, or the built-in one where that is empty.
+        private static string PlaceText => string.IsNullOrWhiteSpace(Place.Value) ? BuiltInPlace : Place.Value;
+
         // The collected radio on its place, a plain copy of the model, nothing of the game's logic.
-        private static void Hab()
+        private static void Hab(VrCollection.Save save)
         {
             var room = VrHab.Room;
-            var want = room != null && Collected.Value;
-            if (want && shown != null && shownIn == room && shownPlace == Place.Value) return;
-            if (shown != null) Object.Destroy(shown);
-            shown = null;
+            var want = room != null && save != null && save.Radio.Value;
+            var place = want ? PlaceText : null;
+            // Shown, or tried, in this room at this place: nothing to do. A try that failed is not made again each
+            // frame (0.32.0 measured the Hab's tables and wrote to the log every frame while the model or a material
+            // for it was missing).
+            if (want && shownIn == room && shownPlace == place) return;
+            Discard(ref shown);
             shownIn = null;
             shownPlace = null;
             if (!want) return;
+            shownIn = room;
+            shownPlace = place;
             if (!VrHab.TryRoomFloor(out var floor)) floor = 0f;
-            if (!VrAiNode.TryPlace(Place.Value, room, floor, out var at, out var turn))
+            if (!VrAiNode.TryPlace(place, room, floor, out var at, out var turn))
             {
-                if (!warned) Plugin.Log.LogWarning("Radio: collected, but RadioPlatz is not set, so it is not shown in the Hab");
+                if (!warned) Plugin.Log.LogWarning($"Radio: RadioPlatz '{place}' is not a place ('x; y; z; turn'), the built-in one is used");
                 warned = true;
-                return;
+                VrAiNode.TryPlace(BuiltInPlace, room, floor, out at, out turn);
             }
             var asked = room.InverseTransformPoint(at);
             var onTable = TryTableTop(room, asked, floor, out var top, out var table, out var tableBox);
@@ -437,10 +490,15 @@ namespace ShipbreakerVR
             var mesh = VrRadioModel.Mesh;
             var template = HabTemplate();
             var material = mesh != null ? VrRadioModel.MaterialFrom(template != null ? template.sharedMaterial : null) : null;
-            if (mesh == null || material == null) return;
+            if (mesh == null || material == null)
+            {
+                Plugin.Log.LogWarning("Radio: no model or material for it, not shown in the Hab this time");
+                return;
+            }
             var radio = new GameObject("ShipbreakerVR Radio");
             radio.transform.SetParent(room, false);
-            radio.layer = template.gameObject.layer;
+            // The workbench's scissors may be missing while a material was still found (VrRadioModel.LitTemplate).
+            radio.layer = template != null ? template.gameObject.layer : room.gameObject.layer;
             radio.AddComponent<MeshFilter>().sharedMesh = mesh;
             radio.AddComponent<MeshRenderer>().sharedMaterial = material;
             radio.transform.position = at;
@@ -453,8 +511,6 @@ namespace ShipbreakerVR
             if (onTable) VrContactShadow.AddFromLamp(radio, mesh, room.up, lamp, room, tableBox, "the radio");
             else VrContactShadow.Add(radio, mesh, room.up, "the radio");
             shown = radio;
-            shownIn = room;
-            shownPlace = Place.Value;
             var local = room.InverseTransformPoint(at);
             Plugin.Log.LogInfo($"Radio: in the Hab at ({local.x:0.00}, {local.y - floor:0.00}, {local.z:0.00}), turned {turn:0}°");
         }

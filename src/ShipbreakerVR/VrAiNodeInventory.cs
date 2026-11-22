@@ -6,8 +6,8 @@ using UnityEngine;
 namespace ShipbreakerVR
 {
     // Collection (Raik 2026-11-15, in 0.32.0): the inventory list (InventoryScreenController, the game's
-    // currencies and truck parts) shows a row "AI Node" with how many went into the backpack (VrAiNode,
-    // Experimente/KiKnotenImRucksack). The row is only drawn, one of the list's own rows with an id of its own: no
+    // currencies and truck parts) shows a row "AI Node" with how many the loaded save has brought home (VrCollection,
+    // KiKnotenAnzahl; one put in the backpack counts once its shift is over). The row is only drawn, one of the list's own rows with an id of its own: no
     // currency, nothing in the save. The game has no icon for an AI node: the mod draws its own (Icon), a dark dome seen
     // from above with its red eye, as the node looks lying on the workbench.
     internal static class VrAiNodeInventory
@@ -72,8 +72,8 @@ namespace ShipbreakerVR
         {
             get
             {
-                VrAiNode.Bind();
-                return VrAiNode.Count != null ? VrAiNode.Count.Value : 0;
+                var save = VrCollection.Current;
+                return save != null ? save.NodeCount.Value : 0;
             }
         }
 
