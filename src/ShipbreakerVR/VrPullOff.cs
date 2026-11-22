@@ -36,6 +36,10 @@ namespace ShipbreakerVR
         // Pulled this long it comes off; a poster, light and only stuck on, sooner (Raik, 2026-11-11: 2 s and 1 s, from 3 s).
         private const float Hold = 2f;
         private const float PosterHold = 1f;
+        // A demo charge on a wall holds on harder, a little different each time (Raik's list of 2026-11-21: three to
+        // four seconds, in place of the game's little game of timing; VrChargeDisarm).
+        private const float ChargeHoldLeast = 3f;
+        private const float ChargeHoldMost = 4f;
         private const float Fly = 0.18f;
         private const float Largest = 2.5f;
         private const float Mass = 4f;
@@ -154,7 +158,25 @@ namespace ShipbreakerVR
             var wanted = hard ? Tilt : 0f;
             pull.Angle = Mathf.MoveTowards(pull.Angle, wanted, Tilt / TiltTime * Time.deltaTime);
             Pose(pull, hand);
-            if (pull.Pulled >= HoldFor(pull)) Loosen(pull, hand);
+            if (pull.Pulled < HoldFor(pull)) return;
+            if (pull.Thing is DemoChargeRetrievalController charge) TakeOff(pull, charge);
+            else Loosen(pull, hand);
+        }
+
+        // A demo charge pulled long enough: back as it sat on the wall, then off the game's way, into the hand that
+        // pulled (VrChargeDisarm.PulledOff: the charge goes back to the stock and one from the stock comes into the hand).
+        private static void TakeOff(Pull pull, DemoChargeRetrievalController charge)
+        {
+            var input = pull.Input;
+            var pulled = pull.Pulled;
+            if (pull.Root != null && pull.Parent != null)
+            {
+                pull.Root.localPosition = pull.RestPosition;
+                pull.Root.localRotation = pull.RestRotation;
+            }
+            Clear(pull);
+            if (logs++ < 40) Plugin.Log.LogInfo($"Pull off: the demo charge comes off after {pulled:0.0} s of pulling by the {input.Name} hand");
+            VrChargeDisarm.PulledOff(input, charge);
         }
 
         // How long it is pulled before it comes off: a poster (its part 'SM_Props_Signage_...', its use 'Pickup_Poster_...')
@@ -162,7 +184,8 @@ namespace ShipbreakerVR
         private static float HoldFor(Pull pull) => pull.Needed;
 
         private static float Needs(Transform root, Component thing) =>
-            root.name.Contains("Signage") || thing.name.Contains("Poster") ? PosterHold : Hold;
+            thing is DemoChargeRetrievalController ? Random.Range(ChargeHoldLeast, ChargeHoldMost)
+            : root.name.Contains("Signage") || thing.name.Contains("Poster") ? PosterHold : Hold;
 
         // The other hand holds on to something fixed (the ship, VrClimb.Braced), not to the thing. Before, only the very
         // body the thing is on counted, and the other hand on the wall next to a first aid kit never did (Raik, 2026-11-11).
@@ -178,6 +201,9 @@ namespace ShipbreakerVR
         // as a surface (VrClimb), the control is the one on the part held.
         private static Component Held(VrInput.Hand input)
         {
+            // A demo charge on a wall, before anything else on it: it comes off its own way (TakeOff).
+            var charge = VrChargeDisarm.OnWall(input);
+            if (charge != null) return charge;
             var control = VrClimb.HeldControl(input);
             if (Usable(control)) return control;
             var collider = VrClimb.HeldCollider(input);
@@ -200,7 +226,7 @@ namespace ShipbreakerVR
 
         private static bool Begin(Pull pull, Component control)
         {
-            var root = Root(control);
+            var root = control is DemoChargeRetrievalController onWall && onWall.DemoCharge != null ? onWall.DemoCharge.transform : Root(control);
             if (root == null)
             {
                 Refused.Add(control);

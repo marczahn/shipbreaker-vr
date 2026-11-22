@@ -403,7 +403,7 @@ def main():
               "At the surface you hold it to, else where you point."),
              (charge(thrown=True), "Let a charge go", "Let go away from a surface.",
               "It floats (Extended tool physics) or goes back by itself."),
-             (button("A"), "Take a charge off", "Hold it, press A; A again in the ring's safe zone.",
+             (holding(), "Take a charge off", "Hold the ship, pull the charge for 3 to 4 s.",
               "It comes off into that hand."),
              (detonator(), "Detonate", "Trigger with the detonator in the hand.",
               "Two fingers press its lever; all placed charges go off."),
