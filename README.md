@@ -201,7 +201,7 @@ options chooses how a charge goes on: *Automatic* as in the flat game, or *Manua
 
 ![Grapple and tethers](docs/images/grapple.svg)
 
-B switches the grapple between grappling (light blue laser) and placing tethers (light blue laser with an orange ring where it points).
+B switches the grapple between grappling (light blue laser) and placing tethers (light blue laser with a blue ring lying where it points).
 The controller buzzes twice when the tether mode starts and once when grappling comes back.
 
 | I want to … | Grappling (light blue laser) | Placing tethers (light blue laser with a ring) |

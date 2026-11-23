@@ -9,11 +9,15 @@ namespace ShipbreakerVR
     // is far shorter than the laser's, so the laser alone does not tell whether a shot would land. The game's own check
     // (ScalpelController.UpdateTargeting: a ray as long as its range, IsValid when the part is cuttable by the Stinger and
     // its power rating suffices); before, the dots showed on any part in reach (Raik, 2026-11-08).
+    // They circle flat on the surface the beam meets (the game's own normal there), a little above it; before, they
+    // circled across the beam, half of the circle inside the wall when the beam came in at a slant.
     internal static class VrStingerDots
     {
         private const float Radius = 0.035f;
         private const float TurnsPerSecond = 0.8f;
         private const int Dots = 3;
+        // Above the surface, so the dots do not sink into it.
+        private const float Lift = 0.004f;
 
         private static readonly AccessTools.FieldRef<CuttingToolController, ScalpelController> StingerOf =
             AccessTools.FieldRefAccess<CuttingToolController, ScalpelController>("m_ScalpelController");
@@ -25,13 +29,15 @@ namespace ShipbreakerVR
             var stinger = StingerOf(tool);
             var target = stinger != null ? stinger.Target : null;
             if (target == null || target.Part == null || !target.IsValid) return;
-            var way = (target.Position - from).normalized;
-            var across = Vector3.Cross(way, Mathf.Abs(way.y) < 0.9f ? Vector3.up : Vector3.right).normalized;
-            var radius = Radius * VrCamera.WorldScale;
+            // The surface's normal; without one, back along the beam.
+            var normal = target.Normal.sqrMagnitude > 1e-6f ? target.Normal.normalized : (from - target.Position).normalized;
+            var across = Vector3.Cross(normal, Mathf.Abs(normal.y) < 0.9f ? Vector3.up : Vector3.right).normalized;
+            var scale = VrCamera.WorldScale;
+            var middle = target.Position + normal * (Lift * scale);
             for (var i = 0; i < Dots; i++)
             {
                 var angle = 360f * (Time.unscaledTime * TurnsPerSecond + (float)i / Dots);
-                points.Add(target.Position + Quaternion.AngleAxis(angle, way) * across * radius);
+                points.Add(middle + Quaternion.AngleAxis(angle, normal) * across * (Radius * scale));
             }
         }
     }
