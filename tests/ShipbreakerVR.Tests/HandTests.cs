@@ -32,7 +32,7 @@ namespace ShipbreakerVR.Tests
             Assert.Equal(closed, VrInput.Squeezed(grip), 3);
 
         [Theory]
-        [InlineData(0.05f, 0f)]
+        [InlineData(0.02f, 0f)]
         [InlineData(0.9f, 1f)]
         public void TheTriggerClosesTheIndexFinger(float trigger, float closed) =>
             Assert.Equal(closed, VrInput.Pulled(trigger), 3);
@@ -41,26 +41,42 @@ namespace ShipbreakerVR.Tests
         public void WithoutSensorsTheFingersAreOnTheController()
         {
             var hand = new VrInput.Hand(UnityEngine.XR.XRNode.LeftHand, "test");
-            hand.Fingers(1f, false, false, false, false);
-            hand.Fingers(5f, false, false, false, false);
+            hand.Fingers(1f, false, false, false, false, false);
+            hand.Fingers(5f, false, false, false, false, false);
             Assert.True(hand.IndexOn);
             Assert.True(hand.ThumbOn);
+        }
+
+        // A thumb lying on the thumb rest is down; without that sensor nobody can tell, so the thumb stays on.
+        [Fact]
+        public void TheThumbIsUpOnlyWithTheThumbRestsSensorToo()
+        {
+            var hand = new VrInput.Hand(UnityEngine.XR.XRNode.LeftHand, "test");
+            hand.Fingers(1f, false, false, true, false, false);
+            hand.Fingers(5f, false, false, false, false, false);
+            Assert.True(hand.ThumbOn);
+            hand.Fingers(6f, false, false, false, false, true);
+            Assert.True(hand.ThumbOn);
+            hand.Fingers(7f, false, false, false, false, true);
+            Assert.True(hand.ThumbOn);
+            hand.Fingers(8f, false, false, false, false, false);
+            Assert.False(hand.ThumbOn);
         }
 
         [Fact]
         public void AFingerIsOffOnceItsSensorToldOfATouchAndLetGo()
         {
             var hand = new VrInput.Hand(UnityEngine.XR.XRNode.LeftHand, "test");
-            hand.Fingers(1f, true, false, true, false);
+            hand.Fingers(1f, true, false, true, false, true);
             Assert.True(hand.IndexOn && hand.ThumbOn);
             // A flicker of the sensor is not a finger off.
-            hand.Fingers(1f + VrInput.FingerOffAfter * 0.5f, false, false, false, false);
+            hand.Fingers(1f + VrInput.FingerOffAfter * 0.5f, false, false, false, false, false);
             Assert.True(hand.IndexOn && hand.ThumbOn);
-            hand.Fingers(2f, false, false, false, false);
+            hand.Fingers(2f, false, false, false, false, false);
             Assert.False(hand.IndexOn);
             Assert.False(hand.ThumbOn);
             // The trigger pulled or a button pressed has a finger on it, whatever the sensor tells.
-            hand.Fingers(3f, false, true, false, true);
+            hand.Fingers(3f, false, true, false, true, false);
             Assert.True(hand.IndexOn && hand.ThumbOn);
         }
 

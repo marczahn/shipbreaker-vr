@@ -26,11 +26,17 @@ namespace ShipbreakerVR
         public static readonly InputFeatureUsage<bool> PrimaryTouch = new InputFeatureUsage<bool>("PrimaryTouch");
         public static readonly InputFeatureUsage<bool> SecondaryTouch = new InputFeatureUsage<bool>("SecondaryTouch");
         public static readonly InputFeatureUsage<bool> StickTouch = new InputFeatureUsage<bool>("Primary2DAxisTouch");
+        // The thumb rest, the flat face beside the buttons: Unity's profile names its path but binds no action to it;
+        // ThumbRestPatch (VrXr) adds one with this usage.
+        public static readonly InputFeatureUsage<bool> ThumbRestTouch = new InputFeatureUsage<bool>(ThumbRestPatch.Usage);
         // A trigger pulled or a stick moved this far has a finger on it, whatever its sensor tells.
-        public const float FingerOnTrigger = 0.05f;
-        private const float FingerOnStick = 0.1f;
-        // A finger is off its sensor only after this long without a touch, in seconds: the sensors flicker.
-        internal const float FingerOffAfter = 0.08f;
+        public const float FingerOnTrigger = 0.02f;
+        private const float FingerOnStick = 0.05f;
+        // Raik (2026-11-23, first test: "the fingers must really be out of the sensors' field; with half signals rather
+        // leave them in their usual form, laid on; one has to move them out on purpose, so they do not wobble when the
+        // controller is held a little more loosely"): a finger is off only after this long without any touch, in
+        // seconds, and on again at the first touch.
+        internal const float FingerOffAfter = 0.3f;
         // The grip's button closes the empty hand from SqueezeFrom (a finger resting on it) to SqueezeFull of its travel;
         // the trigger its index finger from FingerOnTrigger to PullFull.
         private const float SqueezeFrom = 0.03f;
@@ -77,13 +83,15 @@ namespace ShipbreakerVR
             public Button Secondary;
             public Button StickClick;
             // The fingers on the controller, by its touch sensors: the index finger on the trigger, the thumb on a
-            // button or the stick. A sensor counts only once it has told of a touch (IndexSensed, ThumbSensed): a
-            // controller or runtime that names a sensor but never sets it would show that finger off for good, and
-            // without the sensors the fingers are on, as they were before 0.33.0.
+            // button, the stick or the thumb rest. A sensor counts only once it has told of a touch (IndexSensed,
+            // ThumbSensed, ThumbRestSensed): a controller or runtime that names a sensor but never sets it would show
+            // that finger off for good, and without the sensors the fingers are on, as they were before 0.33.0. The
+            // thumb needs both its sensors: without the thumb rest's, a thumb resting there would show as up (Raik).
             public bool IndexOn = true;
             public bool ThumbOn = true;
             public bool IndexSensed;
             public bool ThumbSensed;
+            public bool ThumbRestSensed;
             private float indexTouchedAt = -10f;
             private float thumbTouchedAt = -10f;
 
@@ -93,8 +101,13 @@ namespace ShipbreakerVR
 
             // Which fingers are on the controller at that time: by the sensors (touched), and by what only a finger on
             // it can do (used: the trigger pulled, a button pressed, the stick moved).
-            internal void Fingers(float now, bool indexTouched, bool indexUsed, bool thumbTouched, bool thumbUsed)
+            internal void Fingers(float now, bool indexTouched, bool indexUsed, bool thumbTouched, bool thumbUsed, bool restTouched)
             {
+                if (restTouched && !ThumbRestSensed)
+                {
+                    ThumbRestSensed = true;
+                    Plugin.Log?.LogInfo($"Input: the {Name} controller's thumb rest tells where the thumb is");
+                }
                 if (indexTouched && !IndexSensed)
                 {
                     IndexSensed = true;
@@ -106,9 +119,9 @@ namespace ShipbreakerVR
                     Plugin.Log?.LogInfo($"Input: the {Name} controller's buttons and stick tell where the thumb is");
                 }
                 if (indexTouched || indexUsed) indexTouchedAt = now;
-                if (thumbTouched || thumbUsed) thumbTouchedAt = now;
+                if (thumbTouched || thumbUsed || restTouched) thumbTouchedAt = now;
                 IndexOn = !IndexSensed || now - indexTouchedAt < FingerOffAfter;
-                ThumbOn = !ThumbSensed || now - thumbTouchedAt < FingerOffAfter;
+                ThumbOn = !ThumbSensed || !ThumbRestSensed || now - thumbTouchedAt < FingerOffAfter;
             }
 
             public Hand(XRNode node, string name)
@@ -264,7 +277,7 @@ namespace ShipbreakerVR
                 TriggerValue = GripValue = 0f;
                 Stick = Vector2.zero;
                 bool primary = false, secondary = false, stickClick = false;
-                bool triggerTouch = false, primaryTouch = false, secondaryTouch = false, stickTouch = false;
+                bool triggerTouch = false, primaryTouch = false, secondaryTouch = false, stickTouch = false, restTouch = false;
                 if (Valid)
                 {
                     Device.TryGetFeatureValue(CommonUsages.trigger, out TriggerValue);
@@ -277,9 +290,10 @@ namespace ShipbreakerVR
                     Device.TryGetFeatureValue(PrimaryTouch, out primaryTouch);
                     Device.TryGetFeatureValue(SecondaryTouch, out secondaryTouch);
                     Device.TryGetFeatureValue(StickTouch, out stickTouch);
+                    Device.TryGetFeatureValue(ThumbRestTouch, out restTouch);
                 }
                 Fingers(Time.unscaledTime, triggerTouch, TriggerValue > FingerOnTrigger,
-                    primaryTouch || secondaryTouch || stickTouch, primary || secondary || stickClick || Stick.magnitude > FingerOnStick);
+                    primaryTouch || secondaryTouch || stickTouch, primary || secondary || stickClick || Stick.magnitude > FingerOnStick, restTouch);
                 Trigger.Set(TriggerValue >= (Trigger.Down ? ReleaseAt : PressAt));
                 Grip.Set(GripValue >= (Grip.Down ? ReleaseAt : PressAt));
                 Primary.Set(primary);

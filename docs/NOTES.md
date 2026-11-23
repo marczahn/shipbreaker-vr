@@ -1530,14 +1530,19 @@ Raik, 2026-11-23: the empty hand that holds nothing follows the fingers on the c
   holding on, drawing tools and the fist's blows.
 - **The trigger's touch sensor** (`TriggerTouch`): off the trigger the index finger is out straight (`PointBend`); on
   it, it closes with the others and with the trigger's travel (`VrInput.Pulled`).
-- **The thumb's sensors** (`PrimaryTouch`, `SecondaryTouch`, `Primary2DAxisTouch`): off all of them the thumb is out,
-  22 degrees away from the palm on the loose hand, up out of the fist ("thumbs up", `ThumbsUp`). The thumb rest has no
-  sensor in the Unity profile the mod loads, so a thumb resting there shows as out.
-- A sensor counts only once it has told of a touch (`IndexSensed`, `ThumbSensed`), and a finger is off only after 0.08 s
-  without one. A controller or runtime that names the usages but never sets them keeps its fingers on: the hand of
-  0.32.1, except that the fist follows the grip's travel. The log says once per controller that a sensor answered
-  (`Input: the left controller's trigger tells where the index finger is`). Raik's log of 2026-11-23 lists all four
-  usages on the 'Oculus Touch Controller OpenXR'; whether Virtual Desktop sets them was open when this was written.
+- **The thumb's sensors** (`PrimaryTouch`, `SecondaryTouch`, `Primary2DAxisTouch` and the thumb rest's): off all of
+  them the thumb is out, 22 degrees away from the palm on the loose hand, up out of the fist ("thumbs up", `ThumbsUp`).
+- **The thumb rest** (the flat face beside the buttons): Unity's Oculus Touch profile (OpenXR plugin 1.2.8) names its
+  path `/input/thumbrest/touch` but binds no action to it, so the controller had no such feature and a thumb resting
+  there showed as up (Raik's first test). `ThumbRestPatch` (`VrXr.cs`) adds the action to the profile's map before the
+  plugin hands its maps to the runtime (a prefix on `OpenXRInput.SendToOpenXR`), made as the trigger's touch action
+  is; the feature is `ThumbrestTouch`. The thumb is up only once this sensor has answered too (`ThumbRestSensed`).
+- A sensor counts only once it has told of a touch, and a finger is off only after 0.3 s without any touch (first
+  0.08 s; Raik: the fingers must be clearly out of the sensors' field, moved on purpose, and with half signals stay
+  laid on, so they do not wobble with a loosely held controller). A controller or runtime that names the usages but
+  never sets them keeps its fingers on: the hand of 0.32.1, except that the fist follows the grip's travel. The log
+  says once per controller that a sensor answered (`Input: the left controller's trigger tells where the index
+  finger is`). Virtual Desktop sets the trigger's, the buttons' and the stick's (Raik's log of 2026-11-23).
 - Closed up to a quarter the fingers are still kept out of things as the loose hand's (`KeepOut`), fading out up to
   half; closed further they are not, as the fist never was, and what held the hand back for them goes back to nothing
   (review, 2026-11-23: with the grip barely touched the fingers went into the wall and the hand stayed offset). Lying
