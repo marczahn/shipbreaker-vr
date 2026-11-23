@@ -114,6 +114,10 @@ namespace ShipbreakerVR
                 "Experiment: the line from the hip also shows while the tool is in the hand.");
             shaded = VrSettings.Bind("Experimente", "LeineSchattiert", true,
                 "Experiment: the line is shaded by the sun, round against it and dark in shadow, instead of evenly bright.");
+            fistOut = VrSettings.Bind("Experimente", "LeineFaustTiefe", FistOut * 100f,
+                "Where a tool's line lies in the fist that holds it: this many cm out from the controller's place along the palm's normal (0: in the palm, 5.5: in the closed fingers).");
+            fistToFingers = VrSettings.Bind("Experimente", "LeineFaustZuFingern", FistToFingers * 100f,
+                "Where a tool's line lies in the fist that holds it: this many cm from the controller's place towards the finger tips (negative: towards the wrist).");
             pulling = VrSettings.Bind("Experimente", "LeineZiehen", true,
                 "Experiment: a free hand takes hold of the line of a tool afloat with the grip and pulls the tool in by it.");
             // Not GriffGreifhaken and GriffCutter, as in the third state: those were measured against the controller and
@@ -610,13 +614,6 @@ namespace ShipbreakerVR
 
         private static Vector3 FistMiddle(VrHand hand, Vector3 controller)
         {
-            if (fistOut == null && VrSettings.File != null)
-            {
-                fistOut = VrSettings.Bind("Experimente", "LeineFaustTiefe", FistOut * 100f,
-                    "Where a tool's line lies in the fist that holds it: this many cm out from the controller's place along the palm's normal (0: in the palm, 5.5: in the closed fingers).");
-                fistToFingers = VrSettings.Bind("Experimente", "LeineFaustZuFingern", FistToFingers * 100f,
-                    "Where a tool's line lies in the fist that holds it: this many cm from the controller's place towards the finger tips (negative: towards the wrist).");
-            }
             if (!VrClimb.TryGetPalm(hand.Input, out var palm)) return controller;
             var scale = VrCamera.WorldScale;
             var point = controller + palm * ((fistOut != null ? fistOut.Value * 0.01f : FistOut) * scale);

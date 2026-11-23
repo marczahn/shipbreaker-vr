@@ -147,9 +147,13 @@ namespace ShipbreakerVR
             ringPlace = on.DemoCharge.transform.position;
             ringTurn = on.DemoCharge.transform.rotation;
             if (logs++ < 30) Plugin.Log.LogInfo($"Charge disarm: pulled off the wall by the {hand.Name} hand");
-            on.OnSuccess();
-            // Should the game not have taken it (its success did not run through), the hand's claim on it ends here.
-            if (ringCharge == on) ringCharge = null;
+            // Should the game not have taken it (its success did not run through, or threw), the hand's claim on it ends
+            // here: left set, every later charge would stay on its wall.
+            try { on.OnSuccess(); }
+            finally
+            {
+                if (ringCharge == on) ringCharge = null;
+            }
         }
 
         // From ChargeDisarmSuccessPatch: the game has taken that charge back to the stock. If a hand's ring did it, one

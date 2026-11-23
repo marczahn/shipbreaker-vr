@@ -566,7 +566,7 @@ namespace ShipbreakerVR
             {
                 // Let go at the game's limit before (LeaveLoose): what it would cling with is remembered, and it is
                 // given back when it is let go again below the limit (Restick).
-                var left = held.StickyOff ? -1 : LeftLoose.FindIndex(loose => loose.On == parent);
+                var left = held.StickyOff ? -1 : LooseIndex(parent);
                 if (left >= 0)
                 {
                     held.StickyMask = LeftLoose[left].Mask;
@@ -604,8 +604,18 @@ namespace ShipbreakerVR
             if (!held.StickyOff) return;
             held.StickyOff = false;
             var on = held.StickyOn;
-            LeftLoose.RemoveAll(loose => loose.On == on);
+            var known = LooseIndex(on);
+            if (known >= 0) LeftLoose.RemoveAt(known);
             LeftLoose.Add((on, held.StickyMask));
+        }
+
+        // Where that charge is in the list of those left loose, or -1. By hand, not with a lambda: one that captures a
+        // local makes the method allocate each time it is called, and these run every frame (review, 2026-11-23).
+        private static int LooseIndex(Entity on)
+        {
+            for (var i = 0; i < LeftLoose.Count; i++)
+                if (LeftLoose[i].On == on) return i;
+            return -1;
         }
 
         // Fewer charges out than the limit again (one taken back, or gone): the charge left loose longest clings
@@ -622,7 +632,8 @@ namespace ShipbreakerVR
             var world = World.DefaultGameObjectInjectionWorld;
             if (world == null || !Out(out var count, out var limit)) return;
             var manager = world.EntityManager;
-            LeftLoose.RemoveAll(loose => !manager.Exists(loose.On));
+            for (var i = LeftLoose.Count - 1; i >= 0; i--)
+                if (!manager.Exists(LeftLoose[i].On)) LeftLoose.RemoveAt(i);
             var inHands = 0;
             foreach (var hand in afloat)
                 if (hand.Charge != null) inHands++;
@@ -876,8 +887,7 @@ namespace ShipbreakerVR
             return count - inHands >= limit;
         }
 
-        // The same with the game's warning for it (its sound and its line on the HUD), and the mod's hint under that
-        // line (LimitShown).
+        // The same with the game's warning for it (its sound, and its line on the HUD with the mod's text, LimitShown).
         private static bool LimitReached(DemoChargeRetrievalController charge)
         {
             if (!AtLimit(charge)) return false;
@@ -1132,6 +1142,9 @@ namespace ShipbreakerVR
             if (Time.unscaledTime < reloadAt) return;
             reloadHand = null;
             if (VrClimb.HeldBody(hand) != null || (hand.IsLeft ? VrHand.Left : VrHand.Right).State != HandState.Empty) return;
+            // Nothing asked for at the limit: the grip is only still closed from the charge before (review, 2026-11-23:
+            // it warned and buzzed unasked, and the log said a charge came).
+            if (Out(out var outNow, out var most) && outNow >= most) return;
             if (TakesOut(hand) && logs++ < 60) Plugin.Log.LogInfo($"Charge by hand: the {hand.Name} hand kept its grip closed, the next charge comes into it");
         }
 

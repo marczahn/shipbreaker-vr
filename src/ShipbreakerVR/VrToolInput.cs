@@ -237,7 +237,9 @@ namespace ShipbreakerVR
             // A demo charge on a wall is taken off by the hand that holds it (VrChargeDisarm), not by the game's hand.
             if (VrChargeDisarm.Holds) tool.Now[(int)Action.Interact] = false;
             // A device stripped for its part is stripped by the hand that holds it (VrPullOff), not by its prompt's button.
-            if (VrPullOff.Extracting) tool.Now[(int)Action.Interact] = false;
+            // Only while the device is what is offered: with a thing to collect in the other hand, the button is that
+            // thing's (review, 2026-11-23: its prompt showed and A did nothing).
+            if (VrPullOff.Extracting && offered != null && VrPullOff.Extractable(offered)) tool.Now[(int)Action.Interact] = false;
             if (HoldInteract) tool.Now[(int)Action.Interact] = true;
             if (interactOnce)
             {

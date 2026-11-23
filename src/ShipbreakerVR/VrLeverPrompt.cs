@@ -22,6 +22,18 @@ namespace ShipbreakerVR
         private static float gameAlpha;
         private static int logs;
 
+        static VrLeverPrompt() => VrSession.OnUnload("lever prompt", Release);
+
+        // A prompt hidden when the mod is unloaded shows again: the prefix that puts it back is gone then.
+        private static void Release()
+        {
+            if (hidden != null) hidden.alpha = gameAlpha;
+            hidden = null;
+        }
+
+        // That group's alpha as the game has it, also while it is hidden here (VrStowPrompt keeps it to put it back).
+        internal static float GameAlpha(CanvasGroup group) => group != null && group == hidden ? gameAlpha : group != null ? group.alpha : 1f;
+
         // Every lever and button is worked by hand now (Raik): their prompts go, and the game's own grab is left out for
         // them (VrInteractGrab). Things to collect and breakers to remove keep both.
         public static bool WorkedByHand(InteractableObject control)

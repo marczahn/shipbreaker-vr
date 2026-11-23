@@ -282,6 +282,7 @@ namespace ShipbreakerVR
         private const float CutterStowForward = 0.18f;
         private const float CutterStowLower = 0.10f;
         private const float CutterStowInside = 0.08f;
+        private const float CutterStowWithin = 0.55f;
 
         // Where a hand is as the demo charges' place behind the back is measured, for the log.
         internal static string ChargePlace(VrInput.Hand controller) =>
@@ -311,8 +312,12 @@ namespace ShipbreakerVR
             if (zone == Zone.Detonator) return ChargeBox(Sided(fromNeck + ChargeRef), ChargeStowWider);
             if (zone == Zone.DemoCharge) return LowerBack(Sided(fromNeck + ShoulderRef), BackStowWider);
             if (zone != Zone.Cutter) return false;
+            // The cutter's place is open upwards, backwards and to the side, which suits a hand that reaches over the
+            // shoulder; a part of a tool half a metre long gets into it far from the shoulder too (held at arm's length
+            // to the side at head height), so for those it ends CutterStowWithin from the eyes (review, 2026-11-23).
             var wide = Sided(fromNeck + ShoulderRef);
-            return wide.y > CutterAbove - CutterStowLower && wide.z < CutterBehindBody + CutterStowForward && wide.x > CutterInside - CutterStowInside;
+            return wide.y > CutterAbove - CutterStowLower && wide.z < CutterBehindBody + CutterStowForward && wide.x > CutterInside - CutterStowInside
+                && wide.sqrMagnitude < CutterStowWithin * CutterStowWithin;
         }
 
         public static void Reset() => announced[0] = announced[1] = Zone.None;

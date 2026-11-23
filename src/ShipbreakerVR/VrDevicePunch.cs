@@ -51,6 +51,7 @@ namespace ShipbreakerVR
         private static readonly Collider[] Found = new Collider[32];
         private static ConfigEntry<bool> on;
         private static int logs;
+        private static int steppedFrame = -1;
 
         static VrDevicePunch() => VrSession.OnUnload("device punch", Release);
 
@@ -74,6 +75,11 @@ namespace ShipbreakerVR
                 Arms[0].On = Arms[1].On = false;
                 return;
             }
+            // Once a frame: the rig is placed twice (in LateUpdate and again right before rendering, VrCamera), and the
+            // second pass saw the hand a moment later, next to no way on: a fist that came on then counted as too slow,
+            // and the speed of the frame before was lost (review, 2026-11-23; Raik's log had fists "at 0.3 m/s").
+            if (Time.frameCount == steppedFrame) return;
+            steppedFrame = Time.frameCount;
             Step(VrInput.Left, Arms[0]);
             Step(VrInput.Right, Arms[1]);
         }

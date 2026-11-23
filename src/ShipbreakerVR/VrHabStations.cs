@@ -192,12 +192,14 @@ namespace ShipbreakerVR
             HideNavigation(false);
         }
 
-        // Everything else on the game's navigation canvas, such as the prompt to turn around.
+        // Everything else on the game's navigation canvas, such as the prompt to turn around. Not the mod's own two
+        // lines: the standing hint for X is a sibling of the prompt and went with the rest, so it never showed while
+        // walking (review, 2026-11-23).
         private static void HideNavigation(bool hide)
         {
             if (prompt == null) return;
             foreach (Transform part in prompt.transform.parent)
-                if (part != prompt.transform) part.localScale = hide ? Vector3.zero : Vector3.one;
+                if (part != prompt.transform && (hint == null || part != hint.transform)) part.localScale = hide ? Vector3.zero : Vector3.one;
         }
 
         private static void Done()

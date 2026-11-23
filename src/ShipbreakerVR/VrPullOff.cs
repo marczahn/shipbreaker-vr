@@ -36,14 +36,19 @@ namespace ShipbreakerVR
         // A part held as a surface (no control, the damaged fuel can) is pulled from this much further out (Raik).
         private const float SurfaceExtra = 0.03f;
         private const float Tilt = 7f;
-        private const float TiltTime = 0.3f;
-        // Pulled this long it comes off; a poster, light and only stuck on, sooner (Raik, 2026-11-11: 2 s and 1 s, from 3 s).
-        private const float Hold = 2f;
-        private const float PosterHold = 1f;
-        // A demo charge on a wall holds on harder, a little different each time (Raik's list of 2026-11-21: three to
-        // four seconds, in place of the game's little game of timing; VrChargeDisarm).
-        private const float ChargeHoldLeast = 3f;
-        private const float ChargeHoldMost = 4f;
+        // The times here are real seconds since 2026-11-23. Before, each ran twice as fast as its number said: this
+        // step runs twice a frame (the rig is placed in LateUpdate and again right before rendering, VrCamera), and
+        // both passes counted the frame's time (review). The numbers were asked for and tuned in the headset at that
+        // double speed (Raik: 2 s and 1 s for things and posters, three to four seconds for a charge, 3 s for a device),
+        // so each is halved here to keep what was felt and approved, and time counts once a frame (dt).
+        private const float TiltTime = 0.15f;
+        // Pulled this long it comes off; a poster, light and only stuck on, sooner.
+        private const float Hold = 1f;
+        private const float PosterHold = 0.5f;
+        // A demo charge on a wall holds on harder, a little different each time (in place of the game's little game of
+        // timing; VrChargeDisarm).
+        private const float ChargeHoldLeast = 1.5f;
+        private const float ChargeHoldMost = 2f;
         // And it lifts off the wall only a little while pulled (Raik, 2026-11-22: the 7 degrees of the things on walls
         // were far too much for it; about 3, then it comes off).
         private const float ChargeTilt = 3f;
@@ -67,7 +72,7 @@ namespace ShipbreakerVR
         // does the rest: which joints break, the tilt, the sounds. Off unless Experimente/HandZerlegen is switched on:
         // Raik meant something else by taking computers apart (the devices stripped for the truck's parts, Extract),
         // and this lets a hand take off everything the grapple can.
-        private const float YankRate = 15f;
+        private const float YankRate = 30f;
         private const float YankForce = 1.5f;
         // The heaviest part a hand takes apart, by the game's own mass of what breaks off (kg).
         private const float YankMost = 60f;
@@ -88,7 +93,7 @@ namespace ShipbreakerVR
         // then the two go apart: one holds, the other pulls the part out, whichever of them.
         // And a third (VrDevicePunch): three blows of the fist.
         private const string ExtractKind = "SalvageShort_InteractionTypeAsset";
-        private const float ExtractHold = 3f;
+        private const float ExtractHold = 1.5f;
         // Between the controllers, which sit in the palms: about 20 cm between the hands themselves.
         private const float PairWithin = 0.25f;
         private static readonly AccessTools.FieldRef<InteractableObject, InteractableObjectAsset> AssetOf =
@@ -202,6 +207,9 @@ namespace ShipbreakerVR
         private const string Collectible = "SM_Collectible_";
         private static int logs;
         private static int stripLogs;
+        // This frame's time, counted in the first of the frame's two passes only.
+        private static float dt;
+        private static int steppedFrame = -1;
 
         // From VrFrame once the rig is placed, after the hands took hold or let go.
         public static void Update()
@@ -212,6 +220,8 @@ namespace ShipbreakerVR
                 Reset(Right);
                 return;
             }
+            dt = Time.frameCount != steppedFrame ? Time.deltaTime : 0f;
+            steppedFrame = Time.frameCount;
             Step(Left);
             Step(Right);
         }
@@ -263,7 +273,7 @@ namespace ShipbreakerVR
             if (!braced)
             {
                 pull.Pulled = 0f;
-                pull.Angle = Mathf.MoveTowards(pull.Angle, 0f, pull.Tilt / TiltTime * Time.deltaTime);
+                pull.Angle = Mathf.MoveTowards(pull.Angle, 0f, pull.Tilt / TiltTime * dt);
                 Pose(pull, hand);
                 return;
             }
@@ -274,10 +284,10 @@ namespace ShipbreakerVR
             if (away > Start * scale)
                 pull.Input.Buzz(Mathf.Lerp(0.1f, 0.7f, Mathf.InverseLerp(Start * scale, Enough * scale, away)), 0.05f);
             var hard = away >= Enough * scale;
-            pull.Pulled = hard ? pull.Pulled + Time.deltaTime : 0f;
+            pull.Pulled = hard ? pull.Pulled + dt : 0f;
             // Tilted off the wall while pulled hard, back while not.
             var wanted = hard ? pull.Tilt : 0f;
-            pull.Angle = Mathf.MoveTowards(pull.Angle, wanted, pull.Tilt / TiltTime * Time.deltaTime);
+            pull.Angle = Mathf.MoveTowards(pull.Angle, wanted, pull.Tilt / TiltTime * dt);
             Pose(pull, hand);
             if (pull.Pulled < HoldFor(pull)) return;
             if (pull.Thing is DemoChargeRetrievalController charge) TakeOff(pull, charge);
@@ -326,7 +336,7 @@ namespace ShipbreakerVR
             var away = Vector3.Dot(hand - pull.Root.TransformPoint(pull.Surface), pull.Normal) / scale;
             var far = StripPull.Far(onShip, away, paired, apart);
             var hard = far >= Enough;
-            pull.Pulled = hard ? pull.Pulled + Time.deltaTime : 0f;
+            pull.Pulled = hard ? pull.Pulled + dt : 0f;
             if (hard)
             {
                 var buzz = Mathf.Lerp(0.25f, 0.9f, pull.Pulled / pull.Needed);
@@ -357,6 +367,7 @@ namespace ShipbreakerVR
             Main.EventSystem.RemoveHandler<SpaceTruckPartCollectionEvent>(Credited);
             Main.EventSystem.AddHandler<SpaceTruckPartCollectionEvent>(Credited);
             credited = 0;
+            strippedAt = Time.unscaledTime;
             ((Carbon.Core.Events.IEventBroadcaster)Main.EventSystem).Post(InteractionEvent.GetEvent(InteractionEvent.InteractionType.ProgressComplete, device));
             input.Buzz(1f, 0.15f);
             if (stripLogs++ < 60)
@@ -369,15 +380,27 @@ namespace ShipbreakerVR
 
         static VrPullOff() => VrSession.OnUnload("pull off", Release);
 
-        // The game's event system forgets the mod's listener.
+        // What a hand pulls at goes back as it was, the hands are plain holds again, and the game's event system forgets
+        // the mod's listener.
         private static void Release()
         {
+            foreach (var pull in new[] { Left, Right })
+            {
+                var freed = pull.Thing != null && pull.Braced;
+                Reset(pull);
+                if (freed) VrClimb.SetFree(pull.Input, false, false);
+            }
+            Refused.Clear();
             if (Main.EventSystem != null) Main.EventSystem.RemoveHandler<SpaceTruckPartCollectionEvent>(Credited);
         }
+
+        // When a device was last stripped here: only then is a part of the truck one of this module's to tell of.
+        private static float strippedAt = -10f;
 
         // The game tells that a part of the truck was collected (TriggerableCurrencyChange).
         private static void Credited(SpaceTruckPartCollectionEvent collected)
         {
+            if (Time.unscaledTime - strippedAt > 2f) return;
             credited++;
             var part = collected != null ? collected.SpaceTruckPart : null;
             if (stripLogs++ < 60) Plugin.Log.LogInfo($"Pull off: the game adds a part of the truck: '{(part != null ? part.name : "-")}'");
@@ -426,7 +449,7 @@ namespace ShipbreakerVR
             pull.PairFrom = StripPull.Unpaired;
             pull.Mode = "";
             pull.Members.Clear();
-            if (stripLogs++ < 60) Plugin.Log.LogInfo($"Pull off: {pull.Input.Name} hand holds '{device.name}', a device to strip for its part: pulled for {ExtractHold:0} s, with the other hand on the ship or the two hands going apart");
+            if (stripLogs++ < 60) Plugin.Log.LogInfo($"Pull off: {pull.Input.Name} hand holds '{device.name}', a device to strip for its part: pulled for {ExtractHold:0.0} s, with the other hand on the ship or the two hands going apart");
             return true;
         }
 
@@ -434,6 +457,8 @@ namespace ShipbreakerVR
         // step): from Enough away from the hold on, YankRate times a second.
         private static void Yank(Pull pull, BreakableJointComponent joint, Vector3 hand)
         {
+            // One the game refused is left alone for good, not asked again each frame (review, 2026-11-23).
+            if (Refused.Contains(joint)) return;
             var from = pull.Root.TransformPoint(pull.Surface);
             var away = Vector3.Dot(hand - from, pull.Normal) - SurfaceExtra * VrCamera.WorldScale;
             var scale = VrCamera.WorldScale;
@@ -445,7 +470,7 @@ namespace ShipbreakerVR
             }
             // The nearer to breaking, the harder the buzz.
             pull.Input.Buzz(Mathf.Lerp(0.25f, 0.9f, 1f - joint.GetJointDurability), 0.05f);
-            pull.YankDue += YankRate * Time.deltaTime;
+            pull.YankDue += YankRate * dt;
             var times = Mathf.Min((int)pull.YankDue, 3);
             if (times <= 0) return;
             pull.YankDue -= times;
@@ -484,6 +509,9 @@ namespace ShipbreakerVR
             var input = pull.Input;
             var held = loose ? Solid(pull.Root) : null;
             Clear(pull);
+            // The hand is a plain hold again, also where the part did not come loose (review, 2026-11-23: it stayed
+            // free of the body).
+            VrClimb.SetFree(input, false, false);
             if (held != null && input.Grip.Down)
             {
                 var holds = VrClimb.TakeHold(input, held);

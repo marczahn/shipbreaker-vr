@@ -119,7 +119,7 @@ flat game.
   keep the grip squeezed and the next charge comes into your hand. A red preview means the place is taken: the charge
   does not go on there. *Manual*: no preview, no trigger.
 - To take a charge off a wall, hold on to the ship with one hand, hold the charge with the other and pull it away
-  from the wall for three to four seconds. The charge comes off into that hand.
+  from the wall for about two seconds. The charge comes off into that hand.
 - With the detonator in your hand the trigger detonates: two fingers press its lever. The visor shows how many charges
   are left while you hold a charge or the detonator.
 

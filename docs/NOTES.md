@@ -1463,9 +1463,9 @@ completes the interaction, the part comes out and the device is wrecked. What a 
 `Complete()` and the `ProgressComplete` event) in three ways, and the button does nothing while a hand holds the
 device:
 
-- one hand on the ship, the other holds the device and pulls away from its hold, 3 s;
+- one hand on the ship, the other holds the device and pulls away from its hold, 1.5 s;
 - one hand on the device, the other closed within 25 cm between the controllers (about 20 cm between the hands), on
-  the device as well or beside it, and the two go apart by 8 cm for 3 s, whichever of them pulls. With both on the
+  the device as well or beside it, and the two go apart by 8 cm for 1.5 s, whichever of them pulls. With both on the
   device, the hand that came later is held free of the body, so it pulls without moving the body;
 - three blows of the fist (`VrDevicePunch`, `Experimente/GeraeteSchlag`): a closed, empty hand that comes onto the
   device at 1.5 m/s or more, measured in the rig so the body's flight does not count. The fist has to be closed before
@@ -1487,3 +1487,13 @@ instead, the game's prompt for that button shows.
   with A, so `VrLeverPrompt` no longer hides their prompt then (it did whenever VR ran).
 - The other way round: a demo charge on a wall and a device to strip are worked by the hand that holds them, and the
   button does nothing meanwhile, so `VrLeverPrompt` hides their prompt for that time (`PulledByHand`).
+
+## The placed steps run twice a frame
+`VrCamera.FollowGameCamera` places the rig in `LateUpdate` and again in `Application.onBeforeRender`, and both call
+`VrFrame.RigPlaced`, so every step in `PlacedSteps` runs twice a frame: once with the pose of the frame and once with
+the latest one right before rendering. A step that counts time or looks for an edge has to do so once a frame
+(review, 2026-11-23). `VrPullOff` counted `Time.deltaTime` in both passes, so its hold times ran twice as fast as
+their numbers said (the "3 s" for a device took 1.5 s, the log said 3.0); `VrDevicePunch` saw the hand's speed of the
+second pass, next to nothing, and missed blows. Both step once a frame now (`steppedFrame`), and the pull times are
+halved in the code so they stay what was felt and approved in the headset: 1 s for a thing on a wall, 0.5 s for a
+poster, 1.5 to 2 s for a demo charge, 1.5 s for a device.

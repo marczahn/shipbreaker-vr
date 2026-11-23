@@ -38,6 +38,12 @@ namespace ShipbreakerVR
         private static Vector3 lastPosition;
         private static Quaternion lastRotation = Quaternion.identity;
         private static float lastAt = -10f;
+        // The same pose against the VR rig, which goes with the player: while the rope waits for a new aim (Settle) the
+        // pose is kept there, not in the world, or a part held while flying fell behind by the way flown meanwhile
+        // (review, 2026-11-23: 45 cm at 3 m/s).
+        private static Vector3 lastInRig;
+        private static Quaternion lastTurnInRig = Quaternion.identity;
+        private static bool lastHasRig;
         private const float Recent = 0.5f;
         // An aim the rope is about to take over, since when, and how long it waits for it to be where it belongs.
         private static Transform changingTo;
@@ -88,6 +94,12 @@ namespace ShipbreakerVR
                         changingTo = aim;
                         changingSince = Time.unscaledTime;
                     }
+                    var rig = lastHasRig && VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+                    if (rig != null)
+                    {
+                        lastPosition = rig.TransformPoint(lastInRig);
+                        lastRotation = rig.rotation * lastTurnInRig;
+                    }
                     if (Time.unscaledTime - changingSince < Settle)
                     {
                         position = lastPosition;
@@ -105,6 +117,13 @@ namespace ShipbreakerVR
             lastPosition = position;
             lastRotation = rotation;
             lastAt = Time.unscaledTime;
+            var frame = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+            lastHasRig = frame != null;
+            if (frame != null)
+            {
+                lastInRig = frame.InverseTransformPoint(position);
+                lastTurnInRig = Quaternion.Inverse(frame.rotation) * rotation;
+            }
             return true;
         }
 

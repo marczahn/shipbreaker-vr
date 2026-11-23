@@ -74,7 +74,7 @@ namespace ShipbreakerVR
             if (!shown)
             {
                 shown = true;
-                gameAlpha = group.alpha;
+                gameAlpha = VrLeverPrompt.GameAlpha(group);
                 group.gameObject.SetActive(true);
                 ColorByState?.Invoke(ui, new object[] { true });
                 ui.SetButtonState(false);
