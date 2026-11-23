@@ -1603,6 +1603,16 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
   meters whatever the canvas' scale. One camera never saw that; in VR the contract's window floated before the glass
   (Raik's picture, 2026-11-24). The parent's depth scale is pressed to 2 %, which leaves their order and takes the
   floating.
+- **Coming into the room** (Raik, 2026-11-24: "a blue background when you come into the room, it stays too long"): a
+  dark rectangle with the apartment around it, on the menu canvas fixed in the room. Two of the scene's canvases can
+  be it: the intro text's `Image - Background` and the scene's `Fade Screen` (fade from black, not in
+  `VrCanvases.FadeNames` before, so drawn as a rectangle). The background is switched off while the desk is shown;
+  `Fade Screen` is now a fade (whole view darkened, never a rectangle), and its fade from black is let run out
+  without darkening once the desk is there (at most 8 s). The log says which of the two was dark as the desk came.
+- **The halt as the name is confirmed** (Raik, 2026-11-24, 768 ms in one frame): the new profile's save is there at
+  that moment, and `VrRadio` read the radio's model and its 2.7 MB texture ahead then, meant for a loading screen.
+  It now waits while a career starts (`VrContractDesk.CareerStarting`: apartment or flight video), for the loading
+  screen after the video; the log gives how long the reading takes ("Radio: read ahead in …").
 - **Clicking through** (`VrContractDesk.Advance`): a toggle of the contract that was just ticked, or a button of it
   that was just clicked, hands the selection on 0.15 s later to what lies below it (else to its right), past the
   other choices of the same toggle group, if the game left the selection where it was. So A alone goes through the
