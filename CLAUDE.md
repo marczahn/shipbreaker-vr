@@ -96,11 +96,40 @@ whoever asks.
   `VrBody` (body follows head, playspace), `VrUi` / `VrCanvases` (HUD visor and menu canvas), `VrOptions` /
   `VrOptionsNavigation` / `VrOptionsTab` / `VrOptionsMenu` (rows in the game's options screen, the VR tabs and the "VR options" menu entry), `VrControls` (motion controller flying), `VrXr` (OpenXR
   setup), `VrAim` (aiming with the hand, laser), `VrToolInput` / `VrToolBelt` (tool buttons, taking tools off the
-  body), `VrDualTools` (two tools at once, one per hand; the scanner hides the other), `VrToolModels` / `VrToolFit` (tools in the hand, demo charge arm), `VrTorso` (the player model upright around the neck, keeping its own heading), `VrHands` (the suit's hands follow the
+  body), `VrDualTools` (two tools at once, one per hand; the scanner hides the other), `VrShoulderStow` (things to collect go into the backpack over the shoulder), `VrStowPrompt` (the game's prompt for an AI node or the radio collected with A or X, with the shoulder stow off), `VrCollection` (what each save has brought home, booked when the shift ends: the AI nodes of `VrAiNode`, the radio of `VrRadio` / `VrRadioModel` / `VrRadioMusic`, LYNX's messages of `VrModMail`), `VrToolModels` / `VrToolFit` (tools in the hand, demo charge arm), `VrTorso` (the player model upright around the neck, keeping its own heading), `VrHands` (the suit's hands follow the
   controllers), `VrClimb` (holding on and climbing with the grip of a free hand), `VrTetherMode` (the grapple's tether mode), `VrGrappleHold` (what the grapple holds follows the grapple in the hand), `VrToolHaptics` (the controllers vibrate with the cutter, the grapple and tethers), `VrInput` (the controllers, read once per frame), `VrHand` (what each hand does: tool, second tool, hidden tool, holding on),
   `VrFrame` (the per-frame order: input, tool hands, aim and flying, then the steps on the VR camera's callbacks), `VrCrosshair` (hiding the crosshair while aiming), `GameTools` (the game classes the tool transpilers reach into, with their tool family), `GameRefs` (the player's controllers, found once), `PatchReport` (patch summary, features off when their patches are incomplete), `VrUtil` (small shared helpers: transform paths, canvas group alpha, overlay material), `VrTestScript` / `VrTestXr` / `VrTestRuntime` (test mode: scripted head and controllers, screenshots, the mock
   OpenXR runtime), `VrHelmet`, `VrPostProcess`, `ScreenSizePatch`,
-  `HdrpXrPatch`.
+  `HdrpXrPatch`, `Plugin` (entry point, version). And by area:
+  - Hands on things: `VrHandShape` (the hand's collision shape, as drawn), `VrThumbSkin` (the right arm's missing thumb
+    weights), `VrArmPush` (the arms knock light parts aside), `VrPullOff` (things pulled off a wall by hand: things to
+    collect, posters, a demo charge; devices stripped for spare parts), `VrDevicePunch` (devices stripped by blows of the
+    fist), `VrLever` / `VrNacelle` / `VrNacelleSound` / `VrButtons` (levers, the nacelle switch and buttons worked by
+    hand), `VrInteractHeld` / `VrInteractGrab` (only what a hand holds is offered; the game's own grab left out),
+    `VrLeverPrompt` / `VrKeyHints` (prompts and key hints only where a button does it), `VrKiosk` (the kiosk used from the
+    view; its housing and platform collide as drawn, with `VrShapeField` for shapes that are not convex),
+    `VrTouchSound` (what the hands touch is heard through the suit), `VrFire` (fire on the suit shaken off),
+    `VrPickupLayer` (collectables the cutter and the grapple can reach).
+  - Tools: `VrLooseTools` (tools let go stay afloat on a line to the hip; `VrToolLine` shows the line, `ToolLine` is its
+    chain of points; `VrToolShape` / `ToolPieces` are the tool's collision shape from its model), `VrToolCollide` /
+    `VrToolWeight` / `VrToolSteady` / `VrToolSupport` (extended tool physics: bumping into things, weight, steadying,
+    the second hand on a tool), `VrToolMirror` (the cutter's right side), `VrCutterIdle` (the cutter does not sway),
+    `VrGrappleSize` (the grapple's size in the hand), `VrBeltGrapple` (grapple and detonator hang at the hips),
+    `VrStingerDots` (dots where the Stinger reaches).
+  - Demo charges: `VrChargeByHand` (charges as things of their own, put on by hand or with preview and trigger; the
+    limit and its warning; which side clings), `VrChargeDisarm` (taking one off a wall), `VrChargeCount` (the count on
+    the HUD), `VrDetonatorLights` (the detonator's lights).
+  - Body: `VrSuitLocal` (the new body: the mod's own suit model on the player's bones), `VrBackpack` (the thruster pack
+    on the chest bone), `VrHitbox` (the player's collision sphere).
+  - Flying: `VrFlightComfort` (straightening up, the brake), `VrFlightGlobe` (the globe on the visor).
+  - Station: `VrHab` (the Hab's cameras and spots), `VrHabWalk` / `VrHabStations` / `VrHabPosters` /
+    `VrHabCustomPosters` (walking through it, its screens and exit, posters, own pictures), `VrModelBox` (a drawn thing's
+    box in the room's axes), `VrContactShadow` (shadows under what the mod sets down), `VrAiNodeInventory` /
+    `VrAiNodeMail` / `VrMoraleMail` (the inventory row and LYNX's messages of the collection), `VrMenuInput` (menus with
+    the controllers).
+  - Picture and diagnosis: `VrDebrisRange`, `VrLampShadows` (options under Bild), `VrDiagnostics` / `VrHabSurvey` /
+    `VrLoadTrace` / `VrRenderInfo` (the F8 dump, the Hab's floor plan, load screens and HDRP's state in the log).
+  A new module gets its line here in the same change.
 - `unity/ShipbreakerVRUnity/` – helper project that builds the `xrmanager` AssetBundle with the XR/OpenXR settings and
   collects the OpenXR DLLs (menu *ShipbreakerVR → Build for the game*).
 - `docs/NOTES.md` – technical findings about the game and why the mod does what it does.

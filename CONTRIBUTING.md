@@ -8,7 +8,11 @@ OpenXR at runtime. Tested with Meta Quest via Virtual Desktop (VDXR runtime). Fo
 - Release notes: [docs/releases/](docs/releases)
 
 ## Layout
-- `src/ShipbreakerVR/` – the BepInEx plugin (C#, net48)
+- `src/ShipbreakerVR/` – the BepInEx plugin (C#, net48). One file per concern; [CLAUDE.md](CLAUDE.md) (section
+  *Layout*) names every module with a line on what it does, among them the larger newer ones: `VrSuitLocal` (the new
+  body), `VrLooseTools` (tools afloat on a line), `VrChargeByHand` (demo charges by hand), `VrPullOff` (things pulled
+  off by hand), `VrKiosk`, `VrThumbSkin`, `VrDetonatorLights`. [docs/NOTES.md](docs/NOTES.md) tells why each does what
+  it does.
 - `unity/ShipbreakerVRUnity/` – helper project (Unity 2020.3.35f1). Builds the `xrmanager` AssetBundle with the
   XR/OpenXR settings and collects the OpenXR DLLs (menu *ShipbreakerVR → Build for the game*).
   The XR settings are derived from [ShipbreakerVR by Raicuparta](licenses/ShipbreakerVr-Raicuparta-MIT.txt) (MIT).

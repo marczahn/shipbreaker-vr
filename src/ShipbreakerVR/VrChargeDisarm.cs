@@ -9,9 +9,12 @@ namespace ShipbreakerVR
     // right hand to the charge and starts a little game of timing (DemoChargeRetrievalController.OnInteractStart, a
     // GolfSwingController: a ring fills, and the input has to come inside its safe zone), and then the charge is gone,
     // back in the stock. In VR that input never came (Raik, 2026-11-18), and the hand that came was not his.
-    // As he asked: the hand that holds on to the charge (either one, VrClimb) takes it off itself. The interact button
-    // (A or X) of that hand starts the game's ring for that charge, without the game's hand; the button once more is the
-    // ring's input, and the ring decides as in the game (in its safe zone the charge comes off, outside it it goes off).
+    // As he asked: the hand that holds on to the charge (either one, VrClimb) takes it off itself. Until 0.32.1 the
+    // interact button (A or X) of that hand started the game's ring for that charge, the button once more was the ring's
+    // input, and the ring decided as in the game (in its safe zone the charge came off, outside it it went off).
+    // Since then (Raik's list of 2026-11-21) the hand pulls the charge off, as it pulls a first aid kit off a wall
+    // (VrPullOff: the other hand on the ship, the controller pulled away from the hold, for three to four seconds), and
+    // no ring comes up; a ring the game itself starts still takes the button as its input (Tick).
     // Coming off, the charge on the wall goes back to the stock the game's way and one from the stock is let go in its
     // place, afloat and in that hand, which holds it as any loose part. For NoStickTime it does not cling to the wall
     // again, near as it is. The game's own interaction is left out while a hand holds a charge on a wall (VrToolInput),
@@ -121,15 +124,36 @@ namespace ShipbreakerVR
             // Only one on a wall that the game lets be taken off (its own object is on then, the removable grip unlocked).
             if (!on.gameObject.activeInHierarchy) return;
             Holds = true;
-            if (!hand.Primary.Pressed || ringCharge != null || on.DemoCharge == null) return;
+        }
+
+        // For VrPullOff: the demo charge on a wall that hand holds on to and may pull off, or null.
+        public static DemoChargeRetrievalController OnWall(VrInput.Hand hand)
+        {
+            var state = held[hand.IsLeft ? 0 : 1];
+            var on = state.Charge;
+            if (on == null || state.Collider == null || VrClimb.HeldCollider(hand) != state.Collider) return null;
+            return Deployed(on) && on != ringCharge && on.gameObject.activeInHierarchy && on.DemoCharge != null ? on : null;
+        }
+
+        // From VrPullOff: that hand pulled the charge off the wall, which sits as it sat again. It comes off as with the
+        // ring's success: back to the stock the game's way (Succeeded then lets one from the stock go in its place, into
+        // that hand).
+        public static void PulledOff(VrInput.Hand hand, DemoChargeRetrievalController on)
+        {
+            if (on == null || on.DemoCharge == null || ringCharge != null) return;
             ringCharge = on;
             ringHand = hand;
             // Made at its mesh's place, the new charge's back will be a mesh's depth (BackOfMesh) off the wall.
             ringPlace = on.DemoCharge.transform.position;
             ringTurn = on.DemoCharge.transform.rotation;
-            hand.Buzz(0.3f, 0.05f);
-            if (logs++ < 30) Plugin.Log.LogInfo($"Charge disarm: {hand.Name} hand on a charge on the wall starts its ring");
-            on.OnInteractStart();
+            if (logs++ < 30) Plugin.Log.LogInfo($"Charge disarm: pulled off the wall by the {hand.Name} hand");
+            // Should the game not have taken it (its success did not run through, or threw), the hand's claim on it ends
+            // here: left set, every later charge would stay on its wall.
+            try { on.OnSuccess(); }
+            finally
+            {
+                if (ringCharge == on) ringCharge = null;
+            }
         }
 
         // From ChargeDisarmSuccessPatch: the game has taken that charge back to the stock. If a hand's ring did it, one

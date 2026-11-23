@@ -331,6 +331,11 @@ namespace ShipbreakerVR
         private static int propLogs, chargeOnlyLogs;
         // The charge's renderers on the hand bone (chargesOn), also those not showing yet.
         private static readonly List<Renderer> chargePieces = new List<Renderer>();
+        // Of those, the charge's own (not the detonator's), told once as they are found: asking a transform for its name
+        // makes a new string every time, and HideProps runs every frame (bug list B6). And the names of what it hid,
+        // kept in one list for its log lines instead of a new list each frame.
+        private static readonly HashSet<Renderer> chargeProp = new HashSet<Renderer>();
+        private static readonly List<string> hidNames = new List<string>();
         private static Transform chargesOn;
         private static float nextChargeSearch;
         private static EquipmentController.Equipment holdingAtHide;
@@ -362,16 +367,23 @@ namespace ShipbreakerVR
                 chargesOn = armTip;
                 nextChargeSearch = Time.unscaledTime + 2f;
                 chargePieces.Clear();
+                chargeProp.Clear();
                 foreach (var renderer in armTip.GetComponentsInChildren<Renderer>(true))
-                    if (OnCharge(renderer.transform)) chargePieces.Add(renderer);
+                {
+                    if (!OnCharge(renderer.transform)) continue;
+                    chargePieces.Add(renderer);
+                    if (OnChargeProp(renderer.transform)) chargeProp.Add(renderer);
+                }
                 Plugin.Log.LogInfo($"Tool in hand: charge pieces on the hand: {string.Join(", ", chargePieces.ConvertAll(r => $"{VrUtil.Chain(r.transform)} ({(r.enabled ? "enabled" : "disabled")}, {(r.gameObject.activeInHierarchy ? "active" : "inactive")})"))}");
             }
-            var hid = new List<string>();
+            var hid = hidNames;
+            hid.Clear();
+            var tells = (hide ? propLogs : chargeOnlyLogs) < 10;
             foreach (var renderer in chargePieces)
             {
                 if (renderer == null) continue;
                 // With the charge alone hidden, the detonator's pieces hidden before come back.
-                if (!hide && !OnChargeProp(renderer.transform))
+                if (!hide && !chargeProp.Contains(renderer))
                 {
                     if (hiddenProps.Remove(renderer)) renderer.enabled = true;
                     continue;
@@ -379,7 +391,7 @@ namespace ShipbreakerVR
                 if (!renderer.enabled) continue;
                 renderer.enabled = false;
                 if (!hiddenProps.Contains(renderer)) hiddenProps.Add(renderer);
-                hid.Add(renderer.name);
+                if (tells) hid.Add(renderer.name);
             }
             if (hid.Count > 0 && (hide ? propLogs++ : chargeOnlyLogs++) < 10)
                 Plugin.Log.LogInfo($"Tool in hand: hid {hid.Count} renderer(s) on the hand: {string.Join(", ", hid)} "

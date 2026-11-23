@@ -236,6 +236,10 @@ namespace ShipbreakerVR
             if (VrLever.Holds || VrNacelle.Holds || VrLever.Turnable(offered) || VrNacelle.Is(offered)) tool.Now[(int)Action.Interact] = false;
             // A demo charge on a wall is taken off by the hand that holds it (VrChargeDisarm), not by the game's hand.
             if (VrChargeDisarm.Holds) tool.Now[(int)Action.Interact] = false;
+            // A device stripped for its part is stripped by the hand that holds it (VrPullOff), not by its prompt's button.
+            // Only while the device is what is offered: with a thing to collect in the other hand, the button is that
+            // thing's (review, 2026-11-23: its prompt showed and A did nothing).
+            if (VrPullOff.Extracting && offered != null && VrPullOff.Extractable(offered)) tool.Now[(int)Action.Interact] = false;
             if (HoldInteract) tool.Now[(int)Action.Interact] = true;
             if (interactOnce)
             {
@@ -243,6 +247,49 @@ namespace ShipbreakerVR
                 interactOnce = false;
             }
             LogChanges();
+            ReelWatch();
+        }
+
+        // The game switches the grapple's reeling in on and off only at the moment its action is pressed or released
+        // (GrapplingHook.Update: mIsRetracting is set from the action's state at those two edges). A release it does
+        // not get leaves the reel running: the rope goes on shortening and pulls ever harder (Raik, 2026-11-22: holding
+        // a part and pulling himself to the station, a short press went on reeling and seemed to speed up). Why a
+        // release should go missing is not found; so here the reel is stopped when the game still reels a tenth of a
+        // second after neither the hand that works the grapple nor a key or gamepad holds the action, and the log says
+        // how the hands stood, to find the cause.
+        private static readonly AccessTools.FieldRef<GrapplingHook, bool> Reeling = AccessTools.FieldRefAccess<GrapplingHook, bool>("mIsRetracting");
+        private const float ReelGrace = 0.1f;
+        private static float reelLooseSince = -1f;
+        private static int reelLogs;
+
+        private static void ReelWatch()
+        {
+            var hook = GameRefs.Grapple;
+            if (hook == null || !hook.IsRetracting)
+            {
+                reelLooseSince = -1f;
+                return;
+            }
+            var second = VrDualTools.Second == EquipmentController.Equipment.GrappleHook;
+            var hand = Of(second ? VrHand.SecondHand : VrHand.GameToolHand);
+            var held = hand != null && hand.Now[(int)Action.Retract];
+            var keyed = LynxControls.Instance != null && LynxControls.Instance.GetInputIsPressed(GameplayActions.GameplayActionSet.RetractionModifier);
+            if (held || keyed)
+            {
+                reelLooseSince = -1f;
+                return;
+            }
+            if (reelLooseSince < 0f)
+            {
+                reelLooseSince = Time.unscaledTime;
+                return;
+            }
+            if (Time.unscaledTime - reelLooseSince < ReelGrace) return;
+            reelLooseSince = -1f;
+            Reeling(hook) = false;
+            if (reelLogs++ < 20)
+                Plugin.Log.LogWarning($"Tool control: the grapple went on reeling in with its button released, stopped (grapple {(second ? "as the second tool" : "as the game's tool")} in the {(hand != null ? hand.Name : "no")} hand, "
+                    + $"left hand {VrHand.Left.State}, right hand {VrHand.Right.State}, B {(hand != null && hand.Input.Secondary.Down ? "down" : "up")}, trigger {(hand != null && hand.Trigger ? "down" : "up")})");
         }
 
         // The tool actions of one hand's buttons, for the tool it holds.
@@ -436,9 +483,10 @@ namespace ShipbreakerVR
         }
 
         // Grip pressed at a zone of the tool belt: that tool goes into this hand. Through the game's own selection keys
-        // (EquipmentController.Update), which check whether the tool may change; a tool that is already out (in the other
-        // hand) only changes hands. With the cutter or the grapple in the other hand, the other one of the two joins it
-        // in this hand (VrDualTools).
+        // (EquipmentController.Update), which check whether the tool may change. A tool the other hand holds is not at
+        // its place: the reach takes nothing (HeldByOther); one that is out but not held (let go, afloat) comes into
+        // this hand. With the cutter or the grapple in the other hand, the other one of the two joins it in this hand
+        // (VrDualTools).
         // asTool: the demo charges as the game's tool, also with the charges put on by hand. False if the game does not let
         // the tool change now.
         private static bool Draw(Hand hand, VrToolBelt.Zone zone, bool asTool = false)
@@ -456,6 +504,11 @@ namespace ShipbreakerVR
             if (!equipment.CanEquip(tool) || equipment.IsEquipmentBlocked(tool)) return false;
             // With the charges put on by hand, one comes out from behind the back as a thing of its own (VrChargeByHand).
             if (zone == VrToolBelt.Zone.DemoCharge && !asTool && VrChargeByHand.TakesOut(hand.Input)) return true;
+            if (HeldByOther(hand, zone, tool))
+            {
+                if (logs++ < 60) Plugin.Log.LogInfo($"Tool control: {hand.Name} hand reaches for the {zone}'s place, but the other hand holds it: nothing taken");
+                return true;
+            }
             // The demo charges behind the back and their detonator at the hip are one tool of the game's, in two modes.
             if (tool == EquipmentController.Equipment.DemoCharge && !VrChargeByHand.Draws(zone == VrToolBelt.Zone.Detonator)) return true;
             if (VrDualTools.Second == tool)
@@ -491,6 +544,21 @@ namespace ShipbreakerVR
             VrHand.TakeGameTool(hand.Vr, tool);
             holsterPulses = 0;
             return true;
+        }
+
+        // The tool that place gives is in the other hand, held there with its grip: the place is empty then (Raik,
+        // 2026-11-22: reaching for the detonator's or the cutter's place with the other hand made the tool jump into
+        // that hand; a tool goes from hand to hand by taking hold of the tool itself). Not the charges behind the
+        // back: there is another one as long as there are any.
+        private static bool HeldByOther(Hand hand, VrToolBelt.Zone zone, EquipmentController.Equipment tool)
+        {
+            if (zone == VrToolBelt.Zone.DemoCharge) return false;
+            var other = hand == LeftHand ? RightHand : LeftHand;
+            if (!other.GripDown) return false;
+            if (VrDualTools.Second == tool) return VrDualTools.SecondNode == other.Node;
+            if (equipment.IsNothingEquipped || equipment.CurrentEquipment != tool || other.Vr != VrHand.GameToolHand) return false;
+            // The game's one tool for charges and detonator: only the detonator counts as its place's tool.
+            return zone != VrToolBelt.Zone.Detonator || VrChargeByHand.DetonatorOut;
         }
 
         // With the charges placed the game's way (Sprengsatzplatzierung = Automatisch): a hand that closed round a demo

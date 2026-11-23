@@ -70,6 +70,17 @@ namespace ShipbreakerVR
 
         // The zone each hand last buzzed for (left, right).
         private static readonly Zone[] announced = new Zone[2];
+        // The zone each hand was in when last looked at, and in which frame (Last).
+        private static readonly Zone[] last = new Zone[2];
+        private static readonly int[] lastFrame = { -10, -10 };
+
+        // The zone that hand is in, as Update found it this frame or the one before; None if it was not looked at.
+        // For what shows by where a hand is (VrKeyHints).
+        internal static Zone Last(bool left)
+        {
+            var index = left ? 0 : 1;
+            return Time.frameCount - lastFrame[index] <= 1 ? last[index] : Zone.None;
+        }
         private static int logs;
         private static int missLogs;
 
@@ -79,6 +90,8 @@ namespace ShipbreakerVR
         {
             var zone = Find(hand, out var local);
             var index = hand.IsLeft ? 0 : 1;
+            last[index] = zone;
+            lastFrame[index] = Time.frameCount;
             // A grip pressed near the hip grapple but outside its zone: where the hand was, to fit GripReach.
             if (zone == Zone.None && !hand.IsLeft && hand.Grip.Pressed && missLogs < 30 && HipLocal(hand, out var atHip))
             {
@@ -269,6 +282,7 @@ namespace ShipbreakerVR
         private const float CutterStowForward = 0.18f;
         private const float CutterStowLower = 0.10f;
         private const float CutterStowInside = 0.08f;
+        private const float CutterStowWithin = 0.55f;
 
         // Where a hand is as the demo charges' place behind the back is measured, for the log.
         internal static string ChargePlace(VrInput.Hand controller) =>
@@ -285,6 +299,25 @@ namespace ShipbreakerVR
                     || (ShoulderLocal(controller, out var wide) && wide.y > CutterAbove - CutterStowLower
                         && wide.z < CutterBehindBody + CutterStowForward && wide.x > CutterInside - CutterStowInside);
             return HeadLocal(controller, out var head) && Stows(zone, head);
+        }
+
+        // The same for a point in tracking space, measured against the body: whether something there is at that zone's
+        // place (a part of a tool afloat that a hand holds by its housing, VrLooseTools). The places on the body only:
+        // the helmet's are for the hand.
+        internal static bool StowsAt(Zone zone, Vector3 tracking)
+        {
+            if (!BodyFrame(out var neck, out var heading)) return false;
+            var fromNeck = Quaternion.Inverse(heading) * (tracking - neck);
+            if (zone == Zone.Grapple) return Stows(zone, Sided(fromNeck + HipRef));
+            if (zone == Zone.Detonator) return ChargeBox(Sided(fromNeck + ChargeRef), ChargeStowWider);
+            if (zone == Zone.DemoCharge) return LowerBack(Sided(fromNeck + ShoulderRef), BackStowWider);
+            if (zone != Zone.Cutter) return false;
+            // The cutter's place is open upwards, backwards and to the side, which suits a hand that reaches over the
+            // shoulder; a part of a tool half a metre long gets into it far from the shoulder too (held at arm's length
+            // to the side at head height), so for those it ends CutterStowWithin from the eyes (review, 2026-11-23).
+            var wide = Sided(fromNeck + ShoulderRef);
+            return wide.y > CutterAbove - CutterStowLower && wide.z < CutterBehindBody + CutterStowForward && wide.x > CutterInside - CutterStowInside
+                && wide.sqrMagnitude < CutterStowWithin * CutterStowWithin;
         }
 
         public static void Reset() => announced[0] = announced[1] = Zone.None;

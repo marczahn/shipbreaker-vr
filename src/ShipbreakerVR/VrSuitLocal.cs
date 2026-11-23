@@ -75,6 +75,10 @@ namespace ShipbreakerVR
         private static float nextSearch;
         // geo_suit's bones and the arm bones it lacks (Build)
         private static Transform[] suitBones;
+        // The body the meshes were built on (Build): their bones, the joints of the suit's own and the arms' caps are
+        // that body's. A later shift brings a new player with new bones, and the suit is built again on them; kept, it
+        // hung on the first shift's destroyed bones and did not draw (0.31.5: no suit from the second shift on).
+        private static SkinnedMeshRenderer builtFor;
         // Originalarme: the game's arms draw a copy of their mesh with plain caps at the shoulders (PlainCaps)
         private static Mesh capsMesh;
         private static Mesh armsOwnMesh;
@@ -115,6 +119,11 @@ namespace ShipbreakerVR
                 if (found.name != BodyName || found.sharedMesh == null) continue;
                 try
                 {
+                    if (bodyMesh != null && builtFor != found)
+                    {
+                        Plugin.Log.LogInfo("Local suit: a new body, the suit is built again on its bones");
+                        Forget();
+                    }
                     if (bodyMesh == null) Build(found);
                     Dress(found);
                 }
@@ -511,11 +520,12 @@ namespace ShipbreakerVR
         // It hangs on the chest bone (rig_spine3) as on the Hab's suit: its centre 1.31 m up in the suit's mesh space
         // (the Hab's 1.34 m above the floor, our soles 5.5 cm below zero, the suit a little taller), its front 3 cm into
         // the suit's back, which is measured on the suit itself (the rearmost point within 12 cm of the middle, 25 cm
-        // above and below the centre). On the player and on the mannequin.
+        // above and below the centre). On the mannequin only (a local test tool): on the player it sat under the
+        // game's own thruster pack, which VrBackpack keeps on the chest since 0.31.0, so the player wore two packs one
+        // inside the other (Raik's screenshot of 2026-11-22). The thruster pack is the one a shift has, and stays.
         private static class Backpack
         {
             private const string Key = "Assets/Content/Art/Structures/Kitbash/Hab/Models/PRF_Shipbreaker_BodysuitMesh_Backpack.prefab";
-            private const string BoneName = "rig_spine3";
             private const float CentreHeight = 1.31f;
             private const float IntoBack = 0.03f;
             // The mesh's side that lies on the back faces its -z (Raik's test 2026-11-16: it hung the wrong way round),
@@ -529,16 +539,14 @@ namespace ShipbreakerVR
             private static Mesh mesh;
             private static Material[] materials;
             private static Vector3 place;
-            private static GameObject onPlayer;
             private static GameObject onMannequin;
 
             public static void Update(SkinnedMeshRenderer found, Transform mannequin)
             {
-                if (failed) return;
+                // Without a mannequin nothing wears it, and its prefab is not loaded.
+                if (failed || mannequin == null) return;
                 if (mesh == null && !Ready()) return;
-                if (onPlayer == null) onPlayer = OnPlayer(found);
-                if (mannequin != null && onMannequin == null)
-                    onMannequin = Make(mannequin, Placement, found, "mannequin");
+                if (onMannequin == null) onMannequin = Make(mannequin, Placement, found, "mannequin");
             }
 
             private static bool Ready()
@@ -579,18 +587,6 @@ namespace ShipbreakerVR
                 return false;
             }
 
-            private static GameObject OnPlayer(SkinnedMeshRenderer found)
-            {
-                var bones = found.bones;
-                var binds = found.sharedMesh.bindposes;
-                for (var i = 0; i < bones.Length && i < binds.Length; i++)
-                    if (bones[i] != null && bones[i].name == BoneName)
-                        // the bind pose turns the mesh space into the bone's
-                        return Make(bones[i], binds[i] * Placement, found, "player");
-                Fail($"finds no bone '{BoneName}'");
-                return null;
-            }
-
             private static GameObject Make(Transform parent, Matrix4x4 local, SkinnedMeshRenderer found, string who)
             {
                 var go = new GameObject("ShipbreakerVR Local Suit Backpack") { layer = parent.gameObject.layer };
@@ -621,9 +617,8 @@ namespace ShipbreakerVR
 
             public static void Remove()
             {
-                if (onPlayer != null) Object.Destroy(onPlayer);
                 if (onMannequin != null) Object.Destroy(onMannequin);
-                onPlayer = onMannequin = null;
+                onMannequin = null;
             }
 
             public static void Release()
@@ -1243,6 +1238,7 @@ namespace ShipbreakerVR
             if (File.Exists(helmetFile)) helmetMesh = Read(helmetFile, names, bindposes);
             var visorFile = Path.Combine(Folder, "Anzug-Visier.suit");
             if (File.Exists(visorFile)) visorMesh = Read(visorFile, names, bindposes);
+            builtFor = target;
             Plugin.Log.LogInfo($"Local suit: from '{Path.GetFileName(Folder)}', body {bodyMesh.vertexCount} vertices, helmet {(helmetMesh != null ? helmetMesh.vertexCount : 0)}, visor {(visorMesh != null ? visorMesh.vertexCount : 0)}, bounds {bodyMesh.bounds.min} to {bodyMesh.bounds.max}");
         }
 
@@ -1325,15 +1321,24 @@ namespace ShipbreakerVR
             return mesh;
         }
 
-        private static void Release()
+        // What was built on one body's bones goes; the materials and their textures do not depend on the body and stay.
+        private static void Forget()
         {
             Undress();
-            Backpack.Release();
-            foreach (var o in new Object[] { bodyMesh, helmetMesh, visorMesh, capsMesh, material, visorMaterial, colour, normal, mask })
+            foreach (var o in new Object[] { bodyMesh, helmetMesh, visorMesh, capsMesh })
                 if (o != null) Object.Destroy(o);
             bodyMesh = helmetMesh = visorMesh = capsMesh = null;
             OwnJoints.Clear();
             suitBones = null;
+            builtFor = null;
+        }
+
+        private static void Release()
+        {
+            Forget();
+            Backpack.Release();
+            foreach (var o in new Object[] { material, visorMaterial, colour, normal, mask })
+                if (o != null) Object.Destroy(o);
             material = visorMaterial = null;
             colour = normal = mask = null;
             failed = checkedFiles = false;

@@ -116,5 +116,49 @@ namespace ShipbreakerVR.Tests
             var half = VrControls.ShooterThrust(new UnityEngine.Vector2(0f, 0.575f), UnityEngine.Quaternion.identity);
             Assert.Equal(0.5f, half.magnitude, 2);
         }
+
+        // ---- The thrust reference turning with the body (VrControls) ----
+
+        [Theory]
+        [InlineData(90f, 80f, 80f)]
+        [InlineData(-30f, -45f, -30f)]
+        [InlineData(60f, 0f, 0f)]
+        [InlineData(0f, 25f, 0f)]
+        [InlineData(40f, -10f, 0f)]
+        public void TheBodyTurnedByWhatHeadAndHandTurnedTogether(float head, float hand, float body)
+        {
+            Assert.Equal(body, VrControls.CommonTurn(head, hand), 3);
+        }
+
+        [Fact]
+        public void OnlyTheTurnAboutUpCountsAsATurn()
+        {
+            var half = (float)System.Math.Sqrt(0.5);
+            // a quarter turn to the right about up
+            Assert.Equal(90f, VrControls.TwistAboutUp(new UnityEngine.Quaternion(0f, half, 0f, half)), 2);
+            // a quarter turn to the left
+            Assert.Equal(-90f, VrControls.TwistAboutUp(new UnityEngine.Quaternion(0f, -half, 0f, half)), 2);
+            // nodding and tilting the head are none
+            Assert.Equal(0f, VrControls.TwistAboutUp(new UnityEngine.Quaternion(half, 0f, 0f, half)), 2);
+            Assert.Equal(0f, VrControls.TwistAboutUp(new UnityEngine.Quaternion(0f, 0f, half, half)), 2);
+            Assert.Equal(0f, VrControls.TwistAboutUp(UnityEngine.Quaternion.identity), 2);
+        }
+
+        [Fact]
+        public void TheReferenceGoesRoundTheNeckWithTheBody()
+        {
+            var neck = new UnityEngine.Vector3(1f, 1.5f, 2f);
+            // 40 cm ahead of the neck, a little below it; the body turns a quarter to the right: now 40 cm to its right.
+            var turned = VrControls.TurnedAbout(new UnityEngine.Vector3(1f, 1.2f, 2.4f), neck, 90f);
+            Assert.Equal(1.4f, turned.x, 3);
+            Assert.Equal(1.2f, turned.y, 3);
+            Assert.Equal(2f, turned.z, 3);
+            // and back
+            var back = VrControls.TurnedAbout(turned, neck, -90f);
+            Assert.Equal(1f, back.x, 3);
+            Assert.Equal(2.4f, back.z, 3);
+            // no turn, no move
+            Assert.Equal(new UnityEngine.Vector3(1f, 1.2f, 2.4f), VrControls.TurnedAbout(new UnityEngine.Vector3(1f, 1.2f, 2.4f), neck, 0f));
+        }
     }
 }

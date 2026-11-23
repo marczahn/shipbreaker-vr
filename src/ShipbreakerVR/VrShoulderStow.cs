@@ -18,12 +18,12 @@ namespace ShipbreakerVR
     {
         // The game's own sound of keys picked up in the Hab ('sfx_HAB_pickup_keys' in its sound banks), played as is,
         // as the rattle of a full backpack: no sound file of the mod's own.
-        private const uint RattleSound = 1711490748;
+        internal const uint RattleSound = 1711490748;
         // The game's collect sounds start 0.8 s late on purpose (their Play action's delay in the sound banks: in the game
         // the thing flies to the player first), which felt late letting go over the shoulder (Raik, 2026-11-12). So the
         // game's own grab contact of that hand ('sfx_mech_hands_grab_L'/'_R', no delay) sounds at once as it goes in.
-        private const uint GrabSoundLeft = 3763847643;
-        private const uint GrabSoundRight = 3763847621;
+        internal const uint GrabSoundLeft = 3763847643;
+        internal const uint GrabSoundRight = 3763847621;
         // A good bump as it is collected (Raik, 2026-11-12: from 0.6 for 0.08 s, felt too little after the steady buzz).
         private const float BuzzStrength = 1f;
         private const float BuzzTime = 0.15f;
@@ -113,11 +113,12 @@ namespace ShipbreakerVR
         // Over the shoulder: the hand, or the thing it holds touching the zone (Raik, 2026-11-19: the small fuel cans and
         // the repair kits went in only with the hand right in the zone; the thing reaching into it is to be enough). Of
         // the thing's own shapes (its structure part's, else its body's) the point nearest the middle of the zone counts,
-        // PackMiddle, behind the left shoulder.
+        // PackMiddle, behind the left shoulder. Also for the collection's AI nodes and radio (VrAiNode, VrRadio), which
+        // have no interactable: their body's shapes count.
         private static readonly Vector3 PackMiddle = new Vector3(-0.15f, 0.05f, -0.25f);
         private static readonly System.Collections.Generic.List<Collider> Shapes = new System.Collections.Generic.List<Collider>();
 
-        private static bool Over(VrInput.Hand hand, Rigidbody body, InteractableObject thing)
+        internal static bool Over(VrInput.Hand hand, Rigidbody body, InteractableObject thing)
         {
             if (VrToolBelt.ShoulderLocal(hand, out var local) && VrToolBelt.OverLeftShoulder(local)) return true;
             var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;

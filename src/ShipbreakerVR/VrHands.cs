@@ -142,7 +142,23 @@ namespace ShipbreakerVR
         private const float HandAcross = 0.04f;
         // How far outside the surface a ray for that starts.
         private const float SurfaceProbe = 0.2f;
-        private static readonly RaycastHit[] WallHits = new RaycastHit[16];
+        private static RaycastHit[] WallHits = new RaycastHit[16];
+        private const int MostWallHits = 256;
+
+        // The arm's sweep from the shoulder to the hand: what it meets is in WallHits. A sweep that fills the room for
+        // its hits is asked again with twice the room (the same as VrHandShape.Gather, bug list B5): the query returns
+        // any of the hits, not the nearest, so with more debris along the arm than there was room for, the wall could be
+        // the one left out.
+        private static int Sweep(Vector3 from, float radius, Vector3 direction, float length)
+        {
+            var count = Physics.SphereCastNonAlloc(from, radius, direction, WallHits, length, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            while (count == WallHits.Length && WallHits.Length < MostWallHits)
+            {
+                WallHits = new RaycastHit[WallHits.Length * 2];
+                count = Physics.SphereCastNonAlloc(from, radius, direction, WallHits, length, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            }
+            return count;
+        }
 
         private class Arm
         {
@@ -2266,7 +2282,7 @@ namespace ShipbreakerVR
             var length = way.magnitude;
             if (length < 0.01f) return wrist;
             var direction = way / length;
-            var count = Physics.SphereCastNonAlloc(shoulder, WristRadius, direction, WallHits, length, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            var count = Sweep(shoulder, WristRadius, direction, length);
             var free = length;
             var body = arm.Wrist.root;
             var first = -1;
@@ -2298,7 +2314,7 @@ namespace ShipbreakerVR
                 if (reach > 0.01f)
                 {
                     var blocked = false;
-                    var again = Physics.SphereCastNonAlloc(shoulder, WristRadius * 0.9f, toSlid / reach, WallHits, reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                    var again = Sweep(shoulder, WristRadius * 0.9f, toSlid / reach, reach);
                     for (var i = 0; i < again && !blocked; i++)
                         blocked = WallHits[i].distance > 0f && WallHits[i].distance < reach - 0.005f && !WallHits[i].collider.transform.IsChildOf(body)
                             && !VrLooseTools.HandsPass(WallHits[i].collider);

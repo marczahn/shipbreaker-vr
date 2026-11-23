@@ -10,6 +10,10 @@ namespace ShipbreakerVR
     // shadow showed it (Raik 2026-11-17, a snapshot at the kiosk). Here, after VrTorso has posed the model, the pack is
     // put on the suit's chest bone (rig_spine3) where it sits on the suit in the suit's bind pose, as if it were skinned
     // to that bone. With VR off, in the Hab view, or if anything is missing, it is back where the game has it.
+    // It stays on the chest in the pause and options menus as well (0.32.1). Until then it went back to the game's place
+    // whenever the tools did not aim from the hand (VrAim.Active), the pause menu among that: seen from outside there,
+    // the pack hung at the head, apart from the body and from the new suit's own backpack on its chest (Raik,
+    // 2026-11-22: two backpacks).
     internal static class VrBackpack
     {
         static VrBackpack() => VrSession.OnUnload("backpack", Release);
@@ -32,7 +36,7 @@ namespace ShipbreakerVR
         public static void LateUpdate()
         {
             var vr = VrCamera.Instance;
-            var active = VrAim.Active && vr != null && vr.GameCamera != null && !vr.FollowsHab && Find();
+            var active = VrXr.IsRunning && vr != null && vr.GameCamera != null && !vr.FollowsHab && Find();
             if (!active)
             {
                 Restore();

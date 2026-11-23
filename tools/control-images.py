@@ -82,7 +82,7 @@ def laser(color, ring=False, dot=False):
         parts.append(f'<circle cx="72" cy="19" r="7" fill="{color}" opacity="0.5"/>'
                      f'<circle cx="72" cy="19" r="3" fill="#ffffff"/>')
     if ring:
-        parts.append(f'<circle cx="70" cy="21" r="7" fill="none" stroke="{TETHER}" stroke-width="3"/>')
+        parts.append(f'<circle cx="70" cy="21" r="7" fill="none" stroke="{color}" stroke-width="3"/>')
     return "".join(parts)
 
 
@@ -403,7 +403,7 @@ def main():
               "At the surface you hold it to, else where you point."),
              (charge(thrown=True), "Let a charge go", "Let go away from a surface.",
               "It floats (Extended tool physics) or goes back by itself."),
-             (button("A"), "Take a charge off", "Hold it, press A; A again in the ring's safe zone.",
+             (holding(), "Take a charge off", "Hold the ship, pull the charge for 3 to 4 s.",
               "It comes off into that hand."),
              (detonator(), "Detonate", "Trigger with the detonator in the hand.",
               "Two fingers press its lever; all placed charges go off."),
@@ -416,7 +416,7 @@ def main():
     page("grapple.svg", "ShipbreakerVR grapple and tethers", "Grapple and tethers",
          "B switches the grapple between grappling and placing tethers. Two buzzes: tether mode, one buzz: grappling.", [
              (laser(LASER), "Light blue laser", "The grapple grapples.", "As in the flat game."),
-             (laser(LASER, ring=True), "Light blue laser with an orange ring", "The grapple places tethers.",
+             (laser(LASER, ring=True), "Light blue laser with a blue ring", "The grapple places tethers.",
               "The ring marks where the tether would hold."),
              (trigger(), "Grapple", "Trigger: grapple, hold to keep hold.",
               "Trigger held + A throws, trigger held + B reels in."),

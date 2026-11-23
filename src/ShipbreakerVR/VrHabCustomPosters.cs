@@ -30,15 +30,18 @@ namespace ShipbreakerVR
 
         public static bool IsOwn(Sprite sprite) => sprite != null && sprites.Contains(sprite);
 
+        // Collection (in 0.32.0): own pictures only after LYNX's morale notice (VrMoraleMail), which comes after
+        // the tutorial.
         public static void AddTo(List<NarrativeContentImageAsset> list)
         {
+            if (!VrMoraleMail.PostersAllowed) return;
             Load();
             list.AddRange(pictures.Values);
         }
 
         // The place of a poster's current picture in the game's list.
         public static int Place(Hab3DPoster poster, int saved) =>
-            Choices.ContainsKey(poster.PosterIndex) ? poster.CurrentImageIndex : saved;
+            VrMoraleMail.PostersAllowed && Choices.ContainsKey(poster.PosterIndex) ? poster.CurrentImageIndex : saved;
 
         // From the game's own switch of a poster's picture.
         public static void Chosen(Hab3DPoster poster, NarrativeContentImageAsset picture)
@@ -57,6 +60,7 @@ namespace ShipbreakerVR
         // A poster coming up in the Hab.
         public static void Restore(Hab3DPoster poster)
         {
+            if (!VrMoraleMail.PostersAllowed) return;
             Load();
             if (!Choices.TryGetValue(poster.PosterIndex, out var name)) return;
             if (!pictures.TryGetValue(name, out var picture))

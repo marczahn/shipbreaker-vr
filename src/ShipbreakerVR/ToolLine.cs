@@ -9,14 +9,16 @@ namespace ShipbreakerVR
     // as it is long it is straight. There is no gravity and next to no air, so only a little of the movement is lost
     // each second (keep), and that against the player's own way (carried), which the line shares: flying along at speed
     // it must not trail behind as in a wind.
-    // Up to two of its points can be held in the hands (Hold): they go with the hands, and each stretch between the
-    // ends and the hands has its own length, so a pull of a hand goes to the next stretch alone.
+    // Some of its points can be held (Hold): they go with the hands, and each stretch between the ends and the held
+    // points has its own length, so a pull of a hand goes to the next stretch alone. A fist that holds the line is a
+    // tube the line runs through (Raik, 2026-11-22): two points next to each other are held, one at each end of the
+    // fist, and the line is straight between them and bends only outside the hand.
     // This is only what the line looks like. What it does to the tool at its end is worked out between the two ends
     // (VrLooseTools). Engine-free, so the tests run it (ToolLineTests).
     internal sealed class ToolLine
     {
-        // A point held in a hand: which, where the hand is, and how much line lies up to it from the fixed point before
-        // (the start, or the other hand). Point -1: none.
+        // A point held in a hand: which, where it is, and how much line lies up to it from the fixed point before (the
+        // start, or the held point before it). Point -1: none.
         public struct Hold
         {
             public int Point;
@@ -33,6 +35,10 @@ namespace ShipbreakerVR
         private readonly bool[] pinned;
         private readonly float[] arc;
         private readonly Vector3[] laid, laidBefore;
+        // Room for the calls with one or two held points.
+        private readonly Hold[] pair = new Hold[2];
+        private readonly int[] pairPoints = new int[2];
+        private readonly float[] pairAlongs = new float[2];
         // No sharp bends: a point's two neighbors stay at least this share of two links apart (0.95: a bend of at most
         // about 36 degrees at each point). Without it slack folded into a zigzag, link against link.
         private const float LeastSpan = 0.95f;
@@ -74,14 +80,16 @@ namespace ShipbreakerVR
         // to the end at to.
         public void Step(Vector3 from, Vector3 to, float length, Hold first, Hold second, Vector3 carriedBefore, Vector3 carried, float keep, float bend, int rounds)
         {
+            pair[0] = first;
+            pair[1] = second;
+            Step(from, to, length, pair, 2, carriedBefore, carried, keep, bend, rounds);
+        }
+
+        // The same with any number of points held, in their order along the line from from: one that is none, or not
+        // beyond the one before it, is left out. length is the line from the last held point to the end at to.
+        public void Step(Vector3 from, Vector3 to, float length, Hold[] holds, int count, Vector3 carriedBefore, Vector3 carried, float keep, float bend, int rounds)
+        {
             var last = At.Length - 1;
-            if (first.Point <= 0 || first.Point >= last)
-            {
-                first = second;
-                second = Hold.None;
-            }
-            if (second.Point <= first.Point || second.Point >= last) second = Hold.None;
-            if (first.Point <= 0 || first.Point >= last) first = Hold.None;
             for (var i = 1; i < last; i++)
             {
                 var move = (At[i] - before[i] - carriedBefore) * keep + carried;
@@ -92,21 +100,16 @@ namespace ShipbreakerVR
             At[0] = before[0] = from;
             At[last] = before[last] = to;
             pinned[0] = pinned[last] = true;
-            // The stretches: from the start to the first hand, between the hands, and on to the end.
+            // The stretches: from the start to the first held point, between the held points, and on to the end.
             var start = 0;
-            if (first.Point > 0)
+            for (var h = 0; h < count; h++)
             {
-                At[first.Point] = before[first.Point] = first.At;
-                pinned[first.Point] = true;
-                for (var i = start; i < first.Point; i++) link[i] = first.Length / (first.Point - start);
-                start = first.Point;
-            }
-            if (second.Point > 0)
-            {
-                At[second.Point] = before[second.Point] = second.At;
-                pinned[second.Point] = true;
-                for (var i = start; i < second.Point; i++) link[i] = second.Length / (second.Point - start);
-                start = second.Point;
+                var hold = holds[h];
+                if (hold.Point <= start || hold.Point >= last) continue;
+                At[hold.Point] = before[hold.Point] = hold.At;
+                pinned[hold.Point] = true;
+                for (var i = start; i < hold.Point; i++) link[i] = hold.Length / (hold.Point - start);
+                start = hold.Point;
             }
             for (var i = start; i < last; i++) link[i] = length / (last - start);
             if (bend > 0f)
@@ -184,6 +187,24 @@ namespace ShipbreakerVR
             return Mathf.Sqrt(nearest);
         }
 
+        // The way the line runs at a place that much line from the start, from the start to the end (a unit; zero for a
+        // line without length).
+        public Vector3 Way(float along)
+        {
+            var last = At.Length - 1;
+            var passed = 0f;
+            var way = Vector3.zero;
+            for (var i = 0; i < last; i++)
+            {
+                var step = At[i + 1] - At[i];
+                var length = step.magnitude;
+                if (length > 1e-6f) way = step / length;
+                passed += length;
+                if (passed >= along && length > 1e-6f) break;
+            }
+            return way;
+        }
+
         // How much line lies from the start up to a point of the chain.
         public float Along(int point)
         {
@@ -205,6 +226,17 @@ namespace ShipbreakerVR
         // the line keeps its shape and its movement.
         public void Spread(int first, float firstAlong, int second, float secondAlong)
         {
+            pairPoints[0] = first;
+            pairAlongs[0] = firstAlong;
+            pairPoints[1] = second;
+            pairAlongs[1] = secondAlong;
+            Spread(pairPoints, pairAlongs, 2);
+        }
+
+        // The same for any number of places to be held, in their order along the line: point points[n] comes to lie
+        // alongs[n] of line from the start. One that is none (-1), or not beyond the one before it, is left out.
+        public void Spread(int[] points, float[] alongs, int count)
+        {
             var last = At.Length - 1;
             arc[0] = 0f;
             for (var i = 0; i < last; i++) arc[i + 1] = arc[i] + (At[i + 1] - At[i]).magnitude;
@@ -212,10 +244,10 @@ namespace ShipbreakerVR
             if (total < 1e-6f) return;
             var from = 0;
             var fromAlong = 0f;
-            for (var stretch = 0; stretch < 3; stretch++)
+            for (var stretch = 0; stretch <= count; stretch++)
             {
-                var to = stretch == 0 ? first : stretch == 1 ? second : last;
-                var toAlong = stretch == 0 ? firstAlong : stretch == 1 ? secondAlong : total;
+                var to = stretch < count ? points[stretch] : last;
+                var toAlong = stretch < count ? alongs[stretch] : total;
                 if (to <= from || to > last) continue;
                 toAlong = Mathf.Clamp(toAlong, fromAlong, total);
                 var old = 0;

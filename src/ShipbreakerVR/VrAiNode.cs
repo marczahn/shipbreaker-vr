@@ -1,0 +1,741 @@
+using System.Collections.Generic;
+using BBI.Unity.Game;
+using BepInEx.Configuration;
+using Carbon.Audio;
+using HarmonyLib;
+using Unity.Collections;
+using Unity.Entities;
+using UnityEngine;
+using UnityEngine.Rendering.HighDefinition;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
+
+namespace ShipbreakerVR
+{
+    // Collection (Raik 2026-11-15, in 0.32.0): the AI nodes of the ghost ships
+    // ('SM_Props_AI_Node_...', structure parts fixed on walls and cargo) come off with the grapple held on them for a
+    // while (Grapple). Not by hand: in 0.32.0 a hand pulled them off as it does a first aid kit (VrPullOff), which made
+    // taking one too easy (Raik, 2026-11-22). Once off, held in a hand and let go over the left shoulder they go into
+    // the backpack like the things to collect (VrShoulderStow): removed as the game removes a completed thing
+    // (PendingDestruction on its entity, InteractableObject.DestroyObjectOnComplete).
+    // A small collection: there are three kinds (Regular, LargeRound, LargeWide). Each kind collected the first time
+    // lies in the Hab, for good, each kind at a place of its own (Lay); one of a kind already there adds nothing, as
+    // with the pink bunny. The first one collected also brings LYNX's warning (VrAiNodeMail). All of it is kept in the
+    // mod's own config, for each save on its own (VrCollection), not in the save, so the save never changes. A node
+    // in the backpack counts once its shift is over (VrCollection.Book).
+    // With Steuerung/UeberDieSchulterEinpacken off, A or X of the hand that holds a node puts it in the backpack.
+    // The game counts AI nodes for the ghost ship's objectives (salvaged correctly or not): one in the backpack is gone
+    // and counts for none. With Experimente/KiKnotenStrafe (Raik 2026-11-15) the game also fines it as it fines a node
+    // thrown into the processor: it is marked destroyed by the processor (SalvageableUtility.MarkStructurePartAsDestroyed,
+    // as ProcessorVolume.HandleNegativeSalvage does), and the game's own salvage accounting (SalvageableSystem, the part's
+    // SalvagedObjectIncorrectAction) does the rest, shown when the shift ends. LYNX's warning still says 0.00 credits.
+    // Its entity is removed only a moment later (Settle), so the accounting has seen it first.
+    internal static class VrAiNode
+    {
+        static VrAiNode() => VrSession.OnUnload("AI nodes", Release);
+
+        // On unload (hot reload): the copies in the Hab go, the prefabs are given back, and nodes fined a moment ago are
+        // removed now rather than left hidden in the ship.
+        private static void Release()
+        {
+            Clear();
+            shownIn = null;
+            shownRaw = null;
+            for (var i = 0; i < Settling.Count; i++) Settling[i] = (Settling[i].Thing, 0f);
+            try { Remove(); }
+            catch (System.Exception e) { Plugin.Log.LogWarning($"AI node: removing the nodes in the backpack on unload failed ({e.Message})"); }
+            foreach (var handle in Prefabs.Values)
+                if (handle.IsValid()) Addressables.Release(handle);
+            Prefabs.Clear();
+            NotLoading.Clear();
+            grappled = null;
+            Left.Body = Right.Body = null;
+            Left.Seen = Right.Seen = null;
+            Left.SeenNode = Right.SeenNode = null;
+        }
+
+        private const string Name = "SM_Props_AI_Node";
+        // The node of a kind: 'SM_Props_AI_Node_LargeWide' comes from 'PRF_Props_AI_Node_LargeWide.prefab'.
+        private const string PrefabFolder = "Assets/Content/Prefabs/Objects/GhostShip/";
+        private const string Regular = "SM_Props_AI_Node_Regular";
+        // Where the first lies, in the room's axes (VrHabSurvey: x, height over the floor, z): in front of the loadout
+        // computer's keyboard, right of it and back from the edge (Raik 2026-11-15: first at 132.45 121.80 it lay on the
+        // front edge, 3 cm above the top). The bench top has no collider; its height is where the keyboard and the trays
+        // on it start (0.96 and 0.97 m over the floor). Resting on that, the node sank into it (Raik 2026-11-15): 3 cm more.
+        private static readonly Vector2 Spot = new Vector2(132.57f, 121.76f);
+        private const float BenchTop = 1.0f;
+        // The large round one: on the middle of the white storage tower's top (Raik's pictures 2026-11-15, the look
+        // measured on 'BC_Props_Storage_Tower_1x1xC'). The long one: standing on the floor in the gap between the black
+        // hard crate and the barrels, leaning on the crate's side towards them (Raik looked down there, at 133.2 118.3).
+        // Both measured on their models in the room (Measure): the survey's boxes are too large, as the Hab stands turned
+        // (the large one floated beside the crate's middle, the long one stood off the crate).
+        private const string BlackCrate = "PRF_Hab_Crate_Hard";
+        // The places as the last test in Raik's Hab had them (log of 2026-11-16, the Hab's floor at 21.516 in the room's
+        // axes): the white storage tower ('PRF_Hab_Prop_StorageTower') measured from (129.28, 21.51, 119.95) to
+        // (130.03, 22.49, 120.95), so the middle of its top is at 129.65, 0.97 above the floor, 120.45; the large round
+        // node rested there with its own middle at (129.65, 1.07, 120.45). The black hard crate measured from
+        // (132.88, 21.52, 117.19) to (133.54, 22.53, 117.69); the long node leaned on it at (133.40, 0.25, 117.81).
+        // The Hab is the same for everyone, so these are built in: the large one's place for good, the black crate's
+        // box for when it cannot be measured.
+        internal const string LargeBuiltIn = "129.65; 0.97; 120.45";
+        private static readonly Vector3 BlackCrateMin = new Vector3(132.88f, 0.004f, 117.19f);
+        private static readonly Vector3 BlackCrateMax = new Vector3(133.54f, 1.014f, 117.69f);
+        private const string Floor = "PRF_Hab_Rev_03/SM_Hab_Interior_Floor";
+        private const float LeanAngle = 14f;
+        private const float LeanTurn = 20f;
+        // Standing at the workbench (Workstation_Virtual_Camera, heading 42° in the room): ahead, towards the wall.
+        private static readonly Vector3 TowardsWall = new Vector3(0.67f, 0f, 0.74f);
+        // Each turned a little, so they do not look set down by a machine.
+        private static readonly float[] Turn = { 8f, -14f, 25f };
+
+        private const float ReachedStrength = 0.25f;
+        private const float ReachedTime = 0.04f;
+        private const float OverStrength = 0.08f;
+        private const float OverTime = 0.1f;
+
+        public static ConfigEntry<bool> Fine;
+        public static ConfigEntry<float> GrappleTime;
+        public static ConfigEntry<string> LargePlace;
+        public static ConfigEntry<float> BenchLight;
+
+        // Nodes put in the backpack, removed once the game's salvage accounting had a moment to see them destroyed.
+        private const float Settle = 1f;
+        private static readonly List<(GameObject Thing, float At)> Settling = new List<(GameObject, float)>();
+
+        private class Held
+        {
+            public Rigidbody Body;
+            public bool Over;
+            public float OverSince;
+            // What the hand holds now and whether that is a node (Node), looked up when it changes and now and then.
+            public Rigidbody Seen;
+            public StructurePart SeenNode;
+            public float SeenAt;
+        }
+
+        // A body's parts are counted again this often while a hand keeps holding it (a piece cut off it may leave a
+        // node alone on it).
+        private const float LookAgain = 0.5f;
+        private static readonly List<StructurePart> PartsOn = new List<StructurePart>();
+
+        // The node the hand holds, or null. Until 0.32.0 every part of the held body was listed each frame: holding
+        // on to a ship's hull, that is the whole ship, each frame and into a new array.
+        private static StructurePart Node(Held held, Rigidbody body)
+        {
+            if (body == null)
+            {
+                held.Seen = null;
+                held.SeenNode = null;
+                return null;
+            }
+            if (body != held.Seen || Time.time >= held.SeenAt + LookAgain)
+            {
+                held.Seen = body;
+                held.SeenAt = Time.time;
+                held.SeenNode = NodeOf(body);
+            }
+            var node = held.SeenNode;
+            return node != null && body.gameObject.activeInHierarchy ? node : null;
+        }
+
+        private static readonly Held Left = new Held();
+        private static readonly Held Right = new Held();
+
+        private static readonly Dictionary<string, AsyncOperationHandle<GameObject>> Prefabs = new Dictionary<string, AsyncOperationHandle<GameObject>>();
+        private static readonly List<GameObject> Shown = new List<GameObject>();
+        private static Transform shownIn;
+        private static string shownCollection;
+        private static string shownRaw;
+        private static int logs;
+
+        public static bool Is(Component part) => part != null && part.name.StartsWith(Name);
+
+        public static void Bind()
+        {
+            if (GrappleTime != null || VrSettings.File == null) return;
+            GrappleTime = VrSettings.Bind("Experimente", "KiKnotenGreiferSekunden", 4f,
+                "Experiment: how long the grapple has to hold on to an AI node fixed on a wall or crate before it comes off (seconds).");
+            Fine = VrSettings.Bind("Experimente", "KiKnotenStrafe", true,
+                "Experiment: an AI node put in the backpack is fined by the game as one thrown into the processor (at the end of the shift).");
+            LargePlace = VrSettings.Bind("Experimente", "KiKnotenPlatzGross", "",
+                "Experiment: where the large round AI node rests in the Hab, 'x; y; z' in the room's axes as a hand snapshot writes them (y above the floor), its bottom's middle. Empty: on the white crate's top (" + LargeBuiltIn + ").");
+            BenchLight = VrSettings.Bind("Experimente", "KiKnotenAufhellung", 40f,
+                "Experiment: a small light above the AI node on the workbench, in lumen, as the lamps above the bench light the bench (0: none).");
+        }
+
+        // A place written 'x; y; z' (decimal point or comma), in the room's axes with y above the floor, in the world.
+        private static bool TryPlace(ConfigEntry<string> entry, Transform room, float floor, out Vector3 place) =>
+            TryPlace(entry != null ? entry.Value : null, room, floor, out place, out _);
+
+        // The same with an optional fourth number: a turn about the room's up, in degrees (0 when left out).
+        internal static bool TryPlace(string text, Transform room, float floor, out Vector3 place, out float turn)
+        {
+            place = default;
+            turn = 0f;
+            var parts = text != null ? text.Split(';') : new string[0];
+            if (parts.Length != 3 && parts.Length != 4) return false;
+            var v = new float[4];
+            for (var i = 0; i < parts.Length; i++)
+                if (!float.TryParse(parts[i].Trim().Replace(',', '.'), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out v[i])) return false;
+            place = room.TransformPoint(new Vector3(v[0], v[1] + floor, v[2]));
+            turn = v[3];
+            return true;
+        }
+
+        // The kinds the loaded save has collected, in order (VrCollection).
+        public static List<string> Kinds()
+        {
+            var kinds = VrCollection.Kinds(Kept);
+            kinds.RemoveAll(kind => !kind.StartsWith(Name));
+            return kinds;
+        }
+
+        private static string Kept => VrCollection.Current != null ? VrCollection.Current.Nodes.Value : "";
+
+        // The three kinds, as their prefabs are named. The part in a ship is called 'SM_Props_AI_Node_Regular' whatever
+        // its kind (Raik 2026-11-15: large and long ones collected, all logged as Regular), so the kind is told by its
+        // drawn mesh and size, compared with the three prefabs (KindOf).
+        private static readonly string[] AllKinds = { Regular, "SM_Props_AI_Node_LargeRound", "SM_Props_AI_Node_LargeWide" };
+        private static bool kindsLogged;
+
+        // The drawn mesh of a node: its own, or of its children the one with the most vertices (the nearest LOD).
+        private static MeshFilter Drawn(GameObject node)
+        {
+            var own = node.GetComponent<MeshFilter>();
+            if (own != null && own.sharedMesh != null) return own;
+            MeshFilter best = null;
+            foreach (var f in node.GetComponentsInChildren<MeshFilter>(true))
+                if (f.sharedMesh != null && (best == null || f.sharedMesh.vertexCount > best.sharedMesh.vertexCount)) best = f;
+            return best;
+        }
+
+        // Its size, the diagonal of its mesh's box as scaled in the world: the same however it is turned.
+        private static float Size(MeshFilter filter) => Vector3.Scale(filter.sharedMesh.bounds.size, filter.transform.lossyScale).magnitude;
+
+        private static void Preload()
+        {
+            foreach (var kind in AllKinds)
+            {
+                if (Prefabs.TryGetValue(kind, out var handle) && handle.IsValid()) continue;
+                try { Prefabs[kind] = Addressables.LoadAssetAsync<GameObject>(PrefabKey(kind)); }
+                catch (System.Exception e) { Plugin.Log.LogWarning($"AI node: '{PrefabKey(kind)}' did not load ({e.Message})"); }
+            }
+        }
+
+        // The kind whose prefab has the same mesh and the nearest size; without the prefabs loaded, Regular.
+        private static string KindOf(GameObject thing, out string seen)
+        {
+            var filter = Drawn(thing);
+            seen = filter != null ? $"mesh '{filter.sharedMesh.name}' {filter.sharedMesh.vertexCount} vertices, {Size(filter):0.00} m" : "no mesh";
+            if (filter == null) return Regular;
+            var size = Size(filter);
+            string best = null;
+            var bestScore = float.MaxValue;
+            var known = new List<string>();
+            foreach (var kind in AllKinds)
+            {
+                if (!Prefabs.TryGetValue(kind, out var handle) || !handle.IsValid() || !handle.IsDone || handle.Result == null) continue;
+                var other = Drawn(handle.Result);
+                if (other == null) continue;
+                var otherSize = Size(other);
+                known.Add($"{kind.Substring(Name.Length + 1)}: '{other.sharedMesh.name}' {other.sharedMesh.vertexCount} vertices, {otherSize:0.00} m");
+                var score = Mathf.Abs(otherSize - size) + (other.sharedMesh.name == filter.sharedMesh.name ? 0f : 10f);
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    best = kind;
+                }
+            }
+            if (!kindsLogged && known.Count > 0)
+            {
+                kindsLogged = true;
+                Plugin.Log.LogInfo($"AI node: the kinds are {string.Join("; ", known)}");
+            }
+            return best ?? Regular;
+        }
+
+        private static string PrefabKey(string kind) => PrefabFolder + "PRF_" + kind.Substring(3) + ".prefab";
+
+        // From VrFrame, once a frame, after the shoulder stow.
+        public static void Update()
+        {
+            Bind();
+            Remove();
+            if (!VrXr.IsRunning) return;
+            Preload();
+            Bench();
+            Grapple();
+            if (VrSettings.Climbing == null || !VrSettings.Climbing.Value) Left.Body = Right.Body = null;
+            else
+            {
+                var shoulder = VrSettings.ShoulderStow != null && VrSettings.ShoulderStow.Value;
+                Check(VrInput.Left, Left, shoulder);
+                Check(VrInput.Right, Right, shoulder);
+            }
+        }
+
+        // The grapple on a node still fixed on a wall or crate: held on it long enough, it comes off (Raik 2026-11-15: at
+        // once was far too quick, the cutter takes a while to dissolve one too; 6 s at first, 4 s since Raik's test of
+        // 2026-11-22). Off it comes the way the game lets a part go whose joints broke (SplitOff): a loose object of its
+        // own, in a hierarchy of its own and no longer part of the ship's structure (still part of it, a node thrown
+        // into the barge lit the whole ship red), which the grapple then holds as any small thing
+        // (GrapplingHook.OnHierarchyJointReparented), pulled in like the others. The grapple's hand buzzes, the harder
+        // the nearer it is to coming off.
+        private static StructurePart grappled;
+        private static float grappledSince;
+
+        private static void Grapple()
+        {
+            var hook = GameRefs.Grapple;
+            var part = hook != null ? hook.GrappledStructurePart : null;
+            var body = hook != null ? hook.GrappledRigidbody : null;
+            if (!Is(part) || body == null || body.transform == part.transform || OwnObject(body, part) || !part.gameObject.activeInHierarchy)
+            {
+                grappled = null;
+                return;
+            }
+            if (part != grappled)
+            {
+                grappled = part;
+                grappledSince = Time.time;
+                if (logs++ < 40) Plugin.Log.LogInfo($"AI node: grapple on '{part.name}' on '{body.name}', comes off in {GrappleTime.Value:0.0} s");
+            }
+            var held = Time.time - grappledSince;
+            // The hand that works the grapple (with two tools out, not always the game's tool hand).
+            var hand = (VrToolHaptics.Holding(EquipmentController.Equipment.GrappleHook) ?? VrHand.GameToolHand).Input;
+            if (held < GrappleTime.Value)
+            {
+                hand.Buzz(0.05f + 0.35f * held / Mathf.Max(0.1f, GrappleTime.Value), 0.05f);
+                return;
+            }
+            grappled = null;
+            var root = part.transform;
+            var head = VrCamera.Instance != null ? VrCamera.Instance.transform.position : root.position + root.forward;
+            var normal = (head - root.position).sqrMagnitude > 1e-6f ? (head - root.position).normalized : root.forward;
+            VrPullOff.Break(root, body, hook.GrappledRigidbodyHitPoint, normal);
+            hand.Buzz(0.9f, 0.12f);
+            if (SplitOff(part))
+                Plugin.Log.LogInfo($"AI node: '{part.name}' comes off '{body.name}' after {held:0.0} s on the grapple");
+        }
+
+        // Its joints to the ship removed: the game makes it a loose object of its own, in a hierarchy parent of its own.
+        private static bool SplitOff(StructurePart part)
+        {
+            var blueprint = part.EntityBlueprintComponent;
+            if (!EntityBlueprintComponent.IsValid(blueprint)) return false;
+            var commands = new EntityCommandBuffer(Allocator.TempJob);
+            try
+            {
+                Main.EventSystem.Post(RemoveHierarchyJointsEvent.GetEvent(part, commands));
+                commands.Playback(blueprint.EntityManager);
+                return true;
+            }
+            catch (System.Exception e)
+            {
+                Plugin.Log.LogWarning($"AI node: separating '{part.name}' from its ship failed: {e.Message}");
+                return false;
+            }
+            finally { commands.Dispose(); }
+        }
+
+        // A node's body: its own, or the game's loose object holding it alone.
+        private static StructurePart NodeOf(Rigidbody body)
+        {
+            if (body == null || !body.gameObject.activeInHierarchy) return null;
+            var part = body.GetComponent<StructurePart>();
+            if (Is(part)) return part;
+            body.GetComponentsInChildren(PartsOn);
+            var only = PartsOn.Count == 1 && Is(PartsOn[0]) ? PartsOn[0] : null;
+            PartsOn.Clear();
+            return only;
+        }
+
+        // The game's own loose object of this node alone.
+        private static bool OwnObject(Rigidbody body, StructurePart part)
+        {
+            if (part.transform.parent != body.transform) return false;
+            body.GetComponentsInChildren(PartsOn);
+            var alone = PartsOn.Count == 1;
+            PartsOn.Clear();
+            return alone;
+        }
+
+        private static void Check(VrInput.Hand hand, Held held, bool shoulder)
+        {
+            var body = VrClimb.HeldBody(hand);
+            var node = Node(held, body);
+            if (node != null)
+            {
+                if (!shoulder)
+                {
+                    // Without the shoulder stow: A or X of the hand that holds it, as the game's things to collect
+                    // are taken with their prompt's button.
+                    held.Body = null;
+                    held.Over = false;
+                    VrStowPrompt.Offer(VrOptions.L("AI node", "KI-Knoten"));
+                    if (!hand.Primary.Pressed) return;
+                    VrClimb.Drop(hand, "AI node collected with its button");
+                    Stow(hand, body);
+                    return;
+                }
+                var wasOver = held.Body == body && held.Over;
+                held.Body = body;
+                // Over the shoulder as the things to collect are (VrShoulderStow.Over): the zone sits on the body,
+                // and the node reaching into it is enough. 0.32.0 asked for the hand in a zone that turned with the
+                // head, which missed with the head turned to the shoulder.
+                held.Over = VrShoulderStow.Over(hand, body, null);
+                if (held.Over && !wasOver)
+                {
+                    held.OverSince = Time.time;
+                    hand.Buzz(ReachedStrength, ReachedTime);
+                }
+                else if (held.Over && Time.time >= held.OverSince + ReachedTime) hand.Buzz(OverStrength, OverTime);
+                return;
+            }
+            var was = held.Body;
+            var over = held.Over;
+            held.Body = null;
+            held.Over = false;
+            if (!shoulder || was == null || hand.Grip.Down || !was.gameObject.activeInHierarchy) return;
+            if (VrClimb.HeldBody(hand.IsLeft ? VrInput.Right : VrInput.Left) == was) return;
+            if (!over && !VrShoulderStow.Over(hand, was, null)) return;
+            Stow(hand, was);
+        }
+
+        private static void Stow(VrInput.Hand hand, Rigidbody body)
+        {
+            var part = NodeOf(body);
+            var thing = part != null ? part.gameObject : body.gameObject;
+            var name = thing.name;
+            var head = VrCamera.Instance != null ? VrCamera.Instance.transform : null;
+            if (head != null)
+                AudioViewSystem.RequestOneShotSFX(new WwiseShortID(hand.IsLeft ? VrShoulderStow.GrabSoundLeft : VrShoulderStow.GrabSoundRight), head);
+            var fined = false;
+            if (EntityBlueprintComponent.TryGetEntityBlueprint(thing, out var blueprint))
+            {
+                if (Fine.Value) fined = MarkDestroyed(blueprint);
+                if (fined) Settling.Add((thing, Time.time + Settle));
+                else blueprint.EntityManager.AddComponent<PendingDestruction>(blueprint.Entity);
+            }
+            thing.SetActive(false);
+            if (body.gameObject != thing) body.gameObject.SetActive(false);
+            ((Carbon.Core.Events.IEventBroadcaster)Main.EventSystem).Post(MasterSFXEvent.GetEvent(new WwiseShortID(VrShoulderStow.RattleSound)));
+            hand.Buzz(1f, 0.15f);
+            // Noted only: it is the save's once the shift is over (VrCollection.Book), and nothing is written now.
+            var kind = KindOf(thing, out var seen);
+            VrCollection.NoteNode(kind);
+            Plugin.Log.LogInfo($"AI node: '{name}' ({seen}, a {kind.Substring(Name.Length + 1)}) put in the backpack by the {hand.Name} hand, "
+                + $"noted until the shift is over ({VrCollection.NotedNodes} noted, its kind {(Kinds().Contains(kind) ? "in the Hab already" : "new")})"
+                + (blueprint != null ? "" : " (no entity found, only hidden)") + (fined ? ", fined as thrown into the processor" : ""));
+        }
+
+        // As the processor marks a part that does not belong there: destroyed, for the game to fine.
+        private static bool MarkDestroyed(EntityBlueprintComponent blueprint)
+        {
+            var manager = blueprint.EntityManager;
+            var entity = blueprint.Entity;
+            if (!manager.Exists(entity)) return false;
+            var commands = new EntityCommandBuffer(Allocator.Temp);
+            try
+            {
+                // The part alone, as the processor does with one that does not belong there (ProcessorVolume.
+                // HandleNegativeSalvage): by the processor it is destroyed, never salvaged. By the furnace a part the game
+                // lets be salvaged by destroying (CanBeDestroySalvaged) counts as salvaged, and was paid (Raik 2026-11-15).
+                SalvageableUtility.MarkStructurePartAsDestroyed(commands, manager, entity, SalvagedBy.Processor);
+                commands.Playback(manager);
+                return true;
+            }
+            catch (System.Exception e)
+            {
+                Plugin.Log.LogWarning($"AI node: marking '{blueprint.name}' destroyed failed: {e.Message}");
+                return false;
+            }
+            finally { commands.Dispose(); }
+        }
+
+        // The nodes fined a moment ago: now removed as a completed thing is.
+        private static void Remove()
+        {
+            for (var i = Settling.Count - 1; i >= 0; i--)
+            {
+                var (thing, at) = Settling[i];
+                if (thing != null && Time.time < at) continue;
+                Settling.RemoveAt(i);
+                if (thing != null && EntityBlueprintComponent.TryGetEntityBlueprint(thing, out var blueprint) && blueprint.EntityManager.Exists(blueprint.Entity))
+                    blueprint.EntityManager.AddComponent<PendingDestruction>(blueprint.Entity);
+            }
+        }
+
+        // In the Hab: the kinds collected lie on the workbench, plain copies of the nodes' meshes, nothing of the game's logic.
+        private static void Bench()
+        {
+            var room = VrHab.Room;
+            if (room == null)
+            {
+                // Not in the Hab (a whole shift long): nothing lies anywhere, and no list is built each frame.
+                if (Shown.Count > 0) Clear();
+                shownIn = null;
+                return;
+            }
+            // Nothing changed, also with nothing collected: nothing to do.
+            var kept = Kept;
+            if (shownIn == room && kept == shownRaw && Shown.TrueForAll(o => o != null)) return;
+            var kinds = Kinds();
+            // A kind whose prefab did not load is left out for this run of the game; the save keeps it.
+            kinds.RemoveAll(kind => NotLoading.Contains(kind));
+            var collection = string.Join(",", kinds);
+            if (kinds.Count == 0)
+            {
+                Clear();
+                shownIn = room;
+                shownRaw = kept;
+                return;
+            }
+            if (Shown.Count > 0 && shownIn == room && shownCollection == collection && Shown.TrueForAll(o => o != null))
+            {
+                shownRaw = kept;
+                return;
+            }
+            // Every kind's prefab loaded first, then all are laid out at once.
+            var ready = true;
+            foreach (var kind in kinds)
+            {
+                if (!Prefabs.TryGetValue(kind, out var handle) || !handle.IsValid())
+                {
+                    try { Prefabs[kind] = Addressables.LoadAssetAsync<GameObject>(PrefabKey(kind)); }
+                    catch (System.Exception e)
+                    {
+                        Drop(kind, e.Message);
+                        return;
+                    }
+                    ready = false;
+                    continue;
+                }
+                if (!handle.IsDone)
+                {
+                    ready = false;
+                    continue;
+                }
+                if (handle.Status != AsyncOperationStatus.Succeeded || handle.Result == null)
+                {
+                    Drop(kind, handle.Status.ToString());
+                    return;
+                }
+            }
+            if (!ready) return;
+            Clear();
+            Lay(room, kinds);
+            shownIn = room;
+            shownCollection = collection;
+            shownRaw = Kept;
+        }
+
+        private static void Clear()
+        {
+            foreach (var shown in Shown) if (shown != null) Object.Destroy(shown);
+            Shown.Clear();
+            shownCollection = null;
+        }
+
+        // A kind that does not load is left out until the game starts again, so the others still lie there. What the
+        // save collected stays as it is: 0.32.0 took the kind out of the collection for good.
+        private static readonly HashSet<string> NotLoading = new HashSet<string>();
+
+        private static void Drop(string kind, string why)
+        {
+            Plugin.Log.LogWarning($"AI node: '{PrefabKey(kind)}' did not load ({why}), left out of the Hab for now; the save keeps it");
+            Prefabs.Remove(kind);
+            NotLoading.Add(kind);
+        }
+
+        private static void Lay(Transform room, List<string> kinds)
+        {
+            if (!VrHab.TryRoomFloor(out var floor)) floor = 0f;
+            var up = room.up;
+            var wall = Vector3.ProjectOnPlane(room.TransformDirection(TowardsWall), up).normalized;
+            var spot = room.TransformPoint(new Vector3(Spot.x, floor + BenchTop, Spot.y));
+            var tools = GameObject.Find("SM_Hab_Prop_WorkbenchTool_Scissors");
+            // On the white crate's top, in its middle: the built-in place, as measured in Raik's Hab (LargeBuiltIn), so
+            // it does not hang on a measuring at run time. Experimente/KiKnotenPlatzGross goes first where it is set
+            // (shown by hand, Raik 2026-11-15: the crate's top measured then lay below its drawn one, the node inside it).
+            var crate = spot;
+            if (TryPlace(LargePlace, room, floor, out var placed) || TryPlace(LargeBuiltIn, room, floor, out placed, out _)) crate = placed;
+            // A measuring gone wrong must not put a node out of the room (Raik 2026-11-15: two of three not to be seen).
+            if (Vector3.Distance(crate, spot) > FarOff)
+            {
+                Plugin.Log.LogWarning($"AI node: the white crate measured {Vector3.Distance(crate, spot):0.0} m from the bench, the large one lies on the bench");
+                crate = spot;
+            }
+            var text = new List<string>();
+            for (var i = 0; i < kinds.Count && i < 3; i++)
+            {
+                var kind = kinds[i];
+                var node = Make(room, Prefabs[kind].Result, kind, tools);
+                if (node == null) continue;
+                var drawn = node.GetComponent<MeshRenderer>();
+                var mesh = node.GetComponent<MeshFilter>().sharedMesh;
+                // Lying on its back, its longer side along the bench.
+                var lying = Quaternion.LookRotation(up, wall);
+                if (mesh.bounds.size.y > mesh.bounds.size.x) lying *= Quaternion.Euler(0f, 0f, 90f);
+                var slot = System.Array.IndexOf(AllKinds, kind);
+                lying = Quaternion.AngleAxis(Turn[Mathf.Max(0, slot)], up) * lying;
+                // Each kind has a place of its own (Raik 2026-11-15, pictures): the regular one on the workbench, the large
+                // round one on the white storage tower, the long one standing on the floor, leaning on the black crate's
+                // side towards the barrels.
+                if (kind == AllKinds[2])
+                {
+                    Lean(room, floor, node, mesh);
+                    if (Vector3.Distance(node.transform.position, spot) > FarOff)
+                    {
+                        Plugin.Log.LogWarning($"AI node: the long one measured {Vector3.Distance(node.transform.position, spot):0.0} m from the bench, it lies on the bench");
+                        node.transform.rotation = lying;
+                        node.transform.position = spot;
+                        var low = Lowest(node, mesh, up);
+                        node.transform.position += up * (Vector3.Dot(spot, up) - low);
+                    }
+                    Shown.Add(node);
+                    VrContactShadow.Add(node, mesh, up, "the long AI node");
+                    var at = room.InverseTransformPoint(node.transform.position);
+                    text.Add($"'{kind}' leaning at ({at.x:0.00}, {at.y - floor:0.00}, {at.z:0.00})");
+                    continue;
+                }
+                var center = kind == AllKinds[1] ? crate : spot;
+                node.transform.rotation = lying;
+                node.transform.position = center;
+                // Its lowest point where it should rest.
+                var restOn = Vector3.Dot(center, up);
+                var bottom = Lowest(node, mesh, up);
+                node.transform.position += up * (restOn - bottom);
+                Shown.Add(node);
+                // Not under the large round one: it lies flat on the crate and throws no shadow worth one, and the
+                // patch's corners showed square around its round foot (Raik 2026-11-16).
+                if (kind != AllKinds[1]) VrContactShadow.Add(node, mesh, up, "the AI node on the bench");
+                if (kind == AllKinds[0]) Brighten(node, up);
+                var local = room.InverseTransformPoint(node.transform.position);
+                text.Add($"'{kinds[i]}' at ({local.x:0.00}, {local.y - floor:0.00}, {local.z:0.00}), {drawn.bounds.size.x:0.00} x {drawn.bounds.size.y:0.00} x {drawn.bounds.size.z:0.00} m");
+            }
+            Plugin.Log.LogInfo($"AI node: in the Hab {string.Join("; ", text)}");
+        }
+
+        // The node on the workbench a little brighter (Raik 2026-11-16, pictures: the bench, lit by the lamps above it,
+        // is brighter than the node, which only takes the room's baked light). A small light above it, no shadows, its
+        // reach not much beyond the node.
+        private const float BenchLightHeight = 0.3f;
+        private const float BenchLightRange = 0.6f;
+
+        private static void Brighten(GameObject node, Vector3 up)
+        {
+            if (BenchLight == null || BenchLight.Value <= 0f) return;
+            var lamp = new GameObject("ShipbreakerVR AI Node light");
+            lamp.transform.SetParent(node.transform, false);
+            lamp.transform.position = node.GetComponent<MeshRenderer>().bounds.center + up * BenchLightHeight;
+            var data = lamp.AddHDLight(HDLightTypeAndShape.Point);
+            data.SetIntensity(BenchLight.Value, LightUnit.Lumen);
+            data.SetRange(BenchLightRange);
+            data.SetColor(new Color(1f, 0.96f, 0.9f));
+            data.EnableShadows(false);
+            // Not in the Hab's haze: lit, it showed as a bright point in the air (Raik 2026-11-16).
+            data.volumetricDimmer = 0f;
+            Plugin.Log.LogInfo($"AI node: the one on the bench lit by a small light of {BenchLight.Value:0} lumen");
+        }
+
+        // The long one upright on the floor, its back leaning on the black crate's side (Raik 2026-11-15: pictures looking
+        // down between the crate and the wall's pipe): its dome facing away from the crate and a little round to the room.
+        private static void Lean(Transform room, float floor, GameObject node, Mesh mesh)
+        {
+            // In the room's axes: the crate's side towards the barrels (its largest z), the node standing in front of its
+            // middle, on the floor's own top where it is measured.
+            if (!Measure(room, BlackCrate, out var crate))
+            {
+                Plugin.Log.LogWarning($"AI node: '{BlackCrate}' not found, the long one leans where the crate was measured before");
+                crate = default;
+                crate.SetMinMax(BlackCrateMin + Vector3.up * floor, BlackCrateMax + Vector3.up * floor);
+            }
+            var ground = floor;
+            if (Measure(room, Floor, out var floorBox) && Mathf.Abs(floorBox.max.y - floor) < 0.15f) ground = floorBox.max.y;
+            var away = Quaternion.AngleAxis(-LeanTurn, Vector3.up) * Vector3.forward;
+            var upright = Quaternion.LookRotation(away, Vector3.up);
+            if (mesh.bounds.size.x > mesh.bounds.size.y) upright *= Quaternion.Euler(0f, 0f, 90f);
+            upright = Quaternion.AngleAxis(LeanAngle, Vector3.Cross(away, Vector3.up)) * upright;
+            node.transform.localRotation = upright;
+            node.transform.localPosition = new Vector3(crate.center.x, ground + 0.5f, crate.max.z + 0.2f);
+            // Its box in the room's axes: lowest point on the floor, nearest point to the crate on its side, farthest one
+            // towards the kitchen's wall behind the crate.
+            var low = float.MaxValue;
+            var near = float.MaxValue;
+            var far = float.MinValue;
+            var b = mesh.bounds;
+            for (var c = 0; c < 8; c++)
+            {
+                var corner = new Vector3((c & 1) == 0 ? b.min.x : b.max.x, (c & 2) == 0 ? b.min.y : b.max.y, (c & 4) == 0 ? b.min.z : b.max.z);
+                var p = room.InverseTransformPoint(node.transform.TransformPoint(corner));
+                low = Mathf.Min(low, p.y);
+                near = Mathf.Min(near, p.z);
+                far = Mathf.Max(far, p.x);
+            }
+            // Into the corner of crate and wall (Raik 2026-11-15: still a gap to the crate, and leaning as it does it
+            // belongs in the corner, on crate and wall both). Its box's corners stand off its rounded model, so it goes
+            // a little into the box on both sides.
+            var wall = Measure(room, KitchenWall, out var wallBox) && Mathf.Abs(wallBox.min.x - crate.max.x) < 0.3f ? wallBox.min.x : crate.max.x;
+            node.transform.localPosition += new Vector3(wall + WallSnug - far, ground - low, crate.max.z - CrateSnug - near);
+        }
+
+        // How far the long one's box goes into the black crate's and the wall's (its rounded model then touches them).
+        private const float CrateSnug = 0.025f;
+        private const float WallSnug = 0.01f;
+        private const string KitchenWall = "PRF_Hab_Rev_03/PRF_Hab_Interior_Kitchen/SM_Hab_Interior_Kitchen_Wall";
+
+        // A thing's drawn box in the room's axes (its models' own boxes turned into the room, all of its parts), by its
+        // path under the room. False where there is none.
+        private static bool Measure(Transform room, string path, out Bounds box)
+        {
+            box = default;
+            var thing = room.Find(path);
+            if (thing == null) return false;
+            var any = false;
+            foreach (var renderer in thing.GetComponentsInChildren<MeshRenderer>())
+                if (renderer.enabled) VrModelBox.Add(renderer, room, ref box, ref any);
+            if (any && measureLogs++ < 6)
+                Plugin.Log.LogInfo($"AI node: '{path}' measured from ({box.min.x:0.00}, {box.min.y:0.00}, {box.min.z:0.00}) to ({box.max.x:0.00}, {box.max.y:0.00}, {box.max.z:0.00}) in the room");
+            return any;
+        }
+
+        private static int measureLogs;
+
+        // Farther than this from the workbench, a place is measured wrong: the Hab's room is a few metres across.
+        private const float FarOff = 8f;
+
+        private static GameObject Make(Transform room, GameObject source, string kind, GameObject tools)
+        {
+            var filter = Drawn(source);
+            var renderer = filter != null ? filter.GetComponent<MeshRenderer>() : null;
+            if (filter == null || renderer == null)
+            {
+                Plugin.Log.LogWarning($"AI node: '{kind}' has no mesh, left off the workbench");
+                return null;
+            }
+            var node = new GameObject("ShipbreakerVR AI Node " + kind.Substring(Name.Length + 1));
+            node.transform.SetParent(room, false);
+            node.layer = tools != null ? tools.layer : renderer.gameObject.layer;
+            node.AddComponent<MeshFilter>().sharedMesh = filter.sharedMesh;
+            node.AddComponent<MeshRenderer>().sharedMaterials = renderer.sharedMaterials;
+            node.transform.localScale = filter.transform.lossyScale;
+            return node;
+        }
+
+        // The model's lowest point along up: its own box's corners, not the world box, which stands taller where the node
+        // lies turned (Raik 2026-11-15: the large one a few centimetres above the white crate).
+        private static float Lowest(GameObject node, Mesh mesh, Vector3 up)
+        {
+            var b = mesh.bounds;
+            var low = float.MaxValue;
+            for (var c = 0; c < 8; c++)
+            {
+                var corner = new Vector3((c & 1) == 0 ? b.min.x : b.max.x, (c & 2) == 0 ? b.min.y : b.max.y, (c & 4) == 0 ? b.min.z : b.max.z);
+                low = Mathf.Min(low, Vector3.Dot(node.transform.TransformPoint(corner), up));
+            }
+            return low;
+        }
+    }
+
+}

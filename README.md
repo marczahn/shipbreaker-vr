@@ -144,6 +144,8 @@ menus still work with the controllers.
 | Scan with a tool in the other hand | Take the scanner with your free hand. The other tool disappears while you scan; keep its grip squeezed and it comes back when you let go of the scanner. |
 | Hold on and climb | Squeeze the grip of a hand without a tool close to anything: the hand holds on there. Move the hand to pull yourself along, with both hands hand over hand, or with one while the other works a tool. Light parts come to your hand instead; the station and fixed hulls stay put. Only really small things (nuts, bolts, debris) are held in a fist; on anything larger, a hoist truck or a console, the hand lies on it. Let go while moving the hand to push off. |
 | Collect something | Hold a thing to collect (cable, circuit board, data cassette, ...) behind your left shoulder (a light buzz tells you are there) and let go: it goes into your backpack, with a rattle and a short buzz. |
+| Take an AI node or the radio home | Hold an AI node on a ghost ship with the grapple for about four seconds until it comes loose (it does not come off by hand); a radio floats inside a ship now and then. Put it in your backpack like a thing to collect. With **Stow over the shoulder** off, press A (right hand) or X (left hand) while you hold it. It is yours once the shift is over and you are back in the station, where it gets its place; leave the shift for the main menu and it is back in the ship. Each save has its own collection. |
+| Strip a device for a spare part | The devices you strip for the truck's parts (computer terminal, data bank, comms array and the like) are stripped by hand. Hold the device with one hand, then either hold on to the ship with the other and pull the device hand away, or close the other hand right beside the first (within about 20 cm) and pull the two apart; keep pulling for a second or two. Or make a fist (grip held, nothing in the hand) and hit the device three times. |
 | Push heavy parts | Switch on **Extended physics** in the VR options. Hold on to something fixed with one hand and move a heavy part with the other, or hold two heavy parts and push them apart. The heavier a part, the slower it gets going. |
 | Turn myself on a big part | Set **Climbing** to *Realistic*, hold the same big part with both hands and twist your arms against each other: past the **Climbing dead zone** you turn round the part, the more the heavier it is. With *Simple* you never turn. With *Realistic* your body also has inertia: your arms speed it up only with their force (**Arm force**, 500 N each). Taking hold, the hand stops at once; hold it still and the body glides on a little before it stops (**Catch force**, 900 N), or move it back with your body, hand over hand, to keep your speed and push on. |
 | Put out a fire on my suit | Shake each hand hard back and forth, about seven quick strokes, until its flames go out. Left alone, the fire keeps burning. |
@@ -188,10 +190,10 @@ options chooses how a charge goes on: *Automatic* as in the flat game, or *Manua
 |---|---|
 | Take a charge | Squeeze the grip behind your lower back, with either hand. |
 | Place a charge (*Automatic*) | Point at a surface and pull the trigger; the game's preview shows where it goes. Pointing at nothing, the trigger throws it where your hand points. |
-| Place a charge (*Manual*) | The charge comes into your hand as a thing of its own. Bring its back to the surface and let go: it goes on as you hold it, and the line on the charge is the cut. There is no preview. |
+| Place a charge (*Manual*) | The charge comes into your hand as a thing of its own. Bring its back to the surface and let go: it goes on as you hold it, and the line on the charge is the cut. There is no preview. Only the back clings: thrown or drifting against a wall with the front or the side, or tilted more than 45 degrees, the charge bounces off. |
 | Let a charge go | Let go away from a surface. With **Extended tool physics** it floats where it is, and you take it again or put it back behind your back; without, it goes back by itself. |
 | Hand a charge over | Take hold of it with the other hand, then let go with the first. |
-| Take a charge off a wall | Hold on to it with a hand and press A (X): the game's ring comes up. Press A again while the ring is in its safe zone. With *Manual* the charge comes off into that hand; with *Automatic* you hold the charges again. |
+| Take a charge off a wall | Hold on to the ship with one hand, hold the charge with the other and pull it away from the wall for about two seconds (the controller buzzes harder as it comes loose). With *Manual* the charge comes off into that hand; with *Automatic* you hold the charges again. |
 | Take the detonator | Squeeze the grip at your left hip, where it hangs. |
 | Detonate | Pull the trigger with the detonator in your hand: two fingers press its lever, and all placed charges go off. |
 | See how many charges are left | The visor shows it while you hold a charge or the detonator, the charges in your hands counted in. |
@@ -200,7 +202,7 @@ options chooses how a charge goes on: *Automatic* as in the flat game, or *Manua
 
 ![Grapple and tethers](docs/images/grapple.svg)
 
-B switches the grapple between grappling (light blue laser) and placing tethers (light blue laser with an orange ring where it points).
+B switches the grapple between grappling (light blue laser) and placing tethers (light blue laser with a blue ring lying where it points).
 The controller buzzes twice when the tether mode starts and once when grappling comes back.
 
 | I want to … | Grappling (light blue laser) | Placing tethers (light blue laser with a ring) |
@@ -225,11 +227,12 @@ By default you move between the station's spots with a stick, as in the flat gam
 
 **Walk in the station** is an option in the VR options, off by default, and replaces the spots. Sitting on the bed, A
 stands up. The left stick walks, the right stick turns in steps. Near a screen or the exit, A uses it and B leaves it;
-X opens the exit from anywhere. Look at a poster from close by and the triggers change its picture. Walking with a
-stick can make you feel sick.
+X opens the exit from anywhere (a line at the top of your view says so while you walk). Look at a poster from close by
+and the triggers change its picture. Walking with a stick can make you feel sick.
 
 **Own posters:** put PNG or JPG files into `BepInEx\ShipbreakerVR-Poster` in the game folder (the folder appears after
-your first visit to the station) and they join the pictures for the station's posters.
+your first visit to the station) and they join the pictures for the station's posters, once LYNX has allowed them by a
+message in the station's inbox after the tutorial shift.
 
 **Keyboard:** F3 turns VR on and off, F4 puts the view back in front of you. Both keys can be changed in the config file (section `[Tasten]`).
 

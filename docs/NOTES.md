@@ -1300,3 +1300,223 @@ it 0.1 m towards the legs, which have no collider, and 0.07 m back, so it reache
 `VrToolSteady` filters the turn of cutter and grapple: within 0.5 degrees of the filtered turn it closes `(angle / 0.5)^2` of the gap, the micro filter of the ITR 2 aiming mod, and always follows with a lag of 40 ms for some weight in the hand. The aim uses the same turn.
 With extended tool physics the turn then goes through `VrToolWeight` (a damped spring, 800 N/m, 0.85 of critical damping, at most 20 cm and 50° behind the controller, for `Steuerung/Werkzeuggewicht` kg, 5 by default; it moves the tool's place too, and the hand with it: `VrToolWeight.Grip`, used by `VrAim`, `VrHands.Pose` and the collision) and `VrToolCollide`: oriented boxes around the parts of the tool's model (shrunk to 0.85), tested with `OverlapBox`; the tool turns towards the controller in 2° steps and stops before the first that goes into something. What it went into gives the way out from `Physics.ComputePenetration` (a disabled probe `BoxCollider`); within 15° of straight on it holds, further off it is turned out along the surface at 15 to 270°/s (from 15 to 45°). Still in something, it moves back along itself with the hand, up to 20 cm (`HoldBack`). Not run the frame before (the tool put away), each of the three starts afresh at the controller.
 Tilting the left controller to roll still gave thrust although it is measured at the wrist: 8 cm behind the grip is an estimate, and the arm moves along. So the offset counts 2.5 mm less per degree the hand is tilted from where the trigger was pressed, at most 15 cm (`VrControls.ThrustOffset`). With the measured anchor (above) that is 1 mm and at most 5 cm.
+
+## The collection (0.32.0, reworked in 0.32.1)
+Things to take home: the ghost ships' AI nodes (`VrAiNode`, `VrAiNodeInventory`, `VrAiNodeMail`), a radio
+(`VrRadio`, `VrRadioModel`, `VrRadioMusic`, `VrContactShadow`) and LYNX's messages (`VrModMail`, `VrMoraleMail`).
+`VrCollection` keeps what a save has collected.
+
+**Never in the save.** Everything lives in the mod's config. The mod's messages are in the game's inbox only while
+`HabNarrativeMessageButtonController.RefreshMessages` builds its list: a prefix puts them into the profile's
+`NarrativeInventory`, a Harmony finalizer takes them out again. It is a finalizer and not a postfix so that an
+exception in the game's list building cannot leave them in the inventory, which the game writes to the save. Opening
+one is not handed to `NarrativeItemSystem.ProcessOpenedNarrativeMessage`.
+
+**For each save on its own (0.32.1).** A profile is known by `PlayerProfile.ProfileName`: the game keeps the names
+unique (`PlayerProfileSaveLoadManager.IsProfileNameUnique`) and names the save's file after it
+(`SaveFile.MakePlayerProfileFilePath`), and there is no other id in the profile. Each profile has a config section
+`Sammlung <name>` (`VrCollection.Section` writes what BepInEx does not take in a section name as `%` and its code). A profile deleted
+and made again under the same name finds the old one's collection. Free play runs on a profile named `FreeMode`.
+The keys 0.32.0 kept for all saves under `[Experimente]` (`KiKnotenSammlung`, `KiKnotenImRucksack`,
+`KiKnotenAbmahnung...`, `RadioGesammelt`, `RadioWurf`, `MoralMitteilung...`) are bound no more; BepInEx leaves them in
+the file as orphans. Settings that are not a save's state stay under `[Experimente]` (`RadioPlatz`, `RadioChance`,
+`RadioAbStufe`, `KiKnotenPlatzGross`, `KiKnotenStrafe`, ...).
+
+**Booked when the shift ends (0.32.1).** A node or the radio put in the backpack is only noted in memory
+(`VrCollection.NoteNode`, `NoteRadio`). How a shift ends in the game:
+- The regular end goes through the shift's summary (`PostMissionScreen`). Closing it calls
+  `PostMissionScreen.EndShiftAndLoadHabAsync`, which in a career loads the Hab
+  (`SceneLoader.LoadHabForPostShiftAsync`); on that way `SceneLoader.PreTearDown` saves the profile and the ship
+  (career and destination Hab). The mod books in a prefix on `EndShiftAndLoadHabAsync`, just before that save, with one
+  write of the config.
+- Every change of scene starts with `SceneLoader.StartProcess`. A prefix there drops whatever is still noted: after a
+  regular end nothing is, so what is left belongs to a shift left for the title or another save. Closing the game
+  drops the notes with the process.
+- The Hab is loaded additively next to the bay; going back to work unloads it (`UnloadHabAndResumeShiftAsync`) and the
+  ship stays as it is. A shift left for the title gives the ship as the game saved it before, so a node taken in it is
+  on the ship again, and the radio is put back (below).
+- Free play and the weekly ship have no Hab: `EndShiftAndLoadHabAsync` loads it only for
+  `GameSession.SessionType.Career`, and no other caller asks for a Hab start but a career profile's load
+  (`TeleportUtils`, `LevelSelectButton.m_ForceHabStart`, which is serialized and was not checked in the assets). So
+  the notes are booked in a career only (`GameSession.CurrentSessionType`), and dropped at the end of any other shift:
+  booked into the `FreeMode` profile, the radio would count as collected for good and never float in a free play
+  ship again.
+The inventory row counts booked nodes only.
+
+**AI nodes.** A node's part is called `SM_Props_AI_Node_Regular` whatever its kind; the kind is told by its drawn
+mesh and size against the three prefabs. A node comes off with the grapple held on it for
+`Experimente/KiKnotenGreiferSekunden` (4 s; 6 s in 0.32.0): `RemoveHierarchyJointsEvent` makes the game give it a
+hierarchy of its own, so it is no longer part of the ship's structure (otherwise the barge lights the whole ship
+red). In 0.32.0 a hand also pulled a node off (`VrPullOff`, 5 to 6 s); that made taking one too easy and is gone
+(Raik, 2026-11-22), and with it the mod's own body for a node and its later separation. Over the shoulder is asked as for the things to collect (`VrShoulderStow.Over`: the zone sits on the body
+and the held thing reaching into it is enough); 0.32.0 asked for the hand in a zone that turned with the head. With
+the shoulder stow off, the primary button of the holding hand collects. A kind whose prefab does not load is left out
+until the game starts again and stays in the save's collection.
+
+**Radio.** In the ship it is the mod's own loose body, no entity of the game's, so the game's save does not know it.
+Whether a ship has it is rolled once and kept in the save's section (`RadioWurf`, seed and ship name). `VrRadio.Ship`
+looks at the ship each time it stands ready again (`ModuleService`: a manifest, no spawning or despawning): the same
+ship built again has the radio back if the roll says so and it is neither floating there nor the save's nor noted in
+this shift. In the Hab it stands at `Experimente/RadioPlatz`, or at a built-in place where that is empty: BepInEx
+keeps an empty value once written to the cfg whatever the entry's default is, so the built-in place cannot be the
+default. Its model and texture are read from the DLL as a save is loaded (`VrRadioModel.Warm`), not in the middle of
+a shift. Materials found among the loaded ones (`VrRadioModel.LitTemplate`, `VrContactShadow.Template`) belong to a
+scene's assets and are unloaded with them, so they are looked for again whenever the one kept is gone.
+
+**Radio music.** See the comment in `VrRadioMusic`: the shift music is a Wwise music switch by the global state
+`Main_Flow`, which has no branch for the Hab, so the radio sets `Main_Flow` to `Level` while it plays and puts it
+back after. The Hab's own background plays on the emitter `state_mainFlow_HAB` is posted on; a prefix on
+`AkSoundEngine.PostEvent` remembers that emitter to turn it down. (0.32.0 also logged the first 150 sounds in the Hab
+by name, read from the game's `SoundbanksInfo.xml`; that diagnosis is gone.)
+
+**Open: a read message without LYNX's group.** A read mod message is shown in the group of LYNX's own read messages
+(`VrModMail.AdoptLynx` takes the category from a read message whose category's name says LYNX). A save that has read
+none of LYNX's messages yet has no such group, and the read mod message is then not shown at all until one exists.
+Proposal, not built: keep it among the new messages until the group exists.
+
+## Demo charges: the game's limit (0.32.1)
+In the game's data (`Default_DemoChargeControllerAsset`) the limit is 15 and 5 charges are carried (`MaxCarryAmount`,
+raised by upgrades; the limit is not), so the limit is only reached after buying more charges at the kiosk in the same
+shift. `Experimente/SprengsatzLimit` sets a smaller number for the mod's own check (never more than the game's; 0, the
+default, is the
+game's number). With as many out as may
+be, *Automatisch* hands out no further charge (`TakesOut`); *Manuell* does, with the warning, and that charge stays
+loose until fewer are out again (`Reactivate`, the oldest loose one first). The game's detonation sequence
+(`DemoChargeDetonationSequenceSystem`) takes every entity with `DemoCharge`, oldest first, so a loose surplus charge
+goes off with the others; keeping it out of that is not built.
+
+The game allows `IDemoChargeControllerData.InWorldLimit` charges out at once and asks before it places or throws one
+(`DemoChargeController`: `mDemoChargeQuery.CalculateEntityCount() >= InWorldLimit` gives `InWorldLimitReached`: a
+sound and the HUD's line for it, `InWorldLimitUIController`). A charge taken into the hand as a thing of its own
+(`VrChargeByHand`) is one of the counted entities already, so the mod asks `count - 1 >= InWorldLimit` when it is let
+go at a wall, since 0.32.1 with either way of placing (before, only *Automatisch* asked). At the limit:
+- the charge does not go on;
+- it does not cling by itself either: the `Sticky` on its hierarchy parent, which the mod removes while a hand holds
+  the charge, is not given back, and is kept (`LeftLoose`) until a hand takes the charge again;
+- the game's warning is shown with the mod's text in it (LYNX allows at most so many active charges, further ones are not
+  armed for now; with a charge in the hand also: stow it, lost ones are billed). It is written into the game's own
+  label in a postfix on `InWorldLimitUIController.ToggleWarnings`, which also sets the controller's time left
+  (`mRemainingTime`) to 3.5 s; a `CanvasGroup` the mod puts on the label fades it over the last half second. The
+  label's own text is put back at the game's next call of it.
+
+### Only the back clings (Manuell)
+The game makes a clinging part fast in `HierarchyCollisionListener.HandleECSCollisions`: a part whose hierarchy parent
+has `Sticky` is turned to the contact's normal, set on the surface and jointed, whichever side met it. With the
+charges placed by hand (*Manuell*) a prefix leaves that call out for a demo charge that did not meet the wall with its
+back, or tilted more than 45 degrees against it (`Experimente/SprengsatzHaftWinkel`, 0: any side): it bounces off and
+keeps its `Sticky` for a later touch. The normal handed over is the same for both parts of a contact, so which side
+met the wall is told by where the contact lies against the charge's origin, which lies between back and front. A
+charge held to a wall by hand goes on under the same rule. With *Automatisch* nothing changes.
+
+`Physics.RaycastNonAlloc` returns any of the hits along a ray, not the nearest ones: with more colliders along the
+ray than its array holds, the nearest can be missing. The charges' aimed ray over the game's whole reach
+(`VrChargeByHand.FirstHit`) therefore asks `Physics.Raycast` for one hit at a time and goes on behind the mod's own
+shapes.
+
+## The new body (0.31.5, a prototype)
+`VrSuitLocal` draws the mod's own suit in place of the game's body in a shift: Raik's model (made with Meshy, fitted
+in Blender), the body without arms plus helmet and visor, with the game's own arms as they are. Their round cap at
+the shoulder sits in the body's side like a ball joint, so nothing of the suit has to follow the arms. The texture
+carries no LYNX logo; the earlier suits that did are gone, and so are the ones with sleeves of their own.
+
+The files are the mod's own, not the game's: `Anzug-Koerper.suit`, `Anzug-Helm.suit`, `Anzug-Visier.suit` (meshes in
+the mesh space of the game's `geo_suit`, with skin weights for its bones; knees, feet and toes have joints of their
+own in the file), `Anzug-Farbe.png`, `Anzug-Normal.png` (4096, the ripstop fabric baked in) and `Anzug-Maske.png`
+(metal, occlusion, smoothness). A release ships them in `BepInEx\plugins\ShipbreakerVR\Anzug` (`SUIT_DIR` of
+`tools/build-release.sh`); `BepInEx\ShipbreakerVR-suit-local\Originalarme` goes first where it is there, for trying
+other files. Without the files, or with *Body* set to *Aus* in the VR options (`Bild/Anzugqualitaet`), the
+game's own body shows.
+
+`geo_suit` stays and only stops drawing, so the game keeps switching it as before and the suit follows. The helmet
+hangs on the head bone and, for the player wearing it, only casts its shadow, since the camera sits inside it. The
+thruster pack is the game's own, hung on the chest bone by `VrBackpack`; the suit model has none of its own on the
+player (it had one until 0.32.1, under the thruster pack). The mannequin and the mirror by the kiosk (`Showroom`) are
+local test tools and off in a release.
+
+Known, to be reworked: parts of the suit go through each other with the arms hanging down, and in a deep crouch the
+cloth over the knee pads stretches.
+
+## The suit and a new player (0.32.1)
+The game makes a new `Player` with new bones at least with every level it loads (a new ship). `VrSuitLocal` builds its meshes, its own
+joints and the arms' caps on the bones of the body it first dressed; kept for the next player, the suit hung on
+destroyed bones and did not draw. It now remembers the `geo_suit` it was built on and builds again for another one
+(log: `Local suit: a new body, the suit is built again on its bones`). Materials and textures do not depend on the
+body and are kept.
+
+## VTOL: the thrust reference turns with the body (experiment)
+With VTOL the thrust is the left hand's offset from where it was when the trigger went down. That reference was a
+point in the room (tracking space): turning round physically with the trigger held, the hand goes round with the body
+and away from it, which gave thrust and turned it (Raik, 2026-11-22). A reference that follows the headset instead
+would turn with every look to the side.
+
+`VrControls.TurnReference` tells the body's turn from the head and the left controller together, since there is no
+tracker on the body: each one's turn about the up axis since the trigger went down (the twist of its rotation,
+counted on from frame to frame), and of the two the smaller one where they go the same way. By that angle the
+reference goes round the neck (below the tracked head, `VrTorso.NeckFromEye`), and the reference pose for rolling turns
+with it. Only while that angle changes faster than 8 degrees a second does the reference also move along with the
+neck; it does not follow the head otherwise, because the thrust's deadzone can be a centimetre (Raik's) and every
+sway of the head would be thrust. `VrTorso`'s heading was not used: it follows the hands with a 10 degree dead band
+and stays within 40 degrees of the head, so it lags a turn and moves with a long look aside.
+
+Known to fool it: head and left wrist turning the same way without the body (the reference then goes round by the
+smaller of the two), and rolling the hand with the controller pointing steeply up or down while the head turns the
+same way. `Experimente/SchubReferenzDrehtMit = false` gives the reference in the room back. The log says how far the
+reference went round when the trigger is let go after more than 15 degrees (`Controls: with the thrust held ...`).
+
+## The tool line runs through the fist
+A hand that held a tool's line held one point of the chain (`ToolLine`), at the controller, and the line bent right in
+the hand. A fist is now a tube for it (Raik, 2026-11-22): two points next to each other are held, 5 cm either side
+of the fist's middle (the hollow between palm and closed fingers: 3.5 cm out from the controller's place along the
+palm's normal and 1.5 cm towards the finger tips, `Experimente/LeineFaustTiefe` and `LeineFaustZuFingern`; at the
+controller's own place the line ran through the palm, at `VrClimb.PalmPoint` through the closed fingers) along the way through the fist, which is across the drawn hand (square to the palm's normal and
+to wrist-to-knuckles; without the drawn hand the grip pose's forward, OpenXR's axis of the closed fingers). Which
+end is towards the hip is fixed as the hand takes hold, by the way the line lies there. The link between the two
+points is not worked on (both are held) and is drawn straight instead of as part of the Catmull-Rom curve; the line
+inside the fist counts as 10 cm of line. A pull of the hand goes to the tool from where the line leaves the fist
+(`VrToolLine.ToolSide`). `ToolLine.Step` and `Spread` take any number of held points for this.
+
+Taking the line: within 18 cm of the fist's middle (12 before), and a grip that closed up to 0.25 s ago still takes
+a line the hand comes to (before, only in the frame the grip closed).
+
+## Stripping devices by hand (experiment)
+The devices one strips for a part of the truck (computer terminal, data bank, comms array, power junction and the
+like) are interactables of the kind `SalvageShort_InteractionTypeAsset`: the prompt's button held for a second
+completes the interaction, the part comes out and the device is wrecked. What a hand holds of such a device is its
+`VOL_Interactable`, a trigger volume, not its mesh. `VrPullOff` completes the same interaction (`StripNow`:
+`Complete()` and the `ProgressComplete` event) in three ways, and the button does nothing while a hand holds the
+device:
+
+- one hand on the ship, the other holds the device and pulls away from its hold, 1.5 s;
+- one hand on the device, the other closed within 25 cm between the controllers (about 20 cm between the hands), on
+  the device as well or beside it, and the two go apart by 8 cm for 1.5 s, whichever of them pulls. With both on the
+  device, the hand that came later is held free of the body, so it pulls without moving the body;
+- three blows of the fist (`VrDevicePunch`, `Experimente/GeraeteSchlag`): a closed, empty hand that comes onto the
+  device at 1.5 m/s or more, measured in the rig so the body's flight does not count. The fist has to be closed before
+  it arrives: a grip closed within 0.25 s of touching takes hold instead (`VrClimb.CatchTime`).
+
+The log names each step (`Pull off: the device in the ... hand: ...`, `Device punch: ...`), also a fist that came on
+too slowly, with its speed.
+
+## Prompts where a button does it (0.32.1)
+Rule (Raik, 2026-11-23): where an option switches the hand's way of doing something off and a button does it
+instead, the game's prompt for that button shows.
+- *Stow over the shoulder* off: an AI node or the radio in a hand is collected with A or X. They are the mod's own
+  things and have no interaction of the game's, so `VrStowPrompt` fills the game's prompt widget
+  (`InteractionUIController`: button picture, action, name) while a hand holds one and the game shows no prompt of
+  its own. The widget is switched on by the game at an interaction's `Init` and off at its end and filled only then,
+  so in between the mod can use it; its labels read their localized text again as it comes on (`OnEnable`), hence
+  the mod clears their IDs and writes each frame.
+- *Holding on* off, or the tools not aimed with the hand: levers and push buttons are offered from the view and used
+  with A, so `VrLeverPrompt` no longer hides their prompt then (it did whenever VR ran).
+- The other way round: a demo charge on a wall and a device to strip are worked by the hand that holds them, and the
+  button does nothing meanwhile, so `VrLeverPrompt` hides their prompt for that time (`PulledByHand`).
+
+## The placed steps run twice a frame
+`VrCamera.FollowGameCamera` places the rig in `LateUpdate` and again in `Application.onBeforeRender`, and both call
+`VrFrame.RigPlaced`, so every step in `PlacedSteps` runs twice a frame: once with the pose of the frame and once with
+the latest one right before rendering. A step that counts time or looks for an edge has to do so once a frame
+(review, 2026-11-23). `VrPullOff` counted `Time.deltaTime` in both passes, so its hold times ran twice as fast as
+their numbers said (the "3 s" for a device took 1.5 s, the log said 3.0); `VrDevicePunch` saw the hand's speed of the
+second pass, next to nothing, and missed blows. Both step once a frame now (`steppedFrame`), and the pull times are
+halved in the code so they stay what was felt and approved in the headset: 1 s for a thing on a wall, 0.5 s for a
+poster, 1.5 to 2 s for a demo charge, 1.5 s for a device.

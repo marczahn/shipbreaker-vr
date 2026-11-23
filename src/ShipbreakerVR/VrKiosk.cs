@@ -122,8 +122,10 @@ namespace ShipbreakerVR
 
         private static void LowerPlatform(MeshCollider collider)
         {
+            // Each collider is looked at once: asking a mesh for its name makes a new string every time, and this is
+            // asked for every shape that is not convex near a hand, every frame (bug list B6).
             var shape = collider.sharedMesh;
-            if (shape == null || shape.name != PlatformShape || !Fitted.Add(collider.GetInstanceID())) return;
+            if (shape == null || !Fitted.Add(collider.GetInstanceID()) || shape.name != PlatformShape) return;
             // On the MasterJack's kinematic body (Raik, 2026-11-20: both hands still above and below the floor; the log
             // showed it left as it was since this was made, as any body counted as moving): only a body physics moves
             // leaves it be.

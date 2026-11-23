@@ -53,6 +53,10 @@ namespace ShipbreakerVR
             ("charges afloat", VrChargeByHand.Track),
             ("charge disarm", VrChargeDisarm.Track),
             ("charge count", VrChargeCount.Update),
+            ("ai node", VrAiNode.Update),
+            ("radio", VrRadio.Update),
+            ("stow prompt", VrStowPrompt.Update),
+            ("radio music", VrRadioMusic.Update),
             ("pickup layer", VrPickupLayer.Update),
             ("thumb skin", VrThumbSkin.Update),
             ("vr options entry", VrOptionsMenu.Update),
@@ -87,6 +91,7 @@ namespace ShipbreakerVR
         {
             ("climbing", VrClimb.RigPlaced),
             ("pull off", VrPullOff.Update),
+            ("device punch", VrDevicePunch.Update),
             ("touch sound", VrTouchSound.Update),
             ("tool models", VrToolModels.Place),
             ("loose tools", VrLooseTools.Place),
