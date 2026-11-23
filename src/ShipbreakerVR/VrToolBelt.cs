@@ -70,6 +70,17 @@ namespace ShipbreakerVR
 
         // The zone each hand last buzzed for (left, right).
         private static readonly Zone[] announced = new Zone[2];
+        // The zone each hand was in when last looked at, and in which frame (Last).
+        private static readonly Zone[] last = new Zone[2];
+        private static readonly int[] lastFrame = { -10, -10 };
+
+        // The zone that hand is in, as Update found it this frame or the one before; None if it was not looked at.
+        // For what shows by where a hand is (VrKeyHints).
+        internal static Zone Last(bool left)
+        {
+            var index = left ? 0 : 1;
+            return Time.frameCount - lastFrame[index] <= 1 ? last[index] : Zone.None;
+        }
         private static int logs;
         private static int missLogs;
 
@@ -79,6 +90,8 @@ namespace ShipbreakerVR
         {
             var zone = Find(hand, out var local);
             var index = hand.IsLeft ? 0 : 1;
+            last[index] = zone;
+            lastFrame[index] = Time.frameCount;
             // A grip pressed near the hip grapple but outside its zone: where the hand was, to fit GripReach.
             if (zone == Zone.None && !hand.IsLeft && hand.Grip.Pressed && missLogs < 30 && HipLocal(hand, out var atHip))
             {
