@@ -1538,8 +1538,11 @@ Raik, 2026-11-23: the empty hand that holds nothing follows the fingers on the c
   0.32.1, except that the fist follows the grip's travel. The log says once per controller that a sensor answered
   (`Input: the left controller's trigger tells where the index finger is`). Raik's log of 2026-11-23 lists all four
   usages on the 'Oculus Touch Controller OpenXR'; whether Virtual Desktop sets them was open when this was written.
-- Between the loose hand and the fist the fingers are not kept out of walls (`BendBack`, `KeepOut` run only on the loose
-  hand, as before for the fist). Lying flat on a surface and right at a button win over the grip's travel.
+- Closed up to a quarter the fingers are still kept out of things as the loose hand's (`KeepOut`), fading out up to
+  half; closed further they are not, as the fist never was, and what held the hand back for them goes back to nothing
+  (review, 2026-11-23: with the grip barely touched the fingers went into the wall and the hand stayed offset). Lying
+  flat on a surface and right at a button win over the grip's travel, also while the hand comes off them, so letting
+  go of a hold opens the hand as it did.
 
 **The stiff index finger** (`VrHands.Stiff`): out of the fist, the grip held on nothing (`Arm.Pointing`), the index
 finger is stiff. The grip still takes hold first: pressed within reach of a surface it holds on (`VrClimb.Read`,
@@ -1547,13 +1550,20 @@ finger is stiff. The grip still takes hold first: pressed within reach of a surf
 0.30.1 out again (`idea/pointing-finger`: there a pointing hand held on to nothing, so holding on needed grip and
 trigger together).
 - Where the finger's capsule (knuckle to tip, as posed) meets something that stops a hand, the hand is held back along
-  the way out, however far the controller goes on.
+  the way out. The next frame starts from where it was held, then comes back towards the controller as far as the
+  finger is free all the way (tried every 2 cm, then halved): the finger stays on the side it came from. Resolved from
+  the controller's place alone, the shortest way out of a thin wall is through it once the finger is far in, and
+  behind a wall that is only a skin nothing is found (review, 2026-11-23). Past 35 cm it gives way.
+- Not while that hand holds a tool's line (`VrLooseTools.Hauls`) or a device is being stripped by hand
+  (`VrPullOff.Extracting`). A fist's blow on a device with the index finger out still counts.
 - The controller's way past that point is a spring on the body (`VrClimb.Poke`, `ClimbContact.PokePush`: 2500 N/m,
   250 N at most, against `BodyMass`), so pushing off with a finger takes a long firm push; an arm on a hold has 500 N
   and moves the body with the hand. A loose part met takes the same force back. No push while a hand holds on.
 - Right at a button (`VrButtons.AtButton`) the finger is not held back by the housing: it pushes the button in and
   stops where the button is all the way in (`VrButtons.Travel` past the face at rest, `TryGetFace`).
-- The controller hums with the load, 0.05 to 0.35.
+- The controller hums with the load, 0.05 to 0.35; not at a button, whose own click and buzz it would cut short.
+- The smoothing below measures its angles with `VrToolSteady.Angle`: `Quaternion.Angle` gives 0 below about 0.16
+  degrees, and the pose would stop that far off its controller.
 
 ## A light smoothing of the hands (0.33.0, for the trailer)
 Raik, 2026-11-23, for the trailer's videos: hands held in front of the face tremble, and it shows. Every controller

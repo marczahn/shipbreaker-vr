@@ -73,6 +73,25 @@ namespace ShipbreakerVR.Tests
             Assert.True(tremor < edge && edge < moved);
         }
 
+        [Theory]
+        [InlineData(0.05f)]
+        [InlineData(1f)]
+        [InlineData(90f)]
+        public void TheAngleBetweenTwoRotationsIsToldAlsoWhenTiny(float degrees)
+        {
+            var a = About(0f, 1f, 30f);
+            var b = a * About(1f, 0f, degrees);
+            Assert.Equal(degrees, VrToolSteady.Angle(a, b), 2);
+        }
+
+        // A turn about the x or the y axis, without the engine.
+        private static UnityEngine.Quaternion About(float x, float y, float degrees)
+        {
+            var half = degrees * UnityEngine.Mathf.Deg2Rad * 0.5f;
+            var sine = UnityEngine.Mathf.Sin(half);
+            return new UnityEngine.Quaternion(x * sine, y * sine, 0f, UnityEngine.Mathf.Cos(half));
+        }
+
         [Fact]
         public void SmoothingOffFollowsAtOnce()
         {

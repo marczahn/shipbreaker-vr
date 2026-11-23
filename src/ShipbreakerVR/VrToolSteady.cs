@@ -70,6 +70,16 @@ namespace ShipbreakerVR
         // follows slowly, the slower the less it is behind (as Share); beyond it the faster the further behind, so a
         // real movement is followed at once: moved at a steady speed the pose stays the root of speed x lag x tremor
         // behind (under a centimeter at 1 m/s with 2 mm and 0.04 s).
+        // The angle between two rotations in degrees, also where Quaternion.Angle gives 0 (below about 0.16 degrees,
+        // where its dot product rounds to 1): a smoothed pose would stop that far off its controller.
+        internal static float Angle(Quaternion a, Quaternion b)
+        {
+            // The inverse of a rotation is its conjugate (plain arithmetic, so the tests run it without the engine).
+            var turn = new Quaternion(-a.x, -a.y, -a.z, a.w) * b;
+            var sine = Mathf.Sqrt(turn.x * turn.x + turn.y * turn.y + turn.z * turn.z);
+            return 2f * Mathf.Atan2(sine, Mathf.Abs(turn.w)) * Mathf.Rad2Deg;
+        }
+
         internal static float Follow(float behind, float tremor, float lag, float dt)
         {
             if (tremor <= 0f || lag <= 0f) return 1f;

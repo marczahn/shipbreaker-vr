@@ -67,6 +67,8 @@ namespace ShipbreakerVR
         private static readonly float[] PointBend = { 3f, 6f, 9f };
         // The loose hand's thumb, off the buttons and the stick: its base this far out, away from the palm, in degrees.
         private const float ThumbAway = 22f;
+        // The own hand's fingers are kept out of things (KeepOut) while it is closed no further than this.
+        private const float KeepOutUpTo = 0.5f;
         // Thumbs up: where the thumb's tip goes from its base, in the hand's axes (Frame): up the thumb's side, a little
         // to the back of the hand and ahead.
         private const float ThumbUpBack = 0.15f;
@@ -892,6 +894,8 @@ namespace ShipbreakerVR
             if (arm == RightArm && hand.HoldsTool && hand.Tool == EquipmentController.Equipment.DemoCharge)
             {
                 arm.Closed = arm.Flat = arm.Claw = arm.Straight = 0f;
+                arm.IndexOut = arm.IndexPull = arm.ThumbUp = 0f;
+                arm.Pointing = arm.PointingBefore = false;
                 Open(arm);
                 return;
             }
@@ -907,14 +911,16 @@ namespace ShipbreakerVR
             arm.IndexOut = Mathf.MoveTowards(arm.IndexOut, free && arm.Input.IndexOut ? 1f : 0f, step);
             arm.IndexPull = Mathf.MoveTowards(arm.IndexPull, free ? VrInput.Pulled(arm.Input.TriggerValue) : 0f, step);
             arm.ThumbUp = Mathf.MoveTowards(arm.ThumbUp, free && !arm.Input.ThumbOn ? 1f : 0f, step);
-            arm.Pointing = free && grip && arm.Input.IndexOut;
+            arm.Pointing = free && grip && arm.Input.IndexOut && !VrLooseTools.Hauls(arm.Input) && !VrPullOff.Extracting;
             if (arm.Pointing && !arm.PointingBefore && pointLogs++ < 10)
                 Plugin.Log.LogInfo($"Hands: {arm.Name} index finger out of the fist, off the trigger with the grip held on nothing: stiff");
             arm.PointingBefore = arm.Pointing;
             var atButton = free && (!grip || arm.Pointing) && VrButtons.AtButton(arm.Input);
             arm.Straight = Mathf.MoveTowards(arm.Straight, atButton && !arm.Pointing ? 1f : 0f, step);
-            // Not on a surface it lies flat on, and not right at a button, where the open hand's fingers are straight.
-            var squeeze = free && !flat && (!atButton || arm.Pointing) ? VrInput.Squeezed(arm.Input.GripValue) : 0f;
+            // Not on a surface it lies flat on, and not right at a button, where the open hand's fingers are straight;
+            // nor while it still comes off one (Flat, Straight), so letting go of a hold opens the hand as before.
+            var squeeze = free && !flat && arm.Flat <= 0f && (arm.Pointing || (!atButton && arm.Straight <= 0f))
+                ? VrInput.Squeezed(arm.Input.GripValue) : 0f;
             var closing = arm.Driven && (tool || support || (grip && !flat) || squeeze > 0f);
             if (closing) arm.Fist = !tool && !support && (hand.State != HandState.Holding || VrClimb.HoldsControl(arm.Input));
             if (!support)
@@ -972,6 +978,13 @@ namespace ShipbreakerVR
                 OverEdges(arm, palm, across, side, flatness);
                 Claw(arm, palm, across, side, flatness * arm.Claw);
                 for (var i = 0; i < arm.Thumb.Length; i++) LiftThumb(arm, i, palm, flatness, ThumbIn + ClawThumb * arm.Claw);
+                // The thumb off its buttons: what is left of its way out while the hand is not flat yet (off the surface).
+                var away = ThumbAway * arm.ThumbUp * (1f - arm.Flat) * arm.Weight;
+                if (away > 0f && arm.Thumb[0] != null)
+                {
+                    arm.Thumb[0].rotation = Quaternion.AngleAxis(side * away, along) * arm.Thumb[0].rotation;
+                    arm.Set[arm.Joints.Length] = arm.Thumb[0].localRotation;
+                }
                 ThumbInLine(arm, palm, flatness, true);
                 KeepOut(arm, across, side, flatness);
                 LogFingers(arm, across, side);
@@ -997,6 +1010,8 @@ namespace ShipbreakerVR
                         var closed = i < 3 ? Mathf.Max(arm.Closed, arm.IndexPull) : arm.Closed;
                         var to = Mathf.Lerp(IdleBend[i], ToolBend[i], closed);
                         if (i < 3) to = Mathf.Lerp(to, PointBend[i], point);
+                        // A hand that comes to lie flat while still a little closed: straight as far as it is flat.
+                        to = Mathf.Lerp(Mathf.Lerp(to, FlatBend[i % 3], arm.Flat), FlatBend[i % 3], arm.Straight);
                         Straighten(arm, i, across, Quaternion.AngleAxis(side * to, across) * along, across, arm.Weight);
                         Parallel(arm, i, across, i < 3 ? amount * (1f - point) : amount);
                         InLine(arm, i, across, arm.Weight);
@@ -1044,6 +1059,12 @@ namespace ShipbreakerVR
             }
             else if (arm.Fist) ThumbOnMiddle(arm, inward, amount);
             if (up > 0f) ThumbsUp(arm, frame, side, amount * up);
+            // Closed only a little (up to KeepOutUpTo, fading out from half of it) the fingers are still kept out of
+            // what they are in, as the loose hand's; closed further, as the fist always was, they are not, and what
+            // held the hand back for them (FingerPush) goes back to nothing.
+            var keep = own && !arm.Pointing ? Mathf.Clamp01(2f - 2f * arm.Closed / KeepOutUpTo) : 0f;
+            if (keep > 0f) KeepOut(arm, across, side, arm.Weight * keep);
+            else arm.FingerPush = Vector3.MoveTowards(arm.FingerPush, Vector3.zero, Time.unscaledDeltaTime * FingerPushBack * VrCamera.WorldScale);
             // The stiff finger's shape for Touch: as it is now, out of the fist.
             if (own && arm.Pointing && Chain(arm, 0))
             {
@@ -2585,35 +2606,97 @@ namespace ShipbreakerVR
             arm.FingerPush = Vector3.zero;
             var from = wrist;
             Collider thing = null;
+            var button = false;
             if (VrButtons.AtButton(arm.Input) && VrButtons.TryGetFace(arm.Input, out var face, out var outward))
             {
+                // Only a fingertip that came through the face: one far behind it is behind the wall, not in the button.
                 var deep = Vector3.Dot(face - (wrist + frame * arm.ShapeTip[0]), outward) - VrButtons.Travel * scale;
-                if (deep > 0f) wrist += outward * deep;
+                button = deep < ButtonDeepMost * scale;
+                if (button && deep > 0f) wrist += outward * deep;
             }
-            else
+            if (!button)
             {
-                for (var step = 0; step < 3; step++)
+                // Held back last frame: from there, so the finger stays on the side it came from. Taken from the
+                // controller's place alone, the shortest way out of a thin wall is through it once the finger is far
+                // in, and behind a wall that is only a skin there is nothing to find (review, 2026-11-23).
+                var held = arm.Poking && arm.Poke.sqrMagnitude <= StiffMost * StiffMost * scale * scale ? arm.Poke : Vector3.zero;
+                var at = wrist + held;
+                PushFingerOut(arm, ref at, frame, scale, ref thing);
+                held = at - wrist;
+                // Then back towards the controller as far as the finger is free all the way there.
+                var length = held.magnitude;
+                if (length > StiffAllowed * scale)
                 {
-                    var depth = VrHandShape.Capsule(wrist + frame * arm.ShapeKnuckle[0], wrist + frame * arm.ShapeTip[0],
-                        VrHandShape.FingerRadius[0] * scale, out var way);
-                    if (depth <= 0.0005f * scale || VrHandShape.FromTool || VrHandShape.FromArm) break;
-                    wrist += way * depth;
-                    if (VrHandShape.Met != null) thing = VrHandShape.Met;
+                    var steps = Mathf.Clamp(Mathf.CeilToInt(length / (StiffStep * scale)), 1, 12);
+                    var free = 1f;
+                    var blocked = -1f;
+                    for (var k = steps - 1; k >= 0; k--)
+                    {
+                        var t = (float)k / steps;
+                        if (FingerDeep(arm, wrist + held * t, frame, scale, ref thing) > StiffAllowed * scale)
+                        {
+                            blocked = t;
+                            break;
+                        }
+                        free = t;
+                    }
+                    for (var k = 0; k < 4 && blocked >= 0f; k++)
+                    {
+                        var t = (free + blocked) * 0.5f;
+                        if (FingerDeep(arm, wrist + held * t, frame, scale, ref thing) > StiffAllowed * scale) blocked = t;
+                        else free = t;
+                    }
+                    held *= free;
                 }
+                else held = Vector3.zero;
+                wrist += held;
             }
             arm.Poke = wrist - from;
             arm.PokeAt = wrist + frame * arm.ShapeTip[0];
             arm.PokeThing = thing;
             arm.PokeFrame = Time.frameCount;
-            var held = arm.Poke.magnitude / scale;
-            if (held > 0f)
+            var back = arm.Poke.magnitude / scale;
+            if (back > 0f)
             {
-                arm.Input.Buzz(Mathf.Lerp(PokeHum, PokeHumMost, Mathf.Clamp01(held / PokeHumAt)), 0.02f);
+                // At a button its own click and buzz tell (VrButtons); a hum here would cut them short.
+                if (!button) arm.Input.Buzz(Mathf.Lerp(PokeHum, PokeHumMost, Mathf.Clamp01(back / PokeHumAt)), 0.02f);
                 if (!arm.Poking && stiffLogs++ < 20)
-                    Plugin.Log.LogInfo($"Hands: {arm.Name} stiff index finger meets {(thing != null ? $"'{thing.name}'" : "a button all the way in")}, the hand held back {held * 100f:0.0} cm");
+                    Plugin.Log.LogInfo($"Hands: {arm.Name} stiff index finger meets {(thing != null ? $"'{thing.name}'" : button ? "a button all the way in" : "something")}, the hand held back {back * 100f:0.0} cm");
             }
-            arm.Poking = held > 0f;
+            arm.Poking = back > 0f;
             PalmOut(arm, ref wrist, frame, side);
+        }
+
+        // The stiff finger gives way once the controller is this far past where it stopped (the body is at the wall by
+        // then); the way back to the controller is tried every StiffStep; StiffAllowed in something is free. In meters
+        // at world scale 1. A fingertip more than ButtonDeepMost behind a button's stop is not at the button.
+        private const float StiffMost = 0.35f;
+        private const float StiffStep = 0.02f;
+        private const float StiffAllowed = 0.0005f;
+        private const float ButtonDeepMost = 0.06f;
+
+        // How deep the stiff finger (its capsule, knuckle to tip) is in something with the wrist there; not in the tool
+        // in the other hand or the other arm, which it passes.
+        private static float FingerDeep(Arm arm, Vector3 wrist, Quaternion frame, float scale, ref Collider thing) =>
+            FingerDeep(arm, wrist, frame, scale, ref thing, out _);
+
+        private static float FingerDeep(Arm arm, Vector3 wrist, Quaternion frame, float scale, ref Collider thing, out Vector3 way)
+        {
+            var depth = VrHandShape.Capsule(wrist + frame * arm.ShapeKnuckle[0], wrist + frame * arm.ShapeTip[0],
+                VrHandShape.FingerRadius[0] * scale, out way);
+            if (depth <= 0f || VrHandShape.FromTool || VrHandShape.FromArm) return 0f;
+            if (VrHandShape.Met != null) thing = VrHandShape.Met;
+            return depth;
+        }
+
+        private static void PushFingerOut(Arm arm, ref Vector3 wrist, Quaternion frame, float scale, ref Collider thing)
+        {
+            for (var step = 0; step < 3; step++)
+            {
+                var depth = FingerDeep(arm, wrist, frame, scale, ref thing, out var way);
+                if (depth <= StiffAllowed * scale) break;
+                wrist += way * depth;
+            }
         }
 
         // What that controller's stiff index finger pushes against this frame (Stiff): how far it holds the hand back from

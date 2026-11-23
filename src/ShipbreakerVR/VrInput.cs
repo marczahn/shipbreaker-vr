@@ -236,7 +236,7 @@ namespace ShipbreakerVR
                         {
                             var dt = Time.unscaledDeltaTime;
                             steadyAt = Vector3.Lerp(steadyAt, at, VrToolSteady.Follow((at - steadyAt).magnitude, SmoothWithin * smooth, SmoothLag, dt));
-                            steadyTurn = Quaternion.Slerp(steadyTurn, turn, VrToolSteady.Follow(Quaternion.Angle(steadyTurn, turn), SmoothAngle * smooth, SmoothLag, dt));
+                            steadyTurn = Quaternion.Slerp(steadyTurn, turn, VrToolSteady.Follow(VrToolSteady.Angle(steadyTurn, turn), SmoothAngle * smooth, SmoothLag, dt));
                         }
                         steadied = true;
                         steadyRaw = at;
