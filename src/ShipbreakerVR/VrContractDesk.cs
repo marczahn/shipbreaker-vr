@@ -49,10 +49,21 @@ namespace ShipbreakerVR
         private const float DeskAround = 2.6f;
         // How far in front of the head the screen's middle is put, level, in meters; the canvases lie this far before
         // the glass.
-        private const float Distance = 0.6f;
+        // Raik's first test (2026-11-23): 60 cm was a little too near.
+        private const float Distance = 0.72f;
         private const float BeforeGlass = 0.01f;
-        // The contract's canvas lies this much further out, towards the viewer.
+        // The contract's canvas lies this much further out, towards the viewer. Raik: the glass is set in nearly a
+        // centimeter behind where the terminal's own canvas is, and the contract lay too far out on it; now 7 mm in.
         private const float ContractBefore = 0.003f;
+        // The glass is higher than the terminal's own canvas (30 cm): the screen counts as this much higher (Raik:
+        // "one centimeter higher"; the width fits as it is).
+        private const float ScreenHigher = 0.01f;
+        // The desk comes in front of the player again once the head has moved this far from where it was placed for
+        // (level, in meters) and has been still (slower than StillBelow m/s) for StillFor seconds: Raik sat down again
+        // after it had been placed, and the terminal was off to the left.
+        private const float MovedFrom = 0.2f;
+        private const float StillBelow = 0.1f;
+        private const float StillFor = 0.6f;
         // The apartment's picture is stretched until it is this wide as seen from the head, in degrees (Raik: only
         // stretched, not moved).
         private const float PictureWide = 120f;
@@ -78,6 +89,10 @@ namespace ShipbreakerVR
         private static Vector2 screenSize;
         private static bool shown;
         private static string stateLogged;
+        // Where the head was (in the playspace) when the desk was placed, where it was last frame, and since when it
+        // is still.
+        private static Vector3 placedFor, headBefore;
+        private static float stillSince;
 
         // What is changed of the game's scene while the desk is shown, to put it back.
         private static bool uiMoved, pictureStretched;
@@ -110,7 +125,7 @@ namespace ShipbreakerVR
             var root = desk.transform;
             rotation = root.rotation * screenTurn;
             center = root.TransformPoint(screenCenter) + rotation * Vector3.forward * BeforeGlass;
-            size = screenSize * root.lossyScale.x;
+            size = new Vector2(screenSize.x, screenSize.y + ScreenHigher) * root.lossyScale.x;
             return true;
         }
 
@@ -140,6 +155,7 @@ namespace ShipbreakerVR
             }
             if (desk == null && !Build()) return;
             if (!shown) Show(vr);
+            else Follow(vr);
             Keep();
         }
 
@@ -340,17 +356,26 @@ namespace ShipbreakerVR
         }
 
         // The desk put in front of the player: on the playspace's floor, its screen's middle Distance ahead of the head,
-        // facing them. Ahead is where the playspace faces (where the apartment's picture is), or where the head looks
-        // if that is far off.
+        // level, facing them. Ahead is where the head looks, level (Raik: "it must stand straight in front of me, the
+        // panel centered"; by where the playspace faces it was off to the side for a head turned a little).
         private static void Show(VrCamera vr)
+        {
+            Place(vr);
+            desk.SetActive(true);
+            shown = true;
+            if (computer != null) computer.enabled = false;
+            Stretch(vr.transform.position);
+        }
+
+        private static void Place(VrCamera vr)
         {
             var head = vr.transform;
             var rig = head.parent != null ? head.parent : head;
             var up = rig.up;
             var scale = rig.lossyScale.x;
-            var ahead = Vector3.ProjectOnPlane(rig.forward, up).normalized;
-            var looking = Vector3.ProjectOnPlane(head.forward, up);
-            if (looking.sqrMagnitude > 0.01f && Vector3.Angle(ahead, looking) > 60f) ahead = looking.normalized;
+            var ahead = Vector3.ProjectOnPlane(head.forward, up);
+            if (ahead.sqrMagnitude < 0.01f) ahead = Vector3.ProjectOnPlane(rig.forward, up);
+            ahead.Normalize();
             // The screen's side towards the viewer, level, in the desk's axes.
             var towards = Vector3.ProjectOnPlane(-(screenTurn * Vector3.forward), Vector3.up);
             if (towards.sqrMagnitude < 1e-4f) towards = Vector3.right;
@@ -360,11 +385,25 @@ namespace ShipbreakerVR
             var floor = head.parent != null ? rig.TransformPoint(new Vector3(head.localPosition.x, 0f, head.localPosition.z)) : head.position - up * 1.6f * scale;
             var target = floor + ahead * (Distance * scale) + up * ((screenCenter.y - FloorAt) * scale);
             root.position = target - root.rotation * (screenCenter * scale);
-            desk.SetActive(true);
-            shown = true;
-            if (computer != null) computer.enabled = false;
-            Stretch(head.position);
-            Plugin.Log.LogInfo($"Contract desk: shown, the screen {Distance * 100f:0} cm ahead of the head and {(screenCenter.y - FloorAt) * 100f:0} cm above the floor (the head is {Vector3.Dot(head.position - floor, up) / scale * 100f:0} cm above it)");
+            placedFor = headBefore = head.localPosition;
+            stillSince = Time.unscaledTime;
+            if (logs++ < 60)
+                Plugin.Log.LogInfo($"Contract desk: placed, the screen {Distance * 100f:0} cm ahead of the head and {(screenCenter.y - FloorAt) * 100f:0} cm above the floor (the head is {Vector3.Dot(head.position - floor, up) / scale * 100f:0} cm above it)");
+        }
+
+        // The head moved away from where the desk was placed for, and has come to rest: the desk is placed again.
+        private static void Follow(VrCamera vr)
+        {
+            var at = vr.transform.localPosition;
+            var dt = Time.unscaledDeltaTime;
+            var step = at - headBefore;
+            headBefore = at;
+            step.y = 0f;
+            if (dt <= 0f || step.magnitude / dt > StillBelow) stillSince = Time.unscaledTime;
+            var moved = at - placedFor;
+            moved.y = 0f;
+            if (moved.magnitude < MovedFrom || Time.unscaledTime - stillSince < StillFor) return;
+            Place(vr);
         }
 
         // The apartment's picture as wide as PictureWide from the head, where it is; never smaller than it was.
@@ -389,8 +428,8 @@ namespace ShipbreakerVR
         private static void Keep()
         {
             if (ui == null || contract == null || !Screen(out var center, out var rotation, out var size)) return;
-            // Before the glass, not in it.
-            center -= rotation * Vector3.forward * (BeforeGlass + ContractBefore);
+            // On the glass, a little before the mod's own UI texture.
+            center -= rotation * Vector3.forward * ContractBefore;
             if (!uiMoved)
             {
                 uiMoved = true;
