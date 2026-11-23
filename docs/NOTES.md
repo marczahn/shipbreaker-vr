@@ -1454,3 +1454,36 @@ inside the fist counts as 10 cm of line. A pull of the hand goes to the tool fro
 
 Taking the line: within 18 cm of the fist's middle (12 before), and a grip that closed up to 0.25 s ago still takes
 a line the hand comes to (before, only in the frame the grip closed).
+
+## Stripping devices by hand (experiment)
+The devices one strips for a part of the truck (computer terminal, data bank, comms array, power junction and the
+like) are interactables of the kind `SalvageShort_InteractionTypeAsset`: the prompt's button held for a second
+completes the interaction, the part comes out and the device is wrecked. What a hand holds of such a device is its
+`VOL_Interactable`, a trigger volume, not its mesh. `VrPullOff` completes the same interaction (`StripNow`:
+`Complete()` and the `ProgressComplete` event) in three ways, and the button does nothing while a hand holds the
+device:
+
+- one hand on the ship, the other holds the device and pulls away from its hold, 3 s;
+- one hand on the device, the other closed within 25 cm between the controllers (about 20 cm between the hands), on
+  the device as well or beside it, and the two go apart by 8 cm for 3 s, whichever of them pulls. With both on the
+  device, the hand that came later is held free of the body, so it pulls without moving the body;
+- three blows of the fist (`VrDevicePunch`, `Experimente/GeraeteSchlag`): a closed, empty hand that comes onto the
+  device at 1.5 m/s or more, measured in the rig so the body's flight does not count. The fist has to be closed before
+  it arrives: a grip closed within 0.25 s of touching takes hold instead (`VrClimb.CatchTime`).
+
+The log names each step (`Pull off: the device in the ... hand: ...`, `Device punch: ...`), also a fist that came on
+too slowly, with its speed.
+
+## Prompts where a button does it (0.32.1)
+Rule (Raik, 2026-11-23): where an option switches the hand's way of doing something off and a button does it
+instead, the game's prompt for that button shows.
+- *Stow over the shoulder* off: an AI node or the radio in a hand is collected with A or X. They are the mod's own
+  things and have no interaction of the game's, so `VrStowPrompt` fills the game's prompt widget
+  (`InteractionUIController`: button picture, action, name) while a hand holds one and the game shows no prompt of
+  its own. The widget is switched on by the game at an interaction's `Init` and off at its end and filled only then,
+  so in between the mod can use it; its labels read their localized text again as it comes on (`OnEnable`), hence
+  the mod clears their IDs and writes each frame.
+- *Holding on* off, or the tools not aimed with the hand: levers and push buttons are offered from the view and used
+  with A, so `VrLeverPrompt` no longer hides their prompt then (it did whenever VR ran).
+- The other way round: a demo charge on a wall and a device to strip are worked by the hand that holds them, and the
+  button does nothing meanwhile, so `VrLeverPrompt` hides their prompt for that time (`PulledByHand`).

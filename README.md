@@ -192,7 +192,7 @@ options chooses how a charge goes on: *Automatic* as in the flat game, or *Manua
 | Place a charge (*Manual*) | The charge comes into your hand as a thing of its own. Bring its back to the surface and let go: it goes on as you hold it, and the line on the charge is the cut. There is no preview. |
 | Let a charge go | Let go away from a surface. With **Extended tool physics** it floats where it is, and you take it again or put it back behind your back; without, it goes back by itself. |
 | Hand a charge over | Take hold of it with the other hand, then let go with the first. |
-| Take a charge off a wall | Hold on to it with a hand and press A (X): the game's ring comes up. Press A again while the ring is in its safe zone. With *Manual* the charge comes off into that hand; with *Automatic* you hold the charges again. |
+| Take a charge off a wall | Hold on to the ship with one hand, hold the charge with the other and pull it away from the wall for three to four seconds (the controller buzzes harder as it comes loose). With *Manual* the charge comes off into that hand; with *Automatic* you hold the charges again. |
 | Take the detonator | Squeeze the grip at your left hip, where it hangs. |
 | Detonate | Pull the trigger with the detonator in your hand: two fingers press its lever, and all placed charges go off. |
 | See how many charges are left | The visor shows it while you hold a charge or the detonator, the charges in your hands counted in. |

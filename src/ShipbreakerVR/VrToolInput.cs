@@ -236,6 +236,8 @@ namespace ShipbreakerVR
             if (VrLever.Holds || VrNacelle.Holds || VrLever.Turnable(offered) || VrNacelle.Is(offered)) tool.Now[(int)Action.Interact] = false;
             // A demo charge on a wall is taken off by the hand that holds it (VrChargeDisarm), not by the game's hand.
             if (VrChargeDisarm.Holds) tool.Now[(int)Action.Interact] = false;
+            // A device stripped for its part is stripped by the hand that holds it (VrPullOff), not by its prompt's button.
+            if (VrPullOff.Extracting) tool.Now[(int)Action.Interact] = false;
             if (HoldInteract) tool.Now[(int)Action.Interact] = true;
             if (interactOnce)
             {
