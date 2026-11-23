@@ -1554,3 +1554,13 @@ trigger together).
 - Right at a button (`VrButtons.AtButton`) the finger is not held back by the housing: it pushes the button in and
   stops where the button is all the way in (`VrButtons.Travel` past the face at rest, `TryGetFace`).
 - The controller hums with the load, 0.05 to 0.35.
+
+## A light smoothing of the hands (0.33.0, for the trailer)
+Raik, 2026-11-23, for the trailer's videos: hands held in front of the face tremble, and it shows. Every controller
+pose read through `VrInput` is smoothed a little (`Experimente/HandGlaettung`, 1 by default, 0 for none, up to 3):
+within 2 mm and 0.8 degrees (times the setting) the pose follows slowly, beyond that the faster the further it is
+behind (`VrToolSteady.Follow`), so a hand moved at 1 m/s lags under a centimeter and a tremor of 1 mm at 10 Hz shows
+less than half. It is the filter that steadies a hand with a demo charge, with the same rigid step for the grip and
+the aim pose, so hand, tool and beam stay together; the charges' stronger steadying goes first.
+**It may be taken out again** before 0.33.0 is released: it was made for the videos, and it puts a little lag on
+aiming and climbing for everyone. Ask Raik before the release.

@@ -59,6 +59,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<float> ThrustDeadzone;
         public static ConfigEntry<float> ThrustFull;
         public static ConfigEntry<float> HandTilt;
+        public static ConfigEntry<float> HandSmoothing;
         public static ConfigEntry<float> ToolWeight;
         public static ConfigEntry<float> ToolLineLength;
         public static ConfigEntry<VrFlightGlobe.Mode> FlightGlobe;
@@ -293,6 +294,10 @@ namespace ShipbreakerVR
                     "Mit erweiterter Werkzeugphysik: wie schwer Cutter und Grappler in der Hand sind. Schnell bewegt hängen sie dem Controller nach und pendeln aus, deine Hand bleibt an ihnen. 0 für keins."),
                 "In kg.", Between(0f, 20f));
             // The key is where the line's experiment had it (0.31.0), so a length already set stays; its range was 1 to 15.
+            // Raik (2026-11-23): made for the trailer's videos; it may be taken out again before 0.33.0 is released.
+            HandSmoothing = Bind("Experimente", "HandGlaettung", 1f,
+                "Smooths the hands a little, so their natural tremor shows less (made for videos with the hands close to the face). 0 for none, 1 light, up to 3 for more; a hand moved fast is followed at once either way.",
+                Between(0f, 3f));
             ToolLineLength = Bind("Experimente", "LeinenLaenge", 5f,
                 ("With extended tool physics, how long the line is that keeps a tool you let go on your hip. A short line keeps the tool close, a long one lets it drift further before it holds.",
                     "Mit erweiterter Werkzeugphysik: wie lang die Leine ist, die ein losgelassenes Werkzeug an deiner Hüfte hält. Eine kurze Leine hält das Werkzeug nah, eine lange lässt es weiter treiben, bevor sie hält."),

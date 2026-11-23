@@ -186,6 +186,16 @@ namespace ShipbreakerVR
             private const float SteadyWithin = 0.004f;
             private const float SteadyAngle = 1.2f;
             private const float SteadyLag = 0.05f;
+            // Raik (2026-11-23, for the trailer's videos: "the hands tremble in front of the face, that can hardly be
+            // avoided; a slight, really slight smoothing"): every controller's pose is smoothed a little
+            // (Experimente/HandGlaettung, 1 by default, 0 for none): the tremor within SmoothWithin and SmoothAngle
+            // times that setting is followed slowly, a real movement the faster the further the pose is behind
+            // (VrToolSteady.Follow), so a hand moved at 1 m/s lags under a centimeter. The same filter and the same
+            // rigid step for every pose read as for the charges, whose stronger steadying goes first.
+            // NOTE (Raik): made for the videos; it may be taken out again before 0.33.0 is released. Ask him.
+            private const float SmoothWithin = 0.002f;
+            private const float SmoothAngle = 0.8f;
+            private const float SmoothLag = 0.04f;
             private int steadyFrame = -1;
             private bool steadied;
             private Vector3 steadyRaw, steadyAt;
@@ -204,7 +214,9 @@ namespace ShipbreakerVR
                     steadyFrame = Time.frameCount;
                     var at = Vector3.zero;
                     var turn = Quaternion.identity;
-                    var wanted = VrXr.IsRunning && VrChargeByHand.Steadies(this)
+                    var charge = VrXr.IsRunning && VrChargeByHand.Steadies(this);
+                    var smooth = VrXr.IsRunning && VrSettings.HandSmoothing != null ? VrSettings.HandSmoothing.Value : 0f;
+                    var wanted = (charge || smooth > 0f)
                         && Device.TryGetFeatureValue(CommonUsages.devicePosition, out at) && Device.TryGetFeatureValue(CommonUsages.deviceRotation, out turn);
                     if (!wanted) steadied = false;
                     else
@@ -214,11 +226,17 @@ namespace ShipbreakerVR
                             steadyAt = at;
                             steadyTurn = turn;
                         }
-                        else
+                        else if (charge)
                         {
                             var follow = 1f - Mathf.Exp(-Time.unscaledDeltaTime / SteadyLag);
                             steadyAt = Vector3.Lerp(steadyAt, at, VrToolSteady.Share((at - steadyAt).magnitude, SteadyWithin) * follow);
                             steadyTurn = Quaternion.Slerp(steadyTurn, turn, VrToolSteady.Share(Quaternion.Angle(steadyTurn, turn), SteadyAngle) * follow);
+                        }
+                        else
+                        {
+                            var dt = Time.unscaledDeltaTime;
+                            steadyAt = Vector3.Lerp(steadyAt, at, VrToolSteady.Follow((at - steadyAt).magnitude, SmoothWithin * smooth, SmoothLag, dt));
+                            steadyTurn = Quaternion.Slerp(steadyTurn, turn, VrToolSteady.Follow(Quaternion.Angle(steadyTurn, turn), SmoothAngle * smooth, SmoothLag, dt));
                         }
                         steadied = true;
                         steadyRaw = at;

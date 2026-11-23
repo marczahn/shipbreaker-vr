@@ -64,5 +64,19 @@ namespace ShipbreakerVR
             var part = Mathf.Clamp01(angle / tremor);
             return part * part;
         }
+
+        // The light smoothing of every hand (VrInput, Experimente/HandGlaettung): how much of the way to the controller
+        // a pose that is that far behind it (a length or an angle) goes in a frame of dt seconds. Within the tremor it
+        // follows slowly, the slower the less it is behind (as Share); beyond it the faster the further behind, so a
+        // real movement is followed at once: moved at a steady speed the pose stays the root of speed x lag x tremor
+        // behind (under a centimeter at 1 m/s with 2 mm and 0.04 s).
+        internal static float Follow(float behind, float tremor, float lag, float dt)
+        {
+            if (tremor <= 0f || lag <= 0f) return 1f;
+            if (dt <= 0f || behind <= 0f) return 0f;
+            var part = behind / tremor;
+            var rate = (part < 1f ? part * part : part) / lag;
+            return 1f - Mathf.Exp(-rate * dt);
+        }
     }
 }
