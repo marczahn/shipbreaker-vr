@@ -304,17 +304,22 @@ namespace ShipbreakerVR
             }
 
             // At one of the Hab's screens the canvas lies on the monitor, as large as fits on it.
+            // The same at the desk of a new career's start, on its terminal's screen (VrContractDesk).
             var monitor = vr.FollowsHab ? VrHab.Monitor : null;
-            if (monitor != null)
+            var screenAt = Vector3.zero;
+            var screenTurn = Quaternion.identity;
+            var screenSize = Vector2.zero;
+            var atDesk = monitor == null && VrContractDesk.TryGetScreen(out screenAt, out screenTurn, out screenSize);
+            if (monitor != null) VrHab.MonitorScreen(monitor, out screenAt, out screenTurn, out screenSize);
+            if (monitor != null || atDesk)
             {
                 onMonitor = true;
                 if (VrSettings.MonitorLook.Value) material.color = MonitorTint;
-                VrHab.MonitorScreen(monitor, out var center, out var rotation, out var size);
-                var fit = Mathf.Min(size.x, size.y * aspect);
+                var fit = Mathf.Min(screenSize.x, screenSize.y * aspect);
                 var height = fit / aspect;
-                screenMatrix = Matrix4x4.TRS(center, rotation, new Vector3(fit, height, 1f));
+                screenMatrix = Matrix4x4.TRS(screenAt, screenTurn, new Vector3(fit, height, 1f));
                 var margin = 2f * GlowMargin * height;
-                glowMatrix = Matrix4x4.TRS(center, rotation, new Vector3(fit + margin, height + margin, 1f));
+                glowMatrix = Matrix4x4.TRS(screenAt, screenTurn, new Vector3(fit + margin, height + margin, 1f));
                 if (!Mathf.Approximately(aspect, lookAspect)) CreateMonitorLook(aspect);
                 return;
             }

@@ -1556,3 +1556,41 @@ less than half. It is the filter that steadies a hand with a demo charge, with t
 the aim pose, so hand, tool and beam stay together; the charges' stronger steadying goes first.
 **It may be taken out again** before 0.33.0 is released: it was made for the videos, and it puts a little lag on
 aiming and climbing for everyone. Ask Raik before the release.
+
+## A new career starts at a desk (0.33.0, first build, untested)
+Raik, 2026-11-23: at the start of a new career the contract was a tiny terminal somewhere in the room. What the game
+has there (read from the front end's scene `master_frontend` and its prefab `PRF_ContractScene`):
+- `PRF_IntroCanvas`: the intro's lines of text ("Humankind has industrialized ..."), a screen-space canvas.
+- `3D Scene` (off until the apartment shows): the apartment's picture `Background_Main`, a sprite 7.7 m from the front
+  end's `Main Camera` (at 0 0 -4, 25 degrees); the model `PRF_ApartmentComputer` 0.47 m in front of that camera; two
+  lights and a volume.
+- `UI/PRF_ContractScreen_WorldSpace`: the contract (mail, news, the contract app and its pop-up) as a **world-space
+  canvas**, 1156 x 716 at a scale of 0.00019, so 22 cm wide, on layer 10, which the main camera draws itself. Flat,
+  25 degrees make it fill the screen. In VR the rig stands at that camera and the canvas was a 22 cm terminal.
+- `PRF_OnboardingScene` (`OnboardingSceneController`: video, pop-ups, extraction, cloning, the fees with the thumb
+  print) and `PRF_CinematicIntroCanvas` (the flight's video): screen-space canvases, which the mod draws through its
+  UI texture as every menu.
+
+`VrContractDesk` puts a copy of the Hab's desk in front of the player while `3D Scene` is on and the flight's video is
+not up: on the playspace's floor, the terminal's screen 60 cm ahead of the head, facing the player; ahead is where the
+playspace faces, or where the head looks if that is more than 60 degrees off.
+- **The models** come from the game at run time, nothing of them is in the mod: `Addressables.LoadAssetAsync` of
+  `.../Hab/Prefabs/PRF_Hab_Rev_03.prefab` (the Hab's interior: of it the group `GRP_Hab_Interior_Desk` within 2.6 m of
+  the screen and `PRF_Computer_Terminal_Hab`, the message terminal on the desk) and `.../Hab/Models/PRF_Props_Hab_Chair.prefab`.
+  The keys are the paths in the game's catalog; that they load was not tried when this was written. The prefabs are
+  only read: each mesh becomes a plain object with the mesh and its materials (the finest level of detail only), so
+  none of the game's components runs. The chair is placed as it stands in `Decoupled_Hab` against `PRF_Hab_Rev_03`
+  (-7.74 -0.01 -32.49, turned -90 degrees). The whole interior's assets are in memory for that time and let go with
+  the desk (`Addressables.Release`).
+- **The screen** is the rectangle of the canvas under the terminal's `LYNX_Screensaver_Locked` (0.56 x 0.31 m in the
+  Hab), or the measured one if the prefab has none.
+- **The contract** goes onto it by moving its parent `UI` each frame (turn, scale to fit, place), so what the game's
+  views do with the canvas itself stays; `PRF_ApartmentComputer` is hidden meanwhile. All of it is put back when the
+  desk goes.
+- **The onboarding's screens** lie on the same screen: `VrUi` takes `VrContractDesk.TryGetScreen` as it takes a
+  monitor of the Hab (monitor look included), only while `PRF_OnboardingScene` is on, so the UI texture cannot cover
+  the contract before.
+- **The picture** is stretched where it is until it is 120 degrees wide from the head.
+- Open, to be seen in the headset: whether the keys load, how the scene's two lights light the desk, whether the
+  apartment stays on through the onboarding, and where the playspace's floor is in the front end. The log tells each
+  step (`Contract desk: ...`).
