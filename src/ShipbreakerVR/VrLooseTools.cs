@@ -625,9 +625,6 @@ namespace ShipbreakerVR
             return point;
         }
 
-        // That controller's hand holds a tool's line (VrHands: no stiff index finger meanwhile).
-        public static bool Hauls(VrInput.Hand input) => HaulsAny(input.IsLeft ? 0 : 1);
-
         private static bool HaulsAny(int h)
         {
             foreach (var tool in Tools)

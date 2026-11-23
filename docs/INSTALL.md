@@ -146,10 +146,7 @@ in the VR options switches this off.
 On large things the hand lies on the surface, its fingers laid on and curling over edges; only small things and a
 lever's grip are held in a fist. At an air conditioner's button the fingers stay straight and press it in.
 
-An empty hand follows your fingers on the controller (controllers with touch sensors, as the Quest's): the grip closes
-it into a fist as far as you press it, the index finger is out straight while it is clearly off the trigger, the thumb
-is out while it is off the buttons, the stick and the thumb rest. With the grip squeezed away from any surface and the index finger off the
-trigger, that finger is stiff: it pushes buttons in and, pushed against a wall, pushes you off slowly.
+An empty hand away from any surface closes into a fist as far as you squeeze the grip, and opens the same way.
 
 Taking hold faster than 2 m/s along a surface, the glove glides on and brakes evenly ("Glove brake", 215 N a hand);
 seams take some speed, a step up catches the hand, at a drop-off it lets go. With "Climbing" set to *Realistic* your

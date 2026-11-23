@@ -1521,62 +1521,31 @@ second pass, next to nothing, and missed blows. Both step once a frame now (`ste
 halved in the code so they stay what was felt and approved in the headset: 1 s for a thing on a wall, 0.5 s for a
 poster, 1.5 to 2 s for a demo charge, 1.5 s for a device.
 
-## The empty hand's own fingers (0.33.0)
-Raik, 2026-11-23: the empty hand that holds nothing follows the fingers on the controller, always, with no setting
-(`VrHands.Curl`, the hand that is `free`). Only what can be measured:
-- **The grip's travel** closes the hand (`VrInput.Squeezed`, from 3 % to 90 % of the travel): one pose all the way from
-  the loose hand (`IdleBend`) to the fist (`ToolBend`). Before, the fist came on at the grip's press point and ran from
-  the animation's pose, which is not the loose hand, so half way it would have jumped. `Grip.Down` (0.5) still decides
-  holding on, drawing tools and the fist's blows.
-- **The trigger's touch sensor** (`TriggerTouch`): off the trigger the index finger is out straight (`PointBend`); on
-  it, it closes with the others and with the trigger's travel (`VrInput.Pulled`).
-- **The thumb's sensors** (`PrimaryTouch`, `SecondaryTouch`, `Primary2DAxisTouch` and the thumb rest's): off all of
-  them the thumb is out, 22 degrees away from the palm on the loose hand, up out of the fist ("thumbs up", `ThumbsUp`).
-- **The thumb rest** (the flat face beside the buttons): Unity's Oculus Touch profile (OpenXR plugin 1.2.8) names its
-  path `/input/thumbrest/touch` but binds no action to it, so the controller had no such feature and a thumb resting
-  there showed as up (Raik's first test). `ThumbRestPatch` (`VrXr.cs`) adds the action to the profile's map before the
-  plugin hands its maps to the runtime (a prefix on `OpenXRInput.SendToOpenXR`), made as the trigger's touch action
-  is; the feature is `ThumbrestTouch`. The thumb is up only once this sensor has answered too (`ThumbRestSensed`).
-- **A sensor that hangs** (Raik's finger trace, 2026-11-23): his right controller's stick told of a touch for 41 s on
-  end, through five clear lifts of the thumb off the thumb rest and with the thumb on A and B, so that thumb never
-  counted as off; the left stick let go within 0.15 s each time. The stick and the thumb rest lie on opposite sides of
-  the buttons and one thumb is not on both, so of the two the one that still tells of a touch after the thumb came to
-  the other and has lain there 0.75 s hangs (`Hand.StickHangs`, `RestHangs`) and is left out until it lets go or, for
-  the stick, is moved or clicked. The buttons are not judged this way: a thumb lies across A and B, or a button and
-  the stick, all the time. The price: a thumb that really bridges stick and thumb rest, then stays on the one that
-  was there first, shows as up until it touches or moves something. The log names each hang.
-- A sensor counts only once it has told of a touch, and a finger is off only after 0.3 s without any touch (first
-  0.08 s; Raik: the fingers must be clearly out of the sensors' field, moved on purpose, and with half signals stay
-  laid on, so they do not wobble with a loosely held controller). A controller or runtime that names the usages but
-  never sets them keeps its fingers on: the hand of 0.32.1, except that the fist follows the grip's travel. The log
-  says once per controller that a sensor answered (`Input: the left controller's trigger tells where the index
-  finger is`). Virtual Desktop sets the trigger's, the buttons' and the stick's (Raik's log of 2026-11-23).
+## The empty hand's fist follows the grip (0.33.0)
+Raik, 2026-11-23: the fist of an empty hand that holds nothing closes as far as the grip's button is pressed, no longer
+all at once (`VrHands.Curl`, the hand that is `free`; `VrInput.Squeezed`, from 3 % to 90 % of the travel). It is one
+pose all the way from the loose hand (`IdleBend`) to the fist (`ToolBend`): before, the fist came on at the grip's
+press point and ran from the animation's pose, which is not the loose hand. `Grip.Down` (0.5) still decides holding
+on, drawing tools and the fist's blows.
 - Closed up to a quarter the fingers are still kept out of things as the loose hand's (`KeepOut`), fading out up to
-  half; closed further they are not, as the fist never was, and what held the hand back for them goes back to nothing
-  (review, 2026-11-23: with the grip barely touched the fingers went into the wall and the hand stayed offset). Lying
-  flat on a surface and right at a button win over the grip's travel, also while the hand comes off them, so letting
-  go of a hold opens the hand as it did.
+  half; closed further they are not, as the fist never was, and what held the hand back for them goes back to nothing.
+- Lying flat on a surface and right at a button win over the grip's travel, also while the hand comes off them, so
+  letting go of a hold opens the hand as it did.
 
-**The stiff index finger** (`VrHands.Stiff`): out of the fist, the grip held on nothing (`Arm.Pointing`), the index
-finger is stiff. The grip still takes hold first: pressed within reach of a surface it holds on (`VrClimb.Read`,
-`CatchTime`), so the gesture is made away from a surface and then brought to it. This answers what took the gesture of
-0.30.1 out again (`idea/pointing-finger`: there a pointing hand held on to nothing, so holding on needed grip and
-trigger together).
-- Where the finger's capsule (knuckle to tip, as posed) meets something that stops a hand, the hand is held back along
-  the way out. The next frame starts from where it was held, then comes back towards the controller as far as the
-  finger is free all the way (tried every 2 cm, then halved): the finger stays on the side it came from. Resolved from
-  the controller's place alone, the shortest way out of a thin wall is through it once the finger is far in, and
-  behind a wall that is only a skin nothing is found (review, 2026-11-23). Past 35 cm it gives way.
-- Not while that hand holds a tool's line (`VrLooseTools.Hauls`) or a device is being stripped by hand
-  (`VrPullOff.Extracting`). A fist's blow on a device with the index finger out still counts.
-- The controller's way past that point is a spring on the body (`VrClimb.Poke`, `ClimbContact.PokePush`: 2500 N/m,
-  250 N at most, against `BodyMass`), so pushing off with a finger takes a long firm push; an arm on a hold has 500 N
-  and moves the body with the hand. A loose part met takes the same force back. No push while a hand holds on.
-- Right at a button (`VrButtons.AtButton`) the finger is not held back by the housing: it pushes the button in and
-  stops where the button is all the way in (`VrButtons.Travel` past the face at rest, `TryGetFace`).
-- The controller hums with the load, 0.05 to 0.35; not at a button, whose own click and buzz it would cut short.
-- The smoothing below measures its angles with `VrToolSteady.Angle`: `Quaternion.Angle` gives 0 below about 0.16
-  degrees, and the pose would stop that far off its controller.
+**Taken out again, for the next release** (Raik after three headset tests on 2026-11-23: "not working optimally yet,
+we take the finger gestures out again for now; the dynamic closing stays"): fingers that follow the controller's
+touch sensors (index finger out off the trigger, thumb out and thumbs up off the buttons, the stick and the thumb
+rest) and the stiff index finger that pushes buttons and pushes the body off a wall. The whole state is the branch
+`idea/finger-gestures` (56e4dbc), with a local trace of the sensors on `idea/finger-gestures-test`. What was learned:
+- Virtual Desktop sets the touch usages of the trigger, A/X, B/Y and the stick. The thumb rest's
+  (`/input/thumbrest/touch`) is named by Unity's Oculus Touch profile (OpenXR plugin 1.2.8) but not bound; an action
+  added to the profile's map in a prefix on `OpenXRInput.SendToOpenXR` brings it, and Virtual Desktop sets it too.
+- Raik's wish: a finger is out only when it is clearly and on purpose out of the sensor's field; with half signals it
+  stays laid on, and nothing may wobble with a loosely held controller. A thumb on the thumb rest is down.
+- His right controller's stick sensor told of a touch for 41 s on end, through clear lifts of the thumb; the left
+  one's let go within 0.15 s. Leaving out a stick that still tells of a touch after the thumb lay on the thumb rest
+  for 0.75 s made the lifts count in the trace, but it was still not good enough in the headset.
+- The stiff finger did push the body off (176 N with the controller 7 cm further in, of 250 N at most).
 
 ## A light smoothing of the hands (0.33.0, for the trailer)
 Raik, 2026-11-23, for the trailer's videos: hands held in front of the face tremble, and it shows. Every controller

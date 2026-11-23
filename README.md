@@ -151,9 +151,8 @@ menus still work with the controllers.
 | Put out a fire on my suit | Shake each hand hard back and forth, about seven quick strokes, until its flames go out. Left alone, the fire keeps burning. |
 | Work an airlock console or a switch | Look at it and press A or X. The grip only holds on, also there: your hand lies on it as on a wall, and closes as a fist only round a lever's grip. |
 | End the shift or use the kiosk | Look at the exit door or the kiosk on the MasterJack and press A or X, with its prompt, as in the flat game. |
-| Press an air conditioner's button | Push it in with your hand: right at the button your fingers stay straight and press it, broken or working. Or with a stiff index finger (next rows). |
-| Move my fingers | An empty hand follows your fingers on the controller: the grip closes it into a fist as far as you press it, the index finger is out straight while it is off the trigger and closes as you pull it, and the thumb is out while it is off the buttons, the stick and the thumb rest. Lift a finger clearly off for a moment; one that only rests loosely stays laid on. So you can point, make a fist and give a thumbs up. Needs a controller with touch sensors (Quest Touch); without them the hand closes with the grip as before. |
-| Point with a stiff finger | Squeeze the grip away from any surface with your index finger off the trigger: a fist with the index finger out, and that finger is stiff. It pushes buttons in, and pushed against a wall it pushes you off, slowly: a finger is not an arm. Close to a surface the grip holds on as always. |
+| Press an air conditioner's button | Push it in with your hand: right at the button your fingers stay straight and press it, broken or working. |
+| Make a fist | Squeeze the grip of an empty hand away from any surface: it closes into a fist as far as you press the grip, and opens the same way. |
 | Use a tool with the left hand | Take it with the left hand. X and Y then do what A and B do, and flying pauses until you let go. With a demo charge or the detonator Y brakes instead. |
 | Feel what I do | The controllers vibrate: the cutter's hand while it cuts, the grapple's hand while it holds a part (stronger the closer the part comes to slipping away), and a short buzz for each tether end. |
 
