@@ -49,7 +49,10 @@ namespace ShipbreakerVR
                 Hints[prompt] = hint;
             }
             if (hint.Zone == VrToolBelt.Zone.None) return;
-            if (!VrXr.IsRunning)
+            // Only while the places at the helmet work, which is with the tools aimed with the hand (VrToolInput reads the
+            // belt's places then only). With that option off the flashlight and the scanner are the game's keys again, and
+            // their hints show as the game draws them (Raik, 2026-11-23).
+            if (!VrXr.IsRunning || VrSettings.AimWithHand == null || !VrSettings.AimWithHand.Value)
             {
                 if (hint.Changed) Show(hint);
                 return;
