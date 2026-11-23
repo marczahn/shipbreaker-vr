@@ -444,6 +444,7 @@ namespace ShipbreakerVR
                     // Without the shoulder stow: A or X of the hand that holds it, as with the AI nodes.
                     held.Holding = false;
                     held.Over = false;
+                    VrStowPrompt.Offer(VrOptions.L("Radio", "Radio"));
                     if (!hand.Primary.Pressed) return;
                     VrClimb.Drop(hand, "radio collected with its button");
                     Stow(hand);

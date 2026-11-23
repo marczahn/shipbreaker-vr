@@ -7,6 +7,9 @@ namespace ShipbreakerVR
     // No prompt for a lever turned by hand (VrLever): the game shows what to press for the interactable offered, and A
     // does not use such a lever (Raik). The prompt's group is made invisible after the game's own Update, and the game's
     // own value is put back before its next one, so the game fades it as before and any other prompt shows as it would.
+    // Only while the hands can work it: with holding on switched off (Steuerung/Festhalten) or the tools not aimed with
+    // the hand, no hand takes hold of a lever, the game offers it from the view and A uses it, so its prompt shows
+    // again (Raik, 2026-11-23: where an option switches the hand's way off and the button does it, the prompt is back).
     [HarmonyPatch(typeof(InteractionUIController), "Update")]
     internal static class VrLeverPrompt
     {
@@ -37,7 +40,7 @@ namespace ShipbreakerVR
 
         private static void Postfix(InteractionUIController __instance)
         {
-            if (!VrXr.IsRunning) return;
+            if (!VrXr.IsRunning || !VrAim.Active || VrSettings.Climbing == null || !VrSettings.Climbing.Value) return;
             var control = Current(__instance);
             if (!WorkedByHand(control)) return;
             var group = Group(__instance);
