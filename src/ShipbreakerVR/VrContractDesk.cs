@@ -52,9 +52,12 @@ namespace ShipbreakerVR
         // Raik's first test (2026-11-23): 60 cm was a little too near.
         private const float Distance = 0.72f;
         private const float BeforeGlass = 0.01f;
-        // The contract's canvas lies this much further out, towards the viewer. Raik: the glass is set in nearly a
-        // centimeter behind where the terminal's own canvas is, and the contract lay too far out on it; now 7 mm in.
-        private const float ContractBefore = 0.003f;
+        // The contract's canvas lies this far before the terminal's face. Measured on the terminal's mesh
+        // ('SM_Computer_Terminal_Hab'): its front is one flat face right in the plane of its screensaver canvas; the
+        // frame round it is the desk's own screen part, which stands out, so the glass looks set in. 3 mm before that
+        // face the contract seemed to float on it (Raik's first test), 7 mm behind it it was inside the model and gone
+        // (his second, with a picture). So: as close before the face as does not flicker with it.
+        private const float ContractBefore = 0.001f;
         // The glass is higher than the terminal's own canvas (30 cm): the screen counts as this much higher (Raik:
         // "one centimeter higher"; the width fits as it is).
         private const float ScreenHigher = 0.01f;
@@ -428,8 +431,8 @@ namespace ShipbreakerVR
         private static void Keep()
         {
             if (ui == null || contract == null || !Screen(out var center, out var rotation, out var size)) return;
-            // On the glass, a little before the mod's own UI texture.
-            center -= rotation * Vector3.forward * ContractBefore;
+            // On the terminal's face: Screen gives the place BeforeGlass behind it.
+            center -= rotation * Vector3.forward * (BeforeGlass + ContractBefore);
             if (!uiMoved)
             {
                 uiMoved = true;

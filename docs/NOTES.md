@@ -1585,8 +1585,11 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
   (-7.74 -0.01 -32.49, turned -90 degrees). The whole interior's assets are in memory for that time and let go with
   the desk (`Addressables.Release`).
 - **The screen** is the rectangle of the canvas under the terminal's `LYNX_Screensaver_Locked` (54 x 30 cm in the
-  prefab, which has it), or the measured one if a prefab has none. The glass is set in nearly a centimeter behind that
-  canvas and is higher: the contract lies 7 mm in, the UI texture 10 mm, and the screen counts as 1 cm higher (Raik).
+  prefab, which has it), or the measured one if a prefab has none. The terminal's mesh (104 vertices) has one flat
+  front face exactly in that canvas' plane; the frame with the set-in look is the desk's own part
+  `SM_Hab_Interior_Desk_Screen` round it. The contract lies 1 mm before that face: at 3 mm it seemed to float (Raik's
+  first test), 7 mm behind it it was inside the model and invisible (his second). The UI texture is drawn 10 mm
+  behind, as on the Hab's monitors, where the depth does not hide it. The screen counts as 1 cm higher (Raik).
 - **The contract** goes onto it by moving its parent `UI` each frame (turn, scale to fit, place), so what the game's
   views do with the canvas itself stays; `PRF_ApartmentComputer` is hidden meanwhile. All of it is put back when the
   desk goes.
