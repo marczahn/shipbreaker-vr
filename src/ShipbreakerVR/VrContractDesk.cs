@@ -69,9 +69,16 @@ namespace ShipbreakerVR
         private const float MovedFrom = 0.2f;
         private const float StillBelow = 0.1f;
         private const float StillFor = 0.6f;
-        // The apartment's picture is stretched until it is this wide as seen from the head, in degrees (Raik: only
-        // stretched, not moved).
-        private const float PictureWide = 120f;
+        // The apartment's picture stands straight behind the desk, as far from the head as the game has it from its
+        // camera, its middle at the head's height, and is stretched until it is this wide as seen from the head, in
+        // degrees. Raik's tests: first only stretched where it was (120 degrees), but the desk goes where the head
+        // looks, so the picture stood askew behind it, and it was a little too large.
+        private const float PictureWide = 100f;
+        // The contract's canvas and what lies on it (the mail, the news, the contract's window, its pop-up) are layered
+        // in depth, in meters whatever the canvas' scale: fine for the game's one camera, but in VR the contract's
+        // window floated centimeters before the glass (Raik's picture of 2026-11-24). Their depth is pressed flat to
+        // this share.
+        private const float Flat = 0.02f;
         private const float SearchEvery = 1f;
 
         // The game's side: the contract scene's root and what of it is used.
@@ -112,8 +119,9 @@ namespace ShipbreakerVR
 
         // What is changed of the game's scene while the desk is shown, to put it back.
         private static bool uiMoved, pictureStretched;
-        private static Vector3 uiPosition, uiScale, pictureScale;
-        private static Quaternion uiRotation;
+        private static Vector3 uiPosition, uiScale, pictureScale, picturePosition;
+        private static Quaternion uiRotation, pictureRotation;
+        private static float pictureWidth, pictureFar;
         private static Transform picture;
         private static Renderer computer;
         private static int logs;
@@ -382,7 +390,6 @@ namespace ShipbreakerVR
             desk.SetActive(true);
             shown = true;
             if (computer != null) computer.enabled = false;
-            Stretch(vr.transform.position);
         }
 
         private static void Place(VrCamera vr)
@@ -405,6 +412,7 @@ namespace ShipbreakerVR
             root.position = target - root.rotation * (screenCenter * scale);
             placedFor = headBefore = head.localPosition;
             stillSince = Time.unscaledTime;
+            Picture(head.position, ahead, up, scale);
             if (logs++ < 60)
                 Plugin.Log.LogInfo($"Contract desk: placed, the screen {Distance * 100f:0} cm ahead of the head and {(screenCenter.y - FloorAt) * 100f:0} cm above the floor (the head is {Vector3.Dot(head.position - floor, up) / scale * 100f:0} cm above it)");
         }
@@ -424,20 +432,30 @@ namespace ShipbreakerVR
             Place(vr);
         }
 
-        // The apartment's picture as wide as PictureWide from the head, where it is; never smaller than it was.
-        private static void Stretch(Vector3 from)
+        // The apartment's picture straight behind the desk: ahead of the head as far as it was from the game's camera,
+        // its middle at the head's height, facing the player, as wide as PictureWide from there.
+        private static void Picture(Vector3 from, Vector3 ahead, Vector3 up, float scale)
         {
             var sprite = picture != null ? picture.GetComponent<SpriteRenderer>() : null;
-            if (sprite == null || pictureStretched) return;
-            var width = sprite.bounds.size.x;
-            var far = Vector3.Distance(from, sprite.bounds.center);
-            if (width <= 0.01f || far <= 0.01f) return;
-            var factor = 2f * far * Mathf.Tan(PictureWide * 0.5f * Mathf.Deg2Rad) / width;
-            if (factor <= 1f) return;
-            pictureScale = picture.localScale;
-            pictureStretched = true;
+            if (sprite == null) return;
+            if (!pictureStretched)
+            {
+                var camera = Camera.main != null ? Camera.main.transform.position : from;
+                pictureWidth = sprite.bounds.size.x;
+                pictureFar = Vector3.Distance(camera, sprite.bounds.center);
+                if (pictureWidth <= 0.01f || pictureFar <= 0.01f) return;
+                pictureStretched = true;
+                pictureScale = picture.localScale;
+                picturePosition = picture.position;
+                pictureRotation = picture.rotation;
+            }
+            var factor = 2f * pictureFar * Mathf.Tan(PictureWide * 0.5f * Mathf.Deg2Rad) / pictureWidth;
             picture.localScale = new Vector3(pictureScale.x * factor, pictureScale.y * factor, pictureScale.z);
-            Plugin.Log.LogInfo($"Contract desk: the apartment's picture ({width:0.0} m wide, {far:0.0} m away) is stretched {factor:0.0} times");
+            picture.rotation = Quaternion.LookRotation(ahead, up);
+            // The sprite's middle may lie off its transform.
+            picture.position += from + ahead * pictureFar - sprite.bounds.center;
+            if (logs++ < 60)
+                Plugin.Log.LogInfo($"Contract desk: the apartment's picture ({pictureWidth:0.0} m wide, {pictureFar:0.0} m from the game's camera) stands behind the desk, stretched {factor:0.0} times");
         }
 
         // Every frame while shown: the contract's canvas on the terminal's screen, as large as fits. Its parent ('UI')
@@ -460,10 +478,11 @@ namespace ShipbreakerVR
             }
             var rect = contract.rect;
             if (rect.width <= 1f || rect.height <= 1f) return;
+            Depths();
             var fit = Mathf.Min(size.x / rect.width, size.y / rect.height);
             var parentScale = ui.parent != null ? ui.parent.lossyScale : Vector3.one;
             ui.rotation = rotation * Quaternion.Inverse(contract.localRotation);
-            ui.localScale = new Vector3(fit / Mathf.Max(Mathf.Abs(parentScale.x), 1e-6f), fit / Mathf.Max(Mathf.Abs(parentScale.y), 1e-6f), uiScale.z);
+            ui.localScale = new Vector3(fit / Mathf.Max(Mathf.Abs(parentScale.x), 1e-6f), fit / Mathf.Max(Mathf.Abs(parentScale.y), 1e-6f), uiScale.z * Flat);
             // The middle of the canvas' rectangle, as it rests in its parent, onto the screen's middle.
             var resting = contract.localPosition + contract.localRotation * (Vector3)rect.center;
             ui.position = center - ui.rotation * Vector3.Scale(resting, ui.lossyScale);
@@ -535,6 +554,30 @@ namespace ShipbreakerVR
             return null;
         }
 
+        // For the log, while something of the contract lies off its canvas in depth: what, and how far (in the canvas'
+        // own depth, meters before it was pressed flat). A few times, when the deepest changes.
+        private static float depthLogged;
+        private static int depthLogs;
+
+        private static void Depths()
+        {
+            if (depthLogs >= 8) return;
+            var deepest = 0f;
+            Transform which = null;
+            foreach (var each in contract.GetComponentsInChildren<Transform>(false))
+            {
+                if (each == contract) continue;
+                var depth = contract.InverseTransformPoint(each.position).z;
+                if (Mathf.Abs(depth) <= Mathf.Abs(deepest)) continue;
+                deepest = depth;
+                which = each;
+            }
+            if (which == null || Mathf.Abs(deepest - depthLogged) < 0.002f) return;
+            depthLogged = deepest;
+            depthLogs++;
+            Plugin.Log.LogInfo($"Contract desk: '{which.name}' lies {deepest * 100f:0.0} cm off the contract's canvas in depth (pressed flat to {Flat * 100f:0} % of that)");
+        }
+
         private static void Hide()
         {
             if (!shown) return;
@@ -555,7 +598,12 @@ namespace ShipbreakerVR
                 ui.localScale = uiScale;
             }
             uiMoved = false;
-            if (pictureStretched && picture != null) picture.localScale = pictureScale;
+            if (pictureStretched && picture != null)
+            {
+                picture.localScale = pictureScale;
+                picture.position = picturePosition;
+                picture.rotation = pictureRotation;
+            }
             pictureStretched = false;
             if (computer != null) computer.enabled = true;
             if (listening != null) listening.onClick.RemoveListener(Clicked);

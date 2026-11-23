@@ -1596,7 +1596,13 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
 - **The onboarding's screens** lie on the same screen: `VrUi` takes `VrContractDesk.TryGetScreen` as it takes a
   monitor of the Hab (monitor look included), only while `PRF_OnboardingScene` is on, so the UI texture cannot cover
   the contract before.
-- **The picture** is stretched where it is until it is 120 degrees wide from the head.
+- **The picture** stands straight behind the desk: ahead of the head as far as the game has it from its camera
+  (7.7 m), its middle at the head's height, 100 degrees wide from there; placed again with the desk. First it was only
+  stretched where the game has it (120 degrees): askew behind a desk that goes where the head looks, and too large.
+- **Depth on the canvas**: the contract's window, the mail and the news lie before the canvas by centimeters, in
+  meters whatever the canvas' scale. One camera never saw that; in VR the contract's window floated before the glass
+  (Raik's picture, 2026-11-24). The parent's depth scale is pressed to 2 %, which leaves their order and takes the
+  floating.
 - **Clicking through** (`VrContractDesk.Advance`): a toggle of the contract that was just ticked, or a button of it
   that was just clicked, hands the selection on 0.15 s later to what lies below it (else to its right), past the
   other choices of the same toggle group, if the game left the selection where it was. So A alone goes through the
