@@ -20,6 +20,13 @@ namespace ShipbreakerVR
     internal static class VrToolLine
     {
         private const int Points = 26;
+        // Half the length of the tube a fist is for the line, in meters at world scale 1: the hand's width.
+        private const float FistHalf = 0.05f;
+        // The least line left free beside a fist, in meters at world scale 1.
+        private const float Beside = 0.01f;
+        private static readonly ToolLine.Hold[] FistHolds = new ToolLine.Hold[4];
+        private static readonly int[] SpreadPoints = new int[4];
+        private static readonly float[] SpreadAlongs = new float[4];
         // The smooth curve through the points has this many steps between two of them.
         private const int Between = 3;
         // In meters at world scale 1.
@@ -67,11 +74,22 @@ namespace ShipbreakerVR
             public float StepBefore;
             public Mesh Mesh;
             public bool Reels;
-            // The point each hand holds (left, right; -1: none), where that hand is, and how much line lies between the
-            // hip and the first hand (Near), between the two hands (Mid) and between the last hand and the tool (Rest).
+            // What each hand holds (left, right). A fist is a tube the line runs through (Raik, 2026-11-22: "the whole
+            // fist should be like a tube the line has to go through; only below and above the hand one sees can it
+            // bend again"): two points of the chain next to each other are held, Held (-1: none) at the fist's end
+            // towards the hip and the one after it at its end towards the tool, FistHalf either side of the fist's
+            // middle (HeldAt) along Axis, which points through the fist from the hip's side to the tool's. Turned is
+            // which way round that is against the fist's own axis, kept for as long as the hand holds on. Near is how
+            // much line lies between the hip and the first fist, Mid between the two fists, Rest between the last fist
+            // and the tool; the line inside a fist is as long as the fist.
             public readonly int[] Held = { -1, -1 };
             public readonly Vector3[] HeldAt = new Vector3[2];
+            public readonly Vector3[] Axis = new Vector3[2];
+            public readonly float[] Turned = { 1f, 1f };
             public float Near, Mid, Rest;
+
+            public Vector3 HipSide(int hand) => HeldAt[hand] - Axis[hand] * (FistHalf * VrCamera.WorldScale);
+            public Vector3 ToolSide(int hand) => HeldAt[hand] + Axis[hand] * (FistHalf * VrCamera.WorldScale);
             // How much of the sun reaches each point (0 in shadow to 1), what it goes towards, and the point asked next.
             public readonly float[] Lit = new float[Points];
             public readonly float[] LitGoal = new float[Points];
@@ -148,14 +166,23 @@ namespace ShipbreakerVR
                 // keeps its length (drawn no shorter than the way to the tool, should the tool not come along). With the
                 // tool itself in a hand the line runs through the hand that holds the line instead.
                 var two = outer != inner;
-                line.Near = ToolLine.PaidOut(line.Near, (line.HeldAt[inner] - hip).magnitude, most, true, Slack, Spare * scale, Reel * scale, dt);
-                if (two) line.Mid = Mathf.Max(line.Mid, (line.HeldAt[outer] - line.HeldAt[inner]).magnitude);
-                var far = Mathf.Max(line.Rest, (end - line.HeldAt[outer]).magnitude);
+                var fist = 2f * FistHalf * scale;
+                line.Near = ToolLine.PaidOut(line.Near, (line.HipSide(inner) - hip).magnitude, most, true, Slack, Spare * scale, Reel * scale, dt);
+                if (two) line.Mid = Mathf.Max(line.Mid, (line.HipSide(outer) - line.ToolSide(inner)).magnitude);
+                var far = Mathf.Max(line.Rest, (end - line.ToolSide(outer)).magnitude);
                 if (reels) line.Rest = far;
-                line.PaidOut = line.Near + (two ? line.Mid : 0f) + far;
-                line.Line.Step(hip, end, far, new ToolLine.Hold { Point = line.Held[inner], At = line.HeldAt[inner], Length = line.Near },
-                    two ? new ToolLine.Hold { Point = line.Held[outer], At = line.HeldAt[outer], Length = line.Mid } : ToolLine.Hold.None,
-                    line.CarriedBefore, moved, keep, bend, Rounds);
+                line.PaidOut = line.Near + fist + (two ? line.Mid + fist : 0f) + far;
+                // Each fist holds two points, one at either end of it: the line is straight through the hand.
+                FistHolds[0] = new ToolLine.Hold { Point = line.Held[inner], At = line.HipSide(inner), Length = line.Near };
+                FistHolds[1] = new ToolLine.Hold { Point = line.Held[inner] + 1, At = line.ToolSide(inner), Length = fist };
+                var count = 2;
+                if (two)
+                {
+                    FistHolds[2] = new ToolLine.Hold { Point = line.Held[outer], At = line.HipSide(outer), Length = line.Mid };
+                    FistHolds[3] = new ToolLine.Hold { Point = line.Held[outer] + 1, At = line.ToolSide(outer), Length = fist };
+                    count = 4;
+                }
+                line.Line.Step(hip, end, far, FistHolds, count, line.CarriedBefore, moved, keep, bend, Rounds);
             }
             else
             {
@@ -178,10 +205,12 @@ namespace ShipbreakerVR
             }
         }
 
-        // A hand (0 left, 1 right) at that place takes hold of a tool's line, if the line is within reach of it. The
-        // chain's points are spread anew along the line as it lies, so the hands can take hold again and again, one
-        // beyond the other.
-        public static bool Take(int index, int hand, Vector3 at, float reach)
+        // A hand (0 left, 1 right) with its fist's middle at that place takes hold of a tool's line, if the line is
+        // within reach of it. axis is the way through the fist (from the little finger's side to the thumb's or the
+        // other way round: the line runs through it whichever way it lies). The chain's points are spread anew along the
+        // line as it lies, so the hands can take hold again and again, one beyond the other. False as well where the
+        // line has no room for the fist (too little of it out, or the other fist in the way).
+        public static bool Take(int index, int hand, Vector3 at, Vector3 axis, float reach)
         {
             var line = Lines[index];
             if (!line.Out || line.Held[hand] > 0) return false;
@@ -192,36 +221,91 @@ namespace ShipbreakerVR
             var hip = chain.At[0];
             var end = chain.At[last];
             var other = 1 - hand;
-            line.HeldAt[hand] = at;
+            var scale = VrCamera.WorldScale;
+            var half = FistHalf * scale;
+            var fist = 2f * half;
+            var beside = Beside * scale;
+            var turned = Vector3.Dot(chain.Way(along), axis) >= 0f ? 1f : -1f;
             if (line.Held[other] > 0)
             {
-                var otherAlong = chain.Along(line.Held[other]);
-                var beyond = along >= otherAlong;
-                var innerAlong = beyond ? otherAlong : along;
-                var outerAlong = beyond ? along : otherAlong;
-                var innerPoint = Mathf.Clamp(chain.PointAt(innerAlong), 1, last - 2);
-                var outerPoint = Mathf.Clamp(chain.PointAt(outerAlong), innerPoint + 1, last - 1);
-                chain.Spread(innerPoint, innerAlong, outerPoint, outerAlong);
+                var otherIn = chain.Along(line.Held[other]);
+                var otherOut = chain.Along(line.Held[other] + 1);
+                var beyond = along >= (otherIn + otherOut) * 0.5f;
+                float innerIn, innerOut, outerIn, outerOut;
+                if (beyond)
+                {
+                    innerIn = otherIn;
+                    innerOut = otherOut;
+                    outerIn = Mathf.Max(along - half, otherOut + beside);
+                    outerOut = outerIn + fist;
+                }
+                else
+                {
+                    outerIn = otherIn;
+                    outerOut = otherOut;
+                    innerOut = Mathf.Min(along + half, otherIn - beside);
+                    innerIn = innerOut - fist;
+                }
+                if (innerIn < beside || outerOut > total - beside) return false;
+                var innerPoint = Mathf.Clamp(chain.PointAt(innerIn), 1, last - 4);
+                var outerPoint = Mathf.Clamp(chain.PointAt(outerIn), innerPoint + 2, last - 2);
+                SpreadPoints[0] = innerPoint;
+                SpreadAlongs[0] = innerIn;
+                SpreadPoints[1] = innerPoint + 1;
+                SpreadAlongs[1] = innerOut;
+                SpreadPoints[2] = outerPoint;
+                SpreadAlongs[2] = outerIn;
+                SpreadPoints[3] = outerPoint + 1;
+                SpreadAlongs[3] = outerOut;
+                chain.Spread(SpreadPoints, SpreadAlongs, 4);
+                line.HeldAt[hand] = at;
+                line.Turned[hand] = turned;
+                line.Axis[hand] = axis * turned;
                 line.Held[hand] = beyond ? outerPoint : innerPoint;
                 line.Held[other] = beyond ? innerPoint : outerPoint;
-                line.Mid = Mathf.Max(outerAlong - innerAlong, (at - line.HeldAt[other]).magnitude);
-                if (beyond) line.Rest = Mathf.Max(total - outerAlong, (end - at).magnitude);
-                else line.Near = Mathf.Max(innerAlong, (at - hip).magnitude);
+                var inner = beyond ? other : hand;
+                var outer = beyond ? hand : other;
+                line.Mid = Mathf.Max(outerIn - innerOut, (line.HipSide(outer) - line.ToolSide(inner)).magnitude);
+                if (beyond) line.Rest = Mathf.Max(total - outerOut, (end - line.ToolSide(hand)).magnitude);
+                else line.Near = Mathf.Max(innerIn, (line.HipSide(hand) - hip).magnitude);
             }
             else
             {
-                var point = Mathf.Clamp(chain.PointAt(along), 1, last - 1);
-                chain.Spread(point, along, -1, 0f);
+                if (total < fist + 2f * beside) return false;
+                var inAlong = Mathf.Clamp(along - half, beside, total - fist - beside);
+                var outAlong = inAlong + fist;
+                var point = Mathf.Clamp(chain.PointAt(inAlong), 1, last - 2);
+                SpreadPoints[0] = point;
+                SpreadAlongs[0] = inAlong;
+                SpreadPoints[1] = point + 1;
+                SpreadAlongs[1] = outAlong;
+                chain.Spread(SpreadPoints, SpreadAlongs, 2);
+                line.HeldAt[hand] = at;
+                line.Turned[hand] = turned;
+                line.Axis[hand] = axis * turned;
                 line.Held[hand] = point;
                 line.Mid = 0f;
-                line.Near = Mathf.Max(along, (at - hip).magnitude);
-                line.Rest = Mathf.Max(total - along, (end - at).magnitude);
+                line.Near = Mathf.Max(inAlong, (line.HipSide(hand) - hip).magnitude);
+                line.Rest = Mathf.Max(total - outAlong, (end - line.ToolSide(hand)).magnitude);
             }
             return true;
         }
 
-        // Where a hand that holds a tool's line is now.
-        public static void Carry(int index, int hand, Vector3 at) => Lines[index].HeldAt[hand] = at;
+        // Where the fist of a hand that holds a tool's line is now, and the way through it.
+        public static void Carry(int index, int hand, Vector3 at, Vector3 axis)
+        {
+            var line = Lines[index];
+            line.HeldAt[hand] = at;
+            line.Axis[hand] = axis * line.Turned[hand];
+        }
+
+        // Where the line leaves that hand's fist towards the tool: from there a pull of the hand goes to the tool.
+        public static bool ToolSide(int index, int hand, out Vector3 at)
+        {
+            var line = Lines[index];
+            at = line.Out && line.Held[hand] > 0 ? line.ToolSide(hand) : Vector3.zero;
+            return line.Out && line.Held[hand] > 0;
+        }
 
         public static bool Holds(int index, int hand) => Lines[index].Out && Lines[index].Held[hand] > 0;
 
@@ -242,20 +326,27 @@ namespace ShipbreakerVR
             var chain = line.Line;
             var last = chain.At.Length - 1;
             var other = 1 - hand;
+            // The line that lay in the fist is free line again.
+            var fist = 2f * FistHalf * VrCamera.WorldScale;
             if (line.Held[other] > 0)
             {
-                if (line.Held[hand] > line.Held[other]) line.Rest += line.Mid;
-                else line.Near += line.Mid;
+                if (line.Held[hand] > line.Held[other]) line.Rest += line.Mid + fist;
+                else line.Near += line.Mid + fist;
                 line.Mid = 0f;
                 line.Held[hand] = -1;
-                var along = chain.Along(line.Held[other]);
-                var point = Mathf.Clamp(chain.PointAt(along), 1, last - 1);
-                chain.Spread(point, along, -1, 0f);
+                var inAlong = chain.Along(line.Held[other]);
+                var outAlong = chain.Along(line.Held[other] + 1);
+                var point = Mathf.Clamp(chain.PointAt(inAlong), 1, last - 2);
+                SpreadPoints[0] = point;
+                SpreadAlongs[0] = inAlong;
+                SpreadPoints[1] = point + 1;
+                SpreadAlongs[1] = outAlong;
+                chain.Spread(SpreadPoints, SpreadAlongs, 2);
                 line.Held[other] = point;
                 return;
             }
             line.Held[hand] = -1;
-            line.PaidOut = line.Near + line.Rest;
+            line.PaidOut = line.Near + fist + line.Rest;
             chain.Spread(-1, 0f, -1, 0f);
         }
 
@@ -335,6 +426,12 @@ namespace ShipbreakerVR
                     {
                         point = at[at.Length - 1];
                         along = at[at.Length - 1] - at[at.Length - 2];
+                    }
+                    else if (i == line.Held[0] || i == line.Held[1])
+                    {
+                        // Through a fist the line is straight, not part of the curve.
+                        point = Vector3.Lerp(at[i], at[i + 1], t);
+                        along = at[i + 1] - at[i];
                     }
                     else
                     {

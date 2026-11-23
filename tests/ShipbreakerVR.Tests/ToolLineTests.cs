@@ -246,5 +246,95 @@ namespace ShipbreakerVR.Tests
             Assert.False(pieces[0].Flat);
             Assert.Equal(8, pieces[0].Points.Length);
         }
+
+        // A fist is a tube the line runs through: two points next to each other are held, one at either end of it.
+        private static ToolLine ThroughAFist(out Vector3 hip, out Vector3 tool, out Vector3 into, out Vector3 outOf, out float near, out float far)
+        {
+            var line = new ToolLine(26);
+            hip = Vector3.zero;
+            tool = new Vector3(2f, 0f, 0f);
+            line.Lay(hip, tool, new Vector3(0f, -0.02f, 0f));
+            for (var i = 0; i < 100; i++) line.Step(hip, tool, 2.5f, Vector3.zero, Vector3.zero, 0.98f, 0.1f, 14);
+            // The fist 10 cm long, a metre along the line, lifted off it and turned upright.
+            line.Spread(new[] { 10, 11 }, new[] { 1f, 1.1f }, 2);
+            into = new Vector3(0.9f, 0.3f, 0f);
+            outOf = new Vector3(0.9f, 0.4f, 0f);
+            near = 1.05f;
+            far = 1.4f;
+            var holds = new[]
+            {
+                new ToolLine.Hold { Point = 10, At = into, Length = near },
+                new ToolLine.Hold { Point = 11, At = outOf, Length = 0.1f },
+            };
+            for (var i = 0; i < 300; i++) line.Step(hip, tool, far, holds, 2, Vector3.zero, Vector3.zero, 0.95f, 0.1f, 14);
+            return line;
+        }
+
+        [Fact]
+        public void LineThroughAFistIsStraightInItAndHeldAtBothEnds()
+        {
+            var line = ThroughAFist(out _, out _, out var into, out var outOf, out _, out _);
+            Assert.True((line.At[10] - into).magnitude < 1e-5f);
+            Assert.True((line.At[11] - outOf).magnitude < 1e-5f);
+        }
+
+        [Fact]
+        public void LineThroughAFistKeepsEachStretchsLength()
+        {
+            var line = ThroughAFist(out _, out _, out _, out _, out var near, out var far);
+            Assert.InRange(line.Along(10), near - 0.03f, near + 0.03f);
+            Assert.InRange(line.Length() - line.Along(11), far - 0.03f, far + 0.03f);
+        }
+
+        [Fact]
+        public void LineBendsOnlyOutsideTheFist()
+        {
+            var line = ThroughAFist(out var hip, out var tool, out var into, out var outOf, out _, out _);
+            // Neither stretch runs through the fist: the points before it stay on the hip's side of its entry along
+            // the fist's axis or beside it, never between its two ends.
+            var axis = (outOf - into).normalized;
+            for (var i = 1; i < line.At.Length - 1; i++)
+            {
+                if (i == 10 || i == 11) continue;
+                var along = Vector3.Dot(line.At[i] - into, axis);
+                var beside = (line.At[i] - into - axis * along).magnitude;
+                Assert.False(along > 0.005f && along < 0.095f && beside < 0.005f, $"point {i} lies inside the fist");
+            }
+            Assert.True((line.At[0] - hip).magnitude < 1e-6f && (line.At[25] - tool).magnitude < 1e-6f);
+        }
+
+        [Fact]
+        public void TwoFistsHoldFourPointsInTheirOrder()
+        {
+            var line = new ToolLine(26);
+            var hip = Vector3.zero;
+            var tool = new Vector3(3f, 0f, 0f);
+            line.Lay(hip, tool, new Vector3(0f, -0.02f, 0f));
+            line.Spread(new[] { 6, 7, 15, 16 }, new[] { 0.8f, 0.9f, 1.9f, 2f }, 4);
+            Assert.InRange(line.Along(6), 0.78f, 0.82f);
+            Assert.InRange(line.Along(7), 0.88f, 0.92f);
+            Assert.InRange(line.Along(15), 1.88f, 1.92f);
+            Assert.InRange(line.Along(16), 1.98f, 2.02f);
+            var holds = new[]
+            {
+                new ToolLine.Hold { Point = 6, At = new Vector3(0.8f, 0.2f, 0f), Length = 0.9f },
+                new ToolLine.Hold { Point = 7, At = new Vector3(0.9f, 0.2f, 0f), Length = 0.1f },
+                new ToolLine.Hold { Point = 15, At = new Vector3(1.9f, 0.2f, 0f), Length = 1.1f },
+                new ToolLine.Hold { Point = 16, At = new Vector3(2f, 0.2f, 0f), Length = 0.1f },
+            };
+            for (var i = 0; i < 300; i++) line.Step(hip, tool, 1.2f, holds, 4, Vector3.zero, Vector3.zero, 0.95f, 0.1f, 14);
+            for (var h = 0; h < 4; h++) Assert.True((line.At[holds[h].Point] - holds[h].At).magnitude < 1e-5f);
+            Assert.InRange(line.Along(15) - line.Along(7), 1.07f, 1.13f);
+        }
+
+        [Fact]
+        public void WayIsTheLinesDirectionAtAPlace()
+        {
+            var line = new ToolLine(11);
+            line.Lay(Vector3.zero, new Vector3(0f, 0f, 2f), Vector3.zero);
+            var way = line.Way(1f);
+            Assert.InRange(way.z, 0.999f, 1.001f);
+            Assert.InRange(line.Way(5f).z, 0.999f, 1.001f);
+        }
     }
 }

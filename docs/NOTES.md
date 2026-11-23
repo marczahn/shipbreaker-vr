@@ -1439,3 +1439,18 @@ Known to fool it: head and left wrist turning the same way without the body (the
 smaller of the two), and rolling the hand with the controller pointing steeply up or down while the head turns the
 same way. `Experimente/SchubReferenzDrehtMit = false` gives the reference in the room back. The log says how far the
 reference went round when the trigger is let go after more than 15 degrees (`Controls: with the thrust held ...`).
+
+## The tool line runs through the fist
+A hand that held a tool's line held one point of the chain (`ToolLine`), at the controller, and the line bent right in
+the hand. A fist is now a tube for it (Raik, 2026-11-22): two points next to each other are held, 5 cm either side
+of the fist's middle (the hollow between palm and closed fingers: 3.5 cm out from the controller's place along the
+palm's normal and 1.5 cm towards the finger tips, `Experimente/LeineFaustTiefe` and `LeineFaustZuFingern`; at the
+controller's own place the line ran through the palm, at `VrClimb.PalmPoint` through the closed fingers) along the way through the fist, which is across the drawn hand (square to the palm's normal and
+to wrist-to-knuckles; without the drawn hand the grip pose's forward, OpenXR's axis of the closed fingers). Which
+end is towards the hip is fixed as the hand takes hold, by the way the line lies there. The link between the two
+points is not worked on (both are held) and is drawn straight instead of as part of the Catmull-Rom curve; the line
+inside the fist counts as 10 cm of line. A pull of the hand goes to the tool from where the line leaves the fist
+(`VrToolLine.ToolSide`). `ToolLine.Step` and `Spread` take any number of held points for this.
+
+Taking the line: within 18 cm of the fist's middle (12 before), and a grip that closed up to 0.25 s ago still takes
+a line the hand comes to (before, only in the frame the grip closed).
