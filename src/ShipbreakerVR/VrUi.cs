@@ -50,6 +50,8 @@ namespace ShipbreakerVR
 
         private bool menuMode;
         private bool menuPlaced;
+        // In front of the head while walking the Hab, as the visor is (UpdatePlacement).
+        private bool habVisor;
         private bool menuFollowing;
         private Vector3 menuPosition;
         private Quaternion menuRotation;
@@ -317,9 +319,29 @@ namespace ShipbreakerVR
                 return;
             }
 
+            var rig = head.parent;
+            // Walking through the Hab (VrHabWalk): the canvas shows the mod's own lines only (what to press at a screen,
+            // X for the exit), and stays in front of the head as the visor does, steadied the same way, so they are in
+            // view wherever one walks and looks. Fixed in the room, the standing line for X was behind one's back after
+            // the first turn. As large and as far away as the menu.
+            var walking = vr.FollowsHab && VrHabWalk.Walking && VrHabWalk.TakesInput;
+            if (walking != habVisor)
+            {
+                habVisor = walking;
+                menuPlaced = false;
+                visorPlaced = false;
+            }
+            if (walking)
+            {
+                var turned = SteadyVisor(head.localRotation);
+                var width = VrSettings.MenuWidth.Value * VrCamera.WorldScale;
+                var at = rig.TransformPoint(head.localPosition + turned * Vector3.forward * VrSettings.MenuDistance.Value);
+                screenMatrix = Matrix4x4.TRS(at, rig.rotation * turned, new Vector3(width, width / aspect, 1f));
+                return;
+            }
+
             // Menu: place once in front of the head, upright at eye height, then keep it fixed in the playspace except for
             // following the eye height.
-            var rig = head.parent;
             if (!menuPlaced)
             {
                 menuPlaced = true;
