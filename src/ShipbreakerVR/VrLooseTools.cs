@@ -185,6 +185,10 @@ namespace ShipbreakerVR
             public Quaternion FromTurn;
             // The hand that last held it by its grip, until the game puts it away.
             public VrHand Holder;
+            // Afloat and held by its housing (as any loose part): by which hand, and whether a part of it is at its
+            // place on the body (StowByBody).
+            public VrHand BodyHolder;
+            public bool AtPlace;
             public float HeldAt;
             public bool Loose;
             public float LooseSince;
@@ -483,7 +487,62 @@ namespace ShipbreakerVR
                 if (tool.Prop) PropLetGo(tool);
                 if (!held && tool.Holder != null && Time.unscaledTime - tool.HeldAt > 1f) tool.Holder = null;
                 Haul(tool);
+                StowByBody(tool);
             }
+        }
+
+        // A tool afloat that a hand holds by its housing (as any loose part, VrClimb) goes back onto the body as one
+        // held by its grip does: let go with any part of it at its place on the body (Raik, 2026-11-22: "it is enough
+        // that the tool reaches into its place, it need not be the hand"). A light buzz tells it is there, as the
+        // belt's does for a hand. Until then such a tool could only be moved about; to put it away, a hand had to take
+        // its grip first.
+        private static readonly List<Collider> Shapes = new List<Collider>();
+
+        private static void StowByBody(Tool tool)
+        {
+            if (!tool.Loose || tool.Rigid == null)
+            {
+                tool.BodyHolder = null;
+                tool.AtPlace = false;
+                return;
+            }
+            VrHand holder = null;
+            foreach (var hand in VrHand.Both)
+                if (VrClimb.HeldBody(hand.Input) == tool.Rigid) holder = hand;
+            if (holder != null)
+            {
+                var at = AtItsPlace(tool);
+                if (at && !tool.AtPlace) holder.Input.Buzz(0.25f, 0.04f);
+                tool.AtPlace = at;
+                tool.BodyHolder = holder;
+                return;
+            }
+            var was = tool.BodyHolder;
+            var there = tool.AtPlace;
+            tool.BodyHolder = null;
+            tool.AtPlace = false;
+            // Let go with the grip (not lost by tracking), with the tool at its place.
+            if (was == null || was.Input.Grip.Down || !(there || AtItsPlace(tool))) return;
+            was.Input.Buzz(0.6f, 0.08f);
+            End(tool, $"put back at its place on the body by the {was.Name} hand, which held it by its housing");
+        }
+
+        // Whether any of the tool's shapes has its middle at the tool's place on the body.
+        private static bool AtItsPlace(Tool tool)
+        {
+            var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
+            if (rig == null) return false;
+            tool.Rigid.GetComponentsInChildren(Shapes);
+            var at = false;
+            foreach (var shape in Shapes)
+            {
+                if (shape == null || !shape.enabled || shape.isTrigger) continue;
+                if (!VrToolBelt.StowsAt(tool.Zone, rig.InverseTransformPoint(shape.bounds.center))) continue;
+                at = true;
+                break;
+            }
+            Shapes.Clear();
+            return at;
         }
 
         // ---- Pulling a tool in by its line ----
