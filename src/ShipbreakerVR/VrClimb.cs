@@ -133,6 +133,10 @@ namespace ShipbreakerVR
             public Vector3 PullOffset;
             // Where the grip was pressed last, for CatchTime.
             public float PressedAt = -1f;
+            // When the stiff finger's push may be logged next (Poke).
+            public float PokeLogAt;
+
+            public Hand Other(Hand[] hands) => hands[0] == this ? hands[1] : hands[0];
             // The surface under the hand when it took hold, on Anchor: the game's hand goes there, the body keeps to Point.
             public Vector3 Surface;
             // The surface's outward direction there, on Anchor: a flat hand lies on it (VrHands).
@@ -372,9 +376,37 @@ namespace ShipbreakerVR
             foreach (var hand in Hands) Slide(hand);
             Glide();
             foreach (var hand in Hands) Stretch(hand);
+            foreach (var hand in Hands) Poke(hand, Time.fixedDeltaTime);
             var start = Momentum.Begin();
             Pull();
             Momentum.End(start);
+        }
+
+        // Raik (0.33.0): the stiff index finger (out of the fist, the grip held on nothing, VrHands.Stiff) pushes the body
+        // off what it meets, "with relatively much force": the finger stays at the surface, and the controller going on
+        // behind it is a spring on the body (ClimbContact.PokePush: a finger, not an arm, far less than
+        // Steuerung/Armkraft), so it takes a firm, long push to get going. A loose part takes the same force back. Not
+        // while a hand holds on: the hold decides where the body goes.
+        private static int pokeLogs;
+
+        private static void Poke(Hand hand, float dt)
+        {
+            if (hand.Holding || hand.Other(Hands).Holding || !VrHands.TryGetPoke(hand.Input, out var back, out var at, out var thing)) return;
+            var scale = VrCamera.WorldScale;
+            var depth = back.magnitude;
+            if (depth <= 1e-5f) return;
+            var way = back / depth;
+            var force = ClimbContact.PokePush(depth / scale);
+            player.velocity += way * (force / BodyMass * dt * scale);
+            var body = thing != null ? thing.attachedRigidbody : null;
+            if (body != null && !body.isKinematic && body.gameObject.layer != StaticLayer)
+                body.AddForceAtPosition(-way * (force * scale), at, ForceMode.Force);
+            if (Time.time >= hand.PokeLogAt && pokeLogs < 30)
+            {
+                pokeLogs++;
+                hand.PokeLogAt = Time.time + 1f;
+                Plugin.Log.LogInfo($"Climbing: {hand.Name} stiff index finger pushes the body off {(thing != null ? $"'{thing.name}'" : "a button")} with {force:0} N, the controller {depth / scale * 100f:0.0} cm further in; the body at {player.velocity.magnitude / scale:0.00} m/s");
+            }
         }
 
         // Diagnostics for a light part pulled with the hands (Raik: rowing a 60 kg barrel with both arms still gathers
@@ -2473,6 +2505,13 @@ namespace ShipbreakerVR
     // Outside VrClimb, whose static fields need the game: tests run this without it.
     internal static class ClimbContact
     {
+        // The stiff index finger's push on the body (VrClimb.Poke), in newtons, with the controller that far (meters at
+        // world scale 1) past where the finger stopped: PokeStiffness newtons per meter, PokeForce at most.
+        private const float PokeStiffness = 2500f;
+        private const float PokeForce = 250f;
+
+        public static float PokePush(float depth) => Mathf.Clamp(depth * PokeStiffness, 0f, PokeForce);
+
         // Thrown parts get the hand's speed; tiny debris up to TinyMass more of it (Raik: nuts and bolts flew too slowly),
         // less and less up to NormalMass, from which they get just the hand's speed.
         private const float TinyMass = 2f;

@@ -25,7 +25,7 @@ namespace ShipbreakerVR
         // This near in front of the face, its control is offered to the game (Touch).
         private const float Approach = 0.05f;
         // How far the button sinks in at most.
-        private const float Travel = 0.012f;
+        internal const float Travel = 0.012f;
         // The tip counts on the face within this beyond its edges.
         private const float Beside = 0.01f;
         // Parts near the hand looked through this often, this far around the tip.
@@ -71,6 +71,12 @@ namespace ShipbreakerVR
             // A fingertip or the controller's tip right in front of a button's face (within Approach): the fingers stay
             // straight there (VrHands).
             public bool AtButton;
+            // The deepest fingertip on a button's face this frame: how far in (MinValue with none), and that face at
+            // rest, its middle and its outward direction (VrHands.Stiff: the stiff finger stops where the button is all
+            // the way in).
+            public float FingerDepth = float.MinValue;
+            public Vector3 FacePoint;
+            public Vector3 FaceOut;
 
             public Tip(VrInput.Hand input) => Input = input;
         }
@@ -102,6 +108,7 @@ namespace ShipbreakerVR
                 {
                     tip.Pushing = null;
                     tip.AtButton = false;
+                    tip.FingerDepth = float.MinValue;
                 }
             // Each button as far in as the deepest tip, back out when none.
             foreach (var each in pushed) Sinking.Add(each.Key);
@@ -149,12 +156,28 @@ namespace ShipbreakerVR
             return false;
         }
 
+        // The face of the button that controller's deepest fingertip is on (as shown last frame): its middle at rest and
+        // its outward direction; false with no fingertip on one.
+        public static bool TryGetFace(VrInput.Hand input, out Vector3 point, out Vector3 outward)
+        {
+            point = outward = Vector3.zero;
+            foreach (var tip in Tips)
+                if (tip.Input == input && tip.FingerDepth > float.MinValue)
+                {
+                    point = tip.FacePoint;
+                    outward = tip.FaceOut;
+                    return true;
+                }
+            return false;
+        }
+
         private static readonly List<Vector3> Points = new List<Vector3>();
 
         private static void Touch(Tip tip, Dictionary<Button, float> pushed)
         {
             tip.Pushing = null;
             tip.AtButton = false;
+            tip.FingerDepth = float.MinValue;
             if (VrClimb.TryGetHold(tip.Input, out _)) { tip.In.Clear(); return; }
             if (!tip.Input.TryGetGripPose(out var gripLocal, out _) || !tip.Input.TryGetAimRotation(out var aimLocal)) return;
             if (!VrToolModels.TrackingToWorld(gripLocal, aimLocal, out var grip, out var aim)) return;
@@ -183,13 +206,19 @@ namespace ShipbreakerVR
                 // The deepest of the points on the face.
                 var onFace = false;
                 var depth = float.MinValue;
-                foreach (var point in Points)
+                for (var k = 0; k < Points.Count; k++)
                 {
-                    var local = Local(t, rest, button, point);
+                    var local = Local(t, rest, button, Points[k]);
                     var across = local - button.Out * Vector3.Dot(local, button.Out);
                     if (Mathf.Abs(across.x) > side.x || Mathf.Abs(across.y) > side.y || Mathf.Abs(across.z) > side.z) continue;
                     onFace = true;
-                    depth = Mathf.Max(depth, (button.Half - Vector3.Dot(local, button.Out)) * scale);
+                    var deep = (button.Half - Vector3.Dot(local, button.Out)) * scale;
+                    depth = Mathf.Max(depth, deep);
+                    // The fingertips, after the controller's front.
+                    if (k == 0 || deep <= tip.FingerDepth) continue;
+                    tip.FingerDepth = deep;
+                    tip.FaceOut = t.TransformDirection(button.Out).normalized;
+                    tip.FacePoint = rest + t.rotation * Vector3.Scale(button.Center + button.Out * button.Half, t.lossyScale);
                 }
                 if (onFace && depth > -Approach * VrCamera.WorldScale) tip.AtButton = true;
                 // Coming up to the button, its control is offered to the game already: the game takes a press only for what

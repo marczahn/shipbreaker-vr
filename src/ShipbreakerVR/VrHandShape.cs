@@ -56,6 +56,8 @@ namespace ShipbreakerVR
         private static bool armNear;
         // Whether the deepest place the last Box or Capsule found was in the other arm.
         public static bool FromArm { get; private set; }
+        // The collider the last Capsule was deepest in, or null: nothing met, or the tool or the other arm.
+        public static Collider Met { get; private set; }
 
         // How far a point lies outside that arm (less than 0 inside it), and the way out of it; MaxValue without one.
         public static float ArmDistance(Limb arm, Vector3 point, out Vector3 way)
@@ -175,6 +177,7 @@ namespace ShipbreakerVR
             way = Vector3.zero;
             var deepest = 0f;
             FromTool = false;
+            Met = null;
             if (Near.Count > 0)
             {
                 Probes();
@@ -184,6 +187,7 @@ namespace ShipbreakerVR
                 capsule.radius = radius;
                 capsule.height = length + 2f * radius;
                 deepest = Deepest(capsule, (a + b) * 0.5f, turn, out way);
+                Met = deepestIn;
                 foreach (var thing in NearField)
                     for (var k = 0; k <= CapsulePoints; k++)
                     {
@@ -192,6 +196,7 @@ namespace ShipbreakerVR
                         if (depth <= deepest) continue;
                         deepest = depth;
                         way = outward;
+                        Met = thing;
                     }
             }
             // The tool: points along the bone, each as deep as it lies within its radius of a box.
@@ -202,6 +207,7 @@ namespace ShipbreakerVR
                 deepest = depth;
                 way = outward;
                 FromTool = true;
+                Met = null;
             }
             FromArm = false;
             for (var k = 0; k <= CapsulePoints && armNear; k++)
@@ -212,6 +218,7 @@ namespace ShipbreakerVR
                 way = outward;
                 FromTool = false;
                 FromArm = true;
+                Met = null;
             }
             return deepest;
         }
@@ -283,10 +290,14 @@ namespace ShipbreakerVR
             return deepest;
         }
 
+        // What the last Deepest was deepest in, or null.
+        private static Collider deepestIn;
+
         private static float Deepest(Collider probe, Vector3 at, Quaternion turn, out Vector3 way)
         {
             way = Vector3.zero;
             var deepest = 0f;
+            deepestIn = null;
             // Physics.ComputePenetration finds nothing for a disabled collider (VrToolCollide): on just for the calls, as
             // a trigger, with no physics step in between.
             probe.enabled = true;
@@ -300,6 +311,7 @@ namespace ShipbreakerVR
                 {
                     deepest = distance;
                     way = direction;
+                    deepestIn = thing;
                 }
             }
             probe.enabled = false;

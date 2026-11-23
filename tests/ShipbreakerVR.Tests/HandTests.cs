@@ -21,6 +21,57 @@ namespace ShipbreakerVR.Tests
             VrHand.Apply(true, Equipment.None);
         }
 
+        // The empty hand's fingers from the controller (0.33.0).
+        [Theory]
+        [InlineData(0f, 0f)]
+        [InlineData(0.03f, 0f)]
+        [InlineData(0.465f, 0.5f)]
+        [InlineData(0.9f, 1f)]
+        [InlineData(1f, 1f)]
+        public void TheGripClosesTheHandAsFarAsItIsPressed(float grip, float closed) =>
+            Assert.Equal(closed, VrInput.Squeezed(grip), 3);
+
+        [Theory]
+        [InlineData(0.05f, 0f)]
+        [InlineData(0.9f, 1f)]
+        public void TheTriggerClosesTheIndexFinger(float trigger, float closed) =>
+            Assert.Equal(closed, VrInput.Pulled(trigger), 3);
+
+        [Fact]
+        public void WithoutSensorsTheFingersAreOnTheController()
+        {
+            var hand = new VrInput.Hand(UnityEngine.XR.XRNode.LeftHand, "test");
+            hand.Fingers(1f, false, false, false, false);
+            hand.Fingers(5f, false, false, false, false);
+            Assert.True(hand.IndexOn);
+            Assert.True(hand.ThumbOn);
+        }
+
+        [Fact]
+        public void AFingerIsOffOnceItsSensorToldOfATouchAndLetGo()
+        {
+            var hand = new VrInput.Hand(UnityEngine.XR.XRNode.LeftHand, "test");
+            hand.Fingers(1f, true, false, true, false);
+            Assert.True(hand.IndexOn && hand.ThumbOn);
+            // A flicker of the sensor is not a finger off.
+            hand.Fingers(1f + VrInput.FingerOffAfter * 0.5f, false, false, false, false);
+            Assert.True(hand.IndexOn && hand.ThumbOn);
+            hand.Fingers(2f, false, false, false, false);
+            Assert.False(hand.IndexOn);
+            Assert.False(hand.ThumbOn);
+            // The trigger pulled or a button pressed has a finger on it, whatever the sensor tells.
+            hand.Fingers(3f, false, true, false, true);
+            Assert.True(hand.IndexOn && hand.ThumbOn);
+        }
+
+        [Theory]
+        [InlineData(0f, 0f)]
+        [InlineData(0.02f, 50f)]
+        [InlineData(0.1f, 250f)]
+        [InlineData(0.5f, 250f)]
+        public void TheStiffFingerPushesWithALimitedForce(float depth, float force) =>
+            Assert.Equal(force, ClimbContact.PokePush(depth), 3);
+
         [Fact]
         public void GameToolGoesIntoTheToolHand()
         {
