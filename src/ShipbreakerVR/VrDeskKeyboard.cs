@@ -9,11 +9,13 @@ namespace ShipbreakerVR
     // A keyboard to point at, for the account name of a new career's contract (Raik, 2026-11-23: "a keyboard shown
     // below, over the keys of the desk; while it is there the controllers are seen, with laser pointers. A stopgap for
     // now"). While the contract's name field is selected, a board of keys lies below the terminal's screen
-    // (VrContractDesk), and each controller shows as a short bar with a beam where it points. A key pointed at lights
-    // up, the trigger of that hand types it into the field; OK ends it and selects what comes after the field.
-    // All of it is drawn as world-space UI on the contract's own layer, as the contract is: canvases with plain images
-    // and the field's own font, so it needs no shader or model of its own. The triggers do nothing else in the menu
-    // meanwhile (VrMenuInput).
+    // (VrContractDesk), and each controller shows as a pen with a beam where it points. A key pointed at lights up,
+    // the trigger of that hand types it into the field; OK ends it and selects what comes after the field.
+    // Board and beams are drawn as world-space UI on the contract's own layer, as the contract is: canvases with plain
+    // images and the field's own font, so they need no shader of their own. The pens (Raik: "do it with the pens, any
+    // dark grey material") are a mesh made here, a round body with a pointed tip, in a plain dark grey material of the
+    // shader the desk's parts are drawn with; without that shader a controller shows as a bar of the same UI.
+    // The triggers do nothing else in the menu meanwhile (VrMenuInput).
     internal static class VrDeskKeyboard
     {
         static VrDeskKeyboard() => VrSession.OnUnload("desk keyboard", Release);
@@ -38,6 +40,14 @@ namespace ShipbreakerVR
         private const float BeamThick = 4f;
         private const float BarLong = 110f;
         private const float BarThick = 28f;
+        // The pen, in meters along where the controller points: this far back from the controller's place and this far
+        // ahead of it, the last PenTip of it tapering, this thick; round by PenSides.
+        private const float PenBack = 0.11f;
+        private const float PenAhead = 0.035f;
+        private const float PenTip = 0.03f;
+        private const float PenRadius = 0.0065f;
+        private const int PenSides = 14;
+        private static readonly Color PenColor = new Color(0.11f, 0.115f, 0.125f, 1f);
         private static readonly Color BoardColor = new Color(0.03f, 0.04f, 0.05f, 0.92f);
         private static readonly Color KeyColor = new Color(0.16f, 0.18f, 0.2f, 1f);
         private static readonly Color KeyLit = new Color(0.95f, 0.75f, 0.1f, 1f);
@@ -56,6 +66,7 @@ namespace ShipbreakerVR
             public VrInput.Hand Hand;
             public RectTransform Beam;
             public RectTransform Bar;
+            public Transform Pen;
             public Key At;
         }
 
@@ -66,6 +77,8 @@ namespace ShipbreakerVR
         private static readonly List<Key> Keys = new List<Key>();
         private static readonly Pointer[] Pointers = { new Pointer { Hand = VrInput.Left }, new Pointer { Hand = VrInput.Right } };
         private static TMP_InputField doneWith;
+        private static Mesh penMesh;
+        private static Material penMaterial;
         private static int logs;
 
         // From VrContractDesk, every frame while its desk is shown: that field (or none), the terminal's screen in the
@@ -88,7 +101,7 @@ namespace ShipbreakerVR
             {
                 Active = true;
                 board.SetActive(true);
-                foreach (var pointer in Pointers) pointer.Beam.parent.gameObject.SetActive(true);
+                foreach (var pointer in Pointers) Show(pointer, true);
                 if (logs++ < 20) Plugin.Log.LogInfo("Desk keyboard: shown for the contract's name field");
             }
             Place(screenCenter, screenTurn, screenSize, scale);
@@ -100,8 +113,14 @@ namespace ShipbreakerVR
             if (!Active) return;
             Active = false;
             if (board != null) board.SetActive(false);
-            foreach (var pointer in Pointers)
-                if (pointer.Beam != null) pointer.Beam.parent.gameObject.SetActive(false);
+            foreach (var pointer in Pointers) Show(pointer, false);
+        }
+
+        // A controller's pen (or bar) and beam on or off.
+        private static void Show(Pointer pointer, bool on)
+        {
+            if (pointer.Beam != null && pointer.Beam.parent.gameObject.activeSelf != on) pointer.Beam.parent.gameObject.SetActive(on);
+            if (pointer.Pen != null && pointer.Pen.gameObject.activeSelf != on) pointer.Pen.gameObject.SetActive(on);
         }
 
         // Below the screen, across its width, sloping up away from the viewer.
@@ -127,16 +146,24 @@ namespace ShipbreakerVR
         {
             var vr = VrCamera.Instance;
             var rig = vr.transform.parent;
-            var holder = pointer.Beam.parent.gameObject;
             if (rig == null || !pointer.Hand.Tracked || !pointer.Hand.TryGetAimPose(out var localAt, out var localTurn, out _))
             {
-                holder.SetActive(false);
+                Show(pointer, false);
                 Light(pointer, null);
                 return;
             }
-            holder.SetActive(true);
-            var from = rig.TransformPoint(localAt);
+            Show(pointer, true);
+            var at0 = rig.TransformPoint(localAt);
             var way = rig.rotation * localTurn * Vector3.forward;
+            // The pen where the controller is, pointing as it does; the beam starts at its tip.
+            var from = at0;
+            if (pointer.Pen != null)
+            {
+                pointer.Pen.position = at0;
+                pointer.Pen.rotation = rig.rotation * localTurn;
+                pointer.Pen.localScale = Vector3.one * scale;
+                from = at0 + way * (PenAhead * scale);
+            }
             // Where the beam meets the board.
             var plane = board.transform;
             var normal = plane.forward;
@@ -235,8 +262,62 @@ namespace ShipbreakerVR
                 pointer.Beam = beam;
                 strips.SetActive(false);
             }
+            var shader = VrContractDesk.DeskShader;
+            if (shader != null)
+            {
+                penMesh = PenMesh();
+                penMaterial = new Material(shader) { name = "ShipbreakerVR desk pen", hideFlags = HideFlags.HideAndDontSave };
+                foreach (var color in new[] { "_BaseColor", "_Color" })
+                    if (penMaterial.HasProperty(color)) penMaterial.SetColor(color, PenColor);
+                if (penMaterial.HasProperty("_Smoothness")) penMaterial.SetFloat("_Smoothness", 0.35f);
+                if (penMaterial.HasProperty("_Metallic")) penMaterial.SetFloat("_Metallic", 0.1f);
+                foreach (var pointer in Pointers)
+                {
+                    var pen = new GameObject($"ShipbreakerVR desk pen {pointer.Hand.Name}");
+                    pen.AddComponent<MeshFilter>().sharedMesh = penMesh;
+                    var drawn = pen.AddComponent<MeshRenderer>();
+                    drawn.sharedMaterial = penMaterial;
+                    drawn.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    pen.SetActive(false);
+                    pointer.Pen = pen.transform;
+                    pointer.Bar.gameObject.SetActive(false);
+                }
+            }
             board.SetActive(false);
-            Plugin.Log.LogInfo($"Desk keyboard: built, {Keys.Count} keys, font {(font != null ? $"'{font.name}'" : "none")}");
+            Plugin.Log.LogInfo($"Desk keyboard: built, {Keys.Count} keys, font {(font != null ? $"'{font.name}'" : "none")}, "
+                + (shader != null ? $"pens in the shader '{shader.name}'" : "no shader of the desk's, the controllers show as bars"));
+        }
+
+        // The pen: round, from PenBack behind the controller's place to PenAhead before it along z, its last PenTip
+        // tapering to a point.
+        private static Mesh PenMesh()
+        {
+            float[] along = { -PenBack, -PenBack, PenAhead - PenTip, PenAhead };
+            float[] radius = { 0.0005f, PenRadius, PenRadius, 0.0008f };
+            var vertices = new List<Vector3>();
+            var triangles = new List<int>();
+            for (var ring = 0; ring < along.Length; ring++)
+                for (var side = 0; side <= PenSides; side++)
+                {
+                    var angle = 2f * Mathf.PI * side / PenSides;
+                    vertices.Add(new Vector3(Mathf.Cos(angle) * radius[ring], Mathf.Sin(angle) * radius[ring], along[ring]));
+                }
+            for (var ring = 0; ring + 1 < along.Length; ring++)
+                for (var side = 0; side < PenSides; side++)
+                {
+                    var a = ring * (PenSides + 1) + side;
+                    var b = a + 1;
+                    var c = a + PenSides + 1;
+                    var d = c + 1;
+                    triangles.Add(a); triangles.Add(b); triangles.Add(c);
+                    triangles.Add(b); triangles.Add(d); triangles.Add(c);
+                }
+            var mesh = new Mesh { name = "ShipbreakerVR desk pen", hideFlags = HideFlags.HideAndDontSave };
+            mesh.SetVertices(vertices);
+            mesh.SetTriangles(triangles, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
         }
 
         private static void Add(string text, Rect area, TMP_FontAsset font)
@@ -294,9 +375,15 @@ namespace ShipbreakerVR
             foreach (var pointer in Pointers)
             {
                 if (pointer.Beam != null) Object.Destroy(pointer.Beam.parent.gameObject);
+                if (pointer.Pen != null) Object.Destroy(pointer.Pen.gameObject);
                 pointer.Beam = pointer.Bar = null;
+                pointer.Pen = null;
                 pointer.At = null;
             }
+            if (penMesh != null) Object.Destroy(penMesh);
+            if (penMaterial != null) Object.Destroy(penMaterial);
+            penMesh = null;
+            penMaterial = null;
             doneWith = null;
         }
     }

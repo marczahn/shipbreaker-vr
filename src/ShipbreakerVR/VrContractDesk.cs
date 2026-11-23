@@ -103,6 +103,8 @@ namespace ShipbreakerVR
         private static Vector2 screenSize;
         private static bool shown;
         private static string stateLogged;
+        // The shader the desk's parts are drawn with, for the mod's own things at the desk (VrDeskKeyboard's pens).
+        internal static Shader DeskShader { get; private set; }
         // Where the head was (in the playspace) when the desk was placed, where it was last frame, and since when it
         // is still.
         private static Vector3 placedFor, headBefore;
@@ -334,6 +336,7 @@ namespace ShipbreakerVR
                 var drawn = copy.AddComponent<MeshRenderer>();
                 drawn.sharedMaterials = renderer.sharedMaterials;
                 drawn.shadowCastingMode = renderer.shadowCastingMode;
+                if (DeskShader == null && renderer.sharedMaterial != null) DeskShader = renderer.sharedMaterial.shader;
                 made++;
             }
             return made;
@@ -584,6 +587,7 @@ namespace ShipbreakerVR
             }
             loading = false;
             loadFailed = false;
+            DeskShader = null;
             scene = null;
             room3D = null;
             ui = null;
