@@ -17,7 +17,11 @@ namespace ShipbreakerVR
         // Loose parts lighter than this (kg) are pushed by the arms, not in the hand's way (VrArmPush.LightestPushed).
         private const float LightestStops = 15f;
 
-        private static readonly Collider[] Found = new Collider[32];
+        // What a query finds near the hand. It held 32 and no more: in a dense cloud of debris the query filled it with
+        // any 32 of what was there, the wall could be left out, and the hand went through it (bug list B5). Now a query
+        // that fills it is asked again with twice the room, up to MostFound; the room stays that large.
+        private static Collider[] Found = new Collider[32];
+        private const int MostFound = 512;
         private static readonly List<Collider> Near = new List<Collider>();
         // Of those, the ones met by their field too (VrKiosk: a shape not convex, which is only a skin to physics).
         private static readonly List<Collider> NearField = new List<Collider>();
@@ -102,6 +106,12 @@ namespace ShipbreakerVR
             NearField.Clear();
             toolNear = withTool && VrToolCollide.ToolNear(center, reach);
             var count = Physics.OverlapSphereNonAlloc(center, reach, Found, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            while (count == Found.Length && Found.Length < MostFound)
+            {
+                Found = new Collider[Found.Length * 2];
+                count = Physics.OverlapSphereNonAlloc(center, reach, Found, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                Plugin.Log.LogInfo($"Hand shape: more than {Found.Length / 2} things within reach of a hand, room for {Found.Length} now");
+            }
             for (var i = 0; i < count; i++)
             {
                 if (Found[i] != null) VrKiosk.Fit(Found[i]);

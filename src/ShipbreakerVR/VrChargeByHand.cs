@@ -544,8 +544,10 @@ namespace ShipbreakerVR
 
         // For the short ray from the charge's back to the wall (a few centimetres): room for all that can lie in it.
         private static readonly RaycastHit[] Hits = new RaycastHit[32];
-        private static readonly FieldInfo PreviewField = AccessTools.Field(typeof(DemoChargeController), "m_Preview");
-        private static readonly FieldInfo DataField = AccessTools.Field(typeof(DemoChargeController), "mData");
+        // Read through field references, not reflection: both are asked every frame a charge is held, and the layer
+        // mask came boxed through a Traverse made anew each time (bug list B6).
+        private static readonly AccessTools.FieldRef<DemoChargeController, DemoChargePreview> PreviewOf =
+            AccessTools.FieldRefAccess<DemoChargeController, DemoChargePreview>("m_Preview");
         private static readonly FieldInfo JointSetup = AccessTools.Field(typeof(DemoChargeController), "mCachedJSA");
         private static readonly MethodInfo CacheJointSetup = AccessTools.Method(typeof(DemoChargeController), "CacheJointSetupAsset");
 
@@ -670,7 +672,7 @@ namespace ShipbreakerVR
             LeftLoose.Clear();
         }
 
-        private static DemoChargePreview Preview() => controller != null && PreviewField != null ? PreviewField.GetValue(controller) as DemoChargePreview : null;
+        private static DemoChargePreview Preview() => controller != null ? PreviewOf(controller) : null;
 
         private static readonly AccessTools.FieldRef<DemoChargeController, IDemoChargeControllerData> Data =
             AccessTools.FieldRefAccess<DemoChargeController, IDemoChargeControllerData>("mData");
@@ -681,9 +683,8 @@ namespace ShipbreakerVR
 
         private static LayerMask WallMask()
         {
-            var data = controller != null && DataField != null ? DataField.GetValue(controller) : null;
-            var mask = data != null ? Traverse.Create(data).Property("RaycastLayerMask").GetValue() : null;
-            return mask is LayerMask layers ? layers : (LayerMask)Physics.DefaultRaycastLayers;
+            var data = controller != null ? Data(controller) : null;
+            return data != null ? data.RaycastLayerMask : (LayerMask)Physics.DefaultRaycastLayers;
         }
 
         // What the rays to a wall and the preview's test for room leave out: the charges in the hands (and that charge's

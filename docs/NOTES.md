@@ -1413,6 +1413,29 @@ ray than its array holds, the nearest can be missing. The charges' aimed ray ove
 (`VrChargeByHand.FirstHit`) therefore asks `Physics.Raycast` for one hit at a time and goes on behind the mod's own
 shapes.
 
+## The new body (0.31.5, a prototype)
+`VrSuitLocal` draws the mod's own suit in place of the game's body in a shift: Raik's model (made with Meshy, fitted
+in Blender), the body without arms plus helmet and visor, with the game's own arms as they are. Their round cap at
+the shoulder sits in the body's side like a ball joint, so nothing of the suit has to follow the arms. The texture
+carries no LYNX logo; the earlier suits that did are gone, and so are the ones with sleeves of their own.
+
+The files are the mod's own, not the game's: `Anzug-Koerper.suit`, `Anzug-Helm.suit`, `Anzug-Visier.suit` (meshes in
+the mesh space of the game's `geo_suit`, with skin weights for its bones; knees, feet and toes have joints of their
+own in the file), `Anzug-Farbe.png`, `Anzug-Normal.png` (4096, the ripstop fabric baked in) and `Anzug-Maske.png`
+(metal, occlusion, smoothness). A release ships them in `BepInEx\plugins\ShipbreakerVR\Anzug` (`SUIT_DIR` of
+`tools/build-release.sh`); `BepInEx\ShipbreakerVR-suit-local\Originalarme` goes first where it is there, for trying
+other files. Without the files, or with *Body* set to *Aus* in the VR options (`Bild/Anzugqualitaet`), the
+game's own body shows.
+
+`geo_suit` stays and only stops drawing, so the game keeps switching it as before and the suit follows. The helmet
+hangs on the head bone and, for the player wearing it, only casts its shadow, since the camera sits inside it. The
+thruster pack is the game's own, hung on the chest bone by `VrBackpack`; the suit model has none of its own on the
+player (it had one until 0.32.1, under the thruster pack). The mannequin and the mirror by the kiosk (`Showroom`) are
+local test tools and off in a release.
+
+Known, to be reworked: parts of the suit go through each other with the arms hanging down, and in a deep crouch the
+cloth over the knee pads stretches.
+
 ## The suit and a new player (0.32.1)
 The game makes a new `Player` with new bones at least with every level it loads (a new ship). `VrSuitLocal` builds its meshes, its own
 joints and the arms' caps on the bones of the body it first dressed; kept for the next player, the suit hung on
