@@ -1537,6 +1537,14 @@ Raik, 2026-11-23: the empty hand that holds nothing follows the fingers on the c
   there showed as up (Raik's first test). `ThumbRestPatch` (`VrXr.cs`) adds the action to the profile's map before the
   plugin hands its maps to the runtime (a prefix on `OpenXRInput.SendToOpenXR`), made as the trigger's touch action
   is; the feature is `ThumbrestTouch`. The thumb is up only once this sensor has answered too (`ThumbRestSensed`).
+- **A sensor that hangs** (Raik's finger trace, 2026-11-23): his right controller's stick told of a touch for 41 s on
+  end, through five clear lifts of the thumb off the thumb rest and with the thumb on A and B, so that thumb never
+  counted as off; the left stick let go within 0.15 s each time. The stick and the thumb rest lie on opposite sides of
+  the buttons and one thumb is not on both, so of the two the one that still tells of a touch after the thumb came to
+  the other and has lain there 0.75 s hangs (`Hand.StickHangs`, `RestHangs`) and is left out until it lets go or, for
+  the stick, is moved or clicked. The buttons are not judged this way: a thumb lies across A and B, or a button and
+  the stick, all the time. The price: a thumb that really bridges stick and thumb rest, then stays on the one that
+  was there first, shows as up until it touches or moves something. The log names each hang.
 - A sensor counts only once it has told of a touch, and a finger is off only after 0.3 s without any touch (first
   0.08 s; Raik: the fingers must be clearly out of the sensors' field, moved on purpose, and with half signals stay
   laid on, so they do not wobble with a loosely held controller). A controller or runtime that names the usages but

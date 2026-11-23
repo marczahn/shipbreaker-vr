@@ -37,12 +37,18 @@ namespace ShipbreakerVR.Tests
         public void TheTriggerClosesTheIndexFinger(float trigger, float closed) =>
             Assert.Equal(closed, VrInput.Pulled(trigger), 3);
 
+        private static VrInput.Hand TestHand() => new VrInput.Hand(UnityEngine.XR.XRNode.LeftHand, "test");
+
+        // index touched, buttons touched, stick touched, thumb rest touched; nothing used.
+        private static void Touch(VrInput.Hand hand, float now, bool index = false, bool buttons = false, bool stick = false, bool rest = false) =>
+            hand.Fingers(now, index, false, buttons, false, stick, false, rest);
+
         [Fact]
         public void WithoutSensorsTheFingersAreOnTheController()
         {
-            var hand = new VrInput.Hand(UnityEngine.XR.XRNode.LeftHand, "test");
-            hand.Fingers(1f, false, false, false, false, false);
-            hand.Fingers(5f, false, false, false, false, false);
+            var hand = TestHand();
+            Touch(hand, 1f);
+            Touch(hand, 5f);
             Assert.True(hand.IndexOn);
             Assert.True(hand.ThumbOn);
         }
@@ -51,33 +57,73 @@ namespace ShipbreakerVR.Tests
         [Fact]
         public void TheThumbIsUpOnlyWithTheThumbRestsSensorToo()
         {
-            var hand = new VrInput.Hand(UnityEngine.XR.XRNode.LeftHand, "test");
-            hand.Fingers(1f, false, false, true, false, false);
-            hand.Fingers(5f, false, false, false, false, false);
+            var hand = TestHand();
+            Touch(hand, 1f, buttons: true);
+            Touch(hand, 5f);
             Assert.True(hand.ThumbOn);
-            hand.Fingers(6f, false, false, false, false, true);
+            Touch(hand, 6f, rest: true);
+            Touch(hand, 7f, rest: true);
             Assert.True(hand.ThumbOn);
-            hand.Fingers(7f, false, false, false, false, true);
-            Assert.True(hand.ThumbOn);
-            hand.Fingers(8f, false, false, false, false, false);
+            Touch(hand, 8f);
             Assert.False(hand.ThumbOn);
         }
 
         [Fact]
         public void AFingerIsOffOnceItsSensorToldOfATouchAndLetGo()
         {
-            var hand = new VrInput.Hand(UnityEngine.XR.XRNode.LeftHand, "test");
-            hand.Fingers(1f, true, false, true, false, true);
+            var hand = TestHand();
+            Touch(hand, 1f, index: true, buttons: true, rest: true);
             Assert.True(hand.IndexOn && hand.ThumbOn);
             // A flicker of the sensor is not a finger off.
-            hand.Fingers(1f + VrInput.FingerOffAfter * 0.5f, false, false, false, false, false);
+            Touch(hand, 1f + VrInput.FingerOffAfter * 0.5f);
             Assert.True(hand.IndexOn && hand.ThumbOn);
-            hand.Fingers(2f, false, false, false, false, false);
+            Touch(hand, 2f);
             Assert.False(hand.IndexOn);
             Assert.False(hand.ThumbOn);
             // The trigger pulled or a button pressed has a finger on it, whatever the sensor tells.
-            hand.Fingers(3f, false, true, false, true, false);
+            hand.Fingers(3f, false, true, false, true, false, false, false);
             Assert.True(hand.IndexOn && hand.ThumbOn);
+        }
+
+        // Raik's right controller, 2026-11-23: the stick tells of a touch all the time. Once the thumb has lain on the
+        // thumb rest for a while, the stick is left out, and a thumb lifted off the rest is up.
+        [Fact]
+        public void AStickThatHangsIsLeftOutOnceTheThumbLiesOnTheThumbRest()
+        {
+            var hand = TestHand();
+            Touch(hand, 1f, stick: true);
+            Touch(hand, 2f, stick: true, rest: true);
+            Touch(hand, 2f + VrInput.SensorHangsAfter * 0.5f, stick: true, rest: true);
+            Assert.False(hand.StickHangs);
+            Touch(hand, 2.1f + VrInput.SensorHangsAfter, stick: true, rest: true);
+            Assert.True(hand.StickHangs);
+            Touch(hand, 4f, stick: true);
+            Touch(hand, 5f, stick: true);
+            Assert.False(hand.ThumbOn);
+            // A button touched is the thumb again, and so is the stick moved.
+            Touch(hand, 6f, stick: true, buttons: true);
+            Assert.True(hand.ThumbOn);
+            Touch(hand, 8f, stick: true);
+            Assert.False(hand.ThumbOn);
+            hand.Fingers(9f, false, false, false, false, true, true, false);
+            Assert.True(hand.ThumbOn);
+            Assert.False(hand.StickHangs);
+        }
+
+        // A thumb that goes from the stick to the thumb rest for a moment and back does not make the stick hang, and one
+        // resting on the stick alone stays down.
+        [Fact]
+        public void AStickThatLetsGoDoesNotHang()
+        {
+            var hand = TestHand();
+            Touch(hand, 1f, rest: true);
+            Touch(hand, 2f, stick: true);
+            Touch(hand, 3f, rest: true);
+            Touch(hand, 5f, rest: true);
+            Touch(hand, 6f, stick: true);
+            Touch(hand, 9f, stick: true);
+            Assert.False(hand.StickHangs);
+            Assert.True(hand.ThumbOn);
         }
 
         [Theory]

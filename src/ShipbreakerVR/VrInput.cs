@@ -37,6 +37,9 @@ namespace ShipbreakerVR
         // controller is held a little more loosely"): a finger is off only after this long without any touch, in
         // seconds, and on again at the first touch.
         internal const float FingerOffAfter = 0.3f;
+        // The stick's sensor or the thumb rest's telling of a touch while the thumb has lain on the other for this long,
+        // in seconds, hangs (Hand.Fingers).
+        internal const float SensorHangsAfter = 0.75f;
         // The grip's button closes the empty hand from SqueezeFrom (a finger resting on it) to SqueezeFull of its travel;
         // the trigger its index finger from FingerOnTrigger to PullFull.
         private const float SqueezeFrom = 0.03f;
@@ -94,14 +97,24 @@ namespace ShipbreakerVR
             public bool ThumbRestSensed;
             private float indexTouchedAt = -10f;
             private float thumbTouchedAt = -10f;
+            // The stick's sensor and the thumb rest's: when each began to tell of its touch, and whether it hangs.
+            private bool stickBefore, restBefore;
+            private float stickSince = -10f, restSince = -10f;
+            public bool StickHangs, RestHangs;
 
             // Raik (0.33.0): the index finger off the trigger is out straight. With the grip held on nothing it is stiff
             // (VrHands.Stiff): it pushes buttons and pushes the body off a wall.
             public bool IndexOut => Valid && !IndexOn;
 
             // Which fingers are on the controller at that time: by the sensors (touched), and by what only a finger on
-            // it can do (used: the trigger pulled, a button pressed, the stick moved).
-            internal void Fingers(float now, bool indexTouched, bool indexUsed, bool thumbTouched, bool thumbUsed, bool restTouched)
+            // it can do (used: the trigger pulled, a button pressed, the stick moved or clicked).
+            // Raik's finger trace of 2026-11-23: his right controller's stick told of a touch for 41 s on end, through
+            // five clear lifts of the thumb off the thumb rest and with the thumb on A and B, so that thumb never
+            // counted as off. The stick and the thumb rest lie on opposite sides of the buttons, and one thumb is not on
+            // both: of the two, the one that tells of a touch while the thumb came to the other after it and has lain
+            // there for SensorHangsAfter hangs, and is left out until it lets go or, for the stick, is moved.
+            internal void Fingers(float now, bool indexTouched, bool indexUsed, bool buttonsTouched, bool buttonsUsed,
+                bool stickTouched, bool stickUsed, bool restTouched)
             {
                 if (restTouched && !ThumbRestSensed)
                 {
@@ -113,16 +126,37 @@ namespace ShipbreakerVR
                     IndexSensed = true;
                     Plugin.Log?.LogInfo($"Input: the {Name} controller's trigger tells where the index finger is");
                 }
-                if (thumbTouched && !ThumbSensed)
+                if ((buttonsTouched || stickTouched) && !ThumbSensed)
                 {
                     ThumbSensed = true;
                     Plugin.Log?.LogInfo($"Input: the {Name} controller's buttons and stick tell where the thumb is");
                 }
+                if ((stickTouched && !stickBefore) || stickUsed) stickSince = now;
+                if (restTouched && !restBefore) restSince = now;
+                if (!stickTouched || stickUsed) StickHangs = false;
+                if (!restTouched) RestHangs = false;
+                if (stickTouched && restTouched && !stickUsed)
+                {
+                    if (!StickHangs && restSince > stickSince && now - restSince >= SensorHangsAfter)
+                    {
+                        StickHangs = true;
+                        if (hangLogs++ < 20) Plugin.Log?.LogInfo($"Input: the {Name} controller's stick tells of a touch with the thumb on the thumb rest: it hangs, left out until it lets go");
+                    }
+                    else if (!RestHangs && stickSince > restSince && now - stickSince >= SensorHangsAfter)
+                    {
+                        RestHangs = true;
+                        if (hangLogs++ < 20) Plugin.Log?.LogInfo($"Input: the {Name} controller's thumb rest tells of a touch with the thumb on the stick: it hangs, left out until it lets go");
+                    }
+                }
+                stickBefore = stickTouched;
+                restBefore = restTouched;
                 if (indexTouched || indexUsed) indexTouchedAt = now;
-                if (thumbTouched || thumbUsed || restTouched) thumbTouchedAt = now;
+                if (buttonsTouched || buttonsUsed || stickUsed || (stickTouched && !StickHangs) || (restTouched && !RestHangs)) thumbTouchedAt = now;
                 IndexOn = !IndexSensed || now - indexTouchedAt < FingerOffAfter;
                 ThumbOn = !ThumbSensed || !ThumbRestSensed || now - thumbTouchedAt < FingerOffAfter;
             }
+
+            private static int hangLogs;
 
             public Hand(XRNode node, string name)
             {
@@ -292,8 +326,8 @@ namespace ShipbreakerVR
                     Device.TryGetFeatureValue(StickTouch, out stickTouch);
                     Device.TryGetFeatureValue(ThumbRestTouch, out restTouch);
                 }
-                Fingers(Time.unscaledTime, triggerTouch, TriggerValue > FingerOnTrigger,
-                    primaryTouch || secondaryTouch || stickTouch, primary || secondary || stickClick || Stick.magnitude > FingerOnStick, restTouch);
+                Fingers(Time.unscaledTime, triggerTouch, TriggerValue > FingerOnTrigger, primaryTouch || secondaryTouch, primary || secondary,
+                    stickTouch, stickClick || Stick.magnitude > FingerOnStick, restTouch);
                 Trigger.Set(TriggerValue >= (Trigger.Down ? ReleaseAt : PressAt));
                 Grip.Set(GripValue >= (Grip.Down ? ReleaseAt : PressAt));
                 Primary.Set(primary);
