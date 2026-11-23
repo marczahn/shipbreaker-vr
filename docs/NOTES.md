@@ -1377,7 +1377,9 @@ Proposal, not built: keep it among the new messages until the group exists.
 ## Demo charges: the game's limit (0.32.1)
 In the game's data (`Default_DemoChargeControllerAsset`) the limit is 15 and 5 charges are carried (`MaxCarryAmount`,
 raised by upgrades; the limit is not), so the limit is only reached after buying more charges at the kiosk in the same
-shift. `Experimente/SprengsatzLimit` sets another number for the mod's own check, to try it. With as many out as may
+shift. `Experimente/SprengsatzLimit` sets a smaller number for the mod's own check (never more than the game's; 0, the
+default, is the
+game's number). With as many out as may
 be, *Automatisch* hands out no further charge (`TakesOut`); *Manuell* does, with the warning, and that charge stays
 loose until fewer are out again (`Reactivate`, the oldest loose one first). The game's detonation sequence
 (`DemoChargeDetonationSequenceSystem`) takes every entity with `DemoCharge`, oldest first, so a loose surplus charge
@@ -1391,9 +1393,20 @@ go at a wall, since 0.32.1 with either way of placing (before, only *Automatisch
 - the charge does not go on;
 - it does not cling by itself either: the `Sticky` on its hierarchy parent, which the mod removes while a hand holds
   the charge, is not given back, and is kept (`LeftLoose`) until a hand takes the charge again;
-- the game's warning is shown, with two lines of the mod's under it (stow the charge, lost ones are billed). They are
-  written into the game's own label in a postfix on `InWorldLimitUIController.ToggleWarnings`, and the label's own
-  text is put back at the game's next call of it.
+- the game's warning is shown with the mod's text in it (LYNX allows at most so many active charges, further ones are not
+  armed for now; with a charge in the hand also: stow it, lost ones are billed). It is written into the game's own
+  label in a postfix on `InWorldLimitUIController.ToggleWarnings`, which also sets the controller's time left
+  (`mRemainingTime`) to 3.5 s; a `CanvasGroup` the mod puts on the label fades it over the last half second. The
+  label's own text is put back at the game's next call of it.
+
+### Only the back clings (Manuell)
+The game makes a clinging part fast in `HierarchyCollisionListener.HandleECSCollisions`: a part whose hierarchy parent
+has `Sticky` is turned to the contact's normal, set on the surface and jointed, whichever side met it. With the
+charges placed by hand (*Manuell*) a prefix leaves that call out for a demo charge that did not meet the wall with its
+back, or tilted more than 45 degrees against it (`Experimente/SprengsatzHaftWinkel`, 0: any side): it bounces off and
+keeps its `Sticky` for a later touch. The normal handed over is the same for both parts of a contact, so which side
+met the wall is told by where the contact lies against the charge's origin, which lies between back and front. A
+charge held to a wall by hand goes on under the same rule. With *Automatisch* nothing changes.
 
 `Physics.RaycastNonAlloc` returns any of the hits along a ray, not the nearest ones: with more colliders along the
 ray than its array holds, the nearest can be missing. The charges' aimed ray over the game's whole reach

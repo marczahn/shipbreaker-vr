@@ -744,6 +744,8 @@ namespace ShipbreakerVR
                 if (hit.distance >= nearest || Ours(hit.collider, frame)) continue;
                 var target = hit.collider.GetComponent<StructurePart>();
                 if (!Fits(target, part)) continue;
+                // Put on by hand it goes on with its back, as it clings (ClingsBackOn): not held on edge to the wall.
+                if (BackOnly && !ChargeCling.BackOn(Vector3.Dot(frame.forward, hit.normal), -1f, MostTilt)) continue;
                 nearest = hit.distance;
                 Found(held, target, hit, frame);
             }
@@ -835,8 +837,10 @@ namespace ShipbreakerVR
 
         // How many charges may be out at once. The game's own number (IDemoChargeControllerData.InWorldLimit) is 15 in
         // its data, with 5 carried (more with upgrades): it is only reached after buying more charges at the kiosk in
-        // the same shift. Experimente/SprengsatzLimit sets another number (0: the game's), to try the limit with the
-        // charges one carries.
+        // the same shift. Experimente/SprengsatzLimit sets a smaller number (0: the game's). For a day the mod's own
+        // limit was 6 (Raik, 2026-11-22: "LYNX gives a most of 6 active charges"); he took that lock out again on
+        // 2026-11-23 ("for now"), so the game's number holds unless the config says otherwise.
+        private const int OwnLimit = 0;
         private static ConfigEntry<int> ownLimit;
         private static int limitLogged = -1;
 
@@ -849,9 +853,9 @@ namespace ShipbreakerVR
             try { count = ChargeQuery(controller).CalculateEntityCount(); }
             catch (System.Exception) { return false; }
             if (ownLimit == null && VrSettings.File != null)
-                ownLimit = VrSettings.Bind("Experimente", "SprengsatzLimit", 0,
-                    "Experiment: how many demo charges may be out at once (on walls and afloat). 0: the game's own limit (15).");
-            limit = ownLimit != null && ownLimit.Value > 0 ? ownLimit.Value : data.InWorldLimit;
+                ownLimit = VrSettings.Bind("Experimente", "SprengsatzLimit", OwnLimit,
+                    "How many demo charges may be out at once in VR (on walls and afloat), at most the game's own limit (15). 0: the game's limit, no limit of the mod's own.");
+            limit = ownLimit != null && ownLimit.Value > 0 ? Mathf.Min(ownLimit.Value, data.InWorldLimit) : data.InWorldLimit;
             if (limit != limitLogged)
             {
                 limitLogged = limit;
@@ -881,27 +885,74 @@ namespace ShipbreakerVR
             return true;
         }
 
-        // The game's warning of the limit, with or without the mod's hint to stow the charge under it.
+        // The game's warning of the limit (its sound, and its line on the HUD with the mod's text in it, LimitShown), with
+        // or without the hint to stow the charge under it.
         private static void Warn(bool hint)
         {
-            hintUntil = hint ? Time.unscaledTime + HintWindow : -1f;
+            warnAsked = Time.unscaledTime;
+            warnHint = hint;
             LimitWarning?.Invoke(controller, null);
         }
 
-        // With the game's warning of the charges' limit, what to do about it (Marc, 2026-11-22): the charge in the hand
-        // does not go on and does not cling, so it is to be put back, and one left behind is charged for as any lost
-        // charge. Two short lines under the game's own ('Maximum number of demo charges reached'), in its label, for
-        // as long as the game shows that; the label's own text is put back when the game switches its warnings next.
-        private const float HintWindow = 1f;
-        private static float hintUntil = -1f;
-        // Each label with the hint in it and its own text (a HUD may have more than one of these controllers; each
+        // The warning on the HUD (Raik, 2026-11-22): taking a charge beyond the limit into the hand tells that LYNX
+        // gives a most of so many active charges and that further ones are not armed for the time. It is there for
+        // WarnShow seconds and then fades within WarnFade, not gone at once. Under it, with a charge that came into the
+        // hand all the same (Manuell), what to do about it (Marc, 2026-11-22): the charge does not go on and does not
+        // cling, so it is to be put back, and one left behind is charged for as any lost charge.
+        // The text is written into the game's own label for its warning ('Maximum number of demo charges reached'),
+        // whose time on the screen is set to the mod's; the fading is a CanvasGroup on that label. The label's own
+        // text and look are put back when the game switches its warnings next.
+        private const float WarnShow = 3f;
+        private const float WarnFade = 0.5f;
+        // The game switches its label on in the same call as the warning; a warning of its own later is left as it is.
+        private const float WarnWindow = 1f;
+        private static float warnAsked = -1f;
+        private static bool warnHint;
+        // Each label with the mod's text in it and its own text (a HUD may have more than one of these controllers; each
         // switches its own labels).
         private static readonly Dictionary<TMPro.TMP_Text, string> Hinted = new Dictionary<TMPro.TMP_Text, string>();
+        // The warning's own colour got lost against the scene (Raik, 2026-11-23: "the writing must be a good deal
+        // brighter, it is lost in the background"): the mod's text is written in WarnColor, bold, and the label's own
+        // colour and style are put back with its text.
+        private static readonly Color WarnColor = new Color(1f, 0.97f, 0.88f, 1f);
+        private static readonly Dictionary<TMPro.TMP_Text, (Color Color, TMPro.FontStyles Style)> Looks =
+            new Dictionary<TMPro.TMP_Text, (Color, TMPro.FontStyles)>();
+
+        private static void OwnLook(TMPro.TMP_Text text)
+        {
+            if (!Looks.TryGetValue(text, out var look)) return;
+            text.color = look.Color;
+            text.fontStyle = look.Style;
+            Looks.Remove(text);
+        }
+
+        private sealed class Fading
+        {
+            public CanvasGroup Group;
+            public float Until;
+        }
+
+        private static readonly List<Fading> Fades = new List<Fading>();
+        // The groups the mod put on the game's labels, to take them off again when it is unloaded.
+        private static readonly List<CanvasGroup> OwnGroups = new List<CanvasGroup>();
+        private static readonly AccessTools.FieldRef<InWorldLimitUIController, float> WarnTimeLeft =
+            AccessTools.FieldRefAccess<InWorldLimitUIController, float>("mRemainingTime");
         private static int hintLogs;
+
+        // What the warning says, for that limit.
+        internal static string LimitText(int limit, bool hint)
+        {
+            var text = VrOptions.L($"LYNX allows at most {limit} active demo charges.\nFurther charges are not armed for now.",
+                $"LYNX gibt höchstens {limit} aktive Sprengsätze vor.\nWeitere Sprengsätze werden in dieser Zeit nicht aktiv geschaltet.");
+            if (hint)
+                text += "\n" + VrOptions.L("Stow the charge again. Lost charges will be billed.",
+                    "Sprengsatz wieder verstauen. Verlorene Sprengsätze werden in Rechnung gestellt.");
+            return text;
+        }
 
         // From ChargeLimitHintPatch (InWorldLimitUIController.ToggleWarnings): that controller switched its limit
         // warnings.
-        public static void LimitShown(List<GameObject> labels, InWorldLimitType type)
+        public static void LimitShown(InWorldLimitUIController shown, List<GameObject> labels, InWorldLimitType type)
         {
             const int charges = (int)InWorldLimitType.DemoCharges;
             var label = labels != null && charges < labels.Count ? labels[charges] : null;
@@ -912,12 +963,102 @@ namespace ShipbreakerVR
                 text.text = was;
                 Hinted.Remove(text);
             }
-            if (type != InWorldLimitType.DemoCharges || !VrXr.IsRunning || Time.unscaledTime > hintUntil) return;
+            OwnLook(text);
+            var group = label.GetComponent<CanvasGroup>();
+            for (var i = Fades.Count - 1; i >= 0; i--)
+                if (Fades[i].Group == null || Fades[i].Group == group) Fades.RemoveAt(i);
+            if (group != null && OwnGroups.Contains(group)) group.alpha = 1f;
+            if (type != InWorldLimitType.DemoCharges || !VrXr.IsRunning || Time.unscaledTime > warnAsked + WarnWindow) return;
+            if (!Out(out _, out var limit)) return;
             was = text.text;
             Hinted[text] = was;
-            text.text = was + "\n" + VrOptions.L("Stow the charge again.\nLost charges will be billed.",
-                "Ladung wieder verstauen.\nVerlorene Ladungen werden in Rechnung gestellt.");
-            if (hintLogs++ < 5) Plugin.Log.LogInfo($"Charge by hand: the limit of charges is reached, hint shown under the game's warning '{was}'");
+            text.text = LimitText(limit, warnHint);
+            var own = text.color;
+            Looks[text] = (own, text.fontStyle);
+            text.color = WarnColor;
+            text.fontStyle |= TMPro.FontStyles.Bold;
+            if (group == null)
+            {
+                group = label.AddComponent<CanvasGroup>();
+                group.interactable = false;
+                group.blocksRaycasts = false;
+                OwnGroups.Add(group);
+            }
+            // Only a label the mod may fade is kept longer and faded; one with a group of the game's is left to the game.
+            if (OwnGroups.Contains(group))
+            {
+                group.alpha = 1f;
+                if (shown != null) WarnTimeLeft(shown) = WarnShow + WarnFade;
+                Fades.Add(new Fading { Group = group, Until = Time.time + WarnShow + WarnFade });
+            }
+            if (hintLogs++ < 5) Plugin.Log.LogInfo($"Charge by hand: the limit of {limit} charges is reached, told in the place of the game's warning '{was}' for {WarnShow:0} s, fading within {WarnFade:0.0} s; its own colour was {own}, the mod's text is {WarnColor}, bold");
+        }
+
+        // Each frame: the warnings fade towards their end (the game's clock, as its own count of the time left).
+        private static void FadeWarnings()
+        {
+            for (var i = Fades.Count - 1; i >= 0; i--)
+            {
+                var fading = Fades[i];
+                if (fading.Group == null)
+                {
+                    Fades.RemoveAt(i);
+                    continue;
+                }
+                fading.Group.alpha = ChargeWarning.FadeOut(fading.Until - Time.time, WarnFade);
+            }
+        }
+
+        // ---- Only the back clings (Manuell) ----
+
+        // Put on by hand (Manuell), a charge clings with its back only (Raik, 2026-11-22: "so people do not just throw
+        // stuff about"): one that meets a wall with its front, with its side, or tilted more than MostTilt against
+        // the wall bounces off, and may cling at a later touch. With Automatisch a charge clings wherever it meets a
+        // fitting surface, as in the game (Raik).
+        // The game makes a clinging part fast in HierarchyCollisionListener.HandleECSCollisions: a part whose hierarchy
+        // parent has Sticky is turned to the contact's normal, set on the surface and jointed, whichever side met it.
+        // That call is left out for a charge that did not meet the wall back on (ChargeClingPatch); it keeps its
+        // Sticky. The normal the game hands over is the same for both parts of a contact, so its sign tells nothing:
+        // which side met the wall is told by where the contact lies against the charge's middle (its origin lies
+        // between its back and its front, 3 cm before the back).
+        // 35 degrees at first; Raik's test (2026-11-23): 45.
+        private const float DefaultTilt = 45f;
+        private static ConfigEntry<float> mostTilt;
+        private static int clingLogs;
+
+        private static float MostTilt
+        {
+            get
+            {
+                if (mostTilt == null && VrSettings.File != null)
+                    mostTilt = VrSettings.Bind("Experimente", "SprengsatzHaftWinkel", DefaultTilt,
+                        "With demo charges placed by hand (Manuell): a charge clings only with its back, tilted at most this many degrees against the wall. 0: any side clings, as in the game.");
+                return mostTilt != null ? mostTilt.Value : DefaultTilt;
+            }
+        }
+
+        private static bool BackOnly => On && !Auto && MostTilt > 0f;
+
+        // From ChargeClingPatch: whether the game may make that part fast where it met the other. False for a demo
+        // charge that still clings by itself and met the wall other than back on.
+        public static bool ClingsBackOn(StructurePart part, Vector3 position, Vector3 normal, StructurePart otherPart)
+        {
+            if (!BackOnly || part == null || otherPart == null) return true;
+            var blueprint = part.EntityBlueprintComponent;
+            if (!EntityBlueprintComponent.IsValid(blueprint)) return true;
+            var manager = blueprint.EntityManager;
+            var entity = blueprint.Entity;
+            if (!manager.HasComponent<DemoCharge>(entity)) return true;
+            if (!manager.HasComponent<HierarchyMember>(entity)) return true;
+            var parent = manager.GetComponentData<HierarchyMember>(entity).Parent;
+            if (!manager.Exists(parent) || !manager.HasComponent<Sticky>(parent)) return true;
+            var frame = part.transform;
+            var along = Vector3.Dot(frame.forward, normal.normalized);
+            var side = Vector3.Dot(position - frame.position, frame.forward);
+            if (ChargeCling.BackOn(along, side, MostTilt)) return true;
+            if (clingLogs++ < 40)
+                Plugin.Log.LogInfo($"Charge by hand: a charge meets '{otherPart.name}' {(side > 0f ? "with its front" : "with its back")}, tilted {ChargeCling.Tilt(along):0}° against it (at most {MostTilt:0}° and back on): it does not cling");
+            return false;
         }
 
         // The charge afloat goes back to the stock the game's way and one from the stock goes on the wall, as the game
@@ -1136,6 +1277,7 @@ namespace ShipbreakerVR
             Check(VrInput.Left, afloat[0]);
             Check(VrInput.Right, afloat[1]);
             Reactivate();
+            FadeWarnings();
             ShowPreview();
             Reload();
             Fit();
@@ -1273,6 +1415,17 @@ namespace ShipbreakerVR
             foreach (var pair in Hinted)
                 if (pair.Key != null) pair.Key.text = pair.Value;
             Hinted.Clear();
+            foreach (var pair in Looks)
+                if (pair.Key != null)
+                {
+                    pair.Key.color = pair.Value.Color;
+                    pair.Key.fontStyle = pair.Value.Style;
+                }
+            Looks.Clear();
+            Fades.Clear();
+            foreach (var group in OwnGroups)
+                if (group != null) Object.Destroy(group);
+            OwnGroups.Clear();
             try { GiveBackSticky(); }
             catch (System.Exception e) { Plugin.Log.LogWarning($"Charge by hand: giving the loose charges their cling back on unload failed ({e.Message})"); }
         }
@@ -1320,7 +1473,7 @@ namespace ShipbreakerVR
         private static bool Prefix(DemoChargePreview __instance) => !VrChargeByHand.TestsRoom(__instance);
     }
 
-    // The game's HUD switches its limit warnings: the mod's hint goes under the charges' one (VrChargeByHand.LimitShown).
+    // The game's HUD switches its limit warnings: the charges' one gets the mod's text and time (VrChargeByHand.LimitShown).
     [HarmonyPatch(typeof(InWorldLimitUIController), "ToggleWarnings")]
     internal static class ChargeLimitHintPatch
     {
@@ -1329,9 +1482,49 @@ namespace ShipbreakerVR
 
         private static void Postfix(InWorldLimitUIController __instance, InWorldLimitType type)
         {
-            try { VrChargeByHand.LimitShown(Labels(__instance), type); }
+            try { VrChargeByHand.LimitShown(__instance, Labels(__instance), type); }
             catch (System.Exception e) { Plugin.Log.LogWarning($"Charge by hand: the limit hint failed ({e.Message})"); }
         }
+    }
+
+    // The game makes a clinging part fast where it met another: not a demo charge that did not meet it back on
+    // (VrChargeByHand.ClingsBackOn). The rest of that call is for frozen parts, which a charge is not.
+    [HarmonyPatch]
+    internal static class ChargeClingPatch
+    {
+        private static System.Reflection.MethodBase TargetMethod() =>
+            AccessTools.Method(typeof(HierarchyCollisionListener), "HandleECSCollisions");
+
+        private static bool Prefix(StructurePart part, Vector3 position, Vector3 normal, StructurePart otherPart)
+        {
+            try { return VrChargeByHand.ClingsBackOn(part, position, normal, otherPart); }
+            catch (System.Exception e)
+            {
+                if (failed++ < 3) Plugin.Log.LogWarning($"Charge by hand: the test for a charge meeting a wall back on failed ({e.Message}), it clings as in the game");
+                return true;
+            }
+        }
+
+        private static int failed;
+    }
+
+    // Whether a demo charge met a wall with its back, the part that is plain numbers.
+    internal static class ChargeCling
+    {
+        // How far the charge is tilted against the wall, in degrees: 0 flat on it (either face), 90 on edge. along is
+        // the cosine between the charge's forward and the wall's normal, whichever way that normal points.
+        public static float Tilt(float along) => Mathf.Acos(Mathf.Clamp01(Mathf.Abs(along))) * Mathf.Rad2Deg;
+
+        // Back on: the contact lies behind the charge's middle (side, along its forward, negative) and the charge is
+        // tilted no more than most degrees.
+        public static bool BackOn(float along, float side, float most) => side <= 0f && Tilt(along) <= most;
+    }
+
+    // The limit warning's fading, the part that is plain numbers.
+    internal static class ChargeWarning
+    {
+        // How much of the warning shows with that long left of it: all of it until its last 'fade' seconds.
+        public static float FadeOut(float left, float fade) => fade <= 0f ? (left > 0f ? 1f : 0f) : Mathf.Clamp01(left / fade);
     }
 
     [HarmonyPatch(typeof(DemoChargeAsset), nameof(DemoChargeAsset.SetComponentData))]
