@@ -89,6 +89,18 @@ namespace ShipbreakerVR
         private static GameObject onboarding;
         private static Transform flight;
         private static float nextSearch;
+        // What darkened the apartment as it came (Raik 2026-11-24: "a blue background when you come into the room, it
+        // stays too long"): the dark background of the intro's text, and the scene's fade from black ('Fade Screen',
+        // VrCanvases.FadeNames). On the menu canvas fixed in the room both were a dark rectangle with the room around
+        // it. The background is switched off while the desk is shown; the fade from black is not darkened in VR once
+        // the desk is there (SkipsFade), until the game's fade has run out or for FadeInAtMost seconds. A fade to black
+        // later (the contract done) darkens the view as it should.
+        private static Graphic introBackground;
+        private static bool introBackgroundWas, introHidden;
+        private static Transform fadeScreen;
+        private static bool fadeInSkipped;
+        private static float fadeInSince;
+        private const float FadeInAtMost = 8f;
         // The contract's account name, typed with VrDeskKeyboard.
         private static TMPro.TMP_InputField nameField;
         // Stepping on through the contract (Advance): what was selected last frame and whether it was ticked, the
@@ -180,6 +192,7 @@ namespace ShipbreakerVR
             if (desk == null && !Build()) return;
             if (!shown) Show(vr);
             else Follow(vr);
+            FadeIn();
             Keep();
         }
 
@@ -216,6 +229,9 @@ namespace ShipbreakerVR
                 picture = room != null ? room.Find("Background_Main") : null;
                 var model = room != null ? room.Find("PRF_ApartmentComputer") : null;
                 computer = model != null ? model.GetComponent<Renderer>() : null;
+                var background = root.Find("PRF_IntroCanvas/Image - Background");
+                introBackground = background != null ? background.GetComponent<Graphic>() : null;
+                fadeScreen = root.Find("Fade Screen");
                 Plugin.Log.LogInfo($"Contract desk: the contract scene is there (apartment {Name(room)}, contract {Name(contract)}, onboarding {Name(later)}, flight video {Name(flight)}, picture {Name(picture)}, computer {Name(model)})");
                 return room3D != null;
             }
@@ -223,6 +239,43 @@ namespace ShipbreakerVR
         }
 
         private static string Name(Transform found) => found != null ? "found" : "MISSING";
+
+        // While a new career starts in the front end: the apartment or the flight video is there. VrRadio waits with
+        // reading its model until then (2.7 MB of texture at once, a halt of most of a second when the account's name
+        // was confirmed, Raik 2026-11-24), for the loading screen that follows.
+        internal static bool CareerStarting => scene != null && ((room3D != null && room3D.activeInHierarchy) || Visible(flight));
+
+        // For VrCanvases.FadeAlpha: the scene's fade from black, not darkening the view while the desk has come.
+        internal static bool SkipsFade(Canvas canvas) => fadeInSkipped && shown && fadeScreen != null && canvas != null && canvas.transform == fadeScreen;
+
+        // How dark a part of the scene makes what lies behind it, 0 to 1 (as VrCanvases.FadeAlpha counts it).
+        private static readonly List<Graphic> graphics = new List<Graphic>();
+
+        private static float Darkness(Transform part)
+        {
+            if (part == null || !part.gameObject.activeInHierarchy) return 0f;
+            var darkest = 0f;
+            part.GetComponentsInChildren(graphics);
+            foreach (var graphic in graphics)
+            {
+                if (!graphic.enabled) continue;
+                var c = graphic.color;
+                var darkness = 1f - Mathf.Max(c.r, Mathf.Max(c.g, c.b));
+                darkest = Mathf.Max(darkest, c.a * darkness * graphic.canvasRenderer.GetAlpha() * VrUtil.GroupAlpha(graphic.transform));
+            }
+            return darkest;
+        }
+
+        // While shown: the scene's fade from black let run out without darkening the view.
+        private static void FadeIn()
+        {
+            if (!fadeInSkipped) return;
+            var dark = Darkness(fadeScreen);
+            var since = Time.unscaledTime - fadeInSince;
+            if (dark > 0.02f && since < FadeInAtMost) return;
+            fadeInSkipped = false;
+            Plugin.Log.LogInfo($"Contract desk: the scene's fade from black is over after {since:0.0} s ({(dark > 0.02f ? $"still {dark:0.00} dark, the view darkens with it again" : "run out")})");
+        }
 
         // A canvas the game shows: on, not shrunk away and not faded out (the game's views hide in those ways).
         private static bool Visible(Transform view)
@@ -390,6 +443,17 @@ namespace ShipbreakerVR
             desk.SetActive(true);
             shown = true;
             if (computer != null) computer.enabled = false;
+            var intro = introBackground != null ? Darkness(introBackground.transform) : 0f;
+            var fade = Darkness(fadeScreen);
+            Plugin.Log.LogInfo($"Contract desk: as the desk comes, the intro's background is {(introBackground == null ? "not found" : $"{intro:0.00} dark")}, the scene's fade {(fadeScreen == null ? "not found" : $"{fade:0.00} dark")}");
+            if (introBackground != null && !introHidden)
+            {
+                introHidden = true;
+                introBackgroundWas = introBackground.enabled;
+                introBackground.enabled = false;
+            }
+            fadeInSkipped = fadeScreen != null;
+            fadeInSince = Time.unscaledTime;
         }
 
         private static void Place(VrCamera vr)
@@ -606,6 +670,9 @@ namespace ShipbreakerVR
             }
             pictureStretched = false;
             if (computer != null) computer.enabled = true;
+            if (introHidden && introBackground != null) introBackground.enabled = introBackgroundWas;
+            introHidden = false;
+            fadeInSkipped = false;
             if (listening != null) listening.onClick.RemoveListener(Clicked);
             listening = null;
             selectedBefore = stepFrom = null;
@@ -644,6 +711,8 @@ namespace ShipbreakerVR
             flight = null;
             picture = null;
             computer = null;
+            introBackground = null;
+            fadeScreen = null;
             stateLogged = null;
         }
     }

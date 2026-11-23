@@ -14,7 +14,9 @@ namespace ShipbreakerVR
         // menu canvas fixed in the room they were a black rectangle with the room around it, as if a piece of the world
         // were missing. So there they go on a layer no camera draws, and VrUi darkens the whole view by FadeAlpha
         // instead. On the visor in gameplay they cover the view as meant (FadeScreen also flashes it when cutting).
-        private static readonly HashSet<string> FadeNames = new HashSet<string> { "FadeScreen", "HAB_General_Fade", "WakeUpFade", "QuitFromHabFade" };
+        // 'Fade Screen' is the front end's, in the contract scene of a new career (VrContractDesk lets its fade from
+        // black at the desk run out without darkening, SkipsFade).
+        private static readonly HashSet<string> FadeNames = new HashSet<string> { "FadeScreen", "Fade Screen", "HAB_General_Fade", "WakeUpFade", "QuitFromHabFade" };
         private const int HiddenLayer = VrUi.PassLayer;
 
         private struct Original
@@ -137,7 +139,7 @@ namespace ShipbreakerVR
             var alpha = 0f;
             foreach (var canvas in converted.Keys)
             {
-                if (canvas == null || !canvas.isActiveAndEnabled || !IsFade(canvas)) continue;
+                if (canvas == null || !canvas.isActiveAndEnabled || !IsFade(canvas) || VrContractDesk.SkipsFade(canvas)) continue;
                 canvas.GetComponentsInChildren(graphics);
                 foreach (var graphic in graphics)
                 {
