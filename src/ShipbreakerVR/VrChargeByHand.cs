@@ -676,16 +676,22 @@ namespace ShipbreakerVR
         }
 
         // What the rays to a wall and the preview's test for room leave out: the charges in the hands (and that charge's
-        // own pieces), the player's body and what hangs on the VR rig.
+        // own pieces), the player's body and what hangs on the VR rig. A hand's body counts only while it is a charge:
+        // Check keeps whatever loose body a hand holds, and a ship that is not kinematic is one. With the other hand on
+        // the ship, as one holds on to lay a charge on, the whole ship was left out and no wall found (Raik,
+        // 2026-11-22: laid on by hand they did not stick, drifting to the wall they did; the log: "no wall within 20 cm
+        // of its back" with the left hand on a panel of that 44 t body).
         private static bool Ours(Collider collider, Transform charge)
         {
             if (collider == null) return true;
             var body = collider.attachedRigidbody;
-            if (body != null && (body == afloat[0].Body || body == afloat[1].Body || body == VrToolCollide.Player())) return true;
+            if (body != null && (HoldsAsCharge(afloat[0], body) || HoldsAsCharge(afloat[1], body) || body == VrToolCollide.Player())) return true;
             if (charge != null && collider.transform.IsChildOf(charge)) return true;
             var rig = VrCamera.Instance != null ? VrCamera.Instance.transform.parent : null;
             return rig != null && collider.transform.IsChildOf(rig);
         }
+
+        private static bool HoldsAsCharge(Afloat held, Rigidbody body) => held.Charge != null && held.Body == body;
 
         // A demo charge, on a wall or afloat: no wall for another one (as the game's UpdateTargeting has it).
         private static bool IsCharge(StructurePart part)

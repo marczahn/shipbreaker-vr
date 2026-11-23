@@ -1425,3 +1425,17 @@ device:
 
 The log names each step (`Pull off: the device in the ... hand: ...`, `Device punch: ...`), also a fist that came on
 too slowly, with its speed.
+
+## Prompts where a button does it (0.32.1)
+Rule (Raik, 2026-11-23): where an option switches the hand's way of doing something off and a button does it
+instead, the game's prompt for that button shows.
+- *Stow over the shoulder* off: an AI node or the radio in a hand is collected with A or X. They are the mod's own
+  things and have no interaction of the game's, so `VrStowPrompt` fills the game's prompt widget
+  (`InteractionUIController`: button picture, action, name) while a hand holds one and the game shows no prompt of
+  its own. The widget is switched on by the game at an interaction's `Init` and off at its end and filled only then,
+  so in between the mod can use it; its labels read their localized text again as it comes on (`OnEnable`), hence
+  the mod clears their IDs and writes each frame.
+- *Holding on* off, or the tools not aimed with the hand: levers and push buttons are offered from the view and used
+  with A, so `VrLeverPrompt` no longer hides their prompt then (it did whenever VR ran).
+- The other way round: a demo charge on a wall and a device to strip are worked by the hand that holds them, and the
+  button does nothing meanwhile, so `VrLeverPrompt` hides their prompt for that time (`PulledByHand`).

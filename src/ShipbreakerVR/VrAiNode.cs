@@ -372,6 +372,7 @@ namespace ShipbreakerVR
                     // are taken with their prompt's button.
                     held.Body = null;
                     held.Over = false;
+                    VrStowPrompt.Offer(VrOptions.L("AI node", "KI-Knoten"));
                     if (!hand.Primary.Pressed) return;
                     VrClimb.Drop(hand, "AI node collected with its button");
                     Stow(hand, body);
