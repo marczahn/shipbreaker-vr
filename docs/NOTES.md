@@ -1597,6 +1597,17 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
   monitor of the Hab (monitor look included), only while `PRF_OnboardingScene` is on, so the UI texture cannot cover
   the contract before.
 - **The picture** is stretched where it is until it is 120 degrees wide from the head.
+- **Clicking through** (`VrContractDesk.Advance`): a toggle of the contract that was just ticked, or a button of it
+  that was just clicked, hands the selection on 0.15 s later to what lies below it (else to its right), past the
+  other choices of the same toggle group, if the game left the selection where it was. So A alone goes through the
+  form (Raik, 2026-11-23).
+- **The account name** (`VrDeskKeyboard`, a stopgap, Raik's word): while the contract's name field
+  (`ContractToggleCheck.m_RequiredInputField`, a `TMP_InputField`) is selected, a board of keys lies below the screen
+  (54 x 21.5 cm, sloping 25 degrees), and each controller shows as a bar with a beam along its aim pose. The key a
+  beam meets lights up, that hand's trigger types it (a capital at the start and after a space), OK ends it and
+  selects what is below the field. Board, bars and beams are world-space canvases of plain images on the contract's
+  layer 10, with the field's font: the path the contract itself is drawn by, so no shader or model of the mod's own.
+  `VrMenuInput` leaves the triggers out of the menu meanwhile. Not seen in the headset when this was written.
 - First test (Raik, 2026-11-23): the keys load (8 parts of desk and terminal, the chair), the contract works on the
   screen, "fits quite well already". Not seen yet: the onboarding's screens on the terminal and whether the apartment
   stays on through them. The log tells each step (`Contract desk: ...`).

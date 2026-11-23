@@ -2,7 +2,9 @@ using System.Collections.Generic;
 using BBI.Unity.Game;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
+using UnityEngine.EventSystems;
 using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.UI;
 
 namespace ShipbreakerVR
 {
@@ -80,6 +82,15 @@ namespace ShipbreakerVR
         private static GameObject onboarding;
         private static Transform flight;
         private static float nextSearch;
+        // The contract's account name, typed with VrDeskKeyboard.
+        private static TMPro.TMP_InputField nameField;
+        // Stepping on through the contract (Advance): what was selected last frame and whether it was ticked, the
+        // button listened to, whether it was clicked, and what to step on from, and when.
+        private static GameObject selectedBefore, stepFrom;
+        private static bool tickedBefore, clicked;
+        private static Button listening;
+        private static float stepAt;
+        private const float StepAfter = 0.15f;
 
         // The prefabs, while loading and loaded.
         private static AsyncOperationHandle<GameObject> roomLoad, chairLoad;
@@ -184,6 +195,7 @@ namespace ShipbreakerVR
                 while (root != null && root.name != "PRF_ContractScene") root = root.parent;
                 if (root == null) continue;
                 scene = root;
+                nameField = HarmonyLib.Traverse.Create(check).Field("m_RequiredInputField").GetValue<TMPro.TMP_InputField>();
                 var room = root.Find("3D Scene");
                 room3D = room != null ? room.gameObject : null;
                 ui = root.Find("UI");
@@ -431,6 +443,8 @@ namespace ShipbreakerVR
         private static void Keep()
         {
             if (ui == null || contract == null || !Screen(out var center, out var rotation, out var size)) return;
+            VrDeskKeyboard.Update(Visible(contract) ? nameField : null, center - rotation * Vector3.forward * BeforeGlass, rotation, size, desk.transform.lossyScale.x);
+            Advance();
             // On the terminal's face: Screen gives the place BeforeGlass behind it.
             center -= rotation * Vector3.forward * (BeforeGlass + ContractBefore);
             if (!uiMoved)
@@ -452,10 +466,77 @@ namespace ShipbreakerVR
             ui.position = center - ui.rotation * Vector3.Scale(resting, ui.lossyScale);
         }
 
+        // Raik (2026-11-23): "whenever a tick is set or a button pressed, it should go on to the next row, the next
+        // switch to choose or fill in, so one can simply click through". A toggle of the contract that was just ticked,
+        // or a button of it that was just clicked: if the game leaves the selection on it, the next thing below it (or
+        // to its right) is selected a moment later, past the other choices of the same group of toggles.
+        private static void Advance()
+        {
+            var system = EventSystem.current;
+            var selected = system != null ? system.currentSelectedGameObject : null;
+            if (stepFrom != null && Time.unscaledTime >= stepAt)
+            {
+                var from = stepFrom;
+                stepFrom = null;
+                if (selected == from && from.activeInHierarchy)
+                {
+                    var next = Next(from.GetComponent<Selectable>());
+                    if (next != null)
+                    {
+                        system.SetSelectedGameObject(next.gameObject);
+                        if (logs++ < 60) Plugin.Log.LogInfo($"Contract desk: on from '{from.name}' to '{next.name}'");
+                        return;
+                    }
+                }
+            }
+            if (selected != selectedBefore)
+            {
+                if (listening != null) listening.onClick.RemoveListener(Clicked);
+                listening = null;
+                clicked = false;
+                selectedBefore = selected;
+                if (selected == null || contract == null || !selected.transform.IsChildOf(contract)) return;
+                var toggle = selected.GetComponent<Toggle>();
+                tickedBefore = toggle != null && toggle.isOn;
+                listening = selected.GetComponent<Button>();
+                if (listening != null) listening.onClick.AddListener(Clicked);
+                return;
+            }
+            if (selected == null || contract == null || !selected.transform.IsChildOf(contract)) return;
+            var ticked = selected.GetComponent<Toggle>();
+            var done = clicked || (ticked != null && ticked.isOn && !tickedBefore);
+            if (ticked != null) tickedBefore = ticked.isOn;
+            clicked = false;
+            if (!done) return;
+            stepFrom = selected;
+            stepAt = Time.unscaledTime + StepAfter;
+        }
+
+        private static void Clicked() => clicked = true;
+
+        // What is selected after that: below it, else to its right; not another choice of the same group.
+        private static Selectable Next(Selectable from)
+        {
+            if (from == null) return null;
+            var toggle = from as Toggle;
+            var group = toggle != null ? toggle.group : null;
+            var each = from;
+            for (var i = 0; i < 8; i++)
+            {
+                var next = each.FindSelectableOnDown() ?? each.FindSelectableOnRight();
+                if (next == null || next == from) return null;
+                var other = next as Toggle;
+                if (group == null || other == null || other.group != group) return next;
+                each = next;
+            }
+            return null;
+        }
+
         private static void Hide()
         {
             if (!shown) return;
             shown = false;
+            VrDeskKeyboard.Hide();
             if (desk != null) desk.SetActive(false);
             Restore();
             Plugin.Log.LogInfo("Contract desk: hidden");
@@ -474,12 +555,18 @@ namespace ShipbreakerVR
             if (pictureStretched && picture != null) picture.localScale = pictureScale;
             pictureStretched = false;
             if (computer != null) computer.enabled = true;
+            if (listening != null) listening.onClick.RemoveListener(Clicked);
+            listening = null;
+            selectedBefore = stepFrom = null;
+            clicked = false;
         }
 
         // On unload, and when the front end is left: the desk gone, the prefabs let go.
         public static void Release()
         {
             shown = false;
+            VrDeskKeyboard.Hide();
+            nameField = null;
             Restore();
             if (desk != null) Object.Destroy(desk);
             desk = null;

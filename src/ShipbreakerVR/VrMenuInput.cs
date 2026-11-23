@@ -145,6 +145,8 @@ namespace ShipbreakerVR
                         leftStick = rightStick = Vector2.zero;
                         pressed[0] = pressed[1] = pressed[2] = pressed[4] = pressed[5] = false;
                     }
+                    // The triggers type on the desk's keyboard while it is shown (VrDeskKeyboard).
+                    if (VrDeskKeyboard.Active) pressed[4] = pressed[5] = false;
                 }
 
                 // A press that opened or closed a menu is still held when the next state starts; it must not act there
