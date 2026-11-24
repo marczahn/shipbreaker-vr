@@ -26,6 +26,7 @@ namespace ShipbreakerVR
         private static int darkFrames;
         private static bool passing;
         private static float backSince = -1f;
+        private static bool timed;
         private static readonly MethodInfo Submit = AccessTools.Method(typeof(ContractToggleCheck), "SubmitContract");
 
         static VrContractSubmit() => VrSession.OnUnload("contract submit", () =>
@@ -57,6 +58,12 @@ namespace ShipbreakerVR
         // From VrContractDesk.Update, every frame (also while the desk is not shown, to let the dark go again).
         public static void Update()
         {
+            // The timing patch, once the desk is there: by then the game's options are loaded (see the patch).
+            if (!timed && VrContractDesk.Shown)
+            {
+                timed = true;
+                VrSession.PatchLater(typeof(ContractSubmitTimingPatch));
+            }
             if (pending != null)
             {
                 Darkness = Mathf.Clamp01((Time.unscaledTime - since) / DarkIn);
@@ -89,7 +96,10 @@ namespace ShipbreakerVR
     }
 
     // How long the parts of making a new profile take, while a career starts (at most a few dozen lines a game).
-    [HarmonyPatch]
+    // Applied only once the desk is there (VrContractSubmit.Update): patching LynxControlsUserOptions.ApplyOptions at
+    // the start ran that class's static constructor before the game's options store existed, and the game hung on its
+    // first loading screen (Raik 2026-11-24).
+    [HarmonyPatch, PatchLater]
     internal static class ContractSubmitTimingPatch
     {
         private static int logs;

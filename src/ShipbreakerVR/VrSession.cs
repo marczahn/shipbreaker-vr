@@ -10,6 +10,10 @@ namespace ShipbreakerVR
     // Modules register their own teardown (OnUnload), from their static constructor, which runs on their first use, and
     // unloading runs them in reverse order: what was used last goes first, the patches go last. Before, Plugin.OnDestroy
     // called a hand-kept list of eleven teardowns, and a new module had to remember to add itself.
+    // See VrSession.PatchLater.
+    [System.AttributeUsage(System.AttributeTargets.Class)]
+    internal sealed class PatchLaterAttribute : System.Attribute { }
+
     internal static class VrSession
     {
         private static readonly List<(string What, System.Action Teardown)> Teardowns = new List<(string, System.Action)>();
@@ -19,6 +23,26 @@ namespace ShipbreakerVR
 
         // Called once per module, from its static constructor.
         public static void OnUnload(string what, System.Action teardown) => Teardowns.Add((what, teardown));
+
+        // A patch class marked [PatchLater] is left out at the start and applied here when it is needed: patching a
+        // game method compiles it, and that runs its class's static constructor. Some of the game's classes cannot run
+        // theirs that early (LynxControlsUserOptions reads the options store; Raik 2026-11-24, the game hung on its first
+        // loading screen: the class stayed broken and the game's own loading of the options failed with it). Removed
+        // with the other patches on unload.
+        public static void PatchLater(System.Type type)
+        {
+            if (harmony == null) return;
+            try
+            {
+                harmony.CreateClassProcessor(type).Patch();
+                Plugin.Log.LogInfo($"Patch {type.Name} applied when needed");
+            }
+            catch (System.Exception e)
+            {
+                Plugin.Log.LogError($"Patch {type.Name} failed: {e}");
+                PatchReport.Failed(type.Name);
+            }
+        }
 
         // From Plugin.Awake, after the config is bound. reloaded: loaded again by ScriptEngine while VR runs, so VR is
         // not started (toggled) once more.
@@ -32,6 +56,7 @@ namespace ShipbreakerVR
             OnUnload("patches", () => harmony.UnpatchSelf());
             foreach (var type in AccessTools.GetTypesFromAssembly(typeof(Plugin).Assembly))
             {
+                if (type.IsDefined(typeof(PatchLaterAttribute), false)) continue;
                 try { harmony.CreateClassProcessor(type).Patch(); }
                 catch (System.Exception e)
                 {
