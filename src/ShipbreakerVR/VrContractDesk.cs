@@ -168,6 +168,7 @@ namespace ShipbreakerVR
         // From VrFrame, in Update.
         public static void Update()
         {
+            VrContractSubmit.Update();
             var vr = VrCamera.Instance;
             var state = GameSession.CurrentGameState;
             if (!VrXr.IsRunning || vr == null || vr.FollowsHab || state == GameSession.GameState.Gameplay || state == GameSession.GameState.Hab)
@@ -243,6 +244,9 @@ namespace ShipbreakerVR
         // While a new career starts in the front end: the apartment or the flight video is there. VrRadio waits with
         // reading its model until then (2.7 MB of texture at once, a halt of most of a second when the account's name
         // was confirmed, Raik 2026-11-24), for the loading screen that follows.
+        // Whether the desk stands in the apartment now.
+        internal static bool Shown => shown;
+
         internal static bool CareerStarting => scene != null && ((room3D != null && room3D.activeInHierarchy) || Visible(flight));
 
         // For VrCanvases.FadeAlpha: the scene's fade from black, not darkening the view while the desk has come.
@@ -560,6 +564,14 @@ namespace ShipbreakerVR
         {
             var system = EventSystem.current;
             var selected = system != null ? system.currentSelectedGameObject : null;
+            // The name confirmed and the game's work waiting for the dark (VrContractSubmit): the next page comes
+            // with it, and the game selects on it itself.
+            if (VrContractSubmit.Busy)
+            {
+                stepFrom = null;
+                clicked = false;
+                return;
+            }
             if (stepFrom != null && Time.unscaledTime >= stepAt)
             {
                 var from = stepFrom;

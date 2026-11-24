@@ -248,7 +248,8 @@ namespace ShipbreakerVR
 
             canvases.HideFades = menuMode;
             canvases.Update(uiCamera);
-            gameFade = canvases.FadeAlpha();
+            // With the dark that hides the game's long frame as a new profile is made (VrContractSubmit).
+            gameFade = Mathf.Max(canvases.FadeAlpha(), VrContractSubmit.Darkness);
             if (gameFade > 0.5f && !loggedGameFade)
             {
                 loggedGameFade = true;

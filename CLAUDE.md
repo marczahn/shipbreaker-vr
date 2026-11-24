@@ -126,7 +126,8 @@ whoever asks.
     `VrHabCustomPosters` (walking through it, its screens and exit, posters, own pictures), `VrModelBox` (a drawn thing's
     box in the room's axes), `VrContactShadow` (shadows under what the mod sets down), `VrAiNodeInventory` /
     `VrAiNodeMail` / `VrMoraleMail` (the inventory row and LYNX's messages of the collection), `VrMenuInput` (menus with
-    the controllers), `VrContractDesk` (a new career's contract and onboarding at a copy of the Hab's desk), `VrDeskKeyboard` (a keyboard to
+    the controllers), `VrContractDesk` (a new career's contract and onboarding at a copy of the Hab's desk), `VrContractSubmit` (the view
+    darkened while the game makes the new profile, one long frame), `VrDeskKeyboard` (a keyboard to
     point at for the contract's name, with the controllers' beams).
   - Picture and diagnosis: `VrDebrisRange`, `VrLampShadows` (options under Bild), `VrDiagnostics` / `VrHabSurvey` /
     `VrLoadTrace` / `VrRenderInfo` (the F8 dump, the Hab's floor plan, load screens and HDRP's state in the log).

@@ -1613,6 +1613,12 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
   that moment, and `VrRadio` read the radio's model and its 2.7 MB texture ahead then, meant for a loading screen.
   It now waits while a career starts (`VrContractDesk.CareerStarting`: apartment or flight video), for the loading
   screen after the video; the log gives how long the reading takes ("Radio: read ahead in …").
+  Raik's next test: the halt was still there (706 ms), with no radio read in it. It is the game's own work in
+  `ContractToggleCheck.SubmitContract`: writing its options (`LynxUserOptions.HotWriteAndReload`), making, loading
+  and saving the profile and the meta progress, and the next page's event, all in that one frame. That cannot be made
+  shorter from the mod, so in VR it is hidden (`VrContractSubmit`): the submit waits, the view darkens in 0.12 s,
+  stays dark for two frames, then the game does its work (the headset holds a dark frame), and the view comes back
+  in 0.3 s. The log times each part ("Contract submit: … took … ms").
 - **Clicking through** (`VrContractDesk.Advance`): a toggle of the contract that was just ticked, or a button of it
   that was just clicked, hands the selection on 0.15 s later to what lies below it (else to its right), past the
   other choices of the same toggle group, if the game left the selection where it was. So A alone goes through the
