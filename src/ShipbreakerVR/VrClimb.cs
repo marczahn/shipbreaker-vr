@@ -483,8 +483,8 @@ namespace ShipbreakerVR
                 return;
             }
             var playspace = VrCamera.Instance.Playspace;
-            // Turning, not rolling: the way the body faces, which a roll about it keeps (VrHands turns the hand along on
-            // a roll, RollAlong).
+            // Turning, not rolling: the way the body faces, which a roll about it keeps (VrHands turns a flat hand with its
+            // controller).
             if (Vector3.Angle(playspace * Vector3.forward, hand.TurnAtHold * Vector3.forward) < SlideAfter) return;
             hand.TurnAtHold = playspace;
             // Where the hand is now, taken onto the surface's plane and found on the surface there.
@@ -1758,8 +1758,11 @@ namespace ShipbreakerVR
                 var toward = -away / distance;
                 var nearest = collider.Raycast(new Ray(at, toward), out var face, distance + 0.02f * scale) && Vector3.Dot(face.normal, away) > 0f
                     ? face.normal : away / distance;
-                if (!aimed || Vector3.Angle(nearest, -palm) <= PalmTurnedAway) return nearest;
-                if (!FacingPalm(collider, at, turn, palm, out var turned) || Vector3.Angle(turned, -palm) >= Vector3.Angle(nearest, -palm)) return nearest;
+                // Raik (2026-11-26: on an edge or a handle the hand turned with where the body was, not with the
+                // controller): the controller decides. The face the palm turns to, unless the nearest faces it nearly as
+                // well (within PalmPrefer); before, the nearest was taken up to 60 degrees off the palm.
+                if (!aimed) return nearest;
+                if (!FacingPalm(collider, at, turn, palm, out var turned) || Vector3.Angle(turned, -palm) + PalmPrefer >= Vector3.Angle(nearest, -palm)) return nearest;
                 LogFace(hand, "the nearest face turned away from the palm", Vector3.Angle(nearest, -palm), Vector3.Angle(turned, -palm));
                 return turned;
             }
@@ -1779,8 +1782,9 @@ namespace ShipbreakerVR
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand takes the face its palm turns to ({why}{(nearest >= 0f ? $", nearest face {nearest:0}° off the palm" : "")}), {palm:0}° off the palm");
         }
 
-        // A face the nearest point's own is taken over the palm's only this far off facing the palm, in degrees.
-        private const float PalmTurnedAway = 60f;
+        // The face the palm turns to is taken over the nearest point's own when it faces the palm this much better, in
+        // degrees.
+        private const float PalmPrefer = 10f;
 
         // Of the faces rays from outside the hand along the palm, the aim and the controller's down meet, the one whose
         // outside faces the palm most; false without one.
@@ -2317,6 +2321,19 @@ namespace ShipbreakerVR
                 if (hand.Input != input || !hand.Holding || hand.Anchor == null || hand.Bar == Vector3.zero) continue;
                 axis = hand.Anchor.TransformDirection(hand.Bar).normalized;
                 return true;
+            }
+            return false;
+        }
+
+        // The line of the edge or bar that hand holds (EdgeLine), in the world; false when it holds no edge.
+        public static bool TryGetEdge(VrInput.Hand input, out Vector3 line)
+        {
+            line = Vector3.zero;
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input || !hand.Holding || hand.Anchor == null || hand.EdgeLine == Vector3.zero) continue;
+                line = hand.Anchor.TransformDirection(hand.EdgeLine).normalized;
+                return line.sqrMagnitude > 0.5f;
             }
             return false;
         }

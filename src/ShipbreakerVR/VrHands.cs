@@ -275,17 +275,28 @@ namespace ShipbreakerVR
             // The same for the other arm, in its forearm's axes (StayOutOfArm).
             public Vector3 ArmSide;
             public float ArmSideAt;
-            // The hand on its hold (Grip): fixed on the thing held, turned (GripTurn) and placed (GripPoint, GripOffset)
-            // as it took hold, flat on large ones; blended in and out over GripTime.
+            // The hand on its hold (Grip): placed on the thing held (GripPoint, GripOffset), turned as GripTurn in the
+            // anchor's axes, flat on large ones and following the controller there (GripFollow); blended in and out over
+            // GripTime. GripWorld: the turn shown last, in the world.
             public bool Gripping;
             public Transform GripAnchor;
             public Quaternion GripTurn;
-            // After the hold slid along its surface (VrClimb.Slide): the turn it had, blended over to the new one.
-            public int GripSlides;
-            // The surface's outward direction on the hold, in the anchor's axes (for turning a flat hand along).
-            public Vector3 GripNormal;
-            public Quaternion GripTurnBefore;
-            public float GripTurnAt = -1f;
+            public Quaternion GripWorld = Quaternion.identity;
+            // How far the hand on its hold was off its controller (LogHeld): summed, at most, frames, since, on what.
+            public float HeldOffSum;
+            public float HeldOffMost;
+            public int HeldOffFrames;
+            public float HeldOffSince;
+            public string HeldOn;
+            // How far the elbow is turned out with the hand (Elbow), in degrees, eased.
+            public float Swivel;
+            // The forearm's twist bone (Twist): the bone, its turn and the wrist's to the forearm in the bind pose, and
+            // the forearm's axis in its own axes.
+            public Transform TwistBone;
+            public Quaternion TwistRest;
+            public Quaternion WristRest;
+            public Vector3 ForearmAxis;
+            public bool TwistLogged;
             public Vector3 GripPoint;
             public Vector3 GripOffset;
             public bool GripFlat;
@@ -418,6 +429,34 @@ namespace ShipbreakerVR
             arm.Helpers = helpers.ToArray();
             arm.HelperPlaces = places.ToArray();
             arm.HelperLogged = new bool[arm.Helpers.Length];
+            FindTwist(arm, bones, binds);
+        }
+
+        // The forearm's twist bone ('lowerarm_twist') and the bind pose's turns of it and of the wrist to the forearm (Twist).
+        private static void FindTwist(Arm arm, Transform[] bones, Matrix4x4[] binds)
+        {
+            arm.TwistBone = null;
+            int lower = System.Array.IndexOf(bones, arm.Lower), wrist = System.Array.IndexOf(bones, arm.Wrist);
+            if (lower < 0 || wrist < 0 || lower >= binds.Length || wrist >= binds.Length) return;
+            for (var i = 0; i < bones.Length && i < binds.Length; i++)
+            {
+                var bone = bones[i];
+                if (bone == null || !bone.name.ToLowerInvariant().Contains("lowerarm_twist")) continue;
+                if (arm.Wrist.IsChildOf(bone) || !bone.IsChildOf(arm.Upper))
+                {
+                    Plugin.Log.LogInfo($"Hands: {arm.Name} forearm's '{bone.name}' left as it is (the wrist hangs on it, or it is not on this arm)");
+                    return;
+                }
+                var lowerBind = binds[lower].inverse.rotation;
+                arm.TwistRest = Quaternion.Inverse(lowerBind) * binds[i].inverse.rotation;
+                arm.WristRest = Quaternion.Inverse(lowerBind) * binds[wrist].inverse.rotation;
+                var axis = Quaternion.Inverse(lowerBind) * ((Vector3)binds[wrist].inverse.GetColumn(3) - (Vector3)binds[lower].inverse.GetColumn(3));
+                if (axis.sqrMagnitude < 1e-8f) return;
+                arm.ForearmAxis = axis.normalized;
+                arm.TwistBone = bone;
+                Plugin.Log.LogInfo($"Hands: {arm.Name} forearm's twist bone '{bone.name}' (on '{bone.parent.name}') turns with the wrist");
+                return;
+            }
         }
 
         // The arm's bone lengths from the bind pose of the skin that uses its bones (the suit's arms, geo_arms).
@@ -2101,9 +2140,10 @@ namespace ShipbreakerVR
             var animated = arm.Wrist.rotation;
             var target = Vector3.Lerp(arm.Wrist.position, wrist, weight);
             if (!arm.Measured) Measure(arm, wrist);
-            var shortBy = VrToolModels.Reach(arm.Upper.parent, arm.Upper, arm.Lower, arm.Wrist, target, Elbow(arm));
+            var shortBy = VrToolModels.Reach(arm.Upper.parent, arm.Upper, arm.Lower, arm.Wrist, target, Elbow(arm, frame, target));
             Count(arm, weight >= 1f ? shortBy : 0f);
             arm.Wrist.rotation = Quaternion.Slerp(animated, HandRotation(arm, frame, aimed, animated), weight);
+            Twist(arm, weight);
         }
 
         // A hand that holds on stays fixed on the thing held, as Raik asked: it no longer turns with its controller, so its
@@ -2112,30 +2152,42 @@ namespace ShipbreakerVR
         // keeps the turn and place it took hold with. Letting go it goes back to its controller.
         private static void Grip(Arm arm, bool held, Vector3 point, ref Vector3 wrist, ref Quaternion frame)
         {
+            var controller = frame;
             if (held && VrClimb.TryGetGrip(arm.Input, out var anchor, out var normal))
             {
-                var slides = VrClimb.Slides(arm.Input);
-                if (!arm.Gripping || anchor != arm.GripAnchor || slides != arm.GripSlides)
+                var flat = VrClimb.HoldsFlat(arm.Input);
+                if (!arm.Gripping || anchor != arm.GripAnchor || flat != arm.GripFlat)
                 {
-                    // Slid on the same hold: the hand turns over to its new place instead of snapping.
-                    var slid = arm.Gripping && anchor == arm.GripAnchor;
-                    // From the turn shown now, also in the middle of turning along (RollAlong).
-                    arm.GripTurnBefore = ShownGripTurn(arm);
-                    arm.GripTurnAt = slid ? Time.unscaledTime : -1f;
-                    arm.GripSlides = slides;
+                    // Gone over onto the next part while holding (a glide over a seam): the hand keeps the turn it shows.
+                    var onward = arm.Gripping && arm.GripAnchor != null && flat && arm.GripFlat;
                     arm.Gripping = true;
                     arm.GripAnchor = anchor;
-                    var flat = VrClimb.HoldsFlat(arm.Input);
                     arm.GripFlat = flat;
-                    var start = flat ? FlatFrame(arm, frame, normal) : frame;
                     var side = arm == LeftArm ? 1f : -1f;
-                    arm.GripOffset = flat
-                        ? new Vector3(-side * (PalmThickness + ClawLift), 0f, -PalmLength) * VrCamera.WorldScale
-                        : Quaternion.Inverse(start) * (wrist - point);
-                    if (!flat) start = AroundBar(arm, true) * start;
-                    arm.GripNormal = Quaternion.Inverse(anchor.rotation) * normal;
+                    Quaternion start;
+                    if (flat)
+                    {
+                        start = onward ? arm.GripWorld : HoldFrame(arm, frame, normal);
+                        arm.GripOffset = new Vector3(-side * (PalmThickness + ClawLift), 0f, -PalmLength) * VrCamera.WorldScale;
+                    }
+                    else
+                    {
+                        arm.GripOffset = Quaternion.Inverse(frame) * (wrist - point);
+                        start = AroundBar(arm, true) * frame;
+                    }
                     arm.GripTurn = Quaternion.Inverse(anchor.rotation) * start;
-                    if (logs++ < 40) Plugin.Log.LogInfo($"Hands: {arm.Name} hand fixed on '{anchor.name}'{(flat ? ", flat on the surface" : "")}");
+                    if (logs++ < 40) Plugin.Log.LogInfo($"Hands: {arm.Name} hand fixed on '{anchor.name}'{(flat ? ", flat on the surface, turning with the controller" : "")}");
+                }
+                // Flat on a surface, an edge or a handle, the hand turns with its controller (Raik, 2026-11-26: the hand's
+                // turn much more from the controller, "I cannot turn my hand much otherwise"): the palm stays on the
+                // surface, the knuckles go where the controller points, round an edge the palm goes where the
+                // controller's palm faces (HoldFrame); eased over GripFollow instead of staying put up to 45 degrees and
+                // then turning over. Its place stays on the hold.
+                else if (flat && !VrClimb.HeldFree(arm.Input))
+                {
+                    var shown = anchor.rotation * arm.GripTurn;
+                    var follow = 1f - Mathf.Exp(-Time.unscaledDeltaTime / GripFollow);
+                    arm.GripTurn = Quaternion.Inverse(anchor.rotation) * Quaternion.Slerp(shown, HoldFrame(arm, frame, normal), follow);
                 }
                 arm.GripPoint = anchor.InverseTransformPoint(point);
                 arm.GripBlend = Mathf.MoveTowards(arm.GripBlend, 1f, Time.unscaledDeltaTime / GripTime);
@@ -2148,32 +2200,67 @@ namespace ShipbreakerVR
             if (arm.GripBlend <= 0f || arm.GripAnchor == null)
             {
                 if (!arm.Gripping) arm.GripAnchor = null;
+                LogHeld(arm, false, frame, controller);
                 return;
-            }
-            var turning = arm.GripTurnAt >= 0f && Time.unscaledTime - arm.GripTurnAt < SlideTurnTime;
-            var gripTurn = ShownGripTurn(arm);
-            // Flat on a surface while the body rolls (VTOL's tilt, the Shooter's trigger roll): the hand stays put and the
-            // arm winds round the wrist. Past RollAlong degrees between the hand and where the controller would lay it, it
-            // turns on the spot to the controller's way, over SlideTurnTime (Raik: it should slip after now and then).
-            if (arm.Gripping && arm.GripFlat && !turning)
-            {
-                var along = FlatFrame(arm, frame, arm.GripAnchor.rotation * arm.GripNormal);
-                if (Quaternion.Angle(arm.GripAnchor.rotation * gripTurn, along) > RollAlong)
-                {
-                    arm.GripTurnBefore = gripTurn;
-                    arm.GripTurn = Quaternion.Inverse(arm.GripAnchor.rotation) * along;
-                    arm.GripTurnAt = Time.unscaledTime;
-                    if (rollLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} hand turns along on '{arm.GripAnchor.name}', the arm wound past {RollAlong:0}°");
-                }
             }
             // Held free (a nacelle switch, VrClimb.HeldFree), the hand stays on its hold but turns with the controller.
             var free = arm.Gripping && VrClimb.HeldFree(arm.Input);
-            var turn = free ? AroundBar(arm, false) * frame : arm.GripAnchor.rotation * gripTurn;
+            var turn = free ? AroundBar(arm, false) * frame : arm.GripAnchor.rotation * arm.GripTurn;
+            arm.GripWorld = turn;
             var placed = arm.GripAnchor.TransformPoint(arm.GripPoint) + turn * arm.GripOffset;
             if (free) placed += SwitchHandShift(placed);
             if (arm.GripFlat) placed = HeldOut(arm, OutOfSurface(arm, placed, turn), turn);
             wrist = Vector3.Lerp(wrist, placed, arm.GripBlend);
             frame = Quaternion.Slerp(frame, turn, arm.GripBlend);
+            LogHeld(arm, arm.Gripping, frame, controller);
+        }
+
+        // How quickly a hand flat on its hold follows its controller's turn: the time constant of the easing, in seconds.
+        private const float GripFollow = 0.08f;
+        // Round an edge the palm goes at most this far from the face it took hold on, in degrees.
+        private const float EdgeWrap = 90f;
+
+        // A flat hand's turn on its hold: flat on the surface (FlatFrame), the knuckles where the controller points. On an
+        // edge or a bar (VrClimb.TryGetEdge) the surface under the palm is turned round the edge's line to where the
+        // controller's palm faces, up to EdgeWrap from the face held, so the hand rolls over the edge with the controller.
+        private static Quaternion HoldFrame(Arm arm, Quaternion frame, Vector3 normal)
+        {
+            if (VrClimb.TryGetEdge(arm.Input, out var line))
+            {
+                var palm = frame * (arm == LeftArm ? Vector3.right : Vector3.left);
+                var want = Vector3.ProjectOnPlane(-palm, line);
+                var held = Vector3.ProjectOnPlane(normal, line);
+                if (want.sqrMagnitude > 0.04f && held.sqrMagnitude > 0.04f)
+                    normal = Vector3.RotateTowards(held.normalized, want.normalized, EdgeWrap * Mathf.Deg2Rad, 0f);
+            }
+            return FlatFrame(arm, frame, normal);
+        }
+
+        // While a hand holds on: how far the hand shown is off its controller, logged when it lets go (to see whether it
+        // follows the controller as it should).
+        private static int heldLogs;
+
+        private static void LogHeld(Arm arm, bool holding, Quaternion shown, Quaternion controller)
+        {
+            if (holding)
+            {
+                var off = Quaternion.Angle(shown, controller);
+                if (arm.HeldOffFrames == 0)
+                {
+                    arm.HeldOffSince = Time.unscaledTime;
+                    arm.HeldOn = arm.GripAnchor != null ? arm.GripAnchor.name : "?";
+                    arm.HeldOffSum = arm.HeldOffMost = 0f;
+                }
+                arm.HeldOffSum += off;
+                arm.HeldOffMost = Mathf.Max(arm.HeldOffMost, off);
+                arm.HeldOffFrames++;
+                return;
+            }
+            if (arm.HeldOffFrames == 0) return;
+            if (heldLogs++ < 60)
+                Plugin.Log.LogInfo($"Hands: {arm.Name} hand held '{arm.HeldOn}' {Time.unscaledTime - arm.HeldOffSince:0.0} s{(arm.GripFlat ? " flat" : "")}, "
+                    + $"off its controller by {arm.HeldOffSum / arm.HeldOffFrames:0} degrees on average, {arm.HeldOffMost:0} at most");
+            arm.HeldOffFrames = 0;
         }
 
         // Test (Raik, 2026-11-14: the hand on the nacelle switch's grip sat a little low, not quite as a hand would hold
@@ -2204,16 +2291,6 @@ namespace ShipbreakerVR
         }
 
         private static int barLogs;
-
-        // How long a hand takes to turn over to its hold after sliding along a surface (VrClimb.Slide), or turning along
-        // it (RollAlong), in seconds.
-        private const float SlideTurnTime = 0.35f;
-        private const float RollAlong = 45f;
-
-        // The hand's turn on its hold as shown now, on the way over to a new one after sliding or turning along.
-        private static Quaternion ShownGripTurn(Arm arm) => arm.GripTurnAt < 0f ? arm.GripTurn
-            : Quaternion.Slerp(arm.GripTurnBefore, arm.GripTurn, Mathf.Clamp01((Time.unscaledTime - arm.GripTurnAt) / SlideTurnTime));
-        private static int rollLogs;
 
         // A flat hand placed on its hold, moved out along the palm's way as far as the deepest of its points (HandAlong,
         // HandAcross on the palm's side) went into anything: a ray from outside towards each point finds what is in front
@@ -2290,16 +2367,77 @@ namespace ShipbreakerVR
         }
 
         // Where the elbow points, in the body's axes (VrTorso.Frame): down, a little out to its side and back, as a relaxed
-        // arm's does, whatever the game's animation gives it.
+        // arm's does, whatever the game's animation gives it; with the hand held thumb up (the palm facing in, as round a
+        // Touch controller).
         private static readonly Vector3 ElbowRight = new Vector3(0.4f, -1f, -0.3f);
 
-        private static Vector3? Elbow(Arm arm)
+        // Raik (2026-11-26): the elbow follows the hand's turn about the forearm. Right hand palm down and drawn in: the
+        // elbow goes out to the right; turned back, it comes down again; palm up: still down, a little in. The forearm
+        // itself turns only some 50 to 80 degrees either way, the shoulder takes the rest (a splinted forearm's turn
+        // was made up by the shoulder's), and a wrist turned far against its forearm is what twists the skin there.
+        // So the elbow turns about shoulder to wrist by ElbowFollows of the hand's turn from thumb up (out on palm down,
+        // in on palm up), at most ElbowOutMost out and ElbowInMost in, eased at ElbowSpeed degrees a second.
+        private const float ElbowFollows = 0.5f;
+        private const float ElbowOutMost = 70f;
+        private const float ElbowInMost = 35f;
+        private const float ElbowSpeed = 400f;
+
+        private static Vector3? Elbow(Arm arm, Quaternion hand, Vector3 wrist)
         {
             var camera = VrCamera.Instance != null ? VrCamera.Instance.GameCamera : null;
             if (camera == null) return null;
+            var body = VrTorso.Frame(camera.transform.rotation);
+            var left = arm == LeftArm;
             var local = ElbowRight;
-            if (arm == LeftArm) local.x = -local.x;
-            return VrTorso.Frame(camera.transform.rotation) * local;
+            if (left) local.x = -local.x;
+            var pole = body * local;
+            var wanted = Mathf.Clamp(Pronation(hand, body, left) * ElbowFollows, -ElbowInMost, ElbowOutMost);
+            arm.Swivel = Mathf.MoveTowards(arm.Swivel, wanted, ElbowSpeed * Time.unscaledDeltaTime);
+            var axis = arm.Upper != null ? wrist - arm.Upper.position : Vector3.zero;
+            if (Mathf.Abs(arm.Swivel) < 0.5f || axis.sqrMagnitude < 1e-6f) return pole;
+            axis.Normalize();
+            // The way round the arm that takes the elbow out (to its side, and up).
+            var outward = body * new Vector3(left ? -1f : 1f, 0.5f, 0f);
+            var sign = Vector3.Dot(Quaternion.AngleAxis(10f, axis) * pole - pole, outward) >= 0f ? 1f : -1f;
+            return Quaternion.AngleAxis(sign * arm.Swivel, axis) * pole;
+        }
+
+        // How far the hand (its own axes, Frame) is turned palm down from thumb up about its knuckles, in degrees: palm
+        // down +90, palm up -90, on either hand. Thumb up is the body's up across the knuckles; with the knuckles up or
+        // down, the body's back or front.
+        private static float Pronation(Quaternion hand, Quaternion body, bool left)
+        {
+            var forward = hand * Vector3.forward;
+            var up = body * Vector3.up;
+            var reference = Vector3.ProjectOnPlane(up, forward);
+            if (reference.sqrMagnitude < 0.04f) reference = Vector3.ProjectOnPlane(body * Vector3.forward * -Mathf.Sign(Vector3.Dot(forward, up)), forward);
+            var thumb = Vector3.ProjectOnPlane(hand * Vector3.up, forward);
+            if (reference.sqrMagnitude < 1e-4f || thumb.sqrMagnitude < 1e-4f) return 0f;
+            var roll = Vector3.SignedAngle(reference, thumb, forward);
+            return left ? -roll : roll;
+        }
+
+        // The forearm's twist bone takes TwistShare of the wrist's turn about the forearm (from the bind pose), so the skin
+        // between elbow and wrist turns along instead of twisting at the wrist (Raik: the wrist's skin sometimes looks
+        // deformed). Not where the wrist hangs on the twist bone.
+        private const float TwistShare = 0.5f;
+
+        private static void Twist(Arm arm, float weight)
+        {
+            var bone = arm.TwistBone;
+            if (bone == null || weight <= 0f || arm.Lower == null || arm.Wrist == null) return;
+            var turned = Quaternion.Inverse(arm.Lower.rotation) * arm.Wrist.rotation * Quaternion.Inverse(arm.WristRest);
+            var along = Vector3.Dot(new Vector3(turned.x, turned.y, turned.z), arm.ForearmAxis);
+            var angle = 2f * Mathf.Atan2(along, turned.w) * Mathf.Rad2Deg;
+            if (angle > 180f) angle -= 360f;
+            if (angle < -180f) angle += 360f;
+            var wanted = arm.Lower.rotation * Quaternion.AngleAxis(angle * TwistShare, arm.ForearmAxis) * arm.TwistRest;
+            bone.rotation = Quaternion.Slerp(bone.rotation, wanted, weight);
+            if (!arm.TwistLogged && Mathf.Abs(angle) > 30f && logs++ < 60)
+            {
+                arm.TwistLogged = true;
+                Plugin.Log.LogInfo($"Hands: {arm.Name} forearm's '{bone.name}' takes {TwistShare * 100f:0} % of the wrist's turn about the forearm (now {angle:0} degrees)");
+            }
         }
 
         // An empty hand stops at what is between the shoulder and the controller instead of going through it. Only the
