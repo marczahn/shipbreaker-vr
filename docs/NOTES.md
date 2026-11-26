@@ -1594,3 +1594,8 @@ aiming and climbing for everyone. Ask Raik before the release.
   once and one only confirms with the thumbprint"): A while it counts up gives it one line a frame (its own way, with
   its sounds), then the total at its end; that last step waits until A is let go, so the press does not also confirm
   the thumbprint, which the game selects as the total ends (`VrSkipDebtList`).
+- Tools held back in the tutorial (Raik 2026-11-26: after Weaver says to take the grapple it could not be taken in VR,
+  with F3 it could): the hand asked `EquipmentController.IsEquipmentBlocked`, which also counts the tool wheel
+  (ToolMenu) blocked, and the tutorial keeps the wheel blocked while it hands out the tools one by one. The game's
+  select keys only ask about the tool's own action (SelectGrapple, SelectCutter, SelectDemoCharge, ActivateScanner),
+  and so does the hand now (`VrToolInput.Blocked`, log "the game holds the ... back now").

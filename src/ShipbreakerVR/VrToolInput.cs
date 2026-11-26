@@ -489,6 +489,31 @@ namespace ShipbreakerVR
         // (VrDualTools).
         // asTool: the demo charges as the game's tool, also with the charges put on by hand. False if the game does not let
         // the tool change now.
+        // Whether the game holds that tool back now. Its own EquipmentController.IsEquipmentBlocked also counts the tool
+        // wheel (ToolMenu) being blocked, and the tutorial keeps the wheel blocked while it hands out the tools one by one,
+        // but its select keys (EquipmentController.Update) only ask about the tool's own action. Raik (2026-11-26): after
+        // Weaver says to take the grapple it could not be taken in VR, with F3 (flat) it could. So the hand asks as the
+        // keys do.
+        private static bool Blocked(EquipmentController.Equipment tool)
+        {
+            var blocker = ActionBlockerService.Instance;
+            if (blocker == null) return false;
+            GameplayActions.GameplayActionSet action;
+            switch (tool)
+            {
+                case EquipmentController.Equipment.GrappleHook: action = GameplayActions.GameplayActionSet.SelectGrapple; break;
+                case EquipmentController.Equipment.CuttingTool: action = GameplayActions.GameplayActionSet.SelectCutter; break;
+                case EquipmentController.Equipment.DemoCharge: action = GameplayActions.GameplayActionSet.SelectDemoCharge; break;
+                case EquipmentController.Equipment.Scanner: action = GameplayActions.GameplayActionSet.ActivateScanner; break;
+                default: return false;
+            }
+            var blocked = blocker.IsActionBlocked(LynxControls.ActionSetAndId.FromEnum(action));
+            if (blocked && blockedLogs++ < 20) Plugin.Log.LogInfo($"Tool control: the game holds the {tool} back now ({action} blocked)");
+            return blocked;
+        }
+
+        private static int blockedLogs;
+
         private static bool Draw(Hand hand, VrToolBelt.Zone zone, bool asTool = false)
         {
             if (zone == VrToolBelt.Zone.Flashlight)
@@ -501,7 +526,7 @@ namespace ShipbreakerVR
                 : zone == VrToolBelt.Zone.Cutter ? EquipmentController.Equipment.CuttingTool
                 : zone == VrToolBelt.Zone.DemoCharge || zone == VrToolBelt.Zone.Detonator ? EquipmentController.Equipment.DemoCharge
                 : EquipmentController.Equipment.Scanner;
-            if (!equipment.CanEquip(tool) || equipment.IsEquipmentBlocked(tool)) return false;
+            if (!equipment.CanEquip(tool) || Blocked(tool)) return false;
             // With the charges put on by hand, one comes out from behind the back as a thing of its own (VrChargeByHand).
             if (zone == VrToolBelt.Zone.DemoCharge && !asTool && VrChargeByHand.TakesOut(hand.Input)) return true;
             if (HeldByOther(hand, zone, tool))
