@@ -208,7 +208,10 @@ namespace ShipbreakerVR
             // So on the loading screens (Raik, 2026-11-26: "their edges always look very restless; drawn with more
             // resolution as the station's screens, so they get smoother too"); step by step wherever it is needed.
             var loading = SceneLoader.Instance != null && SceneLoader.Instance.LoadScreenVisible;
-            var sharp = (onMonitor || loading) && VrSettings.MonitorSharpness.Value > 1f;
+            // And the HUD in a shift (Raik, 2026-11-26: "the loading screens are much better; the same for the HUD in the
+            // mission").
+            var hud = !menuMode && GameSession.CurrentGameState == GameSession.GameState.Gameplay;
+            var sharp = (onMonitor || loading || hud) && VrSettings.MonitorSharpness.Value > 1f;
             if (sharp)
             {
                 var factor = Mathf.Max(1f, Mathf.Min(VrSettings.MonitorSharpness.Value, (float)MaxMonitorWidth / width));

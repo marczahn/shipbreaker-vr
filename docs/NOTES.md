@@ -1599,3 +1599,6 @@ aiming and climbing for everyone. Ask Raik before the release.
   (ToolMenu) blocked, and the tutorial keeps the wheel blocked while it hands out the tools one by one. The game's
   select keys only ask about the tool's own action (SelectGrapple, SelectCutter, SelectDemoCharge, ActivateScanner),
   and so does the hand now (`VrToolInput.Blocked`, log "the game holds the ... back now").
+- The HUD in a shift is drawn sharper too (Raik 2026-11-26, after the loading screens: "much better; the same for the
+  HUD in the mission"): `VrUi` takes the larger, mipmapped UI texture (`Anzeige/MonitorSchaerfe`) in gameplay outside
+  the menus as well. Costs the UI camera's drawing at that size every frame of a shift.
