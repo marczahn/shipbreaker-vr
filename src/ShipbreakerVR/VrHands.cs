@@ -282,6 +282,10 @@ namespace ShipbreakerVR
             public Transform GripAnchor;
             public Quaternion GripTurn;
             public Quaternion GripWorld = Quaternion.identity;
+            // A flat hand: its turn as it took hold (anchor's axes) and the controller's then (the rig's axes); it turns
+            // on from there by as much as the controller turned since (Grip).
+            public Quaternion GripStart = Quaternion.identity;
+            public Quaternion GripController = Quaternion.identity;
             // How far the hand on its hold was off its controller (LogHeld): summed, at most, frames, since, on what.
             public float HeldOffSum;
             public float HeldOffMost;
@@ -442,9 +446,10 @@ namespace ShipbreakerVR
             {
                 var bone = bones[i];
                 if (bone == null || !bone.name.ToLowerInvariant().Contains("lowerarm_twist")) continue;
-                if (arm.Wrist.IsChildOf(bone) || !bone.IsChildOf(arm.Upper))
+                if (!bone.IsChildOf(arm.Upper)) continue;
+                if (arm.Wrist.IsChildOf(bone))
                 {
-                    Plugin.Log.LogInfo($"Hands: {arm.Name} forearm's '{bone.name}' left as it is (the wrist hangs on it, or it is not on this arm)");
+                    Plugin.Log.LogInfo($"Hands: {arm.Name} forearm's '{bone.name}' left as it is (the wrist hangs on it)");
                     return;
                 }
                 var lowerBind = binds[lower].inverse.rotation;
@@ -2169,6 +2174,8 @@ namespace ShipbreakerVR
                     {
                         start = onward ? arm.GripWorld : HoldFrame(arm, frame, normal);
                         arm.GripOffset = new Vector3(-side * (PalmThickness + ClawLift), 0f, -PalmLength) * VrCamera.WorldScale;
+                        arm.GripStart = Quaternion.Inverse(anchor.rotation) * start;
+                        arm.GripController = RigLocal(frame);
                     }
                     else
                     {
@@ -2180,14 +2187,34 @@ namespace ShipbreakerVR
                 }
                 // Flat on a surface, an edge or a handle, the hand turns with its controller (Raik, 2026-11-26: the hand's
                 // turn much more from the controller, "I cannot turn my hand much otherwise"): the palm stays on the
-                // surface, the knuckles go where the controller points, round an edge the palm goes where the
-                // controller's palm faces (HoldFrame); eased over GripFollow instead of staying put up to 45 degrees and
-                // then turning over. Its place stays on the hold.
+                // surface, round an edge it goes where the palm turns (HoldFrame); eased over GripFollow instead of
+                // staying put up to 45 degrees and then turning over. Its place stays on the hold.
+                // From the turn it took hold with, by as much as the controller turned since in the rig's axes (Raik,
+                // the same day: holding a terminal's edge thumb up and pushing past it, the hand turned over as if the
+                // controller had been turned 180 degrees; "how I took hold should count"). Taken straight from the
+                // controller, the knuckles went where its aim lay on the surface, and with the aim nearly into the
+                // surface a little turn of the wrist sent them the other way. Only once the hand would lie more than
+                // TurnOver off where the controller lays it now (the body turned on with the controls) does it start
+                // from the controller anew, not while the controller points into the surface.
                 else if (flat && !VrClimb.HeldFree(arm.Input))
                 {
+                    var rig = Rig();
+                    var turned = rig * (RigLocal(frame) * Quaternion.Inverse(arm.GripController)) * Quaternion.Inverse(rig);
+                    var target = HoldFrame(arm, turned * (anchor.rotation * arm.GripStart), normal);
+                    if (Mathf.Abs(Vector3.Dot(frame * Vector3.forward, normal)) < IntoSurface)
+                    {
+                        var own = HoldFrame(arm, frame, normal);
+                        if (Quaternion.Angle(target, own) > TurnOver)
+                        {
+                            arm.GripStart = Quaternion.Inverse(anchor.rotation) * own;
+                            arm.GripController = RigLocal(frame);
+                            target = own;
+                            if (rollLogs++ < 20) Plugin.Log.LogInfo($"Hands: {arm.Name} hand on '{anchor.name}' starts from its controller anew, {TurnOver:0} degrees off it");
+                        }
+                    }
                     var shown = anchor.rotation * arm.GripTurn;
                     var follow = 1f - Mathf.Exp(-Time.unscaledDeltaTime / GripFollow);
-                    arm.GripTurn = Quaternion.Inverse(anchor.rotation) * Quaternion.Slerp(shown, HoldFrame(arm, frame, normal), follow);
+                    arm.GripTurn = Quaternion.Inverse(anchor.rotation) * Quaternion.Slerp(shown, target, follow);
                 }
                 arm.GripPoint = anchor.InverseTransformPoint(point);
                 arm.GripBlend = Mathf.MoveTowards(arm.GripBlend, 1f, Time.unscaledDeltaTime / GripTime);
@@ -2204,8 +2231,10 @@ namespace ShipbreakerVR
                 return;
             }
             // Held free (a nacelle switch, VrClimb.HeldFree), the hand stays on its hold but turns with the controller.
+            // So does a fist round a handle (VrClimb.HoldsHandle), the controller's grip axis along it.
             var free = arm.Gripping && VrClimb.HeldFree(arm.Input);
-            var turn = free ? AroundBar(arm, false) * frame : arm.GripAnchor.rotation * arm.GripTurn;
+            var handle = arm.Gripping && !free && VrClimb.HoldsHandle(arm.Input);
+            var turn = free || handle ? AroundBar(arm, false) * frame : arm.GripAnchor.rotation * arm.GripTurn;
             arm.GripWorld = turn;
             var placed = arm.GripAnchor.TransformPoint(arm.GripPoint) + turn * arm.GripOffset;
             if (free) placed += SwitchHandShift(placed);
@@ -2217,6 +2246,19 @@ namespace ShipbreakerVR
 
         // How quickly a hand flat on its hold follows its controller's turn: the time constant of the easing, in seconds.
         private const float GripFollow = 0.08f;
+        // A flat hand starts from its controller anew past this many degrees off it, unless the controller's aim is
+        // within acos(IntoSurface) of the surface's normal (then where it lays the knuckles cannot be told well).
+        private const float TurnOver = 100f;
+        private const float IntoSurface = 0.7f;
+        private static int rollLogs;
+
+        private static Quaternion Rig()
+        {
+            var camera = VrCamera.Instance != null ? VrCamera.Instance.transform : null;
+            return camera != null && camera.parent != null ? camera.parent.rotation : Quaternion.identity;
+        }
+
+        private static Quaternion RigLocal(Quaternion world) => Quaternion.Inverse(Rig()) * world;
         // Round an edge the palm goes at most this far from the face it took hold on, in degrees.
         private const float EdgeWrap = 90f;
 

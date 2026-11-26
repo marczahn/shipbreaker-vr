@@ -178,6 +178,8 @@ namespace ShipbreakerVR
             // Held on an edge or a bar (a handle, a pillar's corner): its line on Anchor, along which the hold glides;
             // zero on a face.
             public Vector3 EdgeLine;
+            // Held on a handle (thin both ways and long, HandleLine): the hand closes round it as a fist (Bar).
+            public bool Handle;
             // Taken hold of an edge too fast to stop at once (VrClimb.Stretch): the hand stays on the edge while the body
             // goes on, slowed by the arm, the way across it it goes (world); drawn back softly until SoftUntil once caught.
             public bool Stretch;
@@ -692,9 +694,11 @@ namespace ShipbreakerVR
                 }
                 var hold = Hold(hand);
                 var shift = point - surface;
+                var barLine = hand.Bar != Vector3.zero ? hand.Anchor.TransformDirection(hand.Bar) : Vector3.zero;
                 hand.Collider = collider;
                 hand.Body = body;
                 hand.Anchor = body != null ? body.transform : collider.transform;
+                if (barLine != Vector3.zero) hand.Bar = hand.Anchor.InverseTransformDirection(barLine);
                 hand.Point = hand.Anchor.InverseTransformPoint(hold + shift);
                 hand.Surface = hand.Anchor.InverseTransformPoint(point);
                 if (hand.EdgeLine == Vector3.zero) hand.Normal = hand.Anchor.InverseTransformDirection(normal);
@@ -795,18 +799,8 @@ namespace ShipbreakerVR
 
         private static bool EdgeAt(Collider collider, Vector3 at, Vector3 surface, out Vector3 line)
         {
-            line = Vector3.zero;
+            if (HandleLine(collider, out line)) return true;
             var scale = VrCamera.WorldScale;
-            if (Extents(collider, out var size, out var axes))
-            {
-                var order = new[] { 0, 1, 2 };
-                System.Array.Sort(order, (a, b) => size[a].CompareTo(size[b]));
-                if (size[order[1]] <= HandleThick * scale && size[order[2]] >= 2f * size[order[1]])
-                {
-                    line = axes[order[2]];
-                    return true;
-                }
-            }
             var away = at - surface;
             var distance = away.magnitude;
             if (distance < 0.01f * scale) return false;
@@ -817,6 +811,31 @@ namespace ShipbreakerVR
             if (cross.sqrMagnitude < 1e-6f) return false;
             line = cross.normalized;
             return true;
+        }
+
+        // A handle: a collider thin both ways (HandleThick) and at least twice as long, its long axis.
+        private static bool HandleLine(Collider collider, out Vector3 line)
+        {
+            line = Vector3.zero;
+            if (!Extents(collider, out var size, out var axes)) return false;
+            var order = new[] { 0, 1, 2 };
+            System.Array.Sort(order, (a, b) => size[a].CompareTo(size[b]));
+            if (size[order[1]] > HandleThick * VrCamera.WorldScale || size[order[2]] < 2f * size[order[1]]) return false;
+            line = axes[order[2]];
+            return true;
+        }
+
+        // Of the handles, those a fist closes round: named as the game's grab handles are ('SM_HandGrab_…'), or a bar no
+        // thicker than FistThick both ways. A thicker beam, a door's casing, stays an edge the hand lies flat on.
+        private const float FistThick = 0.06f;
+
+        private static bool FistRound(Collider collider)
+        {
+            if (collider.name.IndexOf("HandGrab", System.StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (!Extents(collider, out var size, out _)) return false;
+            var sorted = new[] { size.x, size.y, size.z };
+            System.Array.Sort(sorted);
+            return sorted[1] <= FistThick * VrCamera.WorldScale;
         }
 
         // A collider's size along its own three axes, in world meters, where it can be told.
@@ -1104,6 +1123,16 @@ namespace ShipbreakerVR
             // one holds on at speeds that tear the hand off straight on; faster, the arm takes what it can and the hand is
             // torn off, the body flying on slower.
             hand.EdgeLine = Vector3.zero;
+            // Raik (2026-11-26): the handles beside the door switches ('SM_HandGrab_02_2') were held as an edge, the hand
+            // flat on whichever face was nearest, often the back against the wall. A fixed handle is held as a fist round
+            // its line, as a lever's grip is (VrHands.AroundBar), whichever side the hand came from.
+            var handleLine = Vector3.zero;
+            hand.Handle = control == null && !hand.Movable && HandleLine(best, out handleLine) && FistRound(best);
+            if (hand.Handle)
+            {
+                hand.Bar = hand.Anchor.InverseTransformDirection(handleLine);
+                if (handleLogs++ < 20) Plugin.Log.LogInfo($"Climbing: {hand.Name} hand holds '{best.name}' as a handle, a fist round it");
+            }
             hand.Stretch = false;
             hand.SoftUntil = 0f;
             hand.OffsetKnown = false;
@@ -2050,7 +2079,7 @@ namespace ShipbreakerVR
         {
             foreach (var hand in Hands)
                 if (hand.Input == input && hand.Holding)
-                    return (!(hand.Firm || hand.Follower) || !hand.Small) && (!hand.Control || hand.Bar == Vector3.zero);
+                    return (!(hand.Firm || hand.Follower) || !hand.Small) && (!hand.Control || hand.Bar == Vector3.zero) && !hand.Handle;
             return false;
         }
 
@@ -2225,6 +2254,16 @@ namespace ShipbreakerVR
         {
             foreach (var hand in Hands)
                 if (hand.Input != input && hand.Holding && !hand.Movable && !hand.Free && hand.Anchor != null) return true;
+            return false;
+        }
+
+        private static int handleLogs;
+
+        // True while that controller's hand holds a fixed handle as a fist (Handle).
+        public static bool HoldsHandle(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input && hand.Holding) return hand.Handle && hand.Bar != Vector3.zero;
             return false;
         }
 
