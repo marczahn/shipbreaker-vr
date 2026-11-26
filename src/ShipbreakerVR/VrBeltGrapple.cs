@@ -62,6 +62,7 @@ namespace ShipbreakerVR
         private static bool detonatorPlaced;
         private static Transform detonatorOf;
         private static float nextDetonator;
+        private static bool detonatorUnlocked = true;
 
         // How fast the grapple glides onto its rest point, per second, as the game's spring may only run while it is held.
         private const float Glide = 10f;
@@ -151,7 +152,16 @@ namespace ShipbreakerVR
             var frame = Quaternion.identity;
             // Its place is kept also while it does not show (in a hand, afloat): where it is put back (DetonatorAtHip).
             VrToolPlace.Detonator(out var detonatorAt, out var detonatorTurn);
-            var placed = prop != null && equipment != null && equipment.CanEquip(EquipmentController.Equipment.DemoCharge)
+            // Raik (2026-11-26): only once the charges are unlocked; until then the game has them in the loadout but
+            // blocks drawing them (ActionBlockerService, SelectDemoCharge), and the detonator is not on the belt.
+            var unlocked = ActionBlockerService.Instance == null
+                || !ActionBlockerService.Instance.IsActionBlocked(LynxControls.ActionSetAndId.FromEnum(GameplayActions.GameplayActionSet.SelectDemoCharge));
+            if (unlocked != detonatorUnlocked)
+            {
+                detonatorUnlocked = unlocked;
+                Plugin.Log.LogInfo($"Belt grapple: the demo charges are {(unlocked ? "unlocked, the detonator shows at the hip" : "locked, no detonator at the hip")}");
+            }
+            var placed = unlocked && prop != null && equipment != null && equipment.CanEquip(EquipmentController.Equipment.DemoCharge)
                 && VrHands.DetonatorRest(out inHandAt, out inHandTurn)
                 && VrToolModels.TrackingToWorld(neck + heading * (VrToolBelt.Sided(detonatorAt) - VrToolBelt.ChargeRef), heading * VrToolPlace.Sided(detonatorTurn), out wrist, out frame);
             var shows = placed && !VrLooseTools.DetonatorShowsInHand && !VrLooseTools.DetonatorLoose;
