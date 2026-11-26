@@ -208,7 +208,7 @@ namespace ShipbreakerVR
             if (GameSession.CurrentGameState == GameSession.GameState.Gameplay)
             {
                 var charges = (VrHand.Left.HoldsTool && VrHand.Left.Tool == EquipmentController.Equipment.DemoCharge) || VrChargeByHand.Holds(left);
-                if (!tool || charges) braking = left.Secondary.Down;
+                if (!tool || charges) braking = left.Secondary.Down && (Allowed(GameplayActions.GameplayActionSet.ThrustBrakeLeft) || Allowed(GameplayActions.GameplayActionSet.ThrustBrakeRight));
                 if (VrInput.Right.Valid) TurnFromStick(VrInput.Right.Stick, playspace);
                 turn = VrFlightComfort.AlignStep(playspace, Time.deltaTime) * turn;
             }
@@ -226,7 +226,7 @@ namespace ShipbreakerVR
                     // Shown in the globe as the hand tilt that rolls as fast with VTOL.
                     var share = Ramp(Mathf.Abs(stick.x), StickDeadzone, 1f);
                     if (share > 0f) shooterRoll = -Mathf.Sign(stick.x) * Mathf.Lerp(TurnDeadzone, RollFull, share);
-                    var roll = ShooterRoll(stick.x) * Time.deltaTime;
+                    var roll = RollAllowed(ShooterRoll(stick.x) * Time.deltaTime);
                     if (roll != 0f) turn = Quaternion.AngleAxis(roll, playspace * VrCamera.Instance.HeadRotation * Vector3.forward) * turn;
                     rollWay = roll > 0f ? 1 : roll < 0f ? -1 : 0;
                     stick.x = 0f;
@@ -304,7 +304,7 @@ namespace ShipbreakerVR
         private static void RollFromReference(Quaternion rotation, Quaternion playspace)
         {
             var hand = (Quaternion.Inverse(referenceRotation) * rotation).eulerAngles;
-            var roll = Rate(hand.z);
+            var roll = RollAllowed(Rate(hand.z));
             rollWay = roll > 0f ? 1 : roll < 0f ? -1 : 0;
             if (roll != 0f) turn = Quaternion.AngleAxis(roll, playspace * VrCamera.Instance.HeadRotation * Vector3.forward) * turn;
         }
@@ -433,8 +433,34 @@ namespace ShipbreakerVR
             local = Vector3.zero;
             if (thrust == Vector3.zero || thrustFrame == null) return false;
             local = thrustFrame.InverseTransformDirection(thrust);
-            return true;
+            // What the game holds back now goes nowhere (the tutorial hands the directions out one by one).
+            if (local.x > 0f && !Allowed(GameplayActions.GameplayActionSet.ThrustMoveRight, GameplayActions.GameplayActionSet.ThrustMoveLeftRightComposite)
+                || local.x < 0f && !Allowed(GameplayActions.GameplayActionSet.ThrustMoveLeft, GameplayActions.GameplayActionSet.ThrustMoveLeftRightComposite)) local.x = 0f;
+            if (local.y > 0f && !Allowed(GameplayActions.GameplayActionSet.ThrustMoveUp, GameplayActions.GameplayActionSet.ThrustMoveUpDownComposite)
+                || local.y < 0f && !Allowed(GameplayActions.GameplayActionSet.ThrustMoveDown, GameplayActions.GameplayActionSet.ThrustMoveUpDownComposite)) local.y = 0f;
+            if (local.z > 0f && !Allowed(GameplayActions.GameplayActionSet.ThrustMoveForward, GameplayActions.GameplayActionSet.ThrustMoveBackForwardComposite)
+                || local.z < 0f && !Allowed(GameplayActions.GameplayActionSet.ThrustMoveBackward, GameplayActions.GameplayActionSet.ThrustMoveBackForwardComposite)) local.z = 0f;
+            return local != Vector3.zero;
         }
+
+        // Raik (2026-11-26): the tutorial hands out thrust, rolling and braking step by step, by blocking the game's
+        // actions (ActionBlockerService); the controllers fly past the game's input, so they ask the same: a blocked
+        // direction gives no thrust, a blocked roll no roll, a blocked brake no braking.
+        internal static bool Allowed(GameplayActions.GameplayActionSet action, GameplayActions.GameplayActionSet? also = null)
+        {
+            var blocker = ActionBlockerService.Instance;
+            if (blocker == null) return true;
+            var blocked = blocker.IsActionBlocked(LynxControls.ActionSetAndId.FromEnum(action))
+                || also.HasValue && blocker.IsActionBlocked(LynxControls.ActionSetAndId.FromEnum(also.Value));
+            if (blocked && blockedLogs++ < 20) Plugin.Log.LogInfo($"Controls: the game holds {action} back now, the controllers leave it out");
+            return !blocked;
+        }
+
+        private static int blockedLogs;
+
+        // A roll this frame (degrees, + left), none in a way the game holds back.
+        private static float RollAllowed(float roll) =>
+            roll > 0f && !Allowed(GameplayActions.GameplayActionSet.RollBodyLeft) || roll < 0f && !Allowed(GameplayActions.GameplayActionSet.RollBodyRight) ? 0f : roll;
     }
 
     // Remembers the transform the game thrusts along (the body, or a steering transform when docked).

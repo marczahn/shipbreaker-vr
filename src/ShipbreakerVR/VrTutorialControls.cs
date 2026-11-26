@@ -9,7 +9,7 @@ using UnityEngine;
 namespace ShipbreakerVR
 {
     // Raik (2026-11-26): the tutorial's steps for the controls never completed in VR, first "roll", then "thrust left,
-    // right, forward, back". Their objectives (ControlActionObjective, checked by
+    // right, forward, back", then "brake" (both brake actions held; Y brakes with both). Their objectives (ControlActionObjective, checked by
     // UpdateControlActionObjectiveProgressSystem) wait for the game's single actions to be held (RollBodyLeft/Right,
     // ThrustMoveForward/Backward/Left/Right/Up/Down), but the mod rolls the body itself and gives its thrust into the
     // game's thrust axes (VrControls, ThrustAxisPatch), so those actions never went down. In that check only, an action
@@ -32,6 +32,7 @@ namespace ShipbreakerVR
             GameplayActions.GameplayActionSet.ThrustMoveForward, GameplayActions.GameplayActionSet.ThrustMoveBackward,
             GameplayActions.GameplayActionSet.ThrustMoveLeft, GameplayActions.GameplayActionSet.ThrustMoveRight,
             GameplayActions.GameplayActionSet.ThrustMoveUp, GameplayActions.GameplayActionSet.ThrustMoveDown,
+            GameplayActions.GameplayActionSet.ThrustBrakeLeft, GameplayActions.GameplayActionSet.ThrustBrakeRight,
         };
         private static readonly PlayerAction[] Actions = new PlayerAction[Watched.Length];
         // Which of Watched the mod does, this frame and the frame before (bit i for Watched[i]).
@@ -90,6 +91,9 @@ namespace ShipbreakerVR
                 case GameplayActions.GameplayActionSet.ThrustMoveLeft: return thrust.x <= -ThrustShare;
                 case GameplayActions.GameplayActionSet.ThrustMoveUp: return thrust.y >= ThrustShare;
                 case GameplayActions.GameplayActionSet.ThrustMoveDown: return thrust.y <= -ThrustShare;
+                // The brake objective wants both of the gamepad's brakes held; Y brakes with both.
+                case GameplayActions.GameplayActionSet.ThrustBrakeLeft:
+                case GameplayActions.GameplayActionSet.ThrustBrakeRight: return VrControls.IsBraking();
                 default: return false;
             }
         }

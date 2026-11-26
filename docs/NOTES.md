@@ -1693,3 +1693,9 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
   (`ControlSpriteListAsset.XboxOne_ControlSprites`), the mod's from `Icons/*.png` (trigger, roll, thrust, plus; drawn
   for the mod, 256 px shown at 64 units like the game's). VR or the controllers' flying off: the added parts go and
   the game's picture comes back (`ChangeControlType` once more). Log: "Tutorial prompts: ...".
+- The tutorial hands out the flight step by step (Raik 2026-11-26: "thrust is locked at first and given free piece by
+  piece"), by blocking the game's actions (`ActionBlockerService`). The controllers fly past the game's input, so they
+  ask the same now (`VrControls.Allowed`): `TryGetThrust` leaves out a direction whose action (or its axis) is blocked,
+  a blocked roll left or right gives no roll, Y brakes only while a brake action is free. Log "Controls: the game holds
+  ... back now". And the brake objective (both ThrustBrakeLeft and ThrustBrakeRight held) counts Y braking
+  (`VrTutorialControls`).
