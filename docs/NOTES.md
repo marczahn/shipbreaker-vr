@@ -1641,6 +1641,9 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
 - **Picture and video placed** (Raik 2026-11-26): the apartment's picture 10% smaller (`PictureSize`) and 2° lower
   as seen from the head (`PictureLower`); the flight video, on the menu canvas (`VrUi`), 5° lower about the eyes at the
   same distance (`VideoLower`) and 15% wider (`VideoSize`).
+- **Sitting higher, keys lower** (Raik 2026-11-26): the desk with its chair placed 15 cm lower under the head
+  (`SitHigher`), as if the camera were 15 cm higher (one seemed too small and looked at the screen at an awkward
+  angle); the typing keyboard 4 cm lower, just above the desk's own keys (`VrDeskKeyboard.Lift` 3 cm -> -1 cm).
 - **The contract as sharp as the Hab's screens** (Raik 2026-11-26: the Hab's screens are readable and smooth, the
   campaign's screen flickers at its edges): the contract's canvas was drawn by the headset's camera straight into the
   room. Now (`VrContractPicture`) it is moved onto the pass layer (29, which the headset's camera leaves out), an

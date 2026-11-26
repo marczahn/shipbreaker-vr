@@ -53,6 +53,10 @@ namespace ShipbreakerVR
         // the glass.
         // Raik's first test (2026-11-23): 60 cm was a little too near.
         private const float Distance = 0.72f;
+        // Raik (2026-11-26): "make the player's camera 15 cm higher, one seems a little too small and looks at the
+        // screen at an awkward angle". The desk, the chair and the floor under them go down by as much (the head is
+        // where it is); the apartment's picture stays at the head's height.
+        private const float SitHigher = 0.15f;
         private const float BeforeGlass = 0.01f;
         // The contract's canvas lies this far before the terminal's face. Measured on the terminal's mesh
         // ('SM_Computer_Terminal_Hab'): its front is one flat face right in the plane of its screensaver canvas; the
@@ -487,7 +491,7 @@ namespace ShipbreakerVR
             root.rotation = Quaternion.LookRotation(-ahead, up) * Quaternion.Inverse(Quaternion.LookRotation(towards.normalized, Vector3.up));
             root.localScale = Vector3.one * scale;
             var floor = head.parent != null ? rig.TransformPoint(new Vector3(head.localPosition.x, 0f, head.localPosition.z)) : head.position - up * 1.6f * scale;
-            var target = floor + ahead * (Distance * scale) + up * ((screenCenter.y - FloorAt) * scale);
+            var target = floor + ahead * (Distance * scale) + up * ((screenCenter.y - FloorAt - SitHigher) * scale);
             root.position = target - root.rotation * (screenCenter * scale);
             placedFor = headBefore = head.localPosition;
             stillSince = Time.unscaledTime;
