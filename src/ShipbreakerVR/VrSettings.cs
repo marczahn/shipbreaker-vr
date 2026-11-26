@@ -41,6 +41,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<float> CatchForce;
         public static ConfigEntry<bool> BracedPush;
         public static ConfigEntry<bool> ToolPhysics;
+        public static ConfigEntry<bool> BodyPhysics;
         public static ConfigEntry<bool> FreeWalking;
         public static ConfigEntry<VrHelmet.Mode> Helmet;
         public static ConfigEntry<VrResolution.AntiAliasing> AntiAliasing;
@@ -290,6 +291,9 @@ namespace ShipbreakerVR
             ToolPhysics = Bind("Steuerung", "ErweiterteWerkzeugphysik", false,
                 ("Extended tool physics. On: the cutter and the grapple bump into things instead of going through them and have weight (Tool weight); let go away from their place on the body they float on a line to the hip, and a demo charge let go floats where it is, until you put them back by hand. Off: as in the game, and a tool or a demo charge let go is back at its place on the body.",
                     "Erweiterte Werkzeugphysik. An: Cutter und Grappler stoßen an, statt durch Dinge hindurchzugehen, und haben Gewicht (Werkzeuggewicht); abseits ihres Platzes am Körper losgelassen schweben sie an einer Leine zur Hüfte, und ein losgelassener Sprengsatz schwebt, wo er ist, bis du sie von Hand zurücksteckst. Aus: wie im Spiel, und ein losgelassenes Werkzeug oder ein losgelassener Sprengsatz ist wieder an seinem Platz am Körper."));
+            BodyPhysics = Bind("Steuerung", "ErweiterteKoerperphysik", false,
+                ("Extended body physics. On: what you throw pushes your body back as much as it takes along (your body weighs 50 kg, 100 kg with extended world physics): a tool thrown forward pushes you gently back, and its line catching it pulls you forward again. While a hand holds on to something, the hold takes the push. Off: throwing does not move you.",
+                    "Erweiterte Körperphysik. An: Was du wirfst, stößt deinen Körper so weit zurück, wie es Schwung mitnimmt (dein Körper wiegt 50 kg, mit erweiterter Weltphysik 100 kg): Ein nach vorn geworfenes Werkzeug schiebt dich leicht zurück, fängt die Leine es auf, zieht sie dich wieder nach vorn. Hält sich eine Hand irgendwo fest, nimmt der Halt den Stoß auf. Aus: Werfen bewegt dich nicht."));
             ToolWeight = Bind("Steuerung", "Werkzeuggewicht", 5f,
                 ("With extended tool physics, how heavy the cutter and the grapple are in your hand: moved fast they lag behind the controller and settle, and your hand stays on them. 0 for none.",
                     "Mit erweiterter Werkzeugphysik: wie schwer Cutter und Grappler in der Hand sind. Schnell bewegt hängen sie dem Controller nach und pendeln aus, deine Hand bleibt an ihnen. 0 für keins."),

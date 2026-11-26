@@ -754,6 +754,7 @@ namespace ShipbreakerVR
             }
             rigid.velocity = velocity + moved;
             rigid.angularVelocity = spin;
+            VrRecoil.Throw(player, tool.Mass, moved, tool.Name);
             tool.Loose = true;
             tool.LooseSince = Time.unscaledTime;
             tool.Taut = false;

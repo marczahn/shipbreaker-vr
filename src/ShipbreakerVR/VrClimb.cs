@@ -322,6 +322,7 @@ namespace ShipbreakerVR
             middle = Vector3.ClampMagnitude(middle, allowed);
             body.velocity = player.velocity + middle;
             body.angularVelocity = spin;
+            VrRecoil.Throw(player, body.mass, middle, $"'{body.name}'");
             if (logs++ < 80)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand throws '{body.name}' ({body.mass:0.0} kg) at {middle.magnitude:0.00} m/s, spinning {spin.magnitude * Mathf.Rad2Deg:0}°/s "
                     + $"(hand {speed.magnitude:0.00} m/s over {ThrowWindow * 1000f:0} ms, held {lever.magnitude:0.00} m from its middle, x{gain:0.00}; "

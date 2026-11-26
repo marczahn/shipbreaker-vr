@@ -1610,3 +1610,11 @@ aiming and climbing for everyone. Ask Raik before the release.
   scale, its thirds red, yellow, green, 25 % see-through. Children of the brackets (`Bracket_Left_Container`,
   `Bracket_Right_Container`, found from `VelocityUIController` and `RoomInfoUIController`), 9 wide, 3 off the line,
   as tall as the ticks; made on the first `VelocityUIController.Update` in VR. Log "HUD bars: ...".
+- Extended body physics, a new option (`Steuerung/ErweiterteKoerperphysik`, off by default; Raik 2026-11-26: "when we
+  throw something, be it a tool or an object in the hand, that gives the body an impulse too ... and when the grapple
+  falls into its line, that should even out"). `VrRecoil.Throw`: what is thrown pushes the body back by its mass times
+  its speed against the body over the body's mass (`VrClimb.BodyWeight`, 50 kg, 100 kg with extended world physics,
+  the same the tool's line pulls with, so the line catching a thrown tool about cancels it). At the three throws: a
+  firmly held part (`VrClimb.Throw`), a tool let go (`VrLooseTools`, its 5 kg or the detonator's 1.5 kg), a demo
+  charge let go by hand (`VrChargeByHand.ThrowFrom`, 1.6 kg). While a hand holds on to something the hold takes it.
+  Log "Recoil: ...".
