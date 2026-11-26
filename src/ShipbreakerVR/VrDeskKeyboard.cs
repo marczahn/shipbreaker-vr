@@ -35,8 +35,8 @@ namespace ShipbreakerVR
         private const float Nearer = 0.03f;
         private const float Slope = 25f;
         // Raik (2026-11-26, a picture of it floating well above the desk's keys): a few centimeters lower, just above
-        // them, which is also kinder to the arms; from 3 cm up to 1 cm down.
-        private const float Lift = -0.01f;
+        // them, which is also kinder to the arms; from 3 cm up to 1 cm down, after trying it 3 cm more.
+        private const float Lift = -0.04f;
         // A beam is this long when it meets nothing, and this thick; the bar that stands for a controller.
         private const float BeamFree = 1.2f;
         private const float BeamThick = 4f;
