@@ -62,6 +62,8 @@
     <Reference Include="Wwise.Unity" HintPath="$(ManagedDir)\Wwise.Unity.dll" Private="false" />
     <Reference Include="UnityEngine.SubsystemsModule" HintPath="$(ManagedDir)\UnityEngine.SubsystemsModule.dll" Private="false" />
     <Reference Include="UnityEngine.AnimationModule" HintPath="$(ManagedDir)\UnityEngine.AnimationModule.dll" Private="false" />
+    <Reference Include="UnityEngine.DirectorModule" HintPath="$(ManagedDir)\UnityEngine.DirectorModule.dll" Private="false" />
+    <Reference Include="Unity.Timeline" HintPath="$(ManagedDir)\Unity.Timeline.dll" Private="false" />
     <Reference Include="UnityEngine.ScreenCaptureModule" HintPath="$(ManagedDir)\UnityEngine.ScreenCaptureModule.dll" Private="false" />
     <Reference Include="UnityEngine.ImageConversionModule" HintPath="$(ManagedDir)\UnityEngine.ImageConversionModule.dll" Private="false" />
     <Reference Include="UnityEngine.JSONSerializeModule" HintPath="$(ManagedDir)\UnityEngine.JSONSerializeModule.dll" Private="false" />

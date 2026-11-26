@@ -1579,3 +1579,14 @@ aiming and climbing for everyone. Ask Raik before the release.
 - **Loading screens as sharp as the Hab's screens** (Raik 2026-11-26: their edges look restless): while `SceneLoader.LoadScreenVisible`, the UI texture is drawn as at a Hab screen (`VrUi`: Anzeige/MonitorSchaerfe times the window, at most 4096 wide, mip levels, trilinear, anisotropic, `MonitorMipBias`). To be brought to other screens step by step where needed. Log: "UI texture ... created" as it changes.
 
 - **No detonator before the charges are unlocked** (Raik 2026-11-26): the game keeps the charges in the loadout but blocks `SelectDemoCharge` (`DemoChargeController.Start`, until `UnlockAbilityEvent` DemoCharge or unlimited charges). While that is blocked, `VrBeltGrapple.HangDetonator` hangs nothing at the hip. Log: "the demo charges are locked / unlocked".
+- Skipping (Raik 2026-11-26: "all video sequences with one press of A", station dialogues with Y "one line or one
+  speaker after the other"), `VrSkip`: A stops any `LynxVideoPlayer` video (its `StopVideo`, whether or not the game
+  lets the gamepad skip it); in the onboarding A does in PlayVideo and Extracting what the game's B/Start skip does
+  (to Cloning, the state set before the video stops, else `OnVideoStopped` advances once more; the popups keep A as
+  Confirm); the text before the desk (`InputHandlerFrontEnd` "Action - Skip On Confirm") takes A directly. The
+  earlier `VrHotkeySkip` (A held as Space for `HotkeyHandler`) is gone: no bundle uses that component. In the Hab, Y
+  (not with B held, the diagnostics' chord) stops the line playing now with a `LynxSpeechCancelEvent` for that
+  speaker only, so a sequence of lines goes on with its next by itself; in a scene after a shift that is a timeline,
+  the timeline jumps to the next clip on a `TriggerableSpeechAssetTrack` and `Hab3DController.mWaitTimeForFade` by
+  as much; after the last line (and in a plain speech scene) the clock goes to the scene's length, so it ends as it
+  would have. The log tells each skip ("Skip: ...").
