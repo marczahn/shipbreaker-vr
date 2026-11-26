@@ -188,8 +188,10 @@ namespace ShipbreakerVR
             if (!wanted)
             {
                 Hide();
+                Away(!apartment && desk != null && contract != null && contract.gameObject.activeInHierarchy);
                 return;
             }
+            Away(false);
             if (desk == null && !Build()) return;
             if (!shown) Show(vr);
             else Follow(vr);
@@ -651,6 +653,31 @@ namespace ShipbreakerVR
             Plugin.Log.LogInfo($"Contract desk: '{which.name}' lies {deepest * 100f:0.0} cm off the contract's canvas in depth (pressed flat to {Flat * 100f:0} % of that)");
         }
 
+        // The contract once the desk is left (Raik 2026-11-26: "with the intro video, on the left eye I still see the
+        // menu of the character creation in the background"): the game leaves it switched on through the flight video,
+        // until the onboarding comes. Flat, nothing draws it then (the apartment's camera is off, the video covers the
+        // screen); in VR its world-space canvas stood back at the game's camera, in the room around the video. While
+        // the apartment is off it is shrunk to nothing, by its parent ('UI') as on the desk.
+        private static bool away;
+        private static Vector3 awayFrom;
+
+        private static void Away(bool wanted)
+        {
+            if (wanted == away || ui == null) return;
+            away = wanted;
+            if (wanted)
+            {
+                awayFrom = ui.localScale;
+                ui.localScale = Vector3.zero;
+                Plugin.Log.LogInfo("Contract desk: the contract is put away while the apartment is off");
+            }
+            else
+            {
+                ui.localScale = awayFrom;
+                Plugin.Log.LogInfo("Contract desk: the contract back as the game has it");
+            }
+        }
+
         private static void Hide()
         {
             if (!shown) return;
@@ -691,6 +718,8 @@ namespace ShipbreakerVR
         // On unload, and when the front end is left: the desk gone, the prefabs let go.
         public static void Release()
         {
+            Away(false);
+            away = false;
             shown = false;
             VrDeskKeyboard.Hide();
             nameField = null;

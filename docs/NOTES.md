@@ -1632,7 +1632,12 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
   game checks it); later Nexts do nothing; the fingerprint's skip is kept. Once `3D Scene` is off and the fade is
   95 % dark (at most 1.5 s), the profile is made as `TryCreateProfile` would, then `ApplyOptions`, a save, and the
   tutorial skip. The fees screen and the onboarding's end make it first if it still waits. The log: "Contract
-  submit: the profile … made in … ms (…)".
+  submit: the profile … made in … ms (…)". Raik's test (2026-11-26): no judder any more; made in 39 ms.
+- **The contract during the flight video** (Raik 2026-11-26: the character creation's menu seen in the background
+  of the intro video, on the left eye): the game leaves `PRF_ContractScreen_WorldSpace` on until the onboarding
+  comes; flat nothing draws it then. In VR its canvas stood back at the game's camera, in the room around the video.
+  While the apartment is off, `UI` is shrunk to nothing (`VrContractDesk.Away`), and set back once the game turns
+  the contract off or the apartment comes again.
 - **Clicking through** (`VrContractDesk.Advance`): a toggle of the contract that was just ticked, or a button of it
   that was just clicked, hands the selection on 0.15 s later to what lies below it (else to its right), past the
   other choices of the same toggle group, if the game left the selection where it was. So A alone goes through the
