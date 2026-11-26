@@ -2343,6 +2343,14 @@ namespace ShipbreakerVR
         // HandAcross on the palm's side) went into anything: a ray from outside towards each point finds what is in front
         // of it. Only what has a collider counts; where a hull's visible skin lies outside its collider, the hand still
         // goes into the skin.
+        // Only the part held counts (Raik, 2026-11-26: holding an airlock's wall just below the handle beside its door
+        // switch and turning the hand a little, it jumped onto the handle and back, 17.8 cm each way). The rays come from
+        // SurfaceProbe out; with the fingers under the handle they met the handle in front of them, and the hand was
+        // pushed out by all of that onto it, though nothing of it was in the handle. What lies beside the held part is
+        // left to HeldOut, which pushes the shortest way out. A hold on the wall stays on the wall, one on the handle on
+        // the handle.
+        private static int surfaceSkips;
+
         private static Vector3 OutOfSurface(Arm arm, Vector3 wrist, Quaternion turn)
         {
             var side = arm == LeftArm ? 1f : -1f;
@@ -2350,6 +2358,9 @@ namespace ShipbreakerVR
             var palm = turn * Vector3.right * side;
             var probe = SurfaceProbe * scale;
             var deepest = 0f;
+            var skipped = 0f;
+            Collider skippedOn = null;
+            var held = VrClimb.HeldCollider(arm.Input);
             var body = arm.Wrist.root;
             foreach (var along in HandAlong)
                 for (var across = -1; across <= 1; across += 2)
@@ -2360,9 +2371,20 @@ namespace ShipbreakerVR
                     {
                         var hit = WallHits[i];
                         if (hit.distance <= 0f || hit.collider.transform.IsChildOf(body) || VrLooseTools.HandsPass(hit.collider)) continue;
+                        if (held != null && hit.collider != held)
+                        {
+                            if (probe - hit.distance > skipped)
+                            {
+                                skipped = probe - hit.distance;
+                                skippedOn = hit.collider;
+                            }
+                            continue;
+                        }
                         deepest = Mathf.Max(deepest, probe - hit.distance);
                     }
                 }
+            if (skippedOn != null && skipped > deepest + 0.02f * scale && surfaceSkips++ < 20)
+                Plugin.Log.LogInfo($"Hands: {arm.Name} hand on '{held.name}' not pushed {skipped * 100f / scale:0.0} cm out onto '{skippedOn.name}' beside it");
             return wrist - palm * deepest;
         }
 
