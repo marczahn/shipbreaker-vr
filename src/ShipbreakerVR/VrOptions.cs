@@ -124,6 +124,7 @@ namespace ShipbreakerVR
                 new SliderRow { Label = L("Catch force (N)", "Abfangkraft (N)"), Entry = VrSettings.CatchForce, Format = "0", Step = 10f },
                 new SliderRow { Label = L("Hand tilt (°)", "Handneigung (°)"), Entry = VrSettings.HandTilt, Format = "0", Step = 1f },
                 new BoolRow { Label = L("Fit tools in the hand", "Werkzeuge justieren"), Entry = VrToolFit.Adjusting },
+                new BoolRow { Label = L("Place tools on the body", "Werkzeugposition anpassen"), Entry = VrToolPlace.Positioning },
                 new SliderRow { Label = L("Head height (cm)", "Kopfhöhe (cm)"), Entry = VrSettings.HeadHeight, Format = "0", Step = 1f },
                 new SliderRow { Label = L("Head sideways (cm)", "Kopf seitlich (cm)"), Entry = VrSettings.HeadSideways, Format = "0", Step = 1f },
                 new SliderRow { Label = L("World scale", "Weltmaßstab"), Entry = VrSettings.WorldScale, Format = "0.00" },

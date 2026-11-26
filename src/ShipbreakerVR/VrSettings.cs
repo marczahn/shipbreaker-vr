@@ -218,6 +218,7 @@ namespace ShipbreakerVR
             MirrorCutter = Bind("Bild", "CutterSpiegeln", true,
                 "Copy the detailed left side of the cutter's model onto its plain right side, which the flat game never showed.");
             VrToolFit.Bind();
+            VrToolPlace.Bind();
 
             UiInVr = Bind("Anzeige", "UiImRaum", true,
                 ("Shows the HUD and the menus on a surface in the room instead of flat over the image. Leave it on; off is only for troubleshooting.",

@@ -2218,6 +2218,28 @@ namespace ShipbreakerVR
             return null;
         }
 
+        // Whether something fixed (no rigidbody or a kinematic one, not the player's own) is within Reach of that
+        // controller's hand: where it would take hold. Raik (2026-11-26): there the wall comes before the tools on the
+        // body (VrToolBelt).
+        public static bool WallNear(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input) continue;
+                var at = HandWorld(hand);
+                var count = Physics.OverlapSphereNonAlloc(at, Reach * VrCamera.WorldScale, Found, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                for (var i = 0; i < count; i++)
+                {
+                    var collider = Found[i];
+                    if (Own(collider) || VrLooseTools.Owns(collider)) continue;
+                    var body = collider.attachedRigidbody;
+                    if (body == null || body.isKinematic) return true;
+                }
+                return false;
+            }
+            return false;
+        }
+
         // The collider that controller's hand holds, or null.
         public static Collider HeldCollider(VrInput.Hand input)
         {

@@ -289,7 +289,7 @@ namespace ShipbreakerVR
         // drags the tool or is near it (Raik, 2026-11-14: with a charge in the left hand the right one could not hold the
         // wall; that charge has no fit to adjust at all).
         // A charge in a hand: the other hand's grip near it, or dragging it, moves it and holds nothing else.
-        public static bool Blocks(XRNode node) => Adjusting != null && Adjusting.Value
+        public static bool Blocks(XRNode node) => VrToolPlace.Blocks(node) || Adjusting != null && Adjusting.Value
             && ((node != VrHand.GameToolHand.Node && HoldsModel() && (dragged != null || detonatorDragged || NearTool(node)))
                 || (chargeHolder != null && node != chargeHolder.Node && (chargeDragged || NearTool(node))));
 

@@ -42,7 +42,9 @@ namespace ShipbreakerVR
         // it (12 grips, all within 9 cm); before, a copy hung at the body model's hip, 30 cm further back, and the hand took
         // it from here.
         // 7 cm further forward with the grapple itself (VrBeltGrapple, Raik 2026-11-18).
-        public static readonly Vector3 GripAt = new Vector3(0.30f, -0.72f, -0.01f);
+        // Placed in the headset (VrToolPlace, Raik 2026-11-26), it moves with the grapple.
+        private static readonly Vector3 DefaultGripAt = new Vector3(0.30f, -0.72f, -0.01f);
+        public static Vector3 GripAt => VrToolPlace.GripAt(DefaultGripAt);
         private const float GripReach = 0.13f;
         // The detonator's box, 10 cm further forward than the demo charges' was (Raik, 2026-11-18: the detonator, hung
         // in its middle, was out of sight beside the body; zone and detonator forward, so it can be seen).
@@ -83,12 +85,22 @@ namespace ShipbreakerVR
         }
         private static int logs;
         private static int missLogs;
+        private static int wallLogs;
 
         // The zone the hand is in this frame (None without tracking). Quiet (while its trigger is held) it does not buzz;
         // the buzz comes when the trigger is let go inside the zone.
         public static Zone Update(VrInput.Hand hand, bool quiet)
         {
-            var zone = Find(hand, out var local);
+            var zone = Find(hand, out var local, out var onBody);
+            // Placing the grapple or the detonator on the body (VrToolPlace): the hand takes the tool, draws nothing.
+            if (VrToolPlace.Handle(hand, zone)) zone = Zone.None;
+            // Raik (2026-11-26): reaching towards the tools with a wall near, the wall comes first, so climbing along it
+            // does not keep drawing a tool; to draw one, turn a little away from the wall.
+            else if (onBody && zone != Zone.None && zone != Zone.Scanner && zone != Zone.Flashlight && VrClimb.WallNear(hand))
+            {
+                if (wallLogs++ < 20 && hand.Grip.Pressed) Plugin.Log.LogInfo($"Tool belt: {hand.Name} hand at {zone}, but a wall is in reach: the wall comes first");
+                zone = Zone.None;
+            }
             var index = hand.IsLeft ? 0 : 1;
             last[index] = zone;
             lastFrame[index] = Time.frameCount;
@@ -113,11 +125,14 @@ namespace ShipbreakerVR
             return zone;
         }
 
-        private static Zone Find(VrInput.Hand controller, out Vector3 local)
+        private static Zone Find(VrInput.Hand controller, out Vector3 local, out bool onBody)
         {
+            onBody = false;
             if (!HeadLocal(controller, out local)) return Zone.None;
             // Experiment (VrLooseTools): a tool afloat is not at the body; its zone is around the tool itself.
-            var zone = VrLooseTools.Zone(controller, ZoneOf(controller, local));
+            var body = ZoneOf(controller, local);
+            var zone = VrLooseTools.Zone(controller, body);
+            onBody = zone == body;
             // The flashlight's hand is the one on its side of the helmet.
             return zone == Zone.Flashlight && controller.IsLeft == LeftHanded ? Zone.None : zone;
         }
@@ -243,6 +258,8 @@ namespace ShipbreakerVR
         // The detonator's box at the left hip (the demo charges' until 2026-11-18), that much wider all round.
         private static bool ChargeBox(Vector3 local, float wider)
         {
+            // Moved with the detonator where it is placed in the headset (VrToolPlace).
+            local -= VrToolPlace.DetonatorShift;
             if (local.y >= HipBelow + wider || local.y <= HipDeepest - wider) return false;
             // Measured as if the hand were turned forward by HipTurn on its side of the body, mirrored for the left hip.
             var side = Mathf.Abs(local.x);
