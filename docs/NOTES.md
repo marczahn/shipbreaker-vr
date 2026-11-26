@@ -1704,3 +1704,11 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
   for each direction (`Icons/thrust_<direction>.png`), a thick flat arrow in perspective from a little above and to
   the right, one scale for all: forward and back lie flat into the depth, left and right lie flat across, up and down
   stand. Drawn by `tools/draw-arrows.py` (the trigger and roll pictures by `tools/draw-icons.py`).
+- The tutorial's tool steps (Raik 2026-11-27: "I use the grapple, but it waits for other input"): the objectives that
+  want a game action (from the game data: `CA_TUT_01_07_GrappleIntro_GrapplePush` = Throw, `..._GrappleReel` =
+  GrappleFire + RetractionModifier, `CA_TUT_01_08/06_02_Scanner` = ActivateScanner, `CA_TUT_01_10_RadialMenu` =
+  ToolMenu, `CA_TUT_04_05_CancelTethers` = RecallTethers) read the actions themselves, while the tools get the
+  controllers' presses through `VrToolInput`'s redirect. `VrTutorialControls` now counts those too
+  (`VrToolInput.Presses`, either hand); drawing any tool counts as the tool wheel. The cutter's steps (CutPoints,
+  Vapourize, SplitSaw, CutAngle, CutAluminum) are PAT objectives on what the game does, not on presses. Tethers are
+  bought in the HAB's upgrades first (`PAT_OBJ_TUT_04_03_TethersPurchased`).

@@ -17,6 +17,9 @@ namespace ShipbreakerVR
     // the left stick with the trigger held; ModifiedRoll for either way), thrust along that axis of at least
     // ThrustShare (VTOL moving the controller, Shooter the left stick), at full value, going down and up with it.
     // Elsewhere the actions are left as they are, so the game does not roll or thrust a second time.
+    // Raik (2026-11-27): the same for the grapple's steps ("push it away", "reel it in"); the tools get the controllers'
+    // presses through VrToolInput's own redirect, the objectives did not. The later steps that want an action (scanner,
+    // tool wheel, recalling the tethers) count the same way; the cutter's steps count cuts, not presses.
     [HarmonyPatch]
     internal static class VrTutorialControls
     {
@@ -33,6 +36,11 @@ namespace ShipbreakerVR
             GameplayActions.GameplayActionSet.ThrustMoveLeft, GameplayActions.GameplayActionSet.ThrustMoveRight,
             GameplayActions.GameplayActionSet.ThrustMoveUp, GameplayActions.GameplayActionSet.ThrustMoveDown,
             GameplayActions.GameplayActionSet.ThrustBrakeLeft, GameplayActions.GameplayActionSet.ThrustBrakeRight,
+            // The tools (VrToolInput): push off with the grapple (Throw), reel in (GrappleFire with RetractionModifier),
+            // the scanner, the tool wheel (drawing a tool), recalling the tethers.
+            GameplayActions.GameplayActionSet.GrappleFire, GameplayActions.GameplayActionSet.RetractionModifier,
+            GameplayActions.GameplayActionSet.Throw, GameplayActions.GameplayActionSet.ActivateScanner,
+            GameplayActions.GameplayActionSet.ToolMenu, GameplayActions.GameplayActionSet.RecallTethers,
         };
         private static readonly PlayerAction[] Actions = new PlayerAction[Watched.Length];
         // Which of Watched the mod does, this frame and the frame before (bit i for Watched[i]).
@@ -94,7 +102,7 @@ namespace ShipbreakerVR
                 // The brake objective wants both of the gamepad's brakes held; Y brakes with both.
                 case GameplayActions.GameplayActionSet.ThrustBrakeLeft:
                 case GameplayActions.GameplayActionSet.ThrustBrakeRight: return VrControls.IsBraking();
-                default: return false;
+                default: return VrToolInput.Presses(action);
             }
         }
 
