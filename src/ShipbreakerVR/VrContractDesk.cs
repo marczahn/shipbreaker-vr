@@ -73,7 +73,11 @@ namespace ShipbreakerVR
         // camera, its middle at the head's height, and is stretched until it is this wide as seen from the head, in
         // degrees. Raik's tests: first only stretched where it was (120 degrees), but the desk goes where the head
         // looks, so the picture stood askew behind it, and it was a little too large.
+        // Raik (2026-11-26): "10 percent smaller and a few centimeters lower": PictureSize of that width, and its middle
+        // PictureLower degrees below the head's height as seen from the head.
         private const float PictureWide = 100f;
+        private const float PictureSize = 0.9f;
+        private const float PictureLower = 2f;
         // The contract's canvas and what lies on it (the mail, the news, the contract's window, its pop-up) are layered
         // in depth, in meters whatever the canvas' scale: fine for the game's one camera, but in VR the contract's
         // window floated centimeters before the glass (Raik's picture of 2026-11-24). Their depth is pressed flat to
@@ -524,11 +528,11 @@ namespace ShipbreakerVR
                 picturePosition = picture.position;
                 pictureRotation = picture.rotation;
             }
-            var factor = 2f * pictureFar * Mathf.Tan(PictureWide * 0.5f * Mathf.Deg2Rad) / pictureWidth;
+            var factor = PictureSize * 2f * pictureFar * Mathf.Tan(PictureWide * 0.5f * Mathf.Deg2Rad) / pictureWidth;
             picture.localScale = new Vector3(pictureScale.x * factor, pictureScale.y * factor, pictureScale.z);
             picture.rotation = Quaternion.LookRotation(ahead, up);
             // The sprite's middle may lie off its transform.
-            picture.position += from + ahead * pictureFar - sprite.bounds.center;
+            picture.position += from + ahead * pictureFar - up * (pictureFar * Mathf.Tan(PictureLower * Mathf.Deg2Rad)) - sprite.bounds.center;
             if (logs++ < 60)
                 Plugin.Log.LogInfo($"Contract desk: the apartment's picture ({pictureWidth:0.0} m wide, {pictureFar:0.0} m from the game's camera) stands behind the desk, stretched {factor:0.0} times");
         }

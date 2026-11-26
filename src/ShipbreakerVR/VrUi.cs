@@ -60,6 +60,8 @@ namespace ShipbreakerVR
         // its center, it eases back to their height.
         private const float MenuDeadZone = 0.3f;
         private const float MenuFollowSpeed = 4f;
+        private const float VideoLower = 5f;
+        private const float VideoSize = 1.15f;
 
         public enum Steadying { Aus, Schwach, Stark }
 
@@ -367,6 +369,17 @@ namespace ShipbreakerVR
             }
             // menuPosition is in rig space and already scales with the rig; the width is in world units.
             var w = VrSettings.MenuWidth.Value * VrCamera.WorldScale;
+            // The flight video at a new career's start (VrContractDesk.FlightShown; Raik 2026-11-26: "a few degrees
+            // lower and 15 percent larger, the same distance"): turned down by VideoLower about the eyes, VideoSize as wide.
+            if (VrContractDesk.FlightShown)
+            {
+                var forward = menuRotation * Vector3.forward * VrSettings.MenuDistance.Value;
+                var lowered = menuRotation * Quaternion.Euler(VideoLower, 0f, 0f);
+                var at = menuPosition - forward + lowered * Vector3.forward * VrSettings.MenuDistance.Value;
+                w *= VideoSize;
+                screenMatrix = Matrix4x4.TRS(rig.TransformPoint(at), rig.rotation * lowered, new Vector3(w, w / aspect, 1f));
+                return;
+            }
             screenMatrix = Matrix4x4.TRS(rig.TransformPoint(menuPosition), rig.rotation * menuRotation, new Vector3(w, w / aspect, 1f));
         }
 
