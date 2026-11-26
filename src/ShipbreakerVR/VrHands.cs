@@ -2231,10 +2231,8 @@ namespace ShipbreakerVR
                 return;
             }
             // Held free (a nacelle switch, VrClimb.HeldFree), the hand stays on its hold but turns with the controller.
-            // So does a fist round a handle (VrClimb.HoldsHandle), the controller's grip axis along it.
             var free = arm.Gripping && VrClimb.HeldFree(arm.Input);
-            var handle = arm.Gripping && !free && VrClimb.HoldsHandle(arm.Input);
-            var turn = free || handle ? AroundBar(arm, false) * frame : arm.GripAnchor.rotation * arm.GripTurn;
+            var turn = free ? AroundBar(arm, false) * frame : arm.GripAnchor.rotation * arm.GripTurn;
             arm.GripWorld = turn;
             var placed = arm.GripAnchor.TransformPoint(arm.GripPoint) + turn * arm.GripOffset;
             if (free) placed += SwitchHandShift(placed);
@@ -2275,8 +2273,15 @@ namespace ShipbreakerVR
                 if (want.sqrMagnitude > 0.04f && held.sqrMagnitude > 0.04f)
                     normal = Vector3.RotateTowards(held.normalized, want.normalized, EdgeWrap * Mathf.Deg2Rad, 0f);
             }
+            // The palm turned away from the surface (Raik's test 2026-11-26: on an airlock's plate the hand turned over
+            // by up to 180 degrees to lay its palm on it): the hand stays as the controller holds it.
+            var palmNow = frame * (arm == LeftArm ? Vector3.right : Vector3.left);
+            if (Vector3.Angle(-palmNow, normal) > PalmAway) return frame;
             return FlatFrame(arm, frame, normal);
         }
+
+        // A palm more than this many degrees off facing the surface is not laid on it.
+        private const float PalmAway = 100f;
 
         // While a hand holds on: how far the hand shown is off its controller, logged when it lets go (to see whether it
         // follows the controller as it should).
@@ -2418,9 +2423,10 @@ namespace ShipbreakerVR
         // itself turns only some 50 to 80 degrees either way, the shoulder takes the rest (a splinted forearm's turn
         // was made up by the shoulder's), and a wrist turned far against its forearm is what twists the skin there.
         // So the elbow turns about shoulder to wrist by ElbowFollows of the hand's turn from thumb up (out on palm down,
-        // in on palm up), at most ElbowOutMost out and ElbowInMost in, eased at ElbowSpeed degrees a second.
+        // more on thumb down, in on palm up), at most ElbowOutMost out and ElbowInMost in, eased at ElbowSpeed degrees a
+        // second.
         private const float ElbowFollows = 0.5f;
-        private const float ElbowOutMost = 70f;
+        private const float ElbowOutMost = 90f;
         private const float ElbowInMost = 35f;
         private const float ElbowSpeed = 400f;
 
@@ -2456,8 +2462,15 @@ namespace ShipbreakerVR
             var thumb = Vector3.ProjectOnPlane(hand * Vector3.up, forward);
             if (reference.sqrMagnitude < 1e-4f || thumb.sqrMagnitude < 1e-4f) return 0f;
             var roll = Vector3.SignedAngle(reference, thumb, forward);
-            return left ? -roll : roll;
+            if (left) roll = -roll;
+            // Raik (2026-11-26, the right hand palm out and thumb down before a wall: the elbow went down, not out):
+            // past palm down the hand reaches thumb down, about 180 degrees, where the turn's sign flips. A forearm turns
+            // palm up only so far (SupinationMost); beyond that it is the hand turned in further.
+            return roll < -SupinationMost ? roll + 360f : roll;
         }
+
+        // How far a hand turns palm up, in degrees from thumb up, before more counts as turned in from the other side.
+        private const float SupinationMost = 120f;
 
         // The forearm's twist bone takes TwistShare of the wrist's turn about the forearm (from the bind pose), so the skin
         // between elbow and wrist turns along instead of twisting at the wrist (Raik: the wrist's skin sometimes looks
