@@ -1678,3 +1678,8 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
   as held at full value (right for right, ModifiedRoll for either), going down and up with the roll
   (`VrControls.Rolling`, `RolledBefore`). Nowhere else, so the game does not roll a second time. The hint on the HUD
   still names the gamepad's sticks; a small picture of the controllers for VTOL was Raik's idea for it.
+- Tutorial step "thrust left, right, forward, back" (Raik 2026-11-26, as with rolling): the same objective waits for
+  ThrustMoveForward/Backward/Left/Right/Up/Down held, while the mod's thrust goes into the game's thrust axes
+  (`ThrustAxisPatch`). `VrTutorialRoll` became `VrTutorialControls`: in that check an action also counts as held while
+  the controllers thrust along its axis by at least 0.3 of full (`ThrustShare`, the objectives' own least axis value),
+  in the body's axes (`VrControls.TryGetThrust`). Log: "Tutorial controls: ...".
