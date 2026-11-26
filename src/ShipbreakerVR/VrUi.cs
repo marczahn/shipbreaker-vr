@@ -205,7 +205,10 @@ namespace ShipbreakerVR
             var width = Mathf.Max(Screen.width, 640);
             var height = Mathf.Max(Screen.height, 360);
             // At a Hab screen more pixels and mip levels keep the writing readable (Anzeige/MonitorSchaerfe).
-            var sharp = onMonitor && VrSettings.MonitorSharpness.Value > 1f;
+            // So on the loading screens (Raik, 2026-11-26: "their edges always look very restless; drawn with more
+            // resolution as the station's screens, so they get smoother too"); step by step wherever it is needed.
+            var loading = SceneLoader.Instance != null && SceneLoader.Instance.LoadScreenVisible;
+            var sharp = (onMonitor || loading) && VrSettings.MonitorSharpness.Value > 1f;
             if (sharp)
             {
                 var factor = Mathf.Max(1f, Mathf.Min(VrSettings.MonitorSharpness.Value, (float)MaxMonitorWidth / width));
