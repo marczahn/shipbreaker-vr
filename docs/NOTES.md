@@ -1590,3 +1590,7 @@ aiming and climbing for everyone. Ask Raik before the release.
   the timeline jumps to the next clip on a `TriggerableSpeechAssetTrack` and `Hab3DController.mWaitTimeForFade` by
   as much; after the last line (and in a plain speech scene) the clock goes to the scene's length, so it ends as it
   would have. The log tells each skip ("Skip: ...").
+- The onboarding's list of the debts (`FeesScreenController`, Raik 2026-11-26: "sped up, so everything stands there at
+  once and one only confirms with the thumbprint"): A while it counts up gives it one line a frame (its own way, with
+  its sounds), then the total at its end; that last step waits until A is let go, so the press does not also confirm
+  the thumbprint, which the game selects as the total ends (`VrSkipDebtList`).

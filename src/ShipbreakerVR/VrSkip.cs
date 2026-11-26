@@ -98,6 +98,45 @@ namespace ShipbreakerVR
         }
     }
 
+    // Raik (2026-11-26): the first list of the debts after the videos "sped up, so everything stands there at once and
+    // one only confirms with the thumbprint". A while the list is counting up: its lines come one a frame (the game's own
+    // way, with their sounds), then the total goes to its end at once and the thumbprint comes up, but only once A is let
+    // go, so the same press does not confirm the thumbprint right away (it is selected as the total ends).
+    [HarmonyPatch(typeof(FeesScreenController), "Update")]
+    internal static class VrSkipDebtList
+    {
+        private static readonly AccessTools.FieldRef<FeesScreenController, bool> Animating = AccessTools.FieldRefAccess<FeesScreenController, bool>("mDebtScreenAnimating");
+        private static readonly AccessTools.FieldRef<FeesScreenController, double> Change = AccessTools.FieldRefAccess<FeesScreenController, double>("mDebtChange");
+        private static readonly AccessTools.FieldRef<FeesScreenController, double> Amount = AccessTools.FieldRefAccess<FeesScreenController, double>("mAnimAmount");
+        private static readonly AccessTools.FieldRef<FeesScreenController, double> Start = AccessTools.FieldRefAccess<FeesScreenController, double>("mStartAmount");
+        private static readonly AccessTools.FieldRef<FeesScreenController, float> Clock = AccessTools.FieldRefAccess<FeesScreenController, float>("mTime");
+        private static readonly AccessTools.FieldRef<FeesScreenController, float> TotalClock = AccessTools.FieldRefAccess<FeesScreenController, float>("mTotalTime");
+        private static readonly AccessTools.FieldRef<FeesScreenController, float> LastTick = AccessTools.FieldRefAccess<FeesScreenController, float>("mLastTotalTickTime");
+        private static readonly AccessTools.FieldRef<FeesScreenController, int> Shown = AccessTools.FieldRefAccess<FeesScreenController, int>("mEntriesShown");
+        private static readonly AccessTools.FieldRef<FeesScreenController, int> Cap = AccessTools.FieldRefAccess<FeesScreenController, int>("mEntryCap");
+        private static FeesScreenController hurried;
+
+        private static bool Prefix(FeesScreenController __instance)
+        {
+            if (!Animating(__instance)) { if (hurried == __instance) hurried = null; return true; }
+            if (hurried != __instance)
+            {
+                if (!VrSkip.APressed) return true;
+                hurried = __instance;
+                VrSkip.Log("A speeds the list of the debts up to its end");
+            }
+            // Past the first wait, the next line due now.
+            TotalClock(__instance) = 1e6f;
+            Clock(__instance) = 1e6f;
+            if (Shown(__instance) < Cap(__instance)) return true;
+            if (VrInput.Right.Valid && VrInput.Right.Primary.Down) return false;
+            // The total at its end: the next tick ends the count (IncrementTotal) and brings up the thumbprint.
+            Amount(__instance) = Start(__instance) + Change(__instance);
+            LastTick(__instance) = 0f;
+            return true;
+        }
+    }
+
     [HarmonyPatch(typeof(InputHandlerFrontEnd), "Update")]
     internal static class VrSkipIntroText
     {
