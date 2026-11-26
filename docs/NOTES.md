@@ -1699,3 +1699,8 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
   a blocked roll left or right gives no roll, Y brakes only while a brake action is free. Log "Controls: the game holds
   ... back now". And the brake objective (both ThrustBrakeLeft and ThrustBrakeRight held) counts Y braking
   (`VrTutorialControls`).
+- Thrust in the tutorial's tips with VTOL (Raik 2026-11-26: the same controller and cross six times "looks silly";
+  "an arrow only one way, really flat forward, back, up, down, a bit in 3D"): trigger + plus + an arrow of its own
+  for each direction (`Icons/thrust_<direction>.png`), a thick flat arrow in perspective from a little above and to
+  the right, one scale for all: forward and back lie flat into the depth, left and right lie flat across, up and down
+  stand. Drawn by `tools/draw-arrows.py` (the trigger and roll pictures by `tools/draw-icons.py`).

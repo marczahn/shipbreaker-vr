@@ -15,13 +15,15 @@ namespace ShipbreakerVR
     // shows how it is done with the controllers; the words beside it stay the game's:
     // - rolling: Shooter the left controller's trigger + the left stick; VTOL the trigger + an arc bowing down with its
     //   heads up left and up right (tilt the hand);
-    // - thrust (forward, back, left, right, up, down): Shooter the left stick; VTOL the trigger + a cross of four arrows;
+    // - thrust (forward, back, left, right, up, down): Shooter the left stick; VTOL the trigger + an arrow that way,
+    //   drawn in space (Raik: "really flat forward, back, up, down", so the six lines are not the same picture): lying
+    //   flat and seen from a little above for forward, back, left and right, standing for up and down;
     // - braking: Y (the gamepad's second brake picture is left out);
     // - looking around: the right stick.
     // Under the roll tip's lines one more of the mod's own: "Straighten up" with the left stick pressed in
     // (VrCamera.UpdateCenterPress: a short press straightens up in flight).
     // The pictures are the game's own glyphs (its table for the Xbox One gamepad) and the mod's own drawings
-    // (Icons/*.png: trigger, roll, thrust, plus). A tip's picture comes from ContextualButtonPrompt.ChangeControlType
+    // (Icons/*.png: trigger, roll, thrust_<direction>, plus; drawn by tools/draw-icons.py and tools/draw-arrows.py). A tip's picture comes from ContextualButtonPrompt.ChangeControlType
     // (on enable and on every change of the input device), so the picture is set again after it; what the mod adds
     // (the trigger and the plus before the picture, the straightening line) is added in the prompt's Update and taken
     // away again, with the game's picture back, when VR or the controllers' flying is switched off.
@@ -179,7 +181,7 @@ namespace ShipbreakerVR
             switch (state.Kind)
             {
                 case Kind.Roll: sprite = vtol ? OwnSprite("roll") : Glyph(LynxConfigurableControlOptions.ConfigKey.LeftStickUp); break;
-                case Kind.Thrust: sprite = vtol ? OwnSprite("thrust") : Glyph(LynxConfigurableControlOptions.ConfigKey.LeftStickUp); break;
+                case Kind.Thrust: sprite = vtol ? OwnSprite("thrust_" + Direction(state.Action)) : Glyph(LynxConfigurableControlOptions.ConfigKey.LeftStickUp); break;
                 case Kind.Brake: sprite = Glyph(LynxConfigurableControlOptions.ConfigKey.Action4); break;
                 case Kind.Look: sprite = Glyph(LynxConfigurableControlOptions.ConfigKey.RightStickUp); break;
             }
@@ -263,6 +265,20 @@ namespace ShipbreakerVR
             {
                 try { change.Invoke(prompt, new[] { state.ControlSet }); }
                 catch (System.Exception e) { Plugin.Log.LogWarning($"Tutorial prompts: the game's picture did not come back: {e.InnerException?.Message ?? e.Message}"); }
+            }
+        }
+
+        // The thrust's direction, as its picture is named (Icons/thrust_<direction>.png).
+        private static string Direction(GameplayActions.GameplayActionSet action)
+        {
+            switch (action)
+            {
+                case GameplayActions.GameplayActionSet.ThrustMoveForward: return "forward";
+                case GameplayActions.GameplayActionSet.ThrustMoveBackward: return "back";
+                case GameplayActions.GameplayActionSet.ThrustMoveLeft: return "left";
+                case GameplayActions.GameplayActionSet.ThrustMoveRight: return "right";
+                case GameplayActions.GameplayActionSet.ThrustMoveUp: return "up";
+                default: return "down";
             }
         }
 
