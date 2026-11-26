@@ -1568,3 +1568,5 @@ less than half. It is the filter that steadies a hand with a demo charge, with t
 the aim pose, so hand, tool and beam stay together; the charges' stronger steadying goes first.
 **It may be taken out again** before 0.33.0 is released: it was made for the videos, and it puts a little lag on
 aiming and climbing for everyone. Ask Raik before the release.
+
+- **Hold A to skip** (Raik 2026-11-26): the text before the campaign's desk is skipped by holding Space through `HotkeyHandler` (Assembly-CSharp), which reads the keyboard itself (`Input.GetKey`), not InControl, so A (Confirm) never reached it. `VrHotkeySkip` replaces its `Update` for Space while VR runs: Space or the right A held (outside gameplay), same down / held / up events. Log: "Skip: A held as Space on ...".
