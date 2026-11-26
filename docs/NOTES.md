@@ -1616,9 +1616,23 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
   Raik's next test: the halt was still there (706 ms), with no radio read in it. It is the game's own work in
   `ContractToggleCheck.SubmitContract`: writing its options (`LynxUserOptions.HotWriteAndReload`), making, loading
   and saving the profile and the meta progress, and the next page's event, all in that one frame. That cannot be made
-  shorter from the mod, so in VR it is hidden (`VrContractSubmit`): the submit waits, the view darkens in 0.12 s,
-  stays dark for two frames, then the game does its work (the headset holds a dark frame), and the view comes back
-  in 0.3 s. The log times each part ("Contract submit: … took … ms").
+  shorter from the mod. A first try hid it in a short dark; Raik (2026-11-26): make the profile when the desk is
+  left, before the intro video, so the form runs through smoothly. What the game needs when (from its code and the
+  front end's data):
+  - the footer's Next is one button for every page, `SubmitContract` is on it from page 2 on; its first press makes
+    the profile and sends `m_FinishCreatingProfile` (page 3); every later press only runs `ApplyOptions` (voice, meal,
+    orientation into the profile, options written);
+  - page 5's fingerprint (long press) runs `TrySkipTutorialOnProfile`; the contract's end ("Listen for
+    ContractComplete") turns `3D Scene` off and fades `Fade Screen` to black; the flight video follows, and only when
+    it is over is `PRF_OnboardingScene` switched on;
+  - the onboarding's fees screen reads the profile's difficulty and books the starting debt into it
+    (`FeesScreenController.Initialize`, `IncrementTotal`), its end marks the profile done and saves it
+    (`FinalizePlayerProfile`) and loads the level.
+  So in VR at the desk (`VrContractSubmit`): the name page's Next only sends the page event (the name checked as the
+  game checks it); later Nexts do nothing; the fingerprint's skip is kept. Once `3D Scene` is off and the fade is
+  95 % dark (at most 1.5 s), the profile is made as `TryCreateProfile` would, then `ApplyOptions`, a save, and the
+  tutorial skip. The fees screen and the onboarding's end make it first if it still waits. The log: "Contract
+  submit: the profile … made in … ms (…)".
 - **Clicking through** (`VrContractDesk.Advance`): a toggle of the contract that was just ticked, or a button of it
   that was just clicked, hands the selection on 0.15 s later to what lies below it (else to its right), past the
   other choices of the same toggle group, if the game left the selection where it was. So A alone goes through the

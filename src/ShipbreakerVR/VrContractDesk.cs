@@ -241,12 +241,17 @@ namespace ShipbreakerVR
 
         private static string Name(Transform found) => found != null ? "found" : "MISSING";
 
-        // While a new career starts in the front end: the apartment or the flight video is there. VrRadio waits with
-        // reading its model until then (2.7 MB of texture at once, a halt of most of a second when the account's name
-        // was confirmed, Raik 2026-11-24), for the loading screen that follows.
         // Whether the desk stands in the apartment now.
         internal static bool Shown => shown;
 
+        // For VrContractSubmit, which makes the new profile once the desk is left: whether the apartment is there,
+        // how dark the scene's fade is (0 to 1), whether the flight video shows.
+        internal static bool ApartmentShown => room3D != null && room3D.activeInHierarchy;
+        internal static float FadeDarkness => Darkness(fadeScreen);
+        internal static bool FlightShown => Visible(flight);
+
+        // While a new career starts in the front end: the apartment or the flight video is there. VrRadio waits with
+        // reading its model until then (2.7 MB of texture at once), for the black after the desk or the loading screen.
         internal static bool CareerStarting => scene != null && ((room3D != null && room3D.activeInHierarchy) || Visible(flight));
 
         // For VrCanvases.FadeAlpha: the scene's fade from black, not darkening the view while the desk has come.
@@ -564,14 +569,6 @@ namespace ShipbreakerVR
         {
             var system = EventSystem.current;
             var selected = system != null ? system.currentSelectedGameObject : null;
-            // The name confirmed and the game's work waiting for the dark (VrContractSubmit): the next page comes
-            // with it, and the game selects on it itself.
-            if (VrContractSubmit.Busy)
-            {
-                stepFrom = null;
-                clicked = false;
-                return;
-            }
             if (stepFrom != null && Time.unscaledTime >= stepAt)
             {
                 var from = stepFrom;
