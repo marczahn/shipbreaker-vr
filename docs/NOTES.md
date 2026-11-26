@@ -1671,3 +1671,10 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
 - First test (Raik, 2026-11-23): the keys load (8 parts of desk and terminal, the chair), the contract works on the
   screen, "fits quite well already". Not seen yet: the onboarding's screens on the terminal and whether the apartment
   stays on through them. The log tells each step (`Contract desk: ...`).
+- Tutorial step "roll" (Raik 2026-11-26: it never completed in VR): its objective (`ControlActionObjective`, checked in
+  `UpdateControlActionObjectiveProgressSystem.OnUpdate`) waits for the game's roll actions held (RollBodyLeft/Right; on
+  a gamepad the sticks pressed in), but the mod rolls the body itself. `VrTutorialRoll` redirects that check's reads of
+  the actions (IsPressed, Value, WasPressed, WasReleased): while VTOL or Shooter rolls left, the left roll actions count
+  as held at full value (right for right, ModifiedRoll for either), going down and up with the roll
+  (`VrControls.Rolling`, `RolledBefore`). Nowhere else, so the game does not roll a second time. The hint on the HUD
+  still names the gamepad's sticks; a small picture of the controllers for VTOL was Raik's idea for it.

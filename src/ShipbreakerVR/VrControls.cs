@@ -172,6 +172,11 @@ namespace ShipbreakerVR
         // Shooter, for the flight globe: the thrust in tracking space (0..1) and the roll as a hand tilt in degrees.
         private static Vector3 shooterThrust;
         private static float shooterRoll;
+        // Rolling this frame and the one before: +1 left, -1 right, 0 none (VrTutorialRoll).
+        private static int rollWay, rolledBefore;
+        // Read in ECS systems that may run before or after VrControls.Update in a frame: the latest two frames either way.
+        public static int Rolling => rollWay;
+        public static int RolledBefore => rolledBefore;
         // A left trigger still held from working a tool with that hand flies only after it was let go.
         private static bool triggerFromTool;
 
@@ -188,6 +193,8 @@ namespace ShipbreakerVR
             stickThrust = false;
             shooterThrust = Vector3.zero;
             shooterRoll = 0f;
+            rolledBefore = rollWay;
+            rollWay = 0;
 
             if (Active == Scheme.Aus) { held = false; return; }
             // Controller poses are in tracking space, i.e. relative to the rig whose rotation is the playspace.
@@ -221,6 +228,7 @@ namespace ShipbreakerVR
                     if (share > 0f) shooterRoll = -Mathf.Sign(stick.x) * Mathf.Lerp(TurnDeadzone, RollFull, share);
                     var roll = ShooterRoll(stick.x) * Time.deltaTime;
                     if (roll != 0f) turn = Quaternion.AngleAxis(roll, playspace * VrCamera.Instance.HeadRotation * Vector3.forward) * turn;
+                    rollWay = roll > 0f ? 1 : roll < 0f ? -1 : 0;
                     stick.x = 0f;
                 }
                 if (!left.TryGetAimRotation(out var pointing)) return;
@@ -297,6 +305,7 @@ namespace ShipbreakerVR
         {
             var hand = (Quaternion.Inverse(referenceRotation) * rotation).eulerAngles;
             var roll = Rate(hand.z);
+            rollWay = roll > 0f ? 1 : roll < 0f ? -1 : 0;
             if (roll != 0f) turn = Quaternion.AngleAxis(roll, playspace * VrCamera.Instance.HeadRotation * Vector3.forward) * turn;
         }
 
