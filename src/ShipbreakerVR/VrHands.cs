@@ -2214,7 +2214,9 @@ namespace ShipbreakerVR
                     }
                     var shown = anchor.rotation * arm.GripTurn;
                     var follow = 1f - Mathf.Exp(-Time.unscaledDeltaTime / GripFollow);
-                    arm.GripTurn = Quaternion.Inverse(anchor.rotation) * Quaternion.Slerp(shown, target, follow);
+                    var eased = Quaternion.Slerp(shown, target, follow);
+                    eased = Quaternion.RotateTowards(shown, eased, GripTurnSpeed * Time.unscaledDeltaTime);
+                    arm.GripTurn = Quaternion.Inverse(anchor.rotation) * eased;
                 }
                 arm.GripPoint = anchor.InverseTransformPoint(point);
                 arm.GripBlend = Mathf.MoveTowards(arm.GripBlend, 1f, Time.unscaledDeltaTime / GripTime);
@@ -2242,8 +2244,12 @@ namespace ShipbreakerVR
             LogHeld(arm, arm.Gripping, frame, controller);
         }
 
-        // How quickly a hand flat on its hold follows its controller's turn: the time constant of the easing, in seconds.
-        private const float GripFollow = 0.08f;
+        // How quickly a hand flat on its hold follows its controller's turn: the time constant of the easing, in seconds,
+        // and at most GripTurnSpeed degrees a second. Raik (2026-11-26, after 0.08 s and no limit): "a little slower, a
+        // few milliseconds behind the controller and at a more limited speed, so it feels as if it rubs, as if there
+        // were friction on the wall or the handle".
+        private const float GripFollow = 0.15f;
+        private const float GripTurnSpeed = 240f;
         // A flat hand starts from its controller anew past this many degrees off it, unless the controller's aim is
         // within acos(IntoSurface) of the surface's normal (then where it lays the knuckles cannot be told well).
         private const float TurnOver = 100f;
