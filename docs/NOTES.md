@@ -1602,3 +1602,11 @@ aiming and climbing for everyone. Ask Raik before the release.
 - The HUD in a shift is drawn sharper too (Raik 2026-11-26, after the loading screens: "much better; the same for the
   HUD in the mission"): `VrUi` takes the larger, mipmapped UI texture (`Anzeige/MonitorSchaerfe`) in gameplay outside
   the menus as well. Costs the UI camera's drawing at that size every frame of a shift.
+- Bars on the HUD's brackets (Raik 2026-11-26: the scales left and right "are used for nothing"), `VrHudBars`, while
+  VR runs: on the left bracket's ticks (the speed under it) a yellow bar of the thrust the game gives now
+  (`ThrustController`: `mPrevThrustMagnitude` while Draining with a push this frame and not braking, so keys and
+  gamepad count too), 0 to full, 30 % see-through; on the right bracket's ticks (the room's state under it) the air
+  pressure where the player is (ECS `AirPressure` on the `SingletonLocalPlayer`, 0..1), full atmosphere at 75 % of the
+  scale, its thirds red, yellow, green, 25 % see-through. Children of the brackets (`Bracket_Left_Container`,
+  `Bracket_Right_Container`, found from `VelocityUIController` and `RoomInfoUIController`), 9 wide, 3 off the line,
+  as tall as the ticks; made on the first `VelocityUIController.Update` in VR. Log "HUD bars: ...".
