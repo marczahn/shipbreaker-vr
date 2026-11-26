@@ -1683,3 +1683,13 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
   (`ThrustAxisPatch`). `VrTutorialRoll` became `VrTutorialControls`: in that check an action also counts as held while
   the controllers thrust along its axis by at least 0.3 of full (`ThrustShare`, the objectives' own least axis value),
   in the body's axes (`VrControls.TryGetThrust`). Log: "Tutorial controls: ...".
+- The tutorial's tips show the controllers (Raik 2026-11-26), `VrTutorialPrompts`: the pictures of the tips
+  (`ContextualButtonPrompt` in the `PRF_A1_TUT_..._Tip` popups; the words beside them are separate texts and stay)
+  are set again after the game's `ChangeControlType` while VR runs with VTOL or Shooter: roll = trigger + left stick
+  (Shooter) or trigger + an arc bowing down, heads up left and up right (VTOL); thrust (all six) = left stick (Shooter)
+  or trigger + a cross of four arrows (VTOL); brake = Y, the gamepad's second brake picture left out (ignored by the
+  layout); look around = right stick. Under the roll tip's last line a copy of it, its prompt and localization taken
+  out: the left stick pressed in, "Gerade ausrichten" / "Straighten up". The game's glyphs come from its own table
+  (`ControlSpriteListAsset.XboxOne_ControlSprites`), the mod's from `Icons/*.png` (trigger, roll, thrust, plus; drawn
+  for the mod, 256 px shown at 64 units like the game's). VR or the controllers' flying off: the added parts go and
+  the game's picture comes back (`ChangeControlType` once more). Log: "Tutorial prompts: ...".

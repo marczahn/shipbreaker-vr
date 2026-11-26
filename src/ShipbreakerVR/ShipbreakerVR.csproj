@@ -22,6 +22,8 @@
     <EmbeddedResource Include="Mails\*.txt" LogicalName="Mails/%(Filename)%(Extension)" />
     <!-- The radio of the collection campaign (VrRadioModel), Raik's own model -->
     <EmbeddedResource Include="Models\Radio.obj;Models\Radio.png" LogicalName="Models/%(Filename)%(Extension)" />
+    <!-- Pictograms for the tutorial's tips (VrTutorialPrompts), drawn for the mod -->
+    <EmbeddedResource Include="Icons\*.png" LogicalName="Icons/%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
