@@ -203,6 +203,8 @@ namespace ShipbreakerVR
             public float Flat;
             // How far each finger joint is curled over an edge (0 to 1), as Joints.
             public readonly float[] Edge = new float[12];
+            // How far each of the thumb's three bones is curled over an edge, 0 to 1 (ThumbOverEdge).
+            public readonly float[] ThumbEdge = new float[3];
             // How far the fingers press their tips on a held surface (0 to 1, ClawBend).
             public float Claw;
             // The surface the empty hand met last frame (OutOfWalls), how far the controller's wrist was off it, and
@@ -941,6 +943,7 @@ namespace ShipbreakerVR
             {
                 arm.ThumbLogged = false;
                 System.Array.Clear(arm.Edge, 0, arm.Edge.Length);
+                System.Array.Clear(arm.ThumbEdge, 0, arm.ThumbEdge.Length);
             }
             var amount = arm.Closed * arm.Weight;
             var flatness = arm.Flat * arm.Weight;
@@ -981,6 +984,7 @@ namespace ShipbreakerVR
                 Claw(arm, palm, across, side, flatness * arm.Claw);
                 for (var i = 0; i < arm.Thumb.Length; i++) LiftThumb(arm, i, palm, flatness, ThumbIn + ClawThumb * arm.Claw);
                 ThumbInLine(arm, palm, flatness, true);
+                ThumbOverEdge(arm, palm, flatness);
                 KeepOut(arm, across, side, flatness);
                 LogFingers(arm, across, side);
                 LogThumb(arm, palm, flatness);
@@ -1432,6 +1436,88 @@ namespace ShipbreakerVR
         }
 
         private static int curlLogs;
+
+        // Raik (2026-11-26, a picture of the thumb standing flat in the air past an edge): "the thumb a bit more lively,
+        // pointing down a little over an edge, trying at least to stay on it". The thumb lay in the palm's plane whatever
+        // was under it. Now it is found as the fingers are (OverEdges): from the first of its bones whose end has no
+        // surface under it (EdgeProbe towards the palm), its joints bend towards the palm, over EdgeTime: the base in the
+        // palm (CMC) ThumbEdgeBend[0], the knuckle (MCP) [1], the last joint (IP) [2]. A thumb bends at its knuckle about
+        // 55 to 60 degrees at most and at its last joint about 80 to 90 (measured ranges of motion); over an edge it takes
+        // some two thirds of that, the last joint the most. As far as it stays out of what it lies on (ClawPress).
+        private static readonly float[] ThumbEdgeBend = { 10f, 40f, 55f };
+        private static int thumbEdgeLogs;
+
+        private static void ThumbOverEdge(Arm arm, Vector3 palm, float share)
+        {
+            if (share <= 0f) return;
+            var body = arm.Wrist.root;
+            var probe = EdgeProbe * VrCamera.WorldScale;
+            var arrived = arm.Pressed ? arm.Press >= 1f : arm.GripBlend >= 1f;
+            var over = false;
+            var saved = new Quaternion[3];
+            for (var k = 0; k < 3; k++)
+            {
+                var joint = arm.Thumb[k];
+                if (joint == null) return;
+                var next = ThumbNext(arm, k);
+                if (next == null) return;
+                saved[k] = joint.localRotation;
+                if (!over && arrived && !Supported(next.position, palm, probe, body))
+                {
+                    over = true;
+                    if (arm.ThumbEdge[k] <= 0f && thumbEdgeLogs++ < 30)
+                        Plugin.Log.LogInfo($"Hands: {arm.Name} thumb's '{joint.name}' reaches over an edge ({(arm.Pressed ? "pressed" : "held")})");
+                }
+                arm.ThumbEdge[k] = Mathf.MoveTowards(arm.ThumbEdge[k], over ? 1f : 0f, Time.unscaledDeltaTime / EdgeTime);
+            }
+            if (arm.ThumbEdge[0] <= 0f && arm.ThumbEdge[1] <= 0f && arm.ThumbEdge[2] <= 0f) return;
+            var allowed = ClawPress * VrCamera.WorldScale;
+            var reach = 1f;
+            if (ThumbCurl(arm, saved, palm, share, 1f, allowed))
+            {
+                var low = 0f;
+                for (var step = 0; step < 6; step++)
+                {
+                    var middle = (low + reach) * 0.5f;
+                    if (ThumbCurl(arm, saved, palm, share, middle, allowed)) reach = middle; else low = middle;
+                }
+                reach = low;
+            }
+            ThumbCurl(arm, saved, palm, share, reach, allowed);
+            for (var k = 0; k < 3; k++) arm.Set[arm.Joints.Length + k] = arm.Thumb[k].localRotation;
+        }
+
+        private static Transform ThumbNext(Arm arm, int k)
+        {
+            var joint = arm.Thumb[k];
+            return k + 1 < arm.Thumb.Length && arm.Thumb[k + 1] != null ? arm.Thumb[k + 1] : joint != null && joint.childCount > 0 ? joint.GetChild(0) : null;
+        }
+
+        // The thumb curled towards the palm by that share of its ThumbEdge, from saved; true when a bone is then in something.
+        private static bool ThumbCurl(Arm arm, Quaternion[] saved, Vector3 palm, float share, float reach, float allowed)
+        {
+            for (var k = 0; k < 3; k++) arm.Thumb[k].localRotation = saved[k];
+            var radius = VrHandShape.ThumbRadius * VrCamera.WorldScale;
+            for (var k = 0; k < 3; k++)
+            {
+                if (arm.ThumbEdge[k] <= 0f) continue;
+                var joint = arm.Thumb[k];
+                var next = ThumbNext(arm, k);
+                var bone = next.position - joint.position;
+                var axis = Vector3.Cross(bone, palm);
+                if (axis.sqrMagnitude <= 1e-12f) continue;
+                joint.rotation = Quaternion.AngleAxis(ThumbEdgeBend[k] * arm.ThumbEdge[k] * share * reach, axis.normalized) * joint.rotation;
+            }
+            for (var k = 0; k < arm.Thumb.Length; k++)
+            {
+                var joint = arm.Thumb[k];
+                if (joint == null) break;
+                var next = ThumbNext(arm, k);
+                if (next == null) break;
+                if (VrHandShape.Capsule(joint.position, next.position, radius, out _) > allowed) return true;
+            }
+            return false;
+        }
 
         // The finger curled over an edge by that share of its Edge, from saved; true when it is then in something.
         private static bool EdgeCurl(Arm arm, int finger, Quaternion[] saved, Vector3 across, float side, float share, float reach)

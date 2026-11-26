@@ -1570,3 +1570,5 @@ the aim pose, so hand, tool and beam stay together; the charges' stronger steady
 aiming and climbing for everyone. Ask Raik before the release.
 
 - **Hold A to skip** (Raik 2026-11-26): the text before the campaign's desk is skipped by holding Space through `HotkeyHandler` (Assembly-CSharp), which reads the keyboard itself (`Input.GetKey`), not InControl, so A (Confirm) never reached it. `VrHotkeySkip` replaces its `Update` for Space while VR runs: Space or the right A held (outside gameplay), same down / held / up events. Log: "Skip: A held as Space on ...".
+
+- **Thumb over edges** (Raik 2026-11-26, a picture of the thumb flat in the air past an edge): `VrHands.ThumbOverEdge` finds the thumb's first bone whose end has no surface under it (as `OverEdges` for the fingers) and bends its joints from there towards the palm over 0.15 s: CMC 10°, MCP 40°, IP 55° (about two thirds of the measured ranges, MCP 55–60°, IP 80–90°), as far as it stays out of the surface (`ClawPress`). Log: "thumb's '…' reaches over an edge".
