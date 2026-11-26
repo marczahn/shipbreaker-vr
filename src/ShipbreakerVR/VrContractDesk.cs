@@ -561,6 +561,7 @@ namespace ShipbreakerVR
             // The middle of the canvas' rectangle, as it rests in its parent, onto the screen's middle.
             var resting = contract.localPosition + contract.localRotation * (Vector3)rect.center;
             ui.position = center - ui.rotation * Vector3.Scale(resting, ui.lossyScale);
+            VrContractPicture.Update(contract);
         }
 
         // Raik (2026-11-23): "whenever a tick is set or a button pressed, it should go on to the next row, the next
@@ -691,6 +692,7 @@ namespace ShipbreakerVR
         // The game's scene as it was.
         private static void Restore()
         {
+            VrContractPicture.Hide();
             if (uiMoved && ui != null)
             {
                 ui.localPosition = uiPosition;
@@ -718,6 +720,7 @@ namespace ShipbreakerVR
         // On unload, and when the front end is left: the desk gone, the prefabs let go.
         public static void Release()
         {
+            VrContractPicture.Release();
             Away(false);
             away = false;
             shown = false;

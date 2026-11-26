@@ -1638,6 +1638,13 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
   comes; flat nothing draws it then. In VR its canvas stood back at the game's camera, in the room around the video.
   While the apartment is off, `UI` is shrunk to nothing (`VrContractDesk.Away`), and set back once the game turns
   the contract off or the apartment comes again.
+- **The contract as sharp as the Hab's screens** (Raik 2026-11-26: the Hab's screens are readable and smooth, the
+  campaign's screen flickers at its edges): the contract's canvas was drawn by the headset's camera straight into the
+  room. Now (`VrContractPicture`) it is moved onto the pass layer (29, which the headset's camera leaves out), an
+  orthographic camera of its own (no XR, no post-processing, cleared to clear) draws that layer into a texture as the
+  UI texture at a Hab screen is made (MonitorSchaerfe times the window's width, at most 4096, mip levels, trilinear,
+  aniso 8, mip bias -0.8), and a world-space canvas on the contract's layer shows it where the contract lies. The
+  canvas stays in place for the keyboard; its parts go back to their layers when the desk goes.
 - **Clicking through** (`VrContractDesk.Advance`): a toggle of the contract that was just ticked, or a button of it
   that was just clicked, hands the selection on 0.15 s later to what lies below it (else to its right), past the
   other choices of the same toggle group, if the game left the selection where it was. So A alone goes through the
