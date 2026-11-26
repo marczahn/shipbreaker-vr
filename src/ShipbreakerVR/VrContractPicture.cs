@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.Rendering.HighDefinition;
 using UnityEngine.UI;
 
@@ -14,8 +15,21 @@ namespace ShipbreakerVR
     // camera of its own draws just that layer into such a texture, and a world-space canvas on the contract's own layer
     // shows the texture in the contract's place. The canvas itself stays where it is, so the keyboard (VrDeskKeyboard)
     // and the game's own handling of it are as before.
+    // Raik's first test: the terminal stayed empty, the contract gone. The camera drew into the texture through
+    // SetTargetBuffers, which HDRP does not take; it renders to targetTexture. And the contract is only taken off the
+    // headset's view once the picture is known to work: after the camera has rendered once (endCameraRendering), and a
+    // read of the texture's smallest mip levels a moment later finds something drawn in it (Checks tries); otherwise the
+    // contract is drawn as before, and the log says so.
     internal static class VrContractPicture
     {
+        private const int Checks = 3;
+        private const float CheckAfter = 1.5f;
+        // -1: given up, the contract drawn as before; 0: not known yet; 1: the picture works.
+        private static int works;
+        private static bool rendered, hooked, checking;
+        private static int checks;
+        private static float checkAt = -1f;
+
         private const int Layer = VrUi.PassLayer;
 
         private static Camera camera;
@@ -44,17 +58,32 @@ namespace ShipbreakerVR
                 Hide();
                 return;
             }
-            if (shownLayer < 0) shownLayer = contract.gameObject.layer;
-            // Each frame: the game adds its pop-ups to the contract as it goes.
-            contract.GetComponentsInChildren(true, parts);
-            foreach (var part in parts)
+            if (works < 0)
             {
-                var go = part.gameObject;
-                if (go.layer == Layer) continue;
-                if (!layers.ContainsKey(go)) layers[go] = go.layer;
-                go.layer = Layer;
+                Hide();
+                return;
             }
-            parts.Clear();
+            if (shownLayer < 0) shownLayer = contract.gameObject.layer;
+            if (!hooked)
+            {
+                hooked = true;
+                RenderPipelineManager.endCameraRendering += Rendered;
+            }
+            // Each frame once the camera renders: the game adds its pop-ups to the contract as it goes.
+            if (rendered)
+            {
+                contract.GetComponentsInChildren(true, parts);
+                foreach (var part in parts)
+                {
+                    var go = part.gameObject;
+                    if (go.layer == Layer) continue;
+                    if (!layers.ContainsKey(go)) layers[go] = go.layer;
+                    go.layer = Layer;
+                }
+                parts.Clear();
+                if (works == 0 && !checking && checkAt < 0f) checkAt = Time.unscaledTime + CheckAfter;
+                if (works == 0 && !checking && checkAt >= 0f && Time.unscaledTime >= checkAt) Check();
+            }
 
             var sharpness = Mathf.Max(1f, VrSettings.MonitorSharpness.Value);
             var width = Mathf.Min(Mathf.RoundToInt(Mathf.Max(Screen.width, 640) * sharpness), VrUi.MaxMonitorWidth);
@@ -90,8 +119,7 @@ namespace ShipbreakerVR
             camera.aspect = wide / high;
             camera.nearClipPlane = depth * 0.01f;
             camera.farClipPlane = depth * 2f;
-            camera.SetTargetBuffers(texture.colorBuffer, texture.depthBuffer);
-            camera.pixelRect = new Rect(0, 0, width, height);
+            if (camera.targetTexture != texture) camera.targetTexture = texture;
             camera.enabled = true;
 
             // The picture where the contract's canvas lies, as large.
@@ -100,12 +128,56 @@ namespace ShipbreakerVR
             picture.localScale = contract.localScale;
             picture.sizeDelta = rect.size;
             picture.position = center;
-            if (!picture.gameObject.activeSelf) picture.gameObject.SetActive(true);
+            if (picture.gameObject.activeSelf != rendered) picture.gameObject.SetActive(rendered);
             if (!logged)
             {
                 logged = true;
                 Plugin.Log.LogInfo($"Contract desk: the contract drawn as the Hab's screens are, {width} x {height} with mip levels ({wide * 100f:0} x {high * 100f:0} cm)");
             }
+        }
+
+        private static void Rendered(ScriptableRenderContext context, Camera rendering)
+        {
+            if (rendering == null || rendering != camera || rendered) return;
+            rendered = true;
+            Plugin.Log.LogInfo("Contract desk: the contract's camera renders, the contract goes onto its picture");
+        }
+
+        // The texture's smallest mip levels read back: anything drawn (not clear) means the picture works.
+        private static void Check()
+        {
+            if (texture == null) return;
+            checking = true;
+            var mip = Mathf.Max(0, texture.mipmapCount - 5);
+            AsyncGPUReadback.Request(texture, mip, request =>
+            {
+                checking = false;
+                checkAt = -1f;
+                if (works != 0) return;
+                var drawn = false;
+                if (!request.hasError)
+                {
+                    var data = request.GetData<ushort>();
+                    for (var i = 3; i < data.Length; i += 4)
+                        if (data[i] != 0)
+                        {
+                            drawn = true;
+                            break;
+                        }
+                }
+                checks++;
+                if (drawn)
+                {
+                    works = 1;
+                    Plugin.Log.LogInfo("Contract desk: the contract's picture has the contract in it");
+                }
+                else if (checks >= Checks || request.hasError)
+                {
+                    works = -1;
+                    Hide();
+                    Plugin.Log.LogWarning($"Contract desk: the contract's picture stayed empty ({(request.hasError ? "could not be read" : $"{checks} looks")}), the contract is drawn as before");
+                }
+            });
         }
 
         private static Camera MakeCamera()
@@ -154,6 +226,8 @@ namespace ShipbreakerVR
             layers.Clear();
             if (camera != null) camera.enabled = false;
             if (picture != null && picture.gameObject.activeSelf) picture.gameObject.SetActive(false);
+            rendered = false;
+            checkAt = -1f;
         }
 
         // The front end left: all of it gone.
@@ -173,6 +247,10 @@ namespace ShipbreakerVR
             texture = null;
             shownLayer = -1;
             logged = false;
+            works = 0;
+            checks = 0;
+            if (hooked) RenderPipelineManager.endCameraRendering -= Rendered;
+            hooked = false;
         }
     }
 }

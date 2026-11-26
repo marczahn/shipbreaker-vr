@@ -1645,6 +1645,12 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
   UI texture at a Hab screen is made (MonitorSchaerfe times the window's width, at most 4096, mip levels, trilinear,
   aniso 8, mip bias -0.8), and a world-space canvas on the contract's layer shows it where the contract lies. The
   canvas stays in place for the keyboard; its parts go back to their layers when the desk goes.
+  Raik's first test: the terminal stayed empty, and no click sounds either. The camera drew through
+  `SetTargetBuffers`, which HDRP does not take (it renders to `targetTexture`). Now `targetTexture`, and the contract
+  leaves the headset's view only once the camera has rendered (`RenderPipelineManager.endCameraRendering`) and a read of
+  the texture's small mip levels 1.5 s later finds something drawn (up to 3 looks); else the contract is drawn as
+  before ("the contract's picture stayed empty"). The missing sounds are not explained yet; to be checked with the
+  picture working.
 - **Clicking through** (`VrContractDesk.Advance`): a toggle of the contract that was just ticked, or a button of it
   that was just clicked, hands the selection on 0.15 s later to what lies below it (else to its right), past the
   other choices of the same toggle group, if the game left the selection where it was. So A alone goes through the
