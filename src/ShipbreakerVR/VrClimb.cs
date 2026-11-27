@@ -2324,6 +2324,20 @@ namespace ShipbreakerVR
             return false;
         }
 
+        // True while that controller's hand carries a light part that moves with it (Firm, or a second hand on it), up to
+        // RigidMass: the hand and the part are one there and the hand does not turn on the part (VrHands.Grip). Raik
+        // (2026-11-28): the hand turning on large things and surfaces is fine, but a small thing such as the radio must lie
+        // fast in the hand, moved without the hand turning on it.
+        public static bool HeldRigid(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input && hand.Holding)
+                    return (hand.Firm || hand.Follower) && hand.Body != null && hand.Body.mass <= RigidMass;
+            return false;
+        }
+
+        public const float RigidMass = 10f;
+
         // The body of that controller's hand keeps to where its hold is now, on still, which does not move, while the hand
         // goes with its anchor (a lever the game turns back, VrLever); or, still null, it follows the hold again from where
         // it is, the hold's point on the anchor moved there, so the body does not move.

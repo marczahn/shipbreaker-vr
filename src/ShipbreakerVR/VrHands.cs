@@ -2274,7 +2274,7 @@ namespace ShipbreakerVR
                         start = AroundBar(arm, true) * frame;
                     }
                     arm.GripTurn = Quaternion.Inverse(anchor.rotation) * start;
-                    if (logs++ < 40) Plugin.Log.LogInfo($"Hands: {arm.Name} hand fixed on '{anchor.name}'{(flat ? ", flat on the surface, turning with the controller" : "")}");
+                    if (logs++ < 40) Plugin.Log.LogInfo($"Hands: {arm.Name} hand fixed on '{anchor.name}'{(flat ? VrClimb.HeldRigid(arm.Input) ? ", flat on it, one with the light part" : ", flat on the surface, turning with the controller" : "")}");
                 }
                 // Flat on a surface, an edge or a handle, the hand turns with its controller (Raik, 2026-11-26: the hand's
                 // turn much more from the controller, "I cannot turn my hand much otherwise"): the palm stays on the
@@ -2287,7 +2287,9 @@ namespace ShipbreakerVR
                 // surface a little turn of the wrist sent them the other way. Only once the hand would lie more than
                 // TurnOver off where the controller lays it now (the body turned on with the controls) does it start
                 // from the controller anew, not while the controller points into the surface.
-                else if (flat && !VrClimb.HeldFree(arm.Input))
+                // A light part carried along (VrClimb.HeldRigid, up to 10 kg) is one with the hand: it keeps the turn it took
+                // hold with on the part, and the part goes where the controller turns.
+                else if (flat && !VrClimb.HeldFree(arm.Input) && !VrClimb.HeldRigid(arm.Input))
                 {
                     var rig = Rig();
                     var turned = rig * (RigLocal(frame) * Quaternion.Inverse(arm.GripController)) * Quaternion.Inverse(rig);
