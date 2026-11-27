@@ -1641,3 +1641,12 @@ aiming and climbing for everyone. Ask Raik before the release.
   not at all. Now (`VrToolSteady`) the turn within 3° and with 0.3 s lag, and the place too (`Place`, within 2 cm,
   0.25 s lag, before the tool's weight and collision), so it moves clearly slower and a precise cut keeps its line.
   Still only with extended tool physics (the second hand takes hold of the tool only then). Log "Tool steady: ...".
+- The hand goes along with the tool's recoil (Raik 2026-11-27: on the grapple's push and the cutter's cuts, the wide
+  split saw too, the tool moved through the hand). From the game's data: the cutter's Animator (Anim_CuttingTool,
+  state Anim_CuttingTool_Recoil, 1.5 s) moves and turns its own transform, the grapple's (AC_GrappleTool_01, states
+  Recoil 0.5 s, Push 1, Push 2, Impact) its bone SK_GrappleTool_Root with the pieces on it; resting states
+  Anim_CuttingTool_Idle, Idle, Idle2. `VrToolRecoil` (LateUpdate, before the hands) compares that part's pose against
+  the tool's point with its pose at rest and moves and turns the tool hand, and a second hand on the tool, by just as
+  much about the grip (in tracking space, before the arm's bend), so the grip stays in the hand and the arm follows.
+  The tool is placed as before. Not for a second tool (VrDualTools). Log "Tool recoil: ..." (which part, how far).
+  Untested in the headset.

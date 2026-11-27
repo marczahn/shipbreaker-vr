@@ -2198,11 +2198,14 @@ namespace ShipbreakerVR
             var weight = arm.Weight;
             if (weight <= 0f || arm.Wrist == null || arm.Upper == null || arm.Lower == null) return;
             if (!arm.Input.TryGetPosition(out var gripLocal) || !arm.Input.TryGetAimRotation(out var aimLocal)) return;
-            // A second hand on a tool stays where it took hold of it and moves with it (VrToolSupport).
+            // A second hand on a tool stays where it took hold of it and moves with it (VrToolSupport), its recoil too
+            // (VrToolRecoil).
             if (VrToolSupport.TryGetPose(arm.Input, out var onTool, out var onToolAim))
             {
                 gripLocal = onTool;
                 aimLocal = onToolAim;
+                if (VrToolSupport.TryGetToolFrame(arm.Input, out var toolGrip, out var toolAim, out var toolHand) && toolHand == VrHand.GameToolHand)
+                    VrToolRecoil.Apply(toolGrip, toolAim, ref gripLocal, ref aimLocal);
             }
             // A hand holding the cutter or the grapple turns with the tool, not the controller: when the tool is held off by
             // something (VrToolCollide), the hand stays on its grip and turns with it instead of twisting the wrist, and
@@ -2213,6 +2216,8 @@ namespace ShipbreakerVR
                 aimLocal = VrToolSteady.Apply(arm.Input, vrHand.Tool, aimLocal);
                 // With weight the tool lags behind the controller, and the hand on its grip with it (VrToolWeight).
                 gripLocal = VrToolWeight.Grip(arm.Input, vrHand.Tool, gripLocal);
+                // The tool's recoil carries the hand along, so the grip stays in it (VrToolRecoil).
+                if (vrHand == VrHand.GameToolHand) VrToolRecoil.Apply(gripLocal, aimLocal, ref gripLocal, ref aimLocal);
             }
             if (!vrHand.HoldsTool) gripLocal += aimLocal * new Vector3(arm == LeftArm ? -PalmShift : PalmShift, 0f, 0f);
             if (!VrToolModels.TrackingToWorld(gripLocal + aimLocal * VrInput.WristBehindGrip, aimLocal, out var wrist, out var aim)) return;
