@@ -175,6 +175,12 @@ namespace ShipbreakerVR
         public static void LargeScreen(RectTransform monitor, Vector3 head, float aspect, out Vector3 center, out Quaternion rotation, out Vector2 size)
         {
             MonitorScreen(monitor, out var glass, out var turned, out _);
+            LargeScreen(glass, turned, head, aspect, out center, out rotation, out size);
+        }
+
+        // The same for any screen in the room, given its middle and how it is turned (forward away from the viewer).
+        public static void LargeScreen(Vector3 glass, Quaternion turned, Vector3 head, float aspect, out Vector3 center, out Quaternion rotation, out Vector2 size)
+        {
             var toGlass = glass - head;
             var distance = Mathf.Max(0.2f * VrCamera.WorldScale, toGlass.magnitude - 0.03f * VrCamera.WorldScale);
             var forward = toGlass.sqrMagnitude > 1e-6f ? toGlass.normalized : turned * Vector3.forward;
