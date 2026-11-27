@@ -248,7 +248,6 @@ namespace ShipbreakerVR
             }
             LogChanges();
             ReelWatch();
-            ReelLength();
         }
 
         // The game switches the grapple's reeling in on and off only at the moment its action is pressed or released
@@ -315,17 +314,25 @@ namespace ShipbreakerVR
         // length runs ahead, and after letting go one is pulled on until within it again; pressed again, nothing pulls
         // until the length has come down below how far one is. So here the length is set to how far apart the ends are
         // when reeling stops (if shorter) and when it starts (if longer); what speed one has stays.
+        // Also in the flat game, while the mod is loaded (Raik, 2026-11-27: VR off with F3, the fix stays): its own step
+        // in VrFrame, which runs with VR off as well, and a key or gamepad that holds the reel starts it there too.
         private static readonly AccessTools.FieldRef<GrapplingHook, LaserRope> RopeOf = AccessTools.FieldRefAccess<GrapplingHook, LaserRope>("m_GrapplingRope");
         private static readonly AccessTools.FieldRef<LaserRope, float> RopeLength = AccessTools.FieldRefAccess<LaserRope, float>("mTotalLength");
         private const float ShortestRope = 0.5f;
         private static bool wasReeling;
 
-        private static void ReelLength()
+        public static void ReelLength()
         {
             var hook = GameRefs.Grapple;
             var rope = hook != null ? RopeOf(hook) : null;
             var fixedRope = rope != null && rope.IsInitialized && !rope.IsTraveling
                 && rope.StartAnchorData.Anchor != null && rope.EndAnchorData.Anchor != null;
+            if (fixedRope && !hook.IsRetracting && LynxControls.Instance != null
+                && LynxControls.Instance.GetInputIsPressed(GameplayActions.GameplayActionSet.RetractionModifier))
+            {
+                Reeling(hook) = true;
+                if (reelLogs++ < 40) Plugin.Log.LogInfo($"Tool control: the grapple's reel key held but not reeling (its press came before the rope was fixed), reeling now ({(VrXr.IsRunning ? "VR" : "flat")})");
+            }
             var reeling = fixedRope && hook.IsRetracting;
             if (fixedRope && reeling != wasReeling)
             {
@@ -336,7 +343,7 @@ namespace ShipbreakerVR
                 {
                     RopeLength(rope) = to;
                     if (reelLogs++ < 40)
-                        Plugin.Log.LogInfo($"Tool control: the grapple {(reeling ? "starts" : "stops")} reeling, its rope {length:0.00} m long for ends {apart:0.00} m apart, set to {to:0.00} m (mass ratio {hook.GrappledMassRatio:0.00})");
+                        Plugin.Log.LogInfo($"Tool control: the grapple {(reeling ? "starts" : "stops")} reeling, its rope {length:0.00} m long for ends {apart:0.00} m apart, set to {to:0.00} m (mass ratio {hook.GrappledMassRatio:0.00}, {(VrXr.IsRunning ? "VR" : "flat")})");
                 }
             }
             wasReeling = reeling;

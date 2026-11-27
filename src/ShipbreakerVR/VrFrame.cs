@@ -12,7 +12,8 @@ namespace ShipbreakerVR
     // that changed later in the same frame (the aim still on the old hand for a frame after the other hand took the tool).
     //   1. VrInput      the controllers' buttons, triggers, grips and sticks
     //   2. VrToolInput  what the hands do (VrHand, brought up to date with the game first): drawing, holding and putting
-    //                   away tools, the tool hand, the buttons' actions (and VrDualTools.Check)
+    //                   away tools, the tool hand, the buttons' actions (and VrDualTools.Check); then the grapple's rope
+    //                   length (ReelLength), also with VR off
     //   3. VrAim        the aim camera on the tool hand that step 2 settled
     //   4. VrDualTools  the second tool's aim camera
     //   5. VrControls   flying, braking and turning, which rest while the left hand holds a tool or holds on
@@ -32,6 +33,7 @@ namespace ShipbreakerVR
         {
             ("input", VrInput.Update),
             ("tool input", VrToolInput.Update),
+            ("grapple reel", VrToolInput.ReelLength),
             ("loose tools", VrLooseTools.Track),
             ("cutter idle", VrCutterIdle.Update),
             ("tool support", VrToolSupport.Update),
