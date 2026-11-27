@@ -334,7 +334,7 @@ namespace ShipbreakerVR
             // Hab camera moves become fades in VR: until the view is black the rig stays on the old spot. At the monitor
             // above the bed it stays where it was.
             VrHab.UpdateTransition();
-            if (FollowsHab) VrHabWalk.Update(HabHeading(gameCamera.transform.rotation));
+            if (FollowsHab) VrHabWalk.Update(HabHeading(gameCamera.transform.rotation), gameCamera.transform.position);
             else VrHabWalk.Stop();
             if (FollowsHab && (VrHab.Holding || VrHab.Staying)) return;
             var cam = gameCamera.transform;

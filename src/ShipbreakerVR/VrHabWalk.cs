@@ -9,6 +9,9 @@ namespace ShipbreakerVR
     internal static class VrHabWalk
     {
         private const string SitSpot = "BedSitting_Virtual_Camera";
+        // After a shift (the tutorial's too) the game puts one here, at the other end of the room, not on the bed
+        // (Raik, 2026-11-27). With walking on one walks from here at once, from where the spot is.
+        private const string AfterShiftSpot = "Entry For After Shift_Virtual_Camera";
         private const float Speed = 1.8f;
         private const float Deadzone = 0.2f;
         private const float TurnStep = 45f;
@@ -43,11 +46,17 @@ namespace ShipbreakerVR
 
         public static Quaternion Heading => heading;
 
-        // Runs from the rig's placing, which can come more than once a frame. spotHeading is the game camera's.
-        public static void Update(Quaternion spotHeading)
+        // Runs from the rig's placing, which can come more than once a frame. spotHeading and spotPosition are the game
+        // camera's.
+        public static void Update(Quaternion spotHeading, Vector3 spotPosition)
         {
             if (Time.frameCount == updatedFrame) return;
             updatedFrame = Time.frameCount;
+            if (!Walking && AfterShift && !Paused && !VrHab.Holding && VrHab.TryRoomFloor(out _))
+            {
+                StartAt(spotPosition, spotHeading);
+                return;
+            }
             if (!Walking)
             {
                 if (!AtBed)
@@ -87,6 +96,22 @@ namespace ShipbreakerVR
             Move(VrInput.Left.Stick);
             VrHabPosters.Update(VrCamera.Instance.transform, VrCamera.WorldScale);
             if (!mapping) VrHabStations.Update(VrCamera.Instance.transform, VrCamera.WorldScale);
+        }
+
+        private static bool AfterShift => VrSettings.FreeWalking.Value && VrHab.ActiveSpot == AfterShiftSpot && VrHab.Room != null;
+
+        // Walking from the game's spot: where it is in the room, kept inside the floor (from the bed's place towards it
+        // when the spot lies outside what was walked).
+        private static void StartAt(Vector3 spotPosition, Quaternion spotHeading)
+        {
+            var local = VrHab.Room.InverseTransformPoint(spotPosition);
+            var spot = new Vector2(local.x, local.z);
+            place = HabFloor.Inside(spot) ? spot : HabFloor.Limit(Start, spot);
+            heading = spotHeading;
+            Walking = true;
+            VrHabStations.Find();
+            VrHabStations.Clear();
+            Plugin.Log.LogInfo($"Hab: after the shift at '{AfterShiftSpot}', walking from {place.x:0.00} {place.y:0.00} (spot {spot.x:0.00} {spot.y:0.00})");
         }
 
         public static void Stop()

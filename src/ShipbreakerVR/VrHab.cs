@@ -477,8 +477,9 @@ namespace ShipbreakerVR
         // Eye height over the Hab's floor while standing, in meters at world scale 1.
         public const float Height = 1.9f;
 
-        // A spot below this is one where one sits: the view of the room from the bed is at 1.28 m, the lowest one standing 1.81 m.
-        private const float SitBelow = 1.5f;
+        // A spot below this is one where one sits: the view of the room from the bed is at 1.28 m, the lowest one standing
+        // 1.50 m (the entry after a shift, Raik 2026-11-27: at 1.5 it counted as sitting and stayed low).
+        private const float SitBelow = 1.4f;
 
         public static bool Sits(float spot) => spot < SitBelow;
 

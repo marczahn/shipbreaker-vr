@@ -1641,3 +1641,10 @@ aiming and climbing for everyone. Ask Raik before the release.
   not at all. Now (`VrToolSteady`) the turn within 3° and with 0.3 s lag, and the place too (`Place`, within 2 cm,
   0.25 s lag, before the tool's weight and collision), so it moves clearly slower and a precise cut keeps its line.
   Still only with extended tool physics (the second hand takes hold of the tool only then). Log "Tool steady: ...".
+- After a shift (the tutorial's too) the game puts one at 'Entry For After Shift_Virtual_Camera', at the other end of
+  the room, not on the bed; walking only began from the bed, so there one hopped between spots as in the flat game, and
+  that spot (1.50 m) counted as sitting and stayed low (Raik 2026-11-27). Now with Station/FreiGehen one walks from
+  there at once, from where the spot is in the room (VrHabWalk.StartAt, log "Hab: after the shift ..."), to the terminal
+  and the rest as before; and a spot counts as sitting only below 1.4 m (the bed's view is at 1.28 m).
+- Under the subtitles in the station a small line '[Y] Skip' / '[Y] Überspringen' (VrSkipHint, Raik 2026-11-27): the
+  mod's own, under the lowest subtitle showing, in its font at 0.6 of its size; only in the Hab, not paused, with VR.

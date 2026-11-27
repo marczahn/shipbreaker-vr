@@ -3,6 +3,7 @@ using System.Reflection;
 using BBI.Unity.Game;
 using Doozy.Engine.UI;
 using HarmonyLib;
+using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.Playables;
@@ -257,6 +258,93 @@ namespace ShipbreakerVR
             director.time = next;
             SceneClock(hab) += ahead;
             VrSkip.Log($"Y: the scene goes on to its next line at {next:0.0} s ({ahead:0.0} s on)");
+        }
+    }
+
+    // Raik (2026-11-27): under the subtitles in the station a small line says that Y skips ('[Y] Skip'). One line, of
+    // the mod's own, under the lowest subtitle showing, in the subtitle's font and smaller; only in the Hab, not paused,
+    // and only with VR running.
+    [HarmonyPatch(typeof(SubtitleUIController), "Update")]
+    internal static class VrSkipHint
+    {
+        static VrSkipHint() => VrSession.OnUnload("skip hint", Release);
+
+        private const float Size = 0.6f;
+        private const float Gap = 0.35f;
+        private const float Alpha = 0.8f;
+
+        private static readonly AccessTools.FieldRef<SubtitleUIController, SubtitleEntry[]> Entries =
+            AccessTools.FieldRefAccess<SubtitleUIController, SubtitleEntry[]>("m_SubtitleEntries");
+        private static readonly AccessTools.FieldRef<SubtitleUIController, bool> InHab = AccessTools.FieldRefAccess<SubtitleUIController, bool>("mIsInHab");
+        private static readonly AccessTools.FieldRef<SubtitleEntry, LocalizedTextMeshProUGUI> Line =
+            AccessTools.FieldRefAccess<SubtitleEntry, LocalizedTextMeshProUGUI>("m_LocSubLine");
+        private static readonly Vector3[] Corners = new Vector3[4];
+        private static TextMeshProUGUI hint;
+        private static bool logged;
+
+        private static void Postfix(SubtitleUIController __instance)
+        {
+            var shows = VrXr.IsRunning && InHab(__instance) && GameSession.CurrentGameState != GameSession.GameState.Paused;
+            var parent = __instance.transform;
+            var lowest = float.MaxValue;
+            var middle = 0f;
+            TMP_Text sample = null;
+            if (shows && Entries(__instance) != null)
+                foreach (var entry in Entries(__instance))
+                {
+                    if (entry == null || !entry.isActiveAndEnabled || !entry.IsVisible || !(entry.transform is RectTransform rect)) continue;
+                    rect.GetWorldCorners(Corners);
+                    var bottom = parent.InverseTransformPoint(Corners[0]);
+                    var right = parent.InverseTransformPoint(Corners[3]);
+                    if (bottom.y >= lowest) continue;
+                    lowest = Mathf.Min(bottom.y, right.y);
+                    middle = (bottom.x + right.x) * 0.5f;
+                    var line = Line(entry);
+                    sample = line != null ? line.GetComponent<TMP_Text>() : null;
+                }
+            if (lowest == float.MaxValue || sample == null)
+            {
+                if (hint != null && hint.gameObject.activeSelf) hint.gameObject.SetActive(false);
+                return;
+            }
+            if (hint == null || hint.transform.parent != parent) Make(parent, sample);
+            hint.font = sample.font;
+            hint.fontSize = sample.fontSize * Size;
+            var color = sample.color;
+            color.a *= Alpha;
+            hint.color = color;
+            var text = $"[Y] {VrOptions.L("Skip", "Überspringen")}";
+            if (hint.text != text) hint.text = text;
+            hint.transform.localPosition = new Vector3(middle, lowest - sample.fontSize * Gap, 0f);
+            if (!hint.gameObject.activeSelf) hint.gameObject.SetActive(true);
+            if (logged) return;
+            logged = true;
+            VrSkip.Log($"the hint for Y shows under the subtitles ('{parent.name}', font size {hint.fontSize:0})");
+        }
+
+        private static void Make(Transform parent, TMP_Text sample)
+        {
+            Release();
+            var go = new GameObject("ShipbreakerVR skip hint", typeof(RectTransform));
+            go.layer = parent.gameObject.layer;
+            var rect = (RectTransform)go.transform;
+            rect.SetParent(parent, false);
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.sizeDelta = new Vector2(600f, 60f);
+            go.AddComponent<UnityEngine.UI.LayoutElement>().ignoreLayout = true;
+            hint = go.AddComponent<TextMeshProUGUI>();
+            hint.fontSharedMaterial = sample.fontSharedMaterial;
+            hint.alignment = TextAlignmentOptions.Top;
+            hint.enableWordWrapping = false;
+            hint.overflowMode = TextOverflowModes.Overflow;
+            hint.raycastTarget = false;
+        }
+
+        // On unload, and so with VR switched off.
+        public static void Release()
+        {
+            if (hint != null) Object.Destroy(hint.gameObject);
+            hint = null;
         }
     }
 }
