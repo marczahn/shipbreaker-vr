@@ -1712,3 +1712,7 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
   (`VrToolInput.Presses`, either hand); drawing any tool counts as the tool wheel. The cutter's steps (CutPoints,
   Vapourize, SplitSaw, CutAngle, CutAluminum) are PAT objectives on what the game does, not on presses. Tethers are
   bought in the HAB's upgrades first (`PAT_OBJ_TUT_04_03_TethersPurchased`).
+- The grapple's tether mode only once the game has unlocked the tethers (Raik 2026-11-27: "as long as I have not
+  unlocked the tethers, the grapple has to stay in the grapple mode"): `VrTetherMode.On` also asks
+  `TetherController.TetherUnlocked` (set by the game's `UnlockAbilityEvent`, in the tutorial with the upgrade
+  purchase); B on the grapple does not switch before. Log "Grapple mode: the tethers are not unlocked yet ...".

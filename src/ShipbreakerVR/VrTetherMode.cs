@@ -32,7 +32,21 @@ namespace ShipbreakerVR
 
         static VrTetherMode() => VrSession.OnUnload("tether mode", Release);
 
-        public static bool On { get; private set; }
+        // Raik (2026-11-27): until the game has unlocked the tethers (the tutorial's upgrade purchase,
+        // TetherController.TetherUnlocked), the grapple stays in its grapple mode and B does not switch it.
+        private static bool chosen;
+        private static int lockedLogs;
+
+        public static bool On => chosen && Unlocked;
+
+        public static bool Unlocked
+        {
+            get
+            {
+                var tethers = GameRefs.Tethers;
+                return tethers != null && tethers.TetherUnlocked;
+            }
+        }
 
         private static InputDevice pendingDevice;
         private static float pendingPulseAt = -1f;
@@ -49,7 +63,13 @@ namespace ShipbreakerVR
         // B tap on the grapple.
         public static void Toggle(InputDevice device)
         {
-            On = !On;
+            if (!Unlocked)
+            {
+                chosen = false;
+                if (lockedLogs++ < 5) Plugin.Log.LogInfo("Grapple mode: the tethers are not unlocked yet, the grapple stays in its grapple mode");
+                return;
+            }
+            chosen = !chosen;
             Plugin.Log.LogInfo($"Grapple mode: {(On ? "tethers" : "grapple")}");
             LogGameModes();
             if (!device.isValid) return;
