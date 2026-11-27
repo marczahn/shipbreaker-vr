@@ -12,6 +12,10 @@ namespace ShipbreakerVR
     // While one walks, a smaller line near the top of the view says so the whole time ('[X] Exit'; Raik, 2026-11-22:
     // nothing told that X does that). For it to be in view wherever one walks and looks, the canvas stays in front of
     // the head while walking (VrUi), as the visor does in a shift.
+    // After a shift with a call waiting (Raik, 2026-11-27, after the tutorial): the game waits for one to go to the comms
+    // speaker by the workbench, its light blinking, while it keeps the exit and the terminal shut. Within CallReach of
+    // that light A answers the call (Hab3DController.TryStartAfterShiftSequence, as going there in the flat game does),
+    // and '[X] Exit' shows only while the game lets the exit open.
     internal static class VrHabStations
     {
         private const float Reach = 1.6f;
@@ -25,6 +29,18 @@ namespace ShipbreakerVR
         // The collected radio (VrRadioMusic): this near, and looked at more closely than the terminal beside it.
         private const float RadioReach = 1.5f;
         private const string HomeSpot = "BedSitting_Virtual_Camera";
+        // How near the comms speaker's light the head answers a waiting call, in meters at world scale 1, wherever it looks.
+        private const float CallReach = 2f;
+
+        private static readonly AccessTools.FieldRef<Hab3DController, NotificationLightController> CommsLight =
+            AccessTools.FieldRefAccess<Hab3DController, NotificationLightController>("m_CommsLightController");
+        private static readonly AccessTools.FieldRef<Hab3DController, HabAfterShiftAsset> AfterShift =
+            AccessTools.FieldRefAccess<Hab3DController, HabAfterShiftAsset>("mCurrentAfterShiftData");
+        private static readonly AccessTools.FieldRef<Hab3DController, bool> AfterShiftDone =
+            AccessTools.FieldRefAccess<Hab3DController, bool>("mHasFinsishedAfterShiftSequence");
+        private static readonly AccessTools.FieldRef<Hab3DController, bool> InAfterShift =
+            AccessTools.FieldRefAccess<Hab3DController, bool>("mIsInAfterShiftHab");
+        private static bool nearCall;
         private const string ExitSpot = "Exit_Virtual_Camera";
 
         private class Station
@@ -98,16 +114,21 @@ namespace ShipbreakerVR
         public static void Update(Transform head, float scale)
         {
             if (home == null) return;
-            var next = Nearest(head, scale, out var nextAngle);
+            var call = CallNear(head, scale);
+            Station next = null;
+            var nextAngle = float.MaxValue;
+            if (!call) next = Nearest(head, scale, out nextAngle);
             var radio = VrRadio.InHab;
-            var radioNow = RadioInView(head, scale, radio, out var radioAngle) && (next == null || radioAngle < nextAngle);
+            var radioNow = !call && RadioInView(head, scale, radio, out var radioAngle) && (next == null || radioAngle < nextAngle);
             if (radioNow) next = null;
-            if (next != near || radioNow != nearRadio)
+            if (next != near || radioNow != nearRadio || call != nearCall)
             {
                 near = next;
                 nearRadio = radioNow;
+                nearCall = call;
                 // In front of the head, as one may stand turned away from the canvas's place.
-                if ((near != null || nearRadio) && VrUi.Instance != null) VrUi.Instance.Recenter();
+                if ((near != null || nearRadio || nearCall) && VrUi.Instance != null) VrUi.Instance.Recenter();
+                promptText = null;
             }
             // Its text is built when what it says changes, not each frame.
             var radioOn = nearRadio && VrRadioMusic.On;
@@ -116,11 +137,18 @@ namespace ShipbreakerVR
                 promptFor = near;
                 promptRadio = nearRadio;
                 promptRadioOn = radioOn;
-                promptText = nearRadio ? RadioPrompt() : near != null ? $"[A] {near.Name}" : "";
+                promptText = nearCall ? $"[A] {VrOptions.L("Answer the call", "Anruf annehmen")}"
+                    : nearRadio ? RadioPrompt() : near != null ? $"[A] {near.Name}" : "";
             }
             Show(promptText);
-            ShowHint(hintText);
+            var exitOpen = ExitOpen();
+            ShowHint(exitOpen ? hintText : "");
             if (Time.unscaledTime < lockedUntil) return;
+            if (nearCall)
+            {
+                if (VrInput.Right.Primary.Pressed) AnswerCall();
+                return;
+            }
             if (nearRadio)
             {
                 if (VrInput.Right.Primary.Pressed) VrRadioMusic.Next(radio);
@@ -207,6 +235,34 @@ namespace ShipbreakerVR
             Using = false;
             opened = false;
             closing = false;
+        }
+
+        // The exit as the game lets it open now: shut while a call after the shift waits (IsCameraBlocked).
+        private static bool ExitOpen()
+        {
+            var controller = VrHab.Controller;
+            return exit != null && controller != null && !controller.IsInputBlocked(exit.Way) && !controller.IsCameraBlocked(exit.Way);
+        }
+
+        // A call after the shift waiting to be answered, and the head within CallReach of the comms speaker's light.
+        private static bool CallNear(Transform head, float scale)
+        {
+            var controller = VrHab.Controller;
+            if (controller == null || AfterShift(controller) == null || AfterShiftDone(controller) || InAfterShift(controller)) return false;
+            var light = CommsLight(controller);
+            if (light == null) return false;
+            var way = Vector3.ProjectOnPlane(light.transform.position - head.position, VrHab.RoomUp);
+            return way.magnitude <= CallReach * scale;
+        }
+
+        private static void AnswerCall()
+        {
+            var controller = VrHab.Controller;
+            Plugin.Log.LogInfo($"Hab: answering the call after the shift ('{AfterShift(controller).name}', {AfterShift(controller).SceneType})");
+            controller.TryStartAfterShiftSequence();
+            nearCall = false;
+            promptText = null;
+            Show("");
         }
 
         private static string RadioPrompt() => VrRadioMusic.On

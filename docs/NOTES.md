@@ -1661,3 +1661,9 @@ aiming and climbing for everyone. Ask Raik before the release.
   under it, full for the fastest the jetpack gets fully upgraded (BUFF_Thruster_Speed: 3.5 m/s free; the thrusters' own
   top if higher), yellow; red from the lowest speed at which a crash hurts, read from the player's
   ImpactDamageRangeAsset (8.51 m/s against parts from 100 kg, 10 m/s from 7.5 kg). Log "HUD bars: speed ... (red from ...)".
+- Walking in the station after the tutorial, the call could not be answered (Raik 2026-11-27): after a shift with a
+  call waiting the game keeps only the entry spot, waits for one to go to the comms speaker by the workbench (its light
+  blinking) and keeps the exit and the terminal shut (IsCameraBlocked while mCurrentAfterShiftData is set). Now within
+  2 m of that light (VrHabStations.CallReach, wherever one looks) '[A] Answer the call' starts the scene as the flat
+  game's way there does (Hab3DController.TryStartAfterShiftSequence; log "Hab: answering the call ..."), and '[X] Exit'
+  shows only while the game lets the exit open.
