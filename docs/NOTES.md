@@ -1716,3 +1716,8 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
   unlocked the tethers, the grapple has to stay in the grapple mode"): `VrTetherMode.On` also asks
   `TetherController.TetherUnlocked` (set by the game's `UnlockAbilityEvent`, in the tutorial with the upgrade
   purchase); B on the grapple does not switch before. Log "Grapple mode: the tethers are not unlocked yet ...".
+- The waypoints tip showed braking as "Y or Y" (Raik 2026-11-27: "only the Y button and done", VTOL and Shooter): its
+  "Brakes Container" has the single key ("Button - Not Simul - Brake") and the pair held together ("Simul - Brake
+  Left", "Simul - Brake Right KEYBOARD") with a word between. `VrTutorialPrompts`: a pair prompt beside a "Not Simul"
+  one is taken out of the layout and drawn at no size, with the short texts (up to 4 letters) beside it; back when VR
+  or the controllers' flying is off.

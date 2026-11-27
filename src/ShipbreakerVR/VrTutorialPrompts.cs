@@ -18,7 +18,9 @@ namespace ShipbreakerVR
     // - thrust (forward, back, left, right, up, down): Shooter the left stick; VTOL the trigger + an arrow that way,
     //   drawn in space (Raik: "really flat forward, back, up, down", so the six lines are not the same picture): lying
     //   flat and seen from a little above for forward, back, left and right, standing for up and down;
-    // - braking: Y (the gamepad's second brake picture is left out);
+    // - braking: Y (the gamepad's second brake picture is left out). The waypoints tip shows braking twice, once as
+    //   one key ("Not Simul") and once as two keys held together ("Simul"), with a short word between; there only the
+    //   single one stays, the pair and the word go (Raik 2026-11-27: "Y O Y", "only the Y button and done");
     // - looking around: the right stick.
     // Under the roll tip's lines one more of the mod's own: "Straighten up" with the left stick pressed in
     // (VrCamera.UpdateCenterPress: a short press straightens up in flight).
@@ -33,7 +35,7 @@ namespace ShipbreakerVR
 
         private const string Extra = "ShipbreakerVR ";
 
-        private enum Kind { None, Roll, Thrust, Brake, BrakeSecond, Look }
+        private enum Kind { None, Roll, Thrust, Brake, BrakeSecond, BrakePair, Look }
 
         private sealed class State
         {
@@ -45,6 +47,17 @@ namespace ShipbreakerVR
             public readonly List<GameObject> Added = new List<GameObject>();
             public LayoutElement Ignored;
             public bool IgnoredAdded;
+            // What the mod took out of the tip's layout (the brake pair and the word between), to put back.
+            public readonly List<Hidden> Hid = new List<Hidden>();
+        }
+
+        private struct Hidden
+        {
+            public Transform Thing;
+            public Vector3 Scale;
+            public LayoutElement Layout;
+            public bool LayoutAdded;
+            public bool WasIgnored;
         }
 
         private static readonly Dictionary<MonoBehaviour, State> States = new Dictionary<MonoBehaviour, State>();
@@ -119,9 +132,10 @@ namespace ShipbreakerVR
                 case GameplayActions.GameplayActionSet.ThrustMoveDown:
                     state.Kind = Kind.Thrust; break;
                 case GameplayActions.GameplayActionSet.ThrustBrakeLeft:
-                    state.Kind = Kind.Brake; break;
                 case GameplayActions.GameplayActionSet.ThrustBrakeRight:
-                    state.Kind = Kind.BrakeSecond; break;
+                    state.Kind = InPairBesideSingle(prompt.transform) ? Kind.BrakePair
+                        : state.Action == GameplayActions.GameplayActionSet.ThrustBrakeLeft ? Kind.Brake : Kind.BrakeSecond;
+                    break;
                 case GameplayActions.GameplayActionSet.RotateBodyUp:
                     state.Kind = Kind.Look; break;
             }
@@ -135,6 +149,44 @@ namespace ShipbreakerVR
             for (; at != null; at = at.parent)
                 if (at.name.Contains("TUT_")) return true;
             return false;
+        }
+
+        // A brake prompt of the two-key pair ("Simul") in a line that also has the single key ("Not Simul").
+        private static bool InPairBesideSingle(Transform prompt)
+        {
+            if (!prompt.name.Contains("Simul") || prompt.name.Contains("Not Simul") || prompt.parent == null) return false;
+            foreach (Transform sibling in prompt.parent)
+                if (sibling.name.Contains("Not Simul")) return true;
+            return false;
+        }
+
+        // Out of the tip's layout and drawn at no size, until Undo puts it back.
+        private static void Hide(Transform thing, State state)
+        {
+            foreach (var known in state.Hid) if (known.Thing == thing) return;
+            // Already taken out by the pair's other prompt, which puts it back.
+            if (thing.localScale == Vector3.zero) return;
+            var hidden = new Hidden { Thing = thing, Scale = thing.localScale, Layout = thing.GetComponent<LayoutElement>() };
+            hidden.LayoutAdded = hidden.Layout == null;
+            if (hidden.LayoutAdded) hidden.Layout = thing.gameObject.AddComponent<LayoutElement>();
+            hidden.WasIgnored = hidden.Layout.ignoreLayout;
+            hidden.Layout.ignoreLayout = true;
+            thing.localScale = Vector3.zero;
+            state.Hid.Add(hidden);
+        }
+
+        // The brake pair goes, and the short words beside it in its line ("or", "+"), not the line's own label.
+        private static void HidePair(MonoBehaviour prompt, State state)
+        {
+            var line = prompt.transform.parent;
+            Hide(prompt.transform, state);
+            if (line == null) return;
+            foreach (Transform sibling in line)
+            {
+                if (sibling == prompt.transform || sibling.name.Contains("Not Simul") || sibling.GetComponentInChildren(prompt.GetType(), true) != null) continue;
+                var text = sibling.GetComponentInChildren<TMP_Text>(true);
+                if (text != null && text.text != null && text.text.Trim().Length <= 4) Hide(sibling, state);
+            }
         }
 
         private static Image PictureOf(MonoBehaviour prompt)
@@ -151,6 +203,11 @@ namespace ShipbreakerVR
             // The line for straightening up first: making it switches the roll tip's line off and on, which runs the
             // game's ChangeControlType (and Changed) once more.
             if (state.Action == GameplayActions.GameplayActionSet.RollBodyRight) AddStraighten(prompt, state, picture);
+            if (state.Kind == Kind.BrakePair)
+            {
+                HidePair(prompt, state);
+                return;
+            }
             if (state.Kind == Kind.BrakeSecond)
             {
                 state.Ignored = picture.GetComponent<LayoutElement>();
@@ -257,6 +314,15 @@ namespace ShipbreakerVR
                 else state.Ignored.ignoreLayout = false;
             }
             state.Ignored = null;
+            foreach (var hidden in state.Hid)
+            {
+                if (hidden.Thing == null) continue;
+                hidden.Thing.localScale = hidden.Scale;
+                if (hidden.Layout == null) continue;
+                if (hidden.LayoutAdded) Object.Destroy(hidden.Layout);
+                else hidden.Layout.ignoreLayout = hidden.WasIgnored;
+            }
+            state.Hid.Clear();
             if (was == VrControls.Scheme.Aus || prompt == null) return;
             var picture = PictureOf(prompt);
             if (picture != null) picture.enabled = true;
