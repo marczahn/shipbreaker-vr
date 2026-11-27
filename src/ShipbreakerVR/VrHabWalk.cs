@@ -12,6 +12,10 @@ namespace ShipbreakerVR
         // After a shift (the tutorial's too) the game puts one here, at the other end of the room, not on the bed
         // (Raik, 2026-11-27). With walking on one walks from here at once, from where the spot is.
         private const string AfterShiftSpot = "Entry For After Shift_Virtual_Camera";
+        // Where the game wakes one in the bed after the night (the morning's monitor over the bed): walking ends there,
+        // so the morning goes on as from the bed (Raik, 2026-11-27: after the call one stayed standing).
+        private const string WakeSpot = "Entry_Virtual_Camera";
+        private const string WakeMonitorSpot = "WakeUpMonitor_Virtual_Camera";
         private const float Speed = 1.8f;
         private const float Deadzone = 0.2f;
         private const float TurnStep = 45f;
@@ -82,6 +86,12 @@ namespace ShipbreakerVR
             }
             if (!VrSettings.FreeWalking.Value)
             {
+                Stop();
+                return;
+            }
+            if (VrHab.ActiveSpot == WakeSpot || VrHab.ActiveSpot == WakeMonitorSpot)
+            {
+                Plugin.Log.LogInfo($"Hab: the game wakes one in the bed ('{VrHab.ActiveSpot}'), walking ends");
                 Stop();
                 return;
             }

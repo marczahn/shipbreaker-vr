@@ -261,14 +261,44 @@ namespace ShipbreakerVR
             return way.magnitude <= CallReach * scale;
         }
 
+        // The game's own way to the call ("Answer intercom" at the entry): its navigation sends the event the game's flow
+        // waits on, and that flow ends the night after the call. Started straight away (TryStartAfterShiftSequence), the
+        // call played but the flow stayed behind: after it the screen went black, input stayed blocked, no pause menu,
+        // no bed (Raik, 2026-11-27). Only without that way is the call started straight away.
         private static void AnswerCall()
         {
             var controller = VrHab.Controller;
-            Plugin.Log.LogInfo($"Hab: answering the call after the shift ('{AfterShift(controller).name}', {AfterShift(controller).SceneType})");
-            controller.TryStartAfterShiftSequence();
+            var location = Current();
+            var way = location != null ? CallWay(controller, location) : null;
+            Plugin.Log.LogInfo($"Hab: answering the call after the shift ('{AfterShift(controller).name}', {AfterShift(controller).SceneType}), "
+                + (way != null ? $"the game's way from '{location.LocationVirtualCamera.Name}' to '{way.CameraToGoTo.Name}'" : "started straight away, no way to it found"));
+            if (way != null) location.Navigate(way);
+            else controller.TryStartAfterShiftSequence();
             nearCall = false;
             promptText = null;
             Show("");
+        }
+
+        private static readonly AccessTools.FieldRef<Hab3DController, List<LocalizedTextMeshProUGUI>> CallLabels =
+            AccessTools.FieldRefAccess<Hab3DController, List<LocalizedTextMeshProUGUI>>("m_PathToCommsTerminalLocs");
+
+        // The entry's way whose button the game labelled for the call (its PathToCommsTerminal labels), else the one up
+        // to the living area, as the flat game showed it ("Answer intercom", up).
+        private static NavigationOption CallWay(Hab3DController controller, Hab3DLocationNavigation location)
+        {
+            var options = Options(location);
+            if (options == null) return null;
+            var labels = CallLabels(controller);
+            NavigationOption up = null;
+            foreach (var way in options)
+            {
+                if (way == null || way.CameraToGoTo == null || controller.IsInputBlocked(way) || controller.IsCameraBlocked(way)) continue;
+                if (labels != null && way.ClickableButton != null)
+                    foreach (var label in labels)
+                        if (label != null && label.transform.IsChildOf(way.ClickableButton.transform)) return way;
+                if (way.ButtonOption == FrontEndActions.FrontEndActionSet.NavigateUp) up = way;
+            }
+            return up;
         }
 
         private static string RadioPrompt() => VrRadioMusic.On

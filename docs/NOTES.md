@@ -1670,3 +1670,9 @@ aiming and climbing for everyone. Ask Raik before the release.
 - The '[Y] Skip' hint under the subtitles was there but too small to see (Raik 2026-11-27, at the call after the
   tutorial; log: font size 8): the subtitle's text sits under scaled parents of its own, so its font size is now taken
   as seen (times its scale against the hint's parent) before the hint's 0.6 of it.
+- After the call the night did not come (Raik 2026-11-27): started straight away (TryStartAfterShiftSequence) the call
+  played, but the game's flow waits on the event its "Answer intercom" way sends (NavigationOption.GoTo); after the
+  call the screen went black, input stayed blocked (no pause menu) and one stayed standing. A now takes that way from
+  the entry (the button the game labels for the call, else its way up), as the flat game does; straight away only
+  without it. And walking ends when the game wakes one in the bed (Entry_Virtual_Camera, WakeUpMonitor_Virtual_Camera),
+  so the morning goes on from the bed.
