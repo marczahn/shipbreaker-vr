@@ -1657,3 +1657,7 @@ aiming and climbing for everyone. Ask Raik before the release.
   much about the grip (in tracking space, before the arm's bend), so the grip stays in the hand and the arm follows.
   The tool is placed as before. Not for a second tool (VrDualTools). Log "Tool recoil: ..." (which part, how far).
   Untested in the headset.
+- The left HUD bar shows the speed, no longer the thrust (Raik 2026-11-27): the player's speed as the game's number
+  under it, full for the fastest the jetpack gets fully upgraded (BUFF_Thruster_Speed: 3.5 m/s free; the thrusters' own
+  top if higher), yellow; red from the lowest speed at which a crash hurts, read from the player's
+  ImpactDamageRangeAsset (8.51 m/s against parts from 100 kg, 10 m/s from 7.5 kg). Log "HUD bars: speed ... (red from ...)".
