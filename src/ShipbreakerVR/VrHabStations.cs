@@ -41,6 +41,7 @@ namespace ShipbreakerVR
         private static readonly AccessTools.FieldRef<Hab3DController, bool> InAfterShift =
             AccessTools.FieldRefAccess<Hab3DController, bool>("mIsInAfterShiftHab");
         private static bool nearCall;
+        private static Hab3DController callLogged;
         private const string ExitSpot = "Exit_Virtual_Camera";
 
         private class Station
@@ -252,6 +253,11 @@ namespace ShipbreakerVR
             var light = CommsLight(controller);
             if (light == null) return false;
             var way = Vector3.ProjectOnPlane(light.transform.position - head.position, VrHab.RoomUp);
+            if (callLogged != controller)
+            {
+                callLogged = controller;
+                Plugin.Log.LogInfo($"Hab: a call waits after the shift, at '{VrUtil.Path(light.transform)}' {way.magnitude / scale:0.0} m from the head");
+            }
             return way.magnitude <= CallReach * scale;
         }
 
