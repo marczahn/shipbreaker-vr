@@ -19,9 +19,23 @@ namespace ShipbreakerVR
         // Holding the left stick in: upright to the world's up, keeping the heading.
         public static void StartAligning()
         {
+            if (VrSuitPower.Off)
+            {
+                VrInput.Left.Buzz(0.2f, 0.15f);
+                Plugin.Log.LogInfo("Flight: no straightening up, the suit is shut down");
+                return;
+            }
             aligning = true;
             VrInput.Left.Buzz(0.5f, 0.06f);
             Plugin.Log.LogInfo("Flight: straightening up");
+        }
+
+        // Straightening up under way ends where it is (the suit shut down, VrSuitPower).
+        public static void StopAligning(string why)
+        {
+            if (!aligning) return;
+            aligning = false;
+            Plugin.Log.LogInfo($"Flight: straightening up stops, {why}");
         }
 
         // The last small turn, so the view itself ends level. Looking clearly up or down stays as it is.

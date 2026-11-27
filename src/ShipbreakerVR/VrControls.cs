@@ -202,8 +202,13 @@ namespace ShipbreakerVR
             {
                 var charges = (VrHand.Left.HoldsTool && VrHand.Left.Tool == EquipmentController.Equipment.DemoCharge) || VrChargeByHand.Holds(left);
                 if (!tool || charges) braking = left.Secondary.Down;
-                if (VrInput.Right.Valid) TurnFromStick(VrInput.Right.Stick, playspace);
-                turn = VrFlightComfort.AlignStep(playspace, Time.deltaTime) * turn;
+                // The suit shut down by the campaign (VrSuitPower): no turning at all, only the head moves.
+                if (VrSuitPower.Off) VrFlightComfort.StopAligning("the suit is shut down");
+                else
+                {
+                    if (VrInput.Right.Valid) TurnFromStick(VrInput.Right.Stick, playspace);
+                    turn = VrFlightComfort.AlignStep(playspace, Time.deltaTime) * turn;
+                }
             }
             if (tool) { held = false; triggerFromTool = true; return; }
             if (Active == Scheme.Shooter)
@@ -214,7 +219,7 @@ namespace ShipbreakerVR
                 if (!left.Trigger.Down) triggerFromTool = false;
                 var rolling = left.Trigger.Down && !triggerFromTool;
                 var stick = left.Stick;
-                if (rolling)
+                if (rolling && !VrSuitPower.Off)
                 {
                     // Shown in the globe as the hand tilt that rolls as fast with VTOL.
                     var share = Ramp(Mathf.Abs(stick.x), StickDeadzone, 1f);
@@ -260,7 +265,7 @@ namespace ShipbreakerVR
             var moved = ThrustOffset(offset.magnitude, Quaternion.Angle(referenceRotation, rotation));
             var strength = Ramp(moved, MoveDeadzone, FullOffset);
             if (strength > 0f) thrust = playspace * offset.normalized * strength;
-            RollFromReference(rotation, playspace);
+            if (!VrSuitPower.Off) RollFromReference(rotation, playspace);
         }
 
         // Shooter: the thrust in tracking space for the left stick and the left controller's aim, length 0..1: none inside
