@@ -165,6 +165,25 @@ namespace ShipbreakerVR
             return Overhead(monitor) ? cameraPosition : center - forward * ViewDistance;
         }
 
+        // Raik (2026-11-27), a comfort option: with a weaker headset or poor glasses the screens on the monitors can be
+        // hopeless to read. Large screens: the screen shows as large as the menus (their width for their distance), in
+        // front of the monitor and facing the head, without the screen look; where one stands stays the same.
+        public enum Screens { Ein, Gross }
+
+        public static bool LargeScreens => VrSettings.ImmersiveScreens != null && VrSettings.ImmersiveScreens.Value == Screens.Gross;
+
+        public static void LargeScreen(RectTransform monitor, Vector3 head, float aspect, out Vector3 center, out Quaternion rotation, out Vector2 size)
+        {
+            MonitorScreen(monitor, out var glass, out var turned, out _);
+            var toGlass = glass - head;
+            var distance = Mathf.Max(0.2f * VrCamera.WorldScale, toGlass.magnitude - 0.03f * VrCamera.WorldScale);
+            var forward = toGlass.sqrMagnitude > 1e-6f ? toGlass.normalized : turned * Vector3.forward;
+            rotation = Quaternion.LookRotation(forward, turned * Vector3.up);
+            center = head + forward * distance;
+            var width = distance * VrSettings.MenuWidth.Value / Mathf.Max(0.1f, VrSettings.MenuDistance.Value);
+            size = new Vector2(width, width / aspect);
+        }
+
         private static bool Overhead(RectTransform monitor) => Mathf.Abs((monitor.rotation * Vector3.forward).y) > 0.7f;
 
         private static void HideMarkers(bool hide)

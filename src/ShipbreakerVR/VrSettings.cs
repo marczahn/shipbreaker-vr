@@ -33,6 +33,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<float> MenuWidth;
         public static ConfigEntry<bool> FlipUi;
         public static ConfigEntry<bool> MonitorLook;
+        public static ConfigEntry<VrHab.Screens> ImmersiveScreens;
         public static ConfigEntry<VrFlightComfort.Thrust> ThrustMode;
         public static ConfigEntry<VrClimb.Turning> ClimbTurning;
         public static ConfigEntry<float> ClimbTurnDeadzone;
@@ -311,6 +312,10 @@ namespace ShipbreakerVR
                 "Walk through the station instead of hopping between its spots. Replaces the spots: sitting on the bed A stands up, the left stick walks, the right stick turns in steps, the triggers change the poster you look at, and A uses the screen or door you stand at. Walking with a stick can make you feel sick.");
             MonitorLook = Bind("Anzeige", "MonitorEffekt", true,
                 "Screen look for the menus on the station's monitors: a little dimmer, fine scan lines, darker edges, a faint reflection on the glass and light on the frame. Tasten/MonitorEffektUmschalten (F7) switches it on and off.");
+            ImmersiveScreens = Bind("Anzeige", "ImmersiveComputerscreens", VrHab.Screens.Ein,
+                ("On: the station's computer screens show on their monitors in the room. Large screens: each screen shows as large as the menus, in front of you where the monitor is, so every detail is easy to read with any headset or glasses.",
+                    "Ein: die Computerscreens der Station erscheinen auf ihren Monitoren im Raum. Große Screens: jeder Screen erscheint so groß wie die Menüs vor dir, dort wo der Monitor ist, damit man alle Details mit jedem Headset und jeder Brille gut lesen kann."),
+                (new[] { "On", "Large screens" }, new[] { "Ein", "Große Screens" }));
             Helmet = Bind("Anzeige", "Helm", VrHelmet.Mode.Kopf,
                 ("Follows head: the helmet frame moves with the headset. Hidden: a clear view without the frame. Game default: the helmet stays on the body.",
                     "Folgt dem Kopf: der Helmrahmen bewegt sich mit dem Headset. Ausgeblendet: freie Sicht ohne Rahmen. Spielstandard: der Helm bleibt am Körper."),

@@ -83,6 +83,8 @@ namespace ShipbreakerVR
         private const float MonitorMipBias = -0.8f;
         private static readonly Color GlowColor = new Color(0.55f, 0.85f, 1f, 0.14f);
         private bool onMonitor;
+        // On a monitor, shown large in front of it (VrHab.LargeScreens): no screen look.
+        private bool largeScreen;
         private Matrix4x4 glowMatrix;
         private Material shadeMaterial;
         private Material glareMaterial;
@@ -311,6 +313,14 @@ namespace ShipbreakerVR
 
             // At one of the Hab's screens the canvas lies on the monitor, as large as fits on it.
             var monitor = vr.FollowsHab ? VrHab.Monitor : null;
+            largeScreen = monitor != null && VrHab.LargeScreens;
+            if (largeScreen)
+            {
+                onMonitor = true;
+                VrHab.LargeScreen(monitor, head.position, aspect, out var at, out var facing, out var large);
+                screenMatrix = Matrix4x4.TRS(at, facing, new Vector3(large.x, large.y, 1f));
+                return;
+            }
             if (monitor != null)
             {
                 onMonitor = true;
@@ -431,7 +441,7 @@ namespace ShipbreakerVR
                 cmd.DrawMesh(quad, Matrix4x4.Scale(new Vector3(2f, 2f, 1f)), gameFadeMaterial, 0, 0);
             }
             cmd.SetViewProjectionMatrices(view, proj);
-            var look = onMonitor && VrSettings.MonitorLook.Value && shadeMaterial != null;
+            var look = onMonitor && !largeScreen && VrSettings.MonitorLook.Value && shadeMaterial != null;
             if (look) cmd.DrawMesh(quad, glowMatrix, glowMaterial, 0, 0);
             cmd.DrawMesh(quad, screenMatrix, material, 0, 0);
             if (!menuMode) VrFlightGlobe.Draw(cmd, screenMatrix);
