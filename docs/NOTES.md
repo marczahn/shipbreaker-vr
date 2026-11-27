@@ -1623,3 +1623,7 @@ aiming and climbing for everyone. Ask Raik before the release.
   world or body physics the body weighs that everywhere the mod pushes or pulls it (`VrClimb.BodyMass`: throwing,
   the tool's line, climbing, pushing parts); without either the game's 50 kg. Before, body physics alone left the
   game's 50 kg, so a throw pushed twice as hard as with world physics.
+- Body weight back to two steps (Raik 2026-11-27: "extended body physics on: 100 kg, off: 50; 150 is not needed"):
+  no slider; `VrClimb.BodyMass` is 100 kg with extended body physics, otherwise the game's 50 kg, also with extended
+  world physics (before, world physics gave the 100 kg). Throwing, the tool's line, pushing parts and the climbing
+  momentum go by it; the arm and catch forces of climbing keep their own 100 kg (`ClimbContact`).

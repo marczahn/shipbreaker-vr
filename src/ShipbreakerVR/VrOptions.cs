@@ -152,7 +152,6 @@ namespace ShipbreakerVR
                 new BoolRow { Label = L("Extended world physics", "Erweiterte Weltphysik"), Entry = VrSettings.BracedPush },
                 new BoolRow { Label = L("Extended tool physics", "Erweiterte Werkzeugphysik"), Entry = VrSettings.ToolPhysics },
                 new BoolRow { Label = L("Extended body physics", "Erweiterte Körperphysik"), Entry = VrSettings.BodyPhysics },
-                new SliderRow { Label = L("Body weight (kg)", "Körpergewicht (kg)"), Entry = VrSettings.BodyWeight, Format = "0", Step = 5f },
                 new SliderRow { Label = L("Tool weight (kg)", "Werkzeuggewicht (kg)"), Entry = VrSettings.ToolWeight, Format = "0", Step = 1f },
                 Header(L("Graphics", "Grafik")),
                 new SliderRow { Label = L("Render resolution", "Renderauflösung"), Entry = VrSettings.ResolutionScale, Format = "0.00" },
