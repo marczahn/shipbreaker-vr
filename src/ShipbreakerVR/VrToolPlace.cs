@@ -22,6 +22,9 @@ namespace ShipbreakerVR
 
         public static bool On => Positioning != null && Positioning.Value;
 
+        // For the tests: the stored places, so they can try the mod's own.
+        internal static ConfigEntry<string>[] PlaceEntries => new[] { GrappleHold.Entry, DetonatorHold.Entry };
+
         public static void Bind()
         {
             Positioning = VrSettings.Bind("Justierung", "WerkzeugPositionAnpassen", false,

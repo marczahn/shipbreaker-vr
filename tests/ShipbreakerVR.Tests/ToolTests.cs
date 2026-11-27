@@ -46,8 +46,29 @@ namespace ShipbreakerVR.Tests
         }
     }
 
-    public class ToolBeltTests
+    public class ToolBeltTests : System.IDisposable
     {
+        // The zones around the mod's own places of the tools: Raik's places, the standard since 2026-11-27, are left
+        // empty while these run (the settings bound once for all tests, SettingsTests).
+        private readonly System.Collections.Generic.List<(BepInEx.Configuration.ConfigEntry<string> Entry, string Value)> stored =
+            new System.Collections.Generic.List<(BepInEx.Configuration.ConfigEntry<string>, string)>();
+
+        public ToolBeltTests()
+        {
+            SettingsTests.Bind();
+            foreach (var entry in VrToolPlace.PlaceEntries)
+                if (entry != null)
+                {
+                    stored.Add((entry, entry.Value));
+                    entry.Value = "";
+                }
+        }
+
+        public void Dispose()
+        {
+            foreach (var (entry, value) in stored) entry.Value = value;
+        }
+
         [Theory]
         [InlineData(0f, 0f)]
         [InlineData(0.25f, 0.25f)]
