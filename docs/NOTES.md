@@ -1627,3 +1627,12 @@ aiming and climbing for everyone. Ask Raik before the release.
   no slider; `VrClimb.BodyMass` is 100 kg with extended body physics, otherwise the game's 50 kg, also with extended
   world physics (before, world physics gave the 100 kg). Throwing, the tool's line, pushing parts and the climbing
   momentum go by it; the arm and catch forces of climbing keep their own 100 kg (`ClimbContact`).
+- The local mirror washed out light red (Raik's screenshot 2026-11-27): it copies a loaded HDRP/Unlit material, and
+  that time it was the additive glow `M_FX_Glow_Red_01`; with its keywords gone its blend states stayed, so the
+  mirror's picture was added onto the bay. `Mirror.Look` now prefers an opaque one and makes the copy opaque
+  (surface type, blend, depth write, queue Geometry). Log "Local suit: mirror ... made opaque".
+- Tool places as Raik fitted them, the standard (2026-11-27, "a little more comfortable for the hands"):
+  `SprengsatzHaltung` "-15.6 -2.5 2.9 / -21.8 -142.2 -10.4" (before empty), `ZuenderHaltung` "-2.7 -9.8 -3.3 / 18.1
+  -8.9 6.0" (before "-1.8 -13.0 -3.3 / 15.7 -20.5 -5.5"), `GreifhakenPlatz` "33.0 -72.2 -10.4 / 58.8 11.0 28.2" and
+  `ZuenderPlatz` "-27.1 -76.1 3.4 / 44.2 41.4 17.5" (before empty, the mod's own places). Cutter and grapple in the
+  hand were already his. Stored entries stay as they are; deleting one gives the new standard.

@@ -28,9 +28,10 @@ namespace ShipbreakerVR
                 ("Squeeze the grip at the grapple on the right hip or the detonator on the left to take hold of the tool itself instead of drawing it; move it where you like it, and where you let go it stays, its grip zone with it. Switch it off when they hang right.",
                     "Grip am Greifhaken an der rechten Hüfte oder am Zünder an der linken greift das Werkzeug selbst, statt es zu ziehen; bewege es, wohin du es haben willst. Wo du loslässt, bleibt es, sein Griffbereich mit ihm. Danach wieder ausschalten."),
                 "The places are stored in the entries below; delete an entry to get the mod's place back.");
-            GrappleHold.Entry = VrSettings.Bind("Justierung", "GreifhakenPlatz", "",
+            // As Raik placed them in the headset, the standard since 2026-11-27 (before, empty: the mod's own places).
+            GrappleHold.Entry = VrSettings.Bind("Justierung", "GreifhakenPlatz", "33.0 -72.2 -10.4 / 58.8 11.0 28.2",
                 "Where the grapple hangs on the body: its body's middle in centimeters from the eye, in the axes the belt is measured in (x right, y up, z forward, as when looking down at the hip), then its turn against the body's heading in degrees (pitch, yaw, roll), as \"x y z / pitch yaw roll\". Stored while placing the tools; empty for the mod's place.");
-            DetonatorHold.Entry = VrSettings.Bind("Justierung", "ZuenderPlatz", "",
+            DetonatorHold.Entry = VrSettings.Bind("Justierung", "ZuenderPlatz", "-27.1 -76.1 3.4 / 44.2 41.4 17.5",
                 "Where the charges' detonator hangs on the body: its middle in centimeters, in the axes its zone is measured in (x right, y up, z forward), then its turn against the body's heading in degrees (pitch, yaw, roll), as \"x y z / pitch yaw roll\". Stored while placing the tools; empty for the mod's place.");
         }
 

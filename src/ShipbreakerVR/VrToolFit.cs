@@ -263,11 +263,13 @@ namespace ShipbreakerVR
             foreach (var fit in new[] { GrappleRight, GrappleLeft, CutterRight, CutterLeft, ChargeRight })
                 fit.Entry = VrSettings.Bind("Justierung", fit.Key, fit.Default,
                     "Where the tool sits in that hand: its mount relative to the wrist in centimeters (x right, y up, z forward along the controller), then its turn in degrees (pitch, yaw, roll), as \"x y z / pitch yaw roll\".");
-            ChargeHold.Entry = VrSettings.Bind("Justierung", "SprengsatzHaltung", "",
+            // The charge's hold, the detonator's and their places on the body (VrToolPlace) as Raik fitted them in the
+            // headset, the standard as he asked on 2026-11-27 ("a little more comfortable for the hands"); before, the
+            // charge's hold and the places empty (the mod's own), the detonator "-1.8 -13.0 -3.3 / 15.7 -20.5 -5.5".
+            ChargeHold.Entry = VrSettings.Bind("Justierung", "SprengsatzHaltung", "-15.6 -2.5 2.9 / -21.8 -142.2 -10.4",
                 "How a demo charge placed by hand lies in the right hand (the left hand's is the mirror image): its middle from the grip in centimeters (x right, y up, z forward along the controller), then its turn in degrees, as \"x y z / pitch yaw roll\". Stored while fitting the tools; empty for the mod's own hold.");
-            // As Raik fitted it in the headset on 2026-11-18, the standard for new installs as he asked; before, empty
-            // (the game's own place), which stays for whoever has that stored.
-            DetonatorHold.Entry = VrSettings.Bind("Justierung", "ZuenderHaltung", "-1.8 -13.0 -3.3 / 15.7 -20.5 -5.5",
+            // An empty entry still means the game's own place, for whoever has that stored.
+            DetonatorHold.Entry = VrSettings.Bind("Justierung", "ZuenderHaltung", "-2.7 -9.8 -3.3 / 18.1 -8.9 6.0",
                 "Where the charges' detonator sits in the right hand (the left hand's is the mirror image): from the wrist in centimeters in the hand's own axes (x to the palm's side, y to the thumb's side, z along the knuckles), then its turn in degrees, as \"x y z / pitch yaw roll\". Stored while fitting the tools; empty for the game's own place, delete the entry for the mod's.");
         }
 
