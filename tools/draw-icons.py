@@ -19,7 +19,7 @@ def dot(d, p, w, color):
     d.ellipse([p[0]-w/2, p[1]-w/2, p[0]+w/2, p[1]+w/2], fill=color)
 
 # controller seen from the side, front to the left, as a filled silhouette; its button in the accent colour, straight,
-# on the middle of the grip along it (Raik, 2026-11-27: not the curved trigger any more)
+# on the grip's front edge halfway down (Raik, 2026-11-27: not the curved trigger any more)
 img = Image.new("RGBA", (N, N), CLEAR); d = ImageDraw.Draw(img)
 # head
 d.rounded_rectangle([260, 300, 760, 450], radius=75, fill=W)
@@ -29,11 +29,12 @@ dot(d, (730, 915), 140, W)
 # thumbstick on top of the head
 d.rectangle([600, 240, 640, 310], fill=W)
 d.rounded_rectangle([565, 215, 675, 260], radius=20, fill=W)
-# the button: a straight bar along the grip's axis, halfway down it, with a dark rim
-top, bottom = (650, 400), (730, 915)
+# the button: a short straight bar (a third of what it was), halfway down the grip on its front edge, half in front of
+# it and half on it (Raik, 2026-11-27), with a dark rim
+top, bottom = (560, 400), (660, 930)
 ax = (bottom[0] - top[0], bottom[1] - top[1]); n = math.hypot(*ax); ax = (ax[0]/n, ax[1]/n)
 mid = (top[0] + ax[0]*0.5*n, top[1] + ax[1]*0.5*n)
-half = 120
+half = 40
 a = (mid[0] - ax[0]*half, mid[1] - ax[1]*half); b = (mid[0] + ax[0]*half, mid[1] + ax[1]*half)
 for width, color in ((110, CLEAR), (74, ACC)):
     d.line([a, b], fill=color, width=width)
@@ -41,10 +42,10 @@ for width, color in ((110, CLEAR), (74, ACC)):
 # press marks in front of the grip, pointing at the button
 out_dir = (-ax[1], ax[0]) if -ax[1] < 0 else (ax[1], -ax[0])
 for k in (-1, 0, 1):
-    along = (mid[0] + ax[0]*k*120, mid[1] + ax[1]*k*120)
-    tilt = math.radians(-k*12)
+    along = (mid[0] + ax[0]*k*90, mid[1] + ax[1]*k*90)
+    tilt = math.radians(-k*18)
     dx = out_dir[0]*math.cos(tilt) - out_dir[1]*math.sin(tilt); dy = out_dir[0]*math.sin(tilt) + out_dir[1]*math.cos(tilt)
-    d.line([(along[0] + dx*175, along[1] + dy*175), (along[0] + dx*275, along[1] + dy*275)], fill=ACC, width=44)
+    d.line([(along[0] + dx*110, along[1] + dy*110), (along[0] + dx*200, along[1] + dy*200)], fill=ACC, width=44)
 save(img, "trigger")
 
 # roll: an arc bowing downwards, its heads pointing up left and up right

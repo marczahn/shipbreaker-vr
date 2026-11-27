@@ -1732,5 +1732,6 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
   with trigger + plus before them unless their line already shows the trigger's prompt; X and Y for the
   left-handed. ActivateScanner's lines say "Scanner: rechte Helmseite". Untested in the headset.
 - The tutorial tips' controller pictogram (Icons/trigger.png, tools/draw-icons.py): its button no longer the curved
-  trigger but a straight bar on the middle of the grip, along it, with the press marks in front (Raik 2026-11-27, at the
+  trigger but a short straight bar on the grip's front edge halfway down, half in front of it, a third of the first
+  try's length, with the press marks in front (Raik 2026-11-27, at the
   grapple's tip about holding on).
