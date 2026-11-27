@@ -179,13 +179,15 @@ namespace ShipbreakerVR
         }
 
         // The same for any screen in the room, given its middle and how it is turned (forward away from the viewer).
+        // Fixed in the room like the menus (Raik, 2026-11-27: turned towards the head it turned a little with each turn
+        // of it): parallel to the screen, just in front of it, its size from where one rests there (head: the resting
+        // head, VrCamera.RestingHead, not the tracked one), so it does not move when the head does.
         public static void LargeScreen(Vector3 glass, Quaternion turned, Vector3 head, float aspect, out Vector3 center, out Quaternion rotation, out Vector2 size)
         {
-            var toGlass = glass - head;
-            var distance = Mathf.Max(0.2f * VrCamera.WorldScale, toGlass.magnitude - 0.03f * VrCamera.WorldScale);
-            var forward = toGlass.sqrMagnitude > 1e-6f ? toGlass.normalized : turned * Vector3.forward;
-            rotation = Quaternion.LookRotation(forward, turned * Vector3.up);
-            center = head + forward * distance;
+            var forward = turned * Vector3.forward;
+            rotation = turned;
+            center = glass - forward * (0.03f * VrCamera.WorldScale);
+            var distance = Mathf.Max(0.2f * VrCamera.WorldScale, Vector3.Dot(center - head, forward));
             var width = distance * VrSettings.MenuWidth.Value / Mathf.Max(0.1f, VrSettings.MenuDistance.Value);
             size = new Vector2(width, width / aspect);
         }

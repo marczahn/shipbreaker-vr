@@ -317,7 +317,7 @@ namespace ShipbreakerVR
             if (largeScreen)
             {
                 onMonitor = true;
-                VrHab.LargeScreen(monitor, head.position, aspect, out var at, out var facing, out var large);
+                VrHab.LargeScreen(monitor, vr.RestingHead, aspect, out var at, out var facing, out var large);
                 screenMatrix = Matrix4x4.TRS(at, facing, new Vector3(large.x, large.y, 1f));
                 return;
             }
