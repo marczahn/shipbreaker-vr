@@ -248,6 +248,7 @@ namespace ShipbreakerVR
             }
             LogChanges();
             ReelWatch();
+            ReelLength();
         }
 
         // The game switches the grapple's reeling in on and off only at the moment its action is pressed or released
@@ -265,6 +266,7 @@ namespace ShipbreakerVR
         private static void ReelWatch()
         {
             var hook = GameRefs.Grapple;
+            if (hook != null && !hook.IsRetracting) ReelStart(hook);
             if (hook == null || !hook.IsRetracting)
             {
                 reelLooseSince = -1f;
@@ -290,6 +292,54 @@ namespace ShipbreakerVR
             if (reelLogs++ < 20)
                 Plugin.Log.LogWarning($"Tool control: the grapple went on reeling in with its button released, stopped (grapple {(second ? "as the second tool" : "as the game's tool")} in the {(hand != null ? hand.Name : "no")} hand, "
                     + $"left hand {VrHand.Left.State}, right hand {VrHand.Right.State}, B {(hand != null && hand.Input.Secondary.Down ? "down" : "up")}, trigger {(hand != null && hand.Trigger ? "down" : "up")})");
+        }
+
+        // The other way round: a press the game did not get (it reads the edge only once the rope is fixed, so B pressed
+        // as the rope still flew was lost, and B did nothing until pressed again; Raik, 2026-11-27): while the hand that
+        // works the grapple holds its reel and the rope is fixed, the game reels.
+        private static void ReelStart(GrapplingHook hook)
+        {
+            var rope = RopeOf(hook);
+            if (rope == null || !rope.IsInitialized || rope.IsTraveling) return;
+            var second = VrDualTools.Second == EquipmentController.Equipment.GrappleHook;
+            var hand = Of(second ? VrHand.SecondHand : VrHand.GameToolHand);
+            if (hand == null || !hand.Now[(int)Action.Retract]) return;
+            Reeling(hook) = true;
+            if (reelLogs++ < 20) Plugin.Log.LogInfo("Tool control: the grapple's reel held but not reeling (its press came before the rope was fixed), reeling now");
+        }
+
+        // The rope pulls as long as the reel is held, no longer (Raik, 2026-11-27: grappled to the station's wall, he
+        // went on speeding up with the button let go, and at times pressed long for nothing). The game shortens the
+        // rope's length while reeling (LaserRope.HandleRopeRetraction) and pulls with a spring whenever the ends are
+        // farther apart than that (GetPositionForceInfo), by the whole way to the end: reeled faster than one moves, the
+        // length runs ahead, and after letting go one is pulled on until within it again; pressed again, nothing pulls
+        // until the length has come down below how far one is. So here the length is set to how far apart the ends are
+        // when reeling stops (if shorter) and when it starts (if longer); what speed one has stays.
+        private static readonly AccessTools.FieldRef<GrapplingHook, LaserRope> RopeOf = AccessTools.FieldRefAccess<GrapplingHook, LaserRope>("m_GrapplingRope");
+        private static readonly AccessTools.FieldRef<LaserRope, float> RopeLength = AccessTools.FieldRefAccess<LaserRope, float>("mTotalLength");
+        private const float ShortestRope = 0.5f;
+        private static bool wasReeling;
+
+        private static void ReelLength()
+        {
+            var hook = GameRefs.Grapple;
+            var rope = hook != null ? RopeOf(hook) : null;
+            var fixedRope = rope != null && rope.IsInitialized && !rope.IsTraveling
+                && rope.StartAnchorData.Anchor != null && rope.EndAnchorData.Anchor != null;
+            var reeling = fixedRope && hook.IsRetracting;
+            if (fixedRope && reeling != wasReeling)
+            {
+                var apart = Vector3.Distance(rope.StartAnchorData.WorldAttachPoint, rope.EndAnchorData.WorldAttachPoint);
+                var length = RopeLength(rope);
+                var to = reeling ? Mathf.Min(length, Mathf.Max(ShortestRope, apart)) : Mathf.Max(length, apart);
+                if (Mathf.Abs(to - length) > 0.01f)
+                {
+                    RopeLength(rope) = to;
+                    if (reelLogs++ < 40)
+                        Plugin.Log.LogInfo($"Tool control: the grapple {(reeling ? "starts" : "stops")} reeling, its rope {length:0.00} m long for ends {apart:0.00} m apart, set to {to:0.00} m (mass ratio {hook.GrappledMassRatio:0.00})");
+                }
+            }
+            wasReeling = reeling;
         }
 
         // The tool actions of one hand's buttons, for the tool it holds.

@@ -133,7 +133,13 @@ interacting, the grapple and the "entity of interest".
   (the right one by default; on the left X stands for A and Y for B), the right stick stays with turning. Trigger =
   `GrappleFire`/`CutterFire`/`DemoChargeFire`; A = `Interact`, or `Throw` if the trigger was held when A went down (the
   grapple charges while `Throw` is held and throws on release); B with the trigger held = `RetractionModifier` (reel in;
-  the game only knows reeling in at a fixed speed, there is no reeling out); B tap = `ToolMode` (sent on release); B
+  the game only knows reeling in at a fixed speed, there is no reeling out; the rope pulls only while B is held: Raik, 2026-11-27, grappled
+  to the station's wall he went on speeding up with B let go, and at times pressed long for nothing. The game shortens
+  `LaserRope.mTotalLength` by its retract speed while reeling and pulls with a spring whenever the ends are farther apart
+  (`GetPositionForceInfo`); reeled faster than one moves, the length runs ahead, so after letting go it pulls on, and
+  pressed again nothing pulls until the length is below how far one is. `VrToolInput.ReelLength` sets the length to the
+  ends' distance when reeling stops (if shorter) and starts (if longer, at least 0.5 m); `ReelStart` reels while B is
+  held with the rope fixed, as the game reads the press only as an edge after the rope is fixed); B tap = `ToolMode` (sent on release); B
   held 0.4 s = `PlaceTether` held until B is released (the tether runs from where the hand points at the start to where
   it points at the release), or one `RecallTethers` press if the hand points at nothing. On the grapple B tap switches
   the mod's own tether mode instead (`VrTetherMode`, Marc's wish, like the cutter's mode switch): there the trigger
