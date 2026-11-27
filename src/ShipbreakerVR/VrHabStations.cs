@@ -116,6 +116,7 @@ namespace ShipbreakerVR
         {
             if (home == null) return;
             HideCallMarker();
+            SpeakerLight();
             if (answering)
             {
                 Answering();
@@ -340,6 +341,42 @@ namespace ShipbreakerVR
         // off until the call is over.
         private static Hab3DController answered;
         private static GameObject callMarker;
+
+        // Raik (2026-11-27): while anyone speaks in the station, the intercom's light is on as in a call (the game's
+        // Conversation state, no waypoint), so one sees the talk comes in over it. Only from the light being off, and back
+        // off when the talk ends, unless the game set the light to something else meanwhile (a call waiting, the call).
+        private static readonly AccessTools.FieldRef<NotificationLightController, NotificationLightState> LightState =
+            AccessTools.FieldRefAccess<NotificationLightController, NotificationLightState>("m_State");
+        private const float SpeakerCheck = 0.2f;
+        private static float nextSpeakerCheck;
+        private static NotificationLightController litLight;
+
+        private static void SpeakerLight()
+        {
+            if (Time.unscaledTime < nextSpeakerCheck) return;
+            nextSpeakerCheck = Time.unscaledTime + SpeakerCheck;
+            var controller = VrHab.Controller;
+            var light = controller != null ? CommsLight(controller) : null;
+            if (litLight != null && litLight != light) litLight = null;
+            if (light == null) return;
+            var speaking = VrSkipHabLine.Speaker() != null;
+            if (litLight != null)
+            {
+                if (LightState(light) != NotificationLightState.Conversation) litLight = null;
+                else if (!speaking)
+                {
+                    light.SetState(NotificationLightState.Off);
+                    litLight = null;
+                }
+                return;
+            }
+            if (!speaking || LightState(light) != NotificationLightState.Off) return;
+            light.SetState(NotificationLightState.Conversation);
+            litLight = light;
+            if (speakerLogs++ < 5) Plugin.Log.LogInfo("Hab: someone speaks, the intercom's light is on");
+        }
+
+        private static int speakerLogs;
 
         private static void HideCallMarker()
         {

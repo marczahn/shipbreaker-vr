@@ -1695,3 +1695,4 @@ aiming and climbing for everyone. Ask Raik before the release.
   2026-11-27): the game's timelines place lines as clips of their length. Now when Y ends a line, each timeline playing a
   speech clip runs at 25 times its speed to that clip's end (VrSkipTimelines, not a jump, so its signals and
   activations in between still happen); the after-shift scene's own timeline still moves on to its next line as before.
+- While anyone speaks in the station the intercom's light is on in the game's Conversation state (Raik 2026-11-27,  flavor: the talk comes in over it), without the waypoint; only from Off, and back to Off when the talk ends unless the  game set another state meanwhile (VrHabStations.SpeakerLight, checked every 0.2 s; log "Hab: someone speaks ...").
