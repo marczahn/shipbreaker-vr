@@ -1618,3 +1618,8 @@ aiming and climbing for everyone. Ask Raik before the release.
   firmly held part (`VrClimb.Throw`), a tool let go (`VrLooseTools`, its 5 kg or the detonator's 1.5 kg), a demo
   charge let go by hand (`VrChargeByHand.ThrowFrom`, 1.6 kg). While a hand holds on to something the hold takes it.
   Log "Recoil: ...".
+- Body weight, an option of its own under the body physics (`Steuerung/Koerpergewicht`, 100 kg, 50–150; Raik
+  2026-11-27: "the body weight as its own option, so that throwing always acts on a 100 kg body"). With extended
+  world or body physics the body weighs that everywhere the mod pushes or pulls it (`VrClimb.BodyMass`: throwing,
+  the tool's line, climbing, pushing parts); without either the game's 50 kg. Before, body physics alone left the
+  game's 50 kg, so a throw pushed twice as hard as with world physics.

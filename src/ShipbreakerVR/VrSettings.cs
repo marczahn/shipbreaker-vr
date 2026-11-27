@@ -42,6 +42,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<bool> BracedPush;
         public static ConfigEntry<bool> ToolPhysics;
         public static ConfigEntry<bool> BodyPhysics;
+        public static ConfigEntry<float> BodyWeight;
         public static ConfigEntry<bool> FreeWalking;
         public static ConfigEntry<VrHelmet.Mode> Helmet;
         public static ConfigEntry<VrResolution.AntiAliasing> AntiAliasing;
@@ -286,14 +287,18 @@ namespace ShipbreakerVR
                 "In newtons.", Between(100f, 5000f));
             // Extended world physics (the key's old name kept, so the setting survives the rename).
             BracedPush = Bind("Steuerung", "SchwereTeileSchieben", false,
-                ("Extended world physics. On: holding on to something fixed, the other hand moves heavy parts up to 5 t with a limited force of 250 N, with each hand on a heavy part they push each other apart, and your body weighs 100 kg in these pulls and pushes. Off: the game's own physics, where such parts do not move.",
-                    "Erweiterte Weltphysik. An: Hältst du dich an etwas Festem, bewegt die andere Hand schwere Teile bis 5 t mit begrenzter Kraft von 250 N, mit je einer Hand an zwei schweren Teilen drückst du sie auseinander, und dein Körper wiegt dabei 100 kg. Aus: die Physik des Spiels, in der solche Teile sich nicht bewegen."));
+                ("Extended world physics. On: holding on to something fixed, the other hand moves heavy parts up to 5 t with a limited force of 250 N, with each hand on a heavy part they push each other apart, and your body weighs as much as Body weight (100 kg) in these pulls and pushes. Off: the game's own physics, where such parts do not move.",
+                    "Erweiterte Weltphysik. An: Hältst du dich an etwas Festem, bewegt die andere Hand schwere Teile bis 5 t mit begrenzter Kraft von 250 N, mit je einer Hand an zwei schweren Teilen drückst du sie auseinander, und dein Körper wiegt dabei so viel wie unter Körpergewicht eingestellt (100 kg). Aus: die Physik des Spiels, in der solche Teile sich nicht bewegen."));
             ToolPhysics = Bind("Steuerung", "ErweiterteWerkzeugphysik", false,
                 ("Extended tool physics. On: the cutter and the grapple bump into things instead of going through them and have weight (Tool weight); let go away from their place on the body they float on a line to the hip, and a demo charge let go floats where it is, until you put them back by hand. Off: as in the game, and a tool or a demo charge let go is back at its place on the body.",
                     "Erweiterte Werkzeugphysik. An: Cutter und Grappler stoßen an, statt durch Dinge hindurchzugehen, und haben Gewicht (Werkzeuggewicht); abseits ihres Platzes am Körper losgelassen schweben sie an einer Leine zur Hüfte, und ein losgelassener Sprengsatz schwebt, wo er ist, bis du sie von Hand zurücksteckst. Aus: wie im Spiel, und ein losgelassenes Werkzeug oder ein losgelassener Sprengsatz ist wieder an seinem Platz am Körper."));
             BodyPhysics = Bind("Steuerung", "ErweiterteKoerperphysik", false,
-                ("Extended body physics. On: what you throw pushes your body back as much as it takes along (your body weighs 50 kg, 100 kg with extended world physics): a tool thrown forward pushes you gently back, and its line catching it pulls you forward again. While a hand holds on to something, the hold takes the push. Off: throwing does not move you.",
-                    "Erweiterte Körperphysik. An: Was du wirfst, stößt deinen Körper so weit zurück, wie es Schwung mitnimmt (dein Körper wiegt 50 kg, mit erweiterter Weltphysik 100 kg): Ein nach vorn geworfenes Werkzeug schiebt dich leicht zurück, fängt die Leine es auf, zieht sie dich wieder nach vorn. Hält sich eine Hand irgendwo fest, nimmt der Halt den Stoß auf. Aus: Werfen bewegt dich nicht."));
+                ("Extended body physics. On: what you throw pushes your body back as much as it takes along (as heavy as Body weight, 100 kg, in everything it does: throwing, the tool's line, climbing): a tool thrown forward pushes you gently back, and its line catching it pulls you forward again. While a hand holds on to something, the hold takes the push. Off: throwing does not move you.",
+                    "Erweiterte Körperphysik. An: Was du wirfst, stößt deinen Körper so weit zurück, wie es Schwung mitnimmt (dein Körper wiegt dabei überall so viel wie unter Körpergewicht eingestellt, 100 kg: beim Werfen, an der Werkzeugleine, beim Hangeln): Ein nach vorn geworfenes Werkzeug schiebt dich leicht zurück, fängt die Leine es auf, zieht sie dich wieder nach vorn. Hält sich eine Hand irgendwo fest, nimmt der Halt den Stoß auf. Aus: Werfen bewegt dich nicht."));
+            BodyWeight = Bind("Steuerung", "Koerpergewicht", 100f,
+                ("With extended body or world physics: how heavy your body is, with suit, wherever something pushes or pulls it (throwing, the tool's line, climbing, pushing parts). Without either, the game's own 50 kg.",
+                    "Mit erweiterter Körper- oder Weltphysik: wie schwer dein Körper mit Anzug ist, überall, wo etwas ihn stößt oder zieht (Werfen, Werkzeugleine, Hangeln, Teile schieben). Ohne beide die 50 kg des Spiels."),
+                "In kg.", Between(50f, 150f));
             ToolWeight = Bind("Steuerung", "Werkzeuggewicht", 5f,
                 ("With extended tool physics, how heavy the cutter and the grapple are in your hand: moved fast they lag behind the controller and settle, and your hand stays on them. 0 for none.",
                     "Mit erweiterter Werkzeugphysik: wie schwer Cutter und Grappler in der Hand sind. Schnell bewegt hängen sie dem Controller nach und pendeln aus, deine Hand bleibt an ihnen. 0 für keins."),

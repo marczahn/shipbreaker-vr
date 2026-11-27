@@ -85,8 +85,11 @@ namespace ShipbreakerVR
         // player weighs 50 kg, light for a person in a suit; Raik wants 100 kg (modern materials). Only in these impulses:
         // the rigidbody keeps the game's mass, so thrust, braking and the speed of a push off stay as they were. Without
         // extended world physics the game's mass, as before.
+        // With extended world or body physics the body weighs Body weight (Raik 2026-11-27: one weight for throwing, the
+        // line and the rest), otherwise the game's own.
         private const float ExtendedBodyMass = 100f;
-        private static float BodyMass => VrSettings.BracedPush.Value ? ExtendedBodyMass : player.mass;
+        private static float SetWeight => VrSettings.BodyWeight != null ? Mathf.Max(1f, VrSettings.BodyWeight.Value) : ExtendedBodyMass;
+        private static float BodyMass => VrSettings.BracedPush.Value || VrRecoil.On ? SetWeight : player.mass;
         // Raik, 0.30.1: with realistic climbing the body (ClimbContact.BrakeMass) has inertia (Pull). On a fixed hold each
         // arm speeds the body up with VrSettings.ArmPull and slows it down with VrSettings.CatchForce, both only as far as
         // the hand asks for it: a hand that takes hold and keeps moving back with the body (hand over hand) keeps the
@@ -347,7 +350,7 @@ namespace ShipbreakerVR
         }
 
         // The body's mass as the pulls and pushes take it, for the tug of a tool's line (VrLooseTools).
-        internal static float BodyWeight => player != null ? BodyMass : ExtendedBodyMass;
+        internal static float BodyWeight => player != null ? BodyMass : SetWeight;
 
         private const float ReleaseDrift = 0.05f;   // m/s
         private const float ReleaseTurn = 60f;      // °/s
@@ -965,7 +968,7 @@ namespace ShipbreakerVR
                 motion = player != null ? player.GetComponent<PlayerMotion>() : null;
                 rigPlaced = false;
                 if (player != null && logs++ < 80)
-                    Plugin.Log.LogInfo($"Climbing: player body '{player.name}', {player.mass:0.#} kg ({ExtendedBodyMass:0} kg in the pulls and pushes with extended world physics), interpolation {player.interpolation}");
+                    Plugin.Log.LogInfo($"Climbing: player body '{player.name}', {player.mass:0.#} kg ({SetWeight:0} kg in the pulls and pushes with extended world or body physics), interpolation {player.interpolation}");
                 if (player != null) LogColliders();
             }
             return player != null && rigPlaced;
