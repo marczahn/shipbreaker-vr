@@ -1735,3 +1735,6 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
   trigger but a short straight bar on the grip's front edge halfway down, half in front of it, a third of the first
   try's length, with the press marks in front (Raik 2026-11-27, at the
   grapple's tip about holding on).
+- Tutorial tips: the second pictures for choosing a tool with the tool menu open (the game's second binding, the
+  mouse's; "equip ... (with the tool menu open)") go away altogether (Raik 2026-11-27). Every tutorial prompt is logged
+  once ("Tutorial prompts: '<path>' <set> <action>, line '...'") to find any still left.

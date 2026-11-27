@@ -72,7 +72,7 @@ namespace ShipbreakerVR
 
         private static readonly Dictionary<MonoBehaviour, State> States = new Dictionary<MonoBehaviour, State>();
         private static readonly List<MonoBehaviour> Gone = new List<MonoBehaviour>();
-        private static FieldInfo setField, actionField, targetField, imageField;
+        private static FieldInfo setField, actionField, targetField, imageField, secondaryField;
         private static MethodInfo change;
         private static bool looked;
         private static readonly Dictionary<string, Sprite> Own = new Dictionary<string, Sprite>();
@@ -123,12 +123,26 @@ namespace ShipbreakerVR
                 actionField = AccessTools.Field(type, "m_GameplayAction");
                 targetField = AccessTools.Field(type, "m_SpriteTargetImage");
                 imageField = AccessTools.Field(type, "m_PromptImage");
+                secondaryField = AccessTools.Field(type, "m_ShouldShowSecondaryBinding");
                 change = AccessTools.Method(type, "ChangeControlType");
                 if (setField == null || actionField == null || change == null) Plugin.Log.LogWarning("Tutorial prompts: the game's prompt has no action to read, its pictures stay");
             }
             if (setField == null || actionField == null || change == null) return state;
-            if (setField.GetValue(prompt).ToString() != "Controls_Gameplay" || !InTutorial(prompt.transform)) return state;
+            if (!InTutorial(prompt.transform)) return state;
+            var set = setField.GetValue(prompt).ToString();
+            var secondary = secondaryField != null && secondaryField.GetValue(prompt) is bool b && b;
+            // What each of the tutorial's prompts is, once, to find the ones still to be made for VR.
+            if (seen++ < 80)
+                Plugin.Log.LogInfo($"Tutorial prompts: '{VrUtil.Path(prompt.transform)}' {set} {actionField.GetValue(prompt)}{(secondary ? " (second binding)" : "")}, line '{LineText(prompt.transform)}'");
+            if (set != "Controls_Gameplay") return state;
             state.Action = (GameplayActions.GameplayActionSet)actionField.GetValue(prompt);
+            // Raik (2026-11-27): the tips' second pictures for choosing a tool with the tool menu open (the mouse's, as
+            // the game shows a second binding) go away altogether; the hands take tools from their places.
+            if (secondary && Chooses(state.Action))
+            {
+                state.Kind = Kind.ToolMenu;
+                return state;
+            }
             switch (state.Action)
             {
                 case GameplayActions.GameplayActionSet.RollBodyLeft:
@@ -167,6 +181,24 @@ namespace ShipbreakerVR
             }
             if (state.Kind != Kind.None && logs++ < 30) Plugin.Log.LogInfo($"Tutorial prompts: the tip's picture for {state.Action} ('{VrUtil.Path(prompt.transform)}') shows the controllers while VR runs");
             return state;
+        }
+
+        private static int seen;
+
+        private static bool Chooses(GameplayActions.GameplayActionSet action) =>
+            action == GameplayActions.GameplayActionSet.SelectCutter || action == GameplayActions.GameplayActionSet.SelectGrapple
+            || action == GameplayActions.GameplayActionSet.SelectDemoCharge || action == GameplayActions.GameplayActionSet.ActivateScanner
+            || action == GameplayActions.GameplayActionSet.ToolMenu || action == GameplayActions.GameplayActionSet.ChangeEquipment
+            || action == GameplayActions.GameplayActionSet.EquipmentSelectionExtra01;
+
+        // The words in a prompt's line, for the log.
+        private static string LineText(Transform prompt)
+        {
+            var line = prompt.parent != null ? prompt.parent : prompt;
+            var said = new System.Text.StringBuilder();
+            foreach (var text in line.GetComponentsInChildren<TMP_Text>(true))
+                if (!string.IsNullOrEmpty(text.text)) said.Append(said.Length > 0 ? " | " : "").Append(text.text.Replace("\n", " "));
+            return said.ToString();
         }
 
         // A prompt of the tutorial's tips (PRF_A1_TUT_..._Tip, or a popup named TUT_...).
