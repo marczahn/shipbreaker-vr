@@ -16,15 +16,50 @@ namespace ShipbreakerVR
         private const float Lag = 0.04f;
         // The cutter with the second hand on it (VrToolSupport) is steadied more (Raik, 2026-11-18: the other way round
         // from the grapple, which the second hand makes quicker; so a precise cut does not stray onto delicate parts):
-        // tremor within a wider angle is filtered out, and it follows more slowly.
-        private const float TwoHandTremor = 1.5f;
-        private const float TwoHandLag = 0.10f;
+        // tremor within a wider angle is filtered out, and it follows more slowly. Raik 2026-11-27: with 1.5° and 0.1 s
+        // and the place not steadied at all it moved "just as without the hand"; now clearly slower and steadier, its
+        // place too (Place): within 3° and 2 cm hardly at all, beyond with a lag of a third of a second.
+        private const float TwoHandTremor = 3f;
+        private const float TwoHandLag = 0.30f;
+        private const float TwoHandPlaceTremor = 0.02f;
+        private const float TwoHandPlaceLag = 0.25f;
 
         private class Filter
         {
             public bool Running;
             public int Frame;
             public Quaternion Rotation;
+            public bool Placing;
+            public int PlaceFrame;
+            public Vector3 Position;
+        }
+
+        private static int placeLogs;
+
+        // The cutter's place this frame, in tracking space, for the controller's grip raw: steadied while the second
+        // hand holds it, else raw. Asked many times per frame.
+        public static Vector3 Place(VrInput.Hand hand, EquipmentController.Equipment tool, Vector3 raw)
+        {
+            var filter = hand.IsLeft ? Left : Right;
+            if (tool != EquipmentController.Equipment.CuttingTool || !VrToolSupport.Supported(hand))
+            {
+                filter.Placing = false;
+                return raw;
+            }
+            if (filter.Placing && filter.PlaceFrame == Time.frameCount) return filter.Position;
+            if (!filter.Placing || filter.PlaceFrame < Time.frameCount - 1)
+            {
+                filter.Placing = true;
+                filter.PlaceFrame = Time.frameCount;
+                filter.Position = raw;
+                if (placeLogs++ < 20) Plugin.Log.LogInfo($"Tool steady: the cutter in the {hand.Name} hand steadied by the other hand (turn within {TwoHandTremor}°, place within {TwoHandPlaceTremor * 100f:0} cm, lag {TwoHandLag:0.00} s)");
+                return raw;
+            }
+            filter.PlaceFrame = Time.frameCount;
+            var scale = VrCamera.WorldScale;
+            var share = Share((raw - filter.Position).magnitude, TwoHandPlaceTremor * scale) * (1f - Mathf.Exp(-Time.unscaledDeltaTime / TwoHandPlaceLag));
+            filter.Position = Vector3.Lerp(filter.Position, raw, share);
+            return filter.Position;
         }
 
         private static readonly Filter Left = new Filter();

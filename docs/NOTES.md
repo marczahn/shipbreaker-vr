@@ -1636,3 +1636,8 @@ aiming and climbing for everyone. Ask Raik before the release.
   -8.9 6.0" (before "-1.8 -13.0 -3.3 / 15.7 -20.5 -5.5"), `GreifhakenPlatz` "33.0 -72.2 -10.4 / 58.8 11.0 28.2" and
   `ZuenderPlatz` "-27.1 -76.1 3.4 / 44.2 41.4 17.5" (before empty, the mod's own places). Cutter and grapple in the
   hand were already his. Stored entries stay as they are; deleting one gives the new standard.
+- The cutter with the second hand on it, steadied for real (Raik 2026-11-27: "it moves just as without the hand"):
+  before only its turn, within 1.5° and with 0.1 s lag, little more than with one hand (0.5°, 0.04 s), and its place
+  not at all. Now (`VrToolSteady`) the turn within 3° and with 0.3 s lag, and the place too (`Place`, within 2 cm,
+  0.25 s lag, before the tool's weight and collision), so it moves clearly slower and a precise cut keeps its line.
+  Still only with extended tool physics (the second hand takes hold of the tool only then). Log "Tool steady: ...".
