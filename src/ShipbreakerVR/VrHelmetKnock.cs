@@ -18,8 +18,10 @@ namespace ShipbreakerVR
     // itself (its stop is held back inside the Wwise event).
     // In VR with both controllers:
     // - The game's knock is not played: the hand is the player's. Knocking by hand is: either hand comes against the
-    //   helmet (into Reach of the head, moving towards it). It ends the malfunction there and then: the event's sounds
-    //   fade out, its stop and the music's way back to the helmet are posted, the HUD's warning goes off.
+    //   helmet (into Reach of the head, moving towards it). Each knock sounds as the game's animation does
+    //   ('sfx_helmet_radio_knock', on the game's master SFX object) with a buzz; the second one (Raik, 2026-11-28:
+    //   "two blows, and a knock heard both times") ends the malfunction there and then: the event's sounds fade out,
+    //   its stop and the music's way back to the helmet are posted, the HUD's warning goes off.
     // - Not knocked, it ends by itself when the game would have knocked, as before, only without the knock.
     // - The hiss is a little louder (Louder): the event plays on an emitter of the mod's at the game's own.
     // - Until a player has once knocked by hand (Hinweise/FunkKlopfenGelernt), a line under the HUD's warning tells
@@ -33,6 +35,10 @@ namespace ShipbreakerVR
         private const string StartName = "mus_fastTakeover_start";
         private const string StopName = "mus_fastTakeover_stop";
         private const string BackName = "mix_music_sendToHelmet_andRestartTimeline";
+        private const string KnockName = "sfx_helmet_radio_knock";
+        // Knocks it takes, and the least time between two.
+        private const int Knocks = 2;
+        private const float Again = 0.15f;
         private const uint Start = 4110815201;
         // The hiss's loudness, as a multiple of the game's.
         private const float Louder = 1.5f;
@@ -53,6 +59,9 @@ namespace ShipbreakerVR
         private static float since;
         private static GameObject emitter;
         private static GameObject postedOn;
+        private static GameObject master;
+        private static int knocked;
+        private static float knockedAt;
         private static readonly float[] Distance = { -1f, -1f };
         private static GameObject hint;
         private static Sprite figure;
@@ -83,6 +92,7 @@ namespace ShipbreakerVR
             if (!Waiting(__instance) || grab == __instance) return;
             grab = __instance;
             since = Time.time;
+            knocked = 0;
             Distance[0] = Distance[1] = -1f;
             if (logs++ < 20) Plugin.Log.LogInfo($"Helmet knock: the radio malfunctions{(ByHand ? ", a knock of the hand against the helmet ends it" : "")}");
         }
@@ -126,6 +136,7 @@ namespace ShipbreakerVR
             {
                 if (__0 != Start || posting || __1 == null) return;
                 postedOn = __1;
+                master = __1;
                 if (!ByHand) return;
                 try
                 {
@@ -170,11 +181,11 @@ namespace ShipbreakerVR
             var vr = VrCamera.Instance;
             if (vr == null) return;
             var head = vr.transform.localPosition;
-            if (Knocks(VrInput.Left, 0, head) || Knocks(VrInput.Right, 1, head)) return;
+            if (Knocking(VrInput.Left, 0, head) || Knocking(VrInput.Right, 1, head)) return;
             ShowHint(!Learned && Time.time - since >= HintAfter);
         }
 
-        private static bool Knocks(VrInput.Hand input, int index, Vector3 head)
+        private static bool Knocking(VrInput.Hand input, int index, Vector3 head)
         {
             var dt = Time.deltaTime;
             if (!input.TryGetPosition(out var at) || dt <= 0f)
@@ -186,13 +197,32 @@ namespace ShipbreakerVR
             var before = Distance[index];
             Distance[index] = distance;
             if (before < 0f || before < Reach || distance >= Reach || (before - distance) / dt < Towards) return false;
+            if (knocked > 0 && Time.time - knockedAt < Again) return false;
+            knocked++;
+            knockedAt = Time.time;
+            input.Buzz(0.8f, 0.12f);
+            Sound();
+            if (knocked < Knocks)
+            {
+                if (logs++ < 20) Plugin.Log.LogInfo($"Helmet knock: {input.Name} hand knocked against the helmet ({knocked} of {Knocks}) after {Time.time - since:0.0} s");
+                return false;
+            }
             Knocked(input);
             return true;
         }
 
+        // The game's knock on the helmet, as its animation plays it.
+        private static void Sound()
+        {
+            var on = master != null ? master : postedOn;
+            if (on == null && VrCamera.Instance != null) on = VrCamera.Instance.gameObject;
+            if (on == null) return;
+            try { AkSoundEngine.PostEvent(KnockName, on); }
+            catch (System.Exception e) { if (logs++ < 20) Plugin.Log.LogWarning($"Helmet knock: no knock heard ({e.Message})"); }
+        }
+
         private static void Knocked(VrInput.Hand input)
         {
-            input.Buzz(0.8f, 0.12f);
             var on = postedOn;
             if (on != null)
             {
@@ -214,7 +244,7 @@ namespace ShipbreakerVR
             }
             var first = !Learned;
             if (learned != null) learned.Value = true;
-            if (logs++ < 20) Plugin.Log.LogInfo($"Helmet knock: {input.Name} hand knocked against the helmet after {Time.time - since:0.0} s, the radio works again{(first ? " (learned, the line on the HUD no longer comes)" : "")}");
+            if (logs++ < 20) Plugin.Log.LogInfo($"Helmet knock: {input.Name} hand knocked against the helmet ({knocked} of {Knocks}) after {Time.time - since:0.0} s, the radio works again{(first ? " (learned, the line on the HUD no longer comes)" : "")}");
             End(grab);
         }
 
