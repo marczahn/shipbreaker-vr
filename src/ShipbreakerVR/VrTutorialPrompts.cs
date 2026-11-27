@@ -21,7 +21,11 @@ namespace ShipbreakerVR
     // - braking: Y (the gamepad's second brake picture is left out). The waypoints tip shows braking twice, once as
     //   one key ("Not Simul") and once as two keys held together ("Simul"), with a short word between; there only the
     //   single one stays, the pair and the word go (Raik 2026-11-27: "Y O Y", "only the Y button and done");
-    // - looking around: the right stick.
+    // - looking around: the right stick;
+    // - the tools (the cutter tip, Raik 2026-11-27): VR has no tool menu, so its line ("Open tool menu (hold)") goes, and
+    //   the lines for equipping say where the tool is reached for instead of a picture: the cutter (the game's
+    //   "Stinger" / "Skalp-L") over the right shoulder, the grapple ("Wurfhaken") at the right hip; left and right
+    //   swapped for the left-handed (VrToolBelt.LeftHanded).
     // Under the roll tip's lines one more of the mod's own: "Straighten up" with the left stick pressed in
     // (VrCamera.UpdateCenterPress: a short press straightens up in flight).
     // The pictures are the game's own glyphs (its table for the Xbox One gamepad) and the mod's own drawings
@@ -35,7 +39,7 @@ namespace ShipbreakerVR
 
         private const string Extra = "ShipbreakerVR ";
 
-        private enum Kind { None, Roll, Thrust, Brake, BrakeSecond, BrakePair, Look }
+        private enum Kind { None, Roll, Thrust, Brake, BrakeSecond, BrakePair, Look, ToolMenu, ToolPlace }
 
         private sealed class State
         {
@@ -49,6 +53,8 @@ namespace ShipbreakerVR
             public bool IgnoredAdded;
             // What the mod took out of the tip's layout (the brake pair and the word between), to put back.
             public readonly List<Hidden> Hid = new List<Hidden>();
+            // The line's texts the mod wrote over, with the game's, to put back.
+            public readonly List<KeyValuePair<TMP_Text, string>> Texts = new List<KeyValuePair<TMP_Text, string>>();
         }
 
         private struct Hidden
@@ -138,6 +144,11 @@ namespace ShipbreakerVR
                     break;
                 case GameplayActions.GameplayActionSet.RotateBodyUp:
                     state.Kind = Kind.Look; break;
+                case GameplayActions.GameplayActionSet.ToolMenu:
+                    state.Kind = Kind.ToolMenu; break;
+                case GameplayActions.GameplayActionSet.SelectCutter:
+                case GameplayActions.GameplayActionSet.SelectGrapple:
+                    state.Kind = Kind.ToolPlace; break;
             }
             if (state.Kind != Kind.None && logs++ < 30) Plugin.Log.LogInfo($"Tutorial prompts: the tip's picture for {state.Action} ('{VrUtil.Path(prompt.transform)}') shows the controllers while VR runs");
             return state;
@@ -208,6 +219,22 @@ namespace ShipbreakerVR
                 HidePair(prompt, state);
                 return;
             }
+            if (state.Kind == Kind.ToolMenu)
+            {
+                // Its line, unless that line holds other prompts too (then only the prompt itself).
+                var line = picture.transform.parent;
+                if (line == null || line.name.Contains("TUT_") || line.GetComponentsInChildren(prompt.GetType(), true).Length > 1) line = prompt.transform;
+                Hide(line, state);
+                Plugin.Log.LogInfo($"Tutorial prompts: the tool menu's line '{line.name}' left out (VR has no tool menu)");
+                return;
+            }
+            if (state.Kind == Kind.ToolPlace)
+            {
+                state.Ignored = picture.GetComponent<LayoutElement>();
+                state.IgnoredAdded = state.Ignored == null;
+                if (state.Ignored == null) state.Ignored = picture.gameObject.AddComponent<LayoutElement>();
+                state.Ignored.ignoreLayout = true;
+            }
             if (state.Kind == Kind.BrakeSecond)
             {
                 state.Ignored = picture.GetComponent<LayoutElement>();
@@ -233,6 +260,12 @@ namespace ShipbreakerVR
                 picture.enabled = false;
                 return;
             }
+            if (state.Kind == Kind.ToolPlace)
+            {
+                picture.enabled = false;
+                WritePlace(picture, state);
+                return;
+            }
             var vtol = scheme == VrControls.Scheme.Vtol;
             Sprite sprite = null;
             switch (state.Kind)
@@ -243,6 +276,25 @@ namespace ShipbreakerVR
                 case Kind.Look: sprite = Glyph(LynxConfigurableControlOptions.ConfigKey.RightStickUp); break;
             }
             if (sprite != null) picture.sprite = sprite;
+        }
+
+        // The line's text: where the tool is reached for (written again after each of the game's changes).
+        private static void WritePlace(Image picture, State state)
+        {
+            var line = picture.transform.parent;
+            if (line == null) return;
+            var left = VrToolBelt.LeftHanded;
+            var said = state.Action == GameplayActions.GameplayActionSet.SelectCutter
+                ? (left ? VrOptions.L("Stinger: left shoulder", "Skalp-L: linke Schulter") : VrOptions.L("Stinger: right shoulder", "Skalp-L: rechte Schulter"))
+                : (left ? VrOptions.L("Grapple: left hip", "Wurfhaken: linke Hüfte") : VrOptions.L("Grapple: right hip", "Wurfhaken: rechte Hüfte"));
+            foreach (var text in line.GetComponentsInChildren<TMP_Text>(true))
+            {
+                if (text.text == said) continue;
+                var known = false;
+                foreach (var pair in state.Texts) if (pair.Key == text) known = true;
+                if (!known) state.Texts.Add(new KeyValuePair<TMP_Text, string>(text, text.text));
+                text.text = said;
+            }
         }
 
         // One of the mod's pictures before the tip's picture, in its line, as tall as that picture by that share.
@@ -323,6 +375,9 @@ namespace ShipbreakerVR
                 else hidden.Layout.ignoreLayout = hidden.WasIgnored;
             }
             state.Hid.Clear();
+            foreach (var pair in state.Texts)
+                if (pair.Key != null) pair.Key.text = pair.Value;
+            state.Texts.Clear();
             if (was == VrControls.Scheme.Aus || prompt == null) return;
             var picture = PictureOf(prompt);
             if (picture != null) picture.enabled = true;

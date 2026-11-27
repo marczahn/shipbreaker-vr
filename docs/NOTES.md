@@ -1721,3 +1721,8 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
   Left", "Simul - Brake Right KEYBOARD") with a word between. `VrTutorialPrompts`: a pair prompt beside a "Not Simul"
   one is taken out of the layout and drawn at no size, with the short texts (up to 4 letters) beside it; back when VR
   or the controllers' flying is off.
+- The cutter's tip with the tool menu (Raik 2026-11-27: "controller prompts are nonsense in VR; write Scalpel right
+  shoulder, Grapple right hip; leave the tool menu out"): in the tutorial's tips the ToolMenu prompt's line is taken
+  out of the layout, and the SelectCutter / SelectGrapple lines show no picture but "Skalp-L: rechte Schulter" /
+  "Wurfhaken: rechte Hüfte" ("Stinger: right shoulder" / "Grapple: right hip"; the game's own names; left for the
+  left-handed). Untested: the tip's layout was not found offline, it is guessed from the other tips.
