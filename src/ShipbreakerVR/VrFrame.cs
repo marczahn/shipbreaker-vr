@@ -64,6 +64,7 @@ namespace ShipbreakerVR
             ("grapple holes", VrGrappleHoles.Update),
             ("skipped lines", VrSkipTimelines.Update),
             ("menu prompts", VrMenuPrompts.Update),
+            ("intercom light", VrHabStations.SpeakerLight),
             ("vr options entry", VrOptionsMenu.Update),
             ("vr options tab", VrOptionsTab.Update),
         };

@@ -116,7 +116,6 @@ namespace ShipbreakerVR
         {
             if (home == null) return;
             HideCallMarker();
-            SpeakerLight();
             if (answering)
             {
                 Answering();
@@ -351,8 +350,11 @@ namespace ShipbreakerVR
         private static float nextSpeakerCheck;
         private static NotificationLightController litLight;
 
-        private static void SpeakerLight()
+        // Once a frame (VrFrame), wherever one is in the station: in bed, sitting, at a spot or walking (Raik, 2026-11-27:
+        // lying in bed the light stayed off, as this ran only while walking).
+        public static void SpeakerLight()
         {
+            if (!VrXr.IsRunning) return;
             if (Time.unscaledTime < nextSpeakerCheck) return;
             nextSpeakerCheck = Time.unscaledTime + SpeakerCheck;
             var controller = VrHab.Controller;
