@@ -1667,3 +1667,6 @@ aiming and climbing for everyone. Ask Raik before the release.
   2 m of that light (VrHabStations.CallReach, wherever one looks) '[A] Answer the call' starts the scene as the flat
   game's way there does (Hab3DController.TryStartAfterShiftSequence; log "Hab: answering the call ..."), and '[X] Exit'
   shows only while the game lets the exit open.
+- The '[Y] Skip' hint under the subtitles was there but too small to see (Raik 2026-11-27, at the call after the
+  tutorial; log: font size 8): the subtitle's text sits under scaled parents of its own, so its font size is now taken
+  as seen (times its scale against the hint's parent) before the hint's 0.6 of it.

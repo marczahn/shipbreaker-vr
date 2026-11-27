@@ -309,17 +309,20 @@ namespace ShipbreakerVR
             }
             if (hint == null || hint.transform.parent != parent) Make(parent, sample);
             hint.font = sample.font;
-            hint.fontSize = sample.fontSize * Size;
+            // The subtitle's text sits under scaled parents of its own: its size as seen, in the hint's parent's units
+            // (the first try took its font size as it stood, 8, and the hint was too small to see; Raik 2026-11-27).
+            var seen = sample.fontSize * Mathf.Abs(sample.transform.lossyScale.y) / Mathf.Max(1e-6f, Mathf.Abs(parent.lossyScale.y));
+            hint.fontSize = seen * Size;
             var color = sample.color;
             color.a *= Alpha;
             hint.color = color;
             var text = $"[Y] {VrOptions.L("Skip", "Überspringen")}";
             if (hint.text != text) hint.text = text;
-            hint.transform.localPosition = new Vector3(middle, lowest - sample.fontSize * Gap, 0f);
+            hint.transform.localPosition = new Vector3(middle, lowest - seen * Gap, 0f);
             if (!hint.gameObject.activeSelf) hint.gameObject.SetActive(true);
             if (logged) return;
             logged = true;
-            VrSkip.Log($"the hint for Y shows under the subtitles ('{parent.name}', font size {hint.fontSize:0})");
+            VrSkip.Log($"the hint for Y shows under the subtitles ('{parent.name}', font size {hint.fontSize:0}, the subtitle's {sample.fontSize:0} at {sample.transform.lossyScale.y / parent.lossyScale.y:0.00} of the scale)");
         }
 
         private static void Make(Transform parent, TMP_Text sample)
