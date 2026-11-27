@@ -1726,3 +1726,8 @@ terminal was off to the left after he sat down again, and 60 cm was a little too
   out of the layout, and the SelectCutter / SelectGrapple lines show no picture but "Skalp-L: rechte Schulter" /
   "Wurfhaken: rechte Hüfte" ("Stinger: right shoulder" / "Grapple: right hip"; the game's own names; left for the
   left-handed). Untested: the tip's layout was not found offline, it is guessed from the other tips.
+- The tools' tips with the controllers' buttons (Raik 2026-11-27, the cutter's tips: "you know how the game runs"),
+  as `VrToolInput` has them: CutterFire, GrappleFire and DemoChargeFire show the mod's trigger picture, CutterAltFire
+  (cut angle) and Throw (grapple push) A, ToolMode (Stinger/Splitsaw) and RetractionModifier (reel) B; push and reel
+  with trigger + plus before them unless their line already shows the trigger's prompt; X and Y for the
+  left-handed. ActivateScanner's lines say "Scanner: rechte Helmseite". Untested in the headset.

@@ -25,7 +25,11 @@ namespace ShipbreakerVR
     // - the tools (the cutter tip, Raik 2026-11-27): VR has no tool menu, so its line ("Open tool menu (hold)") goes, and
     //   the lines for equipping say where the tool is reached for instead of a picture: the cutter (the game's
     //   "Stinger" / "Skalp-L") over the right shoulder, the grapple ("Wurfhaken") at the right hip; left and right
-    //   swapped for the left-handed (VrToolBelt.LeftHanded).
+    //   swapped for the left-handed (VrToolBelt.LeftHanded); the scanner's lines likewise ("right side of the helmet");
+    // - working the tools, as VrToolInput has them (Raik 2026-11-27, the cutter's tips): cut, grapple and detonate with
+    //   the trigger (the mod's trigger picture), the cut's angle with A (CutterAltFire), the tool's mode with B
+    //   (ToolMode), the grapple's push and reel with the trigger held and A or B (trigger + plus before them, unless
+    //   their line shows the trigger's prompt itself); X and Y for the left-handed.
     // Under the roll tip's lines one more of the mod's own: "Straighten up" with the left stick pressed in
     // (VrCamera.UpdateCenterPress: a short press straightens up in flight).
     // The pictures are the game's own glyphs (its table for the Xbox One gamepad) and the mod's own drawings
@@ -39,7 +43,7 @@ namespace ShipbreakerVR
 
         private const string Extra = "ShipbreakerVR ";
 
-        private enum Kind { None, Roll, Thrust, Brake, BrakeSecond, BrakePair, Look, ToolMenu, ToolPlace }
+        private enum Kind { None, Roll, Thrust, Brake, BrakeSecond, BrakePair, Look, ToolMenu, ToolPlace, ToolTrigger, ToolA, ToolB }
 
         private sealed class State
         {
@@ -148,7 +152,18 @@ namespace ShipbreakerVR
                     state.Kind = Kind.ToolMenu; break;
                 case GameplayActions.GameplayActionSet.SelectCutter:
                 case GameplayActions.GameplayActionSet.SelectGrapple:
+                case GameplayActions.GameplayActionSet.ActivateScanner:
                     state.Kind = Kind.ToolPlace; break;
+                case GameplayActions.GameplayActionSet.CutterFire:
+                case GameplayActions.GameplayActionSet.GrappleFire:
+                case GameplayActions.GameplayActionSet.DemoChargeFire:
+                    state.Kind = Kind.ToolTrigger; break;
+                case GameplayActions.GameplayActionSet.CutterAltFire:
+                case GameplayActions.GameplayActionSet.Throw:
+                    state.Kind = Kind.ToolA; break;
+                case GameplayActions.GameplayActionSet.ToolMode:
+                case GameplayActions.GameplayActionSet.RetractionModifier:
+                    state.Kind = Kind.ToolB; break;
             }
             if (state.Kind != Kind.None && logs++ < 30) Plugin.Log.LogInfo($"Tutorial prompts: the tip's picture for {state.Action} ('{VrUtil.Path(prompt.transform)}') shows the controllers while VR runs");
             return state;
@@ -242,7 +257,9 @@ namespace ShipbreakerVR
                 if (state.Ignored == null) state.Ignored = picture.gameObject.AddComponent<LayoutElement>();
                 state.Ignored.ignoreLayout = true;
             }
-            var withTrigger = state.Kind == Kind.Roll || state.Kind == Kind.Thrust && scheme == VrControls.Scheme.Vtol;
+            var withTrigger = state.Kind == Kind.Roll || state.Kind == Kind.Thrust && scheme == VrControls.Scheme.Vtol
+                || (state.Action == GameplayActions.GameplayActionSet.Throw || state.Action == GameplayActions.GameplayActionSet.RetractionModifier)
+                    && !LineHasOtherPrompt(prompt);
             if (withTrigger)
             {
                 AddBefore(picture, "trigger", 1f, state);
@@ -274,8 +291,18 @@ namespace ShipbreakerVR
                 case Kind.Thrust: sprite = vtol ? OwnSprite("thrust_" + Direction(state.Action)) : Glyph(LynxConfigurableControlOptions.ConfigKey.LeftStickUp); break;
                 case Kind.Brake: sprite = Glyph(LynxConfigurableControlOptions.ConfigKey.Action4); break;
                 case Kind.Look: sprite = Glyph(LynxConfigurableControlOptions.ConfigKey.RightStickUp); break;
+                case Kind.ToolTrigger: sprite = OwnSprite("trigger"); break;
+                case Kind.ToolA: sprite = Glyph(VrToolBelt.LeftHanded ? LynxConfigurableControlOptions.ConfigKey.Action3 : LynxConfigurableControlOptions.ConfigKey.Action1); break;
+                case Kind.ToolB: sprite = Glyph(VrToolBelt.LeftHanded ? LynxConfigurableControlOptions.ConfigKey.Action4 : LynxConfigurableControlOptions.ConfigKey.Action2); break;
             }
             if (sprite != null) picture.sprite = sprite;
+        }
+
+        // Whether the prompt's line shows another prompt too (the reel's line with the grapple's own trigger).
+        private static bool LineHasOtherPrompt(MonoBehaviour prompt)
+        {
+            var line = prompt.transform.parent;
+            return line != null && line.GetComponentsInChildren(prompt.GetType(), true).Length > 1;
         }
 
         // The line's text: where the tool is reached for (written again after each of the game's changes).
@@ -286,6 +313,8 @@ namespace ShipbreakerVR
             var left = VrToolBelt.LeftHanded;
             var said = state.Action == GameplayActions.GameplayActionSet.SelectCutter
                 ? (left ? VrOptions.L("Stinger: left shoulder", "Skalp-L: linke Schulter") : VrOptions.L("Stinger: right shoulder", "Skalp-L: rechte Schulter"))
+                : state.Action == GameplayActions.GameplayActionSet.ActivateScanner
+                ? (left ? VrOptions.L("Scanner: left side of the helmet", "Scanner: linke Helmseite") : VrOptions.L("Scanner: right side of the helmet", "Scanner: rechte Helmseite"))
                 : (left ? VrOptions.L("Grapple: left hip", "Wurfhaken: linke Hüfte") : VrOptions.L("Grapple: right hip", "Wurfhaken: rechte Hüfte"));
             foreach (var text in line.GetComponentsInChildren<TMP_Text>(true))
             {
