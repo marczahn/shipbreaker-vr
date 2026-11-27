@@ -314,7 +314,7 @@ namespace ShipbreakerVR
         }
 
         // The game's one listener: its audio service registers the proxy of its 'Listener' audio object as Wwise's default.
-        private static GameObject Listener()
+        internal static GameObject Listener()
         {
             if (listener != null) return listener;
             if (listenerLooked && Time.frameCount % 120 != 0) return null;

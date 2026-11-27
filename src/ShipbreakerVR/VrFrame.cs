@@ -99,6 +99,7 @@ namespace ShipbreakerVR
             ("climbing", VrClimb.RigPlaced),
             ("pull off", VrPullOff.Update),
             ("device punch", VrDevicePunch.Update),
+            ("helmet knock", VrHelmetKnock.Update),
             ("touch sound", VrTouchSound.Update),
             ("tool models", VrToolModels.Place),
             ("loose tools", VrLooseTools.Place),
