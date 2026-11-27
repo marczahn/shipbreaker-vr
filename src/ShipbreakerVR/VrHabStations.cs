@@ -115,6 +115,7 @@ namespace ShipbreakerVR
         public static void Update(Transform head, float scale)
         {
             if (home == null) return;
+            HideCallMarker();
             if (answering)
             {
                 Answering();
@@ -122,7 +123,6 @@ namespace ShipbreakerVR
                 ShowHint("");
                 return;
             }
-            HideCallMarker();
             var call = CallNear(head, scale);
             Station next = null;
             var nextAngle = float.MaxValue;
@@ -307,7 +307,9 @@ namespace ShipbreakerVR
             if (Time.unscaledTime < nextStep || (controller.CinemachineBrain != null && controller.CinemachineBrain.IsBlending)) return;
             var location = Current();
             if (location != null) Passed.Add(location.LocationVirtualCamera.Name);
-            var way = location != null && Passed.Count <= MostSteps ? CallWay(controller, location) : null;
+            // At the intercom's own place the way ends (it went on to the window, 2026-11-27).
+            var there = location != null && location.LocationVirtualCamera.Name.StartsWith("Comms");
+            var way = location != null && !there && Passed.Count <= MostSteps ? CallWay(controller, location) : null;
             if (way != null)
             {
                 Plugin.Log.LogInfo($"Hab: the game's way to the call, from '{location.LocationVirtualCamera.Name}' to '{way.CameraToGoTo.Name}'");
@@ -334,22 +336,36 @@ namespace ShipbreakerVR
         }
 
         // Raik (2026-11-27): after the call, the night and the morning's messages, the game's green waypoint over the
-        // intercom (PRF_Waypoint_Intercom) still showed. Once the call that was answered here is over (no call waits any
-        // more), that waypoint goes off, as nothing waits there.
+        // intercom (PRF_Waypoint_Intercom) still showed. It goes off as soon as the call is answered here, and is kept
+        // off until the call is over.
         private static Hab3DController answered;
         private static GameObject callMarker;
 
         private static void HideCallMarker()
         {
             var controller = VrHab.Controller;
-            if (answered == null || answered != controller || AfterShift(controller) != null) return;
+            if (answered == null) return;
+            if (answered != controller)
+            {
+                answered = null;
+                return;
+            }
             if (callMarker == null)
+            {
                 foreach (var each in Resources.FindObjectsOfTypeAll<Transform>())
                     if (each.name == "PRF_Waypoint_Intercom" && each.gameObject.scene.IsValid()) { callMarker = each.gameObject; break; }
-            answered = null;
-            if (callMarker == null || !callMarker.activeSelf) return;
-            callMarker.SetActive(false);
-            Plugin.Log.LogInfo("Hab: the call is over, the intercom's waypoint goes off");
+                if (callMarker == null)
+                {
+                    answered = null;
+                    return;
+                }
+            }
+            if (callMarker.activeSelf)
+            {
+                callMarker.SetActive(false);
+                Plugin.Log.LogInfo("Hab: the call is answered, the intercom's waypoint goes off");
+            }
+            if (AfterShift(controller) == null) answered = null;
         }
 
         private static readonly AccessTools.FieldRef<Hab3DController, List<LocalizedTextMeshProUGUI>> CallLabels =

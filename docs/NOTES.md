@@ -1688,7 +1688,8 @@ aiming and climbing for everyone. Ask Raik before the release.
   place, else up, never back to a place passed, at most 5 steps; then the call starts (log "Hab: the call starts at
   ... ways there: ..."). The prompt shows only once nobody speaks in the station (the line saying a call waits, played
   or skipped). The intercom's green waypoint (PRF_Waypoint_Intercom, switched by the game's scene scripting) stayed on
-  after the night; once the answered call is over it goes off (log "Hab: the call is over, the intercom's waypoint
+  after the night; it goes off as soon as the call is answered and stays off until the call is over, and the way ends
+  at the Comms place (it went on to the window) (log "Hab: the call is answered, the intercom's waypoint
   goes off").
 - A skipped line in the station still held up what came after it as long as the line would have lasted (Raik
   2026-11-27): the game's timelines place lines as clips of their length. Now when Y ends a line, each timeline playing a
