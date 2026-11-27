@@ -1648,3 +1648,12 @@ aiming and climbing for everyone. Ask Raik before the release.
   and the rest as before; and a spot counts as sitting only below 1.4 m (the bed's view is at 1.28 m).
 - Under the subtitles in the station a small line '[Y] Skip' / '[Y] Überspringen' (VrSkipHint, Raik 2026-11-27): the
   mod's own, under the lowest subtitle showing, in its font at 0.6 of its size; only in the Hab, not paused, with VR.
+- The hand goes along with the tool's recoil (Raik 2026-11-27: on the grapple's push and the cutter's cuts, the wide
+  split saw too, the tool moved through the hand). From the game's data: the cutter's Animator (Anim_CuttingTool,
+  state Anim_CuttingTool_Recoil, 1.5 s) moves and turns its own transform, the grapple's (AC_GrappleTool_01, states
+  Recoil 0.5 s, Push 1, Push 2, Impact) its bone SK_GrappleTool_Root with the pieces on it; resting states
+  Anim_CuttingTool_Idle, Idle, Idle2. `VrToolRecoil` (LateUpdate, before the hands) compares that part's pose against
+  the tool's point with its pose at rest and moves and turns the tool hand, and a second hand on the tool, by just as
+  much about the grip (in tracking space, before the arm's bend), so the grip stays in the hand and the arm follows.
+  The tool is placed as before. Not for a second tool (VrDualTools). Log "Tool recoil: ..." (which part, how far).
+  Untested in the headset.
