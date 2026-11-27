@@ -1682,3 +1682,15 @@ aiming and climbing for everyone. Ask Raik before the release.
   the entry (the button the game labels for the call, else its way up), as the flat game does; straight away only
   without it. And walking ends when the game wakes one in the bed (Entry_Virtual_Camera, WakeUpMonitor_Virtual_Camera),
   so the morning goes on from the bed.
+- The call took three presses of A (Raik 2026-11-27; log: entry to HabitationTurned, to Bed, then straight away), each
+  with the game's sound of moving on: the game's way to the call goes over several places. One A now goes all of it,
+  a step each time the game's camera has arrived (no blend, 0.3 s), by the labelled way, else the one to the Comms
+  place, else up, never back to a place passed, at most 5 steps; then the call starts (log "Hab: the call starts at
+  ... ways there: ..."). The prompt shows only once nobody speaks in the station (the line saying a call waits, played
+  or skipped). The intercom's green waypoint (PRF_Waypoint_Intercom, switched by the game's scene scripting) stayed on
+  after the night; once the answered call is over it goes off (log "Hab: the call is over, the intercom's waypoint
+  goes off").
+- A skipped line in the station still held up what came after it as long as the line would have lasted (Raik
+  2026-11-27): the game's timelines place lines as clips of their length. Now when Y ends a line, each timeline playing a
+  speech clip runs at 25 times its speed to that clip's end (VrSkipTimelines, not a jump, so its signals and
+  activations in between still happen); the after-shift scene's own timeline still moves on to its next line as before.

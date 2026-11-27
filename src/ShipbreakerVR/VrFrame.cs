@@ -62,6 +62,7 @@ namespace ShipbreakerVR
             ("pickup layer", VrPickupLayer.Update),
             ("thumb skin", VrThumbSkin.Update),
             ("grapple holes", VrGrappleHoles.Update),
+            ("skipped lines", VrSkipTimelines.Update),
             ("vr options entry", VrOptionsMenu.Update),
             ("vr options tab", VrOptionsTab.Update),
         };

@@ -187,14 +187,13 @@ namespace ShipbreakerVR
         private static readonly List<LynxSpeechViewComponent> Views = new List<LynxSpeechViewComponent>();
         private static Transform speech;
 
-        private static void Postfix(Hab3DController __instance)
+        // Who speaks in the station now (one of the game's speech objects playing a line), or null.
+        public static LynxSpeechViewComponent Speaker()
         {
-            if (!VrXr.IsRunning || __instance.IsHabPaused || GameSession.CurrentGameState == GameSession.GameState.Paused) return;
-            if (!VrInput.Left.Valid || !VrInput.Left.Secondary.Pressed || VrInput.Right.Secondary.Down) return;
             if (speech == null)
             {
                 var found = GameObject.Find("SpeechObjects");
-                if (found == null) return;
+                if (found == null) return null;
                 speech = found.transform;
             }
             speech.GetComponentsInChildren(Views);
@@ -202,10 +201,21 @@ namespace ShipbreakerVR
             foreach (var view in Views)
                 if (view != null && view.SpeechObject != null && view.SpeechObject.CurrentlyPlayingPlaybackID.IsValid) { speaking = view; break; }
             Views.Clear();
+            return speaking;
+        }
+
+        private static void Postfix(Hab3DController __instance)
+        {
+            if (!VrXr.IsRunning || __instance.IsHabPaused || GameSession.CurrentGameState == GameSession.GameState.Paused) return;
+            if (!VrInput.Left.Valid || !VrInput.Left.Secondary.Pressed || VrInput.Right.Secondary.Down) return;
+            var speaking = Speaker();
             if (speaking == null) return;
             var goesOn = SequenceGoesOn(speaking.gameObject);
             Main.EventSystem.Post(LynxSpeechCancelEvent.GetEvent(new List<LynxSpeechViewComponent> { speaking }, false, false));
             VrSkip.Log($"Y ends the line of '{speaking.name}'{(goesOn ? ", its sequence goes on" : "")}");
+            // Whatever else waits out the line's length (Raik, 2026-11-27) goes on as if it had been spoken.
+            var own = SceneDirector(__instance);
+            VrSkipTimelines.Hurry(own != null ? own.GetComponent<PlayableDirector>() : null);
             if (goesOn || !InAfterShift(__instance)) return;
             var scene = Scene(__instance);
             if (scene == null) return;
@@ -258,6 +268,67 @@ namespace ShipbreakerVR
             director.time = next;
             SceneClock(hab) += ahead;
             VrSkip.Log($"Y: the scene goes on to its next line at {next:0.0} s ({ahead:0.0} s on)");
+        }
+    }
+
+    // Raik (2026-11-27): a skipped line still held up what came after it for as long as the line would have gone on
+    // (the game's timelines place each line as a clip of its length, TriggerableSpeechControlAsset, and go on after it).
+    // So when Y ends a line, each timeline playing a speech clip at that moment runs fast to that clip's end, then at
+    // its own speed again; run fast, not jumped, so whatever the timeline does in between (signals, activations) still
+    // happens. The after-shift scene's own timeline is left to VrSkipHabLine, which moves it on to the next line.
+    internal static class VrSkipTimelines
+    {
+        static VrSkipTimelines() => VrSession.OnUnload("skipped lines' timelines", Release);
+
+        private const double Fast = 25.0;
+        private static readonly List<(PlayableDirector Director, double Until)> Hurried = new List<(PlayableDirector, double)>();
+
+        public static void Hurry(PlayableDirector except)
+        {
+            foreach (var director in Object.FindObjectsOfType<PlayableDirector>())
+            {
+                if (director == null || director == except || director.state != PlayState.Playing || !director.playableGraph.IsValid()) continue;
+                if (!(director.playableAsset is TimelineAsset timeline)) continue;
+                var now = director.time;
+                var until = -1.0;
+                foreach (var track in timeline.GetOutputTracks())
+                {
+                    if (track == null || track.muted || track.GetType().Name != "TriggerableSpeechAssetTrack") continue;
+                    foreach (var clip in track.GetClips())
+                        if (clip.start <= now + 0.05 && clip.end > now + 0.1) until = System.Math.Max(until, clip.end);
+                }
+                if (until < 0) continue;
+                var known = Hurried.FindIndex(each => each.Director == director);
+                if (known >= 0) Hurried[known] = (director, System.Math.Max(Hurried[known].Until, until));
+                else Hurried.Add((director, until));
+                SetSpeed(director, Fast);
+                VrSkip.Log($"Y: the timeline '{director.name}' runs fast from {now:0.0} to the line's end at {until:0.0} s");
+            }
+        }
+
+        // Once a frame (VrFrame): a timeline back to its speed once at the line's end, or stopped.
+        public static void Update()
+        {
+            for (var i = Hurried.Count - 1; i >= 0; i--)
+            {
+                var (director, until) = Hurried[i];
+                if (director != null && director.state == PlayState.Playing && director.playableGraph.IsValid() && director.time < until) continue;
+                if (director != null && director.playableGraph.IsValid()) SetSpeed(director, 1.0);
+                Hurried.RemoveAt(i);
+            }
+        }
+
+        private static void SetSpeed(PlayableDirector director, double speed)
+        {
+            var graph = director.playableGraph;
+            for (var i = 0; i < graph.GetRootPlayableCount(); i++) graph.GetRootPlayable(i).SetSpeed(speed);
+        }
+
+        private static void Release()
+        {
+            foreach (var (director, _) in Hurried)
+                if (director != null && director.playableGraph.IsValid()) SetSpeed(director, 1.0);
+            Hurried.Clear();
         }
     }
 

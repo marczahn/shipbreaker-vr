@@ -115,6 +115,14 @@ namespace ShipbreakerVR
         public static void Update(Transform head, float scale)
         {
             if (home == null) return;
+            if (answering)
+            {
+                Answering();
+                Show("");
+                ShowHint("");
+                return;
+            }
+            HideCallMarker();
             var call = CallNear(head, scale);
             Station next = null;
             var nextAngle = float.MaxValue;
@@ -258,25 +266,90 @@ namespace ShipbreakerVR
                 callLogged = controller;
                 Plugin.Log.LogInfo($"Hab: a call waits after the shift, at '{VrUtil.Path(light.transform)}' {way.magnitude / scale:0.0} m from the head");
             }
-            return way.magnitude <= CallReach * scale;
+            // Raik (2026-11-27): only once the station has said that a call waits (that line played or skipped).
+            return way.magnitude <= CallReach * scale && VrSkipHabLine.Speaker() == null;
         }
 
         // The game's own way to the call ("Answer intercom" at the entry): its navigation sends the event the game's flow
         // waits on, and that flow ends the night after the call. Started straight away (TryStartAfterShiftSequence), the
         // call played but the flow stayed behind: after it the screen went black, input stayed blocked, no pause menu,
         // no bed (Raik, 2026-11-27). Only without that way is the call started straight away.
+        // That way goes over several places (entry, living area, bed: Raik, 2026-11-27, A had to be pressed three times,
+        // each time with the game's sound of moving on); one A now goes all of it, a step each time the game's camera has
+        // arrived, and starts the call where no way goes on.
+        private const int MostSteps = 5;
+        private const float StepPause = 0.3f;
+        private static bool answering;
+        private static float nextStep;
+        private static readonly HashSet<string> Passed = new HashSet<string>();
+
         private static void AnswerCall()
         {
             var controller = VrHab.Controller;
-            var location = Current();
-            var way = location != null ? CallWay(controller, location) : null;
-            Plugin.Log.LogInfo($"Hab: answering the call after the shift ('{AfterShift(controller).name}', {AfterShift(controller).SceneType}), "
-                + (way != null ? $"the game's way from '{location.LocationVirtualCamera.Name}' to '{way.CameraToGoTo.Name}'" : "started straight away, no way to it found"));
-            if (way != null) location.Navigate(way);
-            else controller.TryStartAfterShiftSequence();
+            Plugin.Log.LogInfo($"Hab: answering the call after the shift ('{AfterShift(controller).name}', {AfterShift(controller).SceneType})");
+            answering = true;
+            answered = controller;
+            nextStep = 0f;
+            Passed.Clear();
             nearCall = false;
             promptText = null;
             Show("");
+        }
+
+        private static void Answering()
+        {
+            var controller = VrHab.Controller;
+            if (controller == null || AfterShift(controller) == null || AfterShiftDone(controller) || InAfterShift(controller))
+            {
+                answering = false;
+                return;
+            }
+            if (Time.unscaledTime < nextStep || (controller.CinemachineBrain != null && controller.CinemachineBrain.IsBlending)) return;
+            var location = Current();
+            if (location != null) Passed.Add(location.LocationVirtualCamera.Name);
+            var way = location != null && Passed.Count <= MostSteps ? CallWay(controller, location) : null;
+            if (way != null)
+            {
+                Plugin.Log.LogInfo($"Hab: the game's way to the call, from '{location.LocationVirtualCamera.Name}' to '{way.CameraToGoTo.Name}'");
+                location.Navigate(way);
+                nextStep = Time.unscaledTime + StepPause;
+                return;
+            }
+            Plugin.Log.LogInfo($"Hab: the call starts at '{(location != null ? location.LocationVirtualCamera.Name : VrHab.ActiveSpot)}' after {Passed.Count - 1} step(s), "
+                + $"ways there: {WaysText(location)}");
+            controller.TryStartAfterShiftSequence();
+            answering = false;
+            answered = controller;
+        }
+
+        private static string WaysText(Hab3DLocationNavigation location)
+        {
+            var options = location != null ? Options(location) : null;
+            if (options == null) return "none";
+            var said = new System.Text.StringBuilder();
+            foreach (var way in options)
+                if (way != null && way.CameraToGoTo != null)
+                    said.Append(said.Length > 0 ? ", " : "").Append(way.CameraToGoTo.Name).Append(" (").Append(way.ButtonOption).Append(')');
+            return said.Length > 0 ? said.ToString() : "none";
+        }
+
+        // Raik (2026-11-27): after the call, the night and the morning's messages, the game's green waypoint over the
+        // intercom (PRF_Waypoint_Intercom) still showed. Once the call that was answered here is over (no call waits any
+        // more), that waypoint goes off, as nothing waits there.
+        private static Hab3DController answered;
+        private static GameObject callMarker;
+
+        private static void HideCallMarker()
+        {
+            var controller = VrHab.Controller;
+            if (answered == null || answered != controller || AfterShift(controller) != null) return;
+            if (callMarker == null)
+                foreach (var each in Resources.FindObjectsOfTypeAll<Transform>())
+                    if (each.name == "PRF_Waypoint_Intercom" && each.gameObject.scene.IsValid()) { callMarker = each.gameObject; break; }
+            answered = null;
+            if (callMarker == null || !callMarker.activeSelf) return;
+            callMarker.SetActive(false);
+            Plugin.Log.LogInfo("Hab: the call is over, the intercom's waypoint goes off");
         }
 
         private static readonly AccessTools.FieldRef<Hab3DController, List<LocalizedTextMeshProUGUI>> CallLabels =
@@ -289,16 +362,19 @@ namespace ShipbreakerVR
             var options = Options(location);
             if (options == null) return null;
             var labels = CallLabels(controller);
-            NavigationOption up = null;
+            NavigationOption up = null, comms = null;
             foreach (var way in options)
             {
                 if (way == null || way.CameraToGoTo == null || controller.IsInputBlocked(way) || controller.IsCameraBlocked(way)) continue;
+                if (Passed.Contains(way.CameraToGoTo.Name)) continue;
                 if (labels != null && way.ClickableButton != null)
                     foreach (var label in labels)
                         if (label != null && label.transform.IsChildOf(way.ClickableButton.transform)) return way;
+                // The place at the intercom itself (Comms_Virtual_Camera), where the flat game's way ends.
+                if (way.CameraToGoTo.Name.StartsWith("Comms")) comms = way;
                 if (way.ButtonOption == FrontEndActions.FrontEndActionSet.NavigateUp) up = way;
             }
-            return up;
+            return comms ?? up;
         }
 
         private static string RadioPrompt() => VrRadioMusic.On
