@@ -60,6 +60,8 @@ namespace ShipbreakerVR
         // its center, it eases back to their height.
         private const float MenuDeadZone = 0.3f;
         private const float MenuFollowSpeed = 4f;
+        private const float VideoLower = 5f;
+        private const float VideoSize = 1.15f;
 
         public enum Steadying { Aus, Schwach, Stark }
 
@@ -78,9 +80,9 @@ namespace ShipbreakerVR
         private const float GlowMargin = 0.12f;
         private const float ScreenCorner = 0.04f;
         private static readonly Color MonitorTint = new Color(0.9f, 0.93f, 0.96f, 1f);
-        private const int MaxMonitorWidth = 4096;
+        internal const int MaxMonitorWidth = 4096;
         // Mip levels alone left the writing soft: a finer level than the distance asks for keeps it sharp, without shimmer yet.
-        private const float MonitorMipBias = -0.8f;
+        internal const float MonitorMipBias = -0.8f;
         private static readonly Color GlowColor = new Color(0.55f, 0.85f, 1f, 0.14f);
         private bool onMonitor;
         // On a monitor, shown large in front of it (VrHab.LargeScreens): no screen look.
@@ -312,25 +314,31 @@ namespace ShipbreakerVR
             }
 
             // At one of the Hab's screens the canvas lies on the monitor, as large as fits on it.
+            // The same at the desk of a new career's start, on its terminal's screen (VrContractDesk).
             var monitor = vr.FollowsHab ? VrHab.Monitor : null;
-            largeScreen = monitor != null && VrHab.LargeScreens;
+            var screenAt = Vector3.zero;
+            var screenTurn = Quaternion.identity;
+            var screenSize = Vector2.zero;
+            var atDesk = monitor == null && VrContractDesk.TryGetScreen(out screenAt, out screenTurn, out screenSize);
+            if (monitor != null) VrHab.MonitorScreen(monitor, out screenAt, out screenTurn, out screenSize);
+            // Large screens (comfort option): as large as the menus, in front of the screen, at the desk too.
+            largeScreen = (monitor != null || atDesk) && VrHab.LargeScreens;
             if (largeScreen)
             {
                 onMonitor = true;
-                VrHab.LargeScreen(monitor, vr.RestingHead, aspect, out var at, out var facing, out var large);
+                VrHab.LargeScreen(screenAt, screenTurn, vr.RestingHead, aspect, out var at, out var facing, out var large);
                 screenMatrix = Matrix4x4.TRS(at, facing, new Vector3(large.x, large.y, 1f));
                 return;
             }
-            if (monitor != null)
+            if (monitor != null || atDesk)
             {
                 onMonitor = true;
                 if (VrSettings.MonitorLook.Value) material.color = MonitorTint;
-                VrHab.MonitorScreen(monitor, out var center, out var rotation, out var size);
-                var fit = Mathf.Min(size.x, size.y * aspect);
+                var fit = Mathf.Min(screenSize.x, screenSize.y * aspect);
                 var height = fit / aspect;
-                screenMatrix = Matrix4x4.TRS(center, rotation, new Vector3(fit, height, 1f));
+                screenMatrix = Matrix4x4.TRS(screenAt, screenTurn, new Vector3(fit, height, 1f));
                 var margin = 2f * GlowMargin * height;
-                glowMatrix = Matrix4x4.TRS(center, rotation, new Vector3(fit + margin, height + margin, 1f));
+                glowMatrix = Matrix4x4.TRS(screenAt, screenTurn, new Vector3(fit + margin, height + margin, 1f));
                 if (!Mathf.Approximately(aspect, lookAspect)) CreateMonitorLook(aspect);
                 return;
             }
@@ -378,6 +386,17 @@ namespace ShipbreakerVR
             }
             // menuPosition is in rig space and already scales with the rig; the width is in world units.
             var w = VrSettings.MenuWidth.Value * VrCamera.WorldScale;
+            // The flight video at a new career's start (VrContractDesk.FlightShown; Raik 2026-11-26: "a few degrees
+            // lower and 15 percent larger, the same distance"): turned down by VideoLower about the eyes, VideoSize as wide.
+            if (VrContractDesk.FlightShown)
+            {
+                var forward = menuRotation * Vector3.forward * VrSettings.MenuDistance.Value;
+                var lowered = menuRotation * Quaternion.Euler(VideoLower, 0f, 0f);
+                var at = menuPosition - forward + lowered * Vector3.forward * VrSettings.MenuDistance.Value;
+                w *= VideoSize;
+                screenMatrix = Matrix4x4.TRS(rig.TransformPoint(at), rig.rotation * lowered, new Vector3(w, w / aspect, 1f));
+                return;
+            }
             screenMatrix = Matrix4x4.TRS(rig.TransformPoint(menuPosition), rig.rotation * menuRotation, new Vector3(w, w / aspect, 1f));
         }
 

@@ -57,6 +57,7 @@ namespace ShipbreakerVR
             ("charge count", VrChargeCount.Update),
             ("ai node", VrAiNode.Update),
             ("radio", VrRadio.Update),
+            ("contract desk", VrContractDesk.Update),
             ("stow prompt", VrStowPrompt.Update),
             ("radio music", VrRadioMusic.Update),
             ("pickup layer", VrPickupLayer.Update),

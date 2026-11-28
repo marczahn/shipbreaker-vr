@@ -758,6 +758,18 @@ namespace ShipbreakerVR
             return true;
         }
 
+        // For VrTutorialControls: whether the controllers press that game action now, from either hand. The tutorial's
+        // objectives read the game's actions themselves, which the controllers never press. Drawing any tool counts as
+        // opening the tool wheel (ToolMenu), which VR does not have.
+        internal static bool Presses(GameplayActions.GameplayActionSet action)
+        {
+            if (action == GameplayActions.GameplayActionSet.ToolMenu)
+                return now[(int)Action.Grapple] || now[(int)Action.Cutter] || now[(int)Action.DemoCharge] || now[(int)Action.Scanner];
+            if (!Actions.TryGetValue(action, out var mapped)) return false;
+            var index = (int)mapped;
+            return mapped >= Action.Grapple ? now[index] : LeftHand.Now[index] || RightHand.Now[index];
+        }
+
         public static bool GetInputWasPressed(LynxControls controls, LynxControls.ActionSetAndId actionSetAndId, int family) =>
             controls.GetInputWasPressed(actionSetAndId) || (Virtual(actionSetAndId, family, out var n, out var b, out var i) && n[i] && !b[i]);
 

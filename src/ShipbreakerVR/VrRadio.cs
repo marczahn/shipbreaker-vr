@@ -98,9 +98,11 @@ namespace ShipbreakerVR
             Bind();
             if (Place == null) return;
             var save = VrCollection.Current;
-            if (save != null && !warmed)
+            if (save != null && !warmed && !VrContractDesk.CareerStarting)
             {
-                // A save was just loaded, the loading screen is up or about to be.
+                // A save was just loaded, the loading screen is up or about to be. For a new career the save is there
+                // as soon as the account's name is confirmed, at the desk: there the halt showed (Raik 2026-11-24),
+                // so it waits for the loading screen after the flight video.
                 warmed = true;
                 VrRadioModel.Warm();
             }

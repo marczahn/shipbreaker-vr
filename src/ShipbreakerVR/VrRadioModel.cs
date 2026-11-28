@@ -54,8 +54,11 @@ namespace ShipbreakerVR
         public static void Warm()
         {
             if (failed) return;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             if (mesh == null) Load();
+            var model = clock.ElapsedMilliseconds;
             if (texture == null && !failed) LoadTexture();
+            Plugin.Log.LogInfo($"Radio: read ahead in {clock.ElapsedMilliseconds} ms (model {model} ms, texture {clock.ElapsedMilliseconds - model} ms)");
         }
 
         // A material for it, made from one of the scene's lit materials (so it is lit as the things around it are), with

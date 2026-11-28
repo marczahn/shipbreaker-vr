@@ -1712,3 +1712,185 @@ Raik (2026-11-28). The game's PlayerFX ElectricalDamage, ExplosionDamage and Imp
 
 ## Hand smoothing is a comfort option (0.33.0)
 Raik (2026-11-28): the light smoothing made for the trailer (`VrInput.Steady`) stays, as a comfort option off by default: `Anzeige/HandGlaettung`, 0 to 3, a slider in the comfort rows after the immersive screens. The key moved from `Experimente/HandGlaettung` (1 by default), so a config that had the experiment starts at 0.
+
+## A new career starts at a desk (0.33.0)
+Raik, 2026-11-23: at the start of a new career the contract was a tiny terminal somewhere in the room. What the game
+has there (read from the front end's scene `master_frontend` and its prefab `PRF_ContractScene`):
+- `PRF_IntroCanvas`: the intro's lines of text ("Humankind has industrialized ..."), a screen-space canvas.
+- `3D Scene` (off until the apartment shows): the apartment's picture `Background_Main`, a sprite 7.7 m from the front
+  end's `Main Camera` (at 0 0 -4, 25 degrees); the model `PRF_ApartmentComputer` 0.47 m in front of that camera; two
+  lights and a volume.
+- `UI/PRF_ContractScreen_WorldSpace`: the contract (mail, news, the contract app and its pop-up) as a **world-space
+  canvas**, 1156 x 716 at a scale of 0.00019, so 22 cm wide, on layer 10, which the main camera draws itself. Flat,
+  25 degrees make it fill the screen. In VR the rig stands at that camera and the canvas was a 22 cm terminal.
+- `PRF_OnboardingScene` (`OnboardingSceneController`: video, pop-ups, extraction, cloning, the fees with the thumb
+  print) and `PRF_CinematicIntroCanvas` (the flight's video): screen-space canvases, which the mod draws through its
+  UI texture as every menu.
+
+`VrContractDesk` puts a copy of the Hab's desk in front of the player while `3D Scene` is on and the flight's video is
+not up: on the playspace's floor, the terminal's screen 72 cm ahead of the head, facing the player; ahead is where the
+head looks, level. Once the head has moved 20 cm from where the desk was placed for and has come to rest for 0.6 s,
+the desk is placed again (Raik's first test, 2026-11-23: placed by where the playspace faces and only once, the
+terminal was off to the left after he sat down again, and 60 cm was a little too near).
+- **The models** come from the game at run time, nothing of them is in the mod: `Addressables.LoadAssetAsync` of
+  `.../Hab/Prefabs/PRF_Hab_Rev_03.prefab` (the Hab's interior: of it the group `GRP_Hab_Interior_Desk` within 2.6 m of
+  the screen and `PRF_Computer_Terminal_Hab`, the message terminal on the desk) and `.../Hab/Models/PRF_Props_Hab_Chair.prefab`.
+  The keys are the paths in the game's catalog; that they load was not tried when this was written. The prefabs are
+  only read: each mesh becomes a plain object with the mesh and its materials (the finest level of detail only), so
+  none of the game's components runs. The chair is placed as it stands in `Decoupled_Hab` against `PRF_Hab_Rev_03`
+  (-7.74 -0.01 -32.49, turned -90 degrees). The whole interior's assets are in memory for that time and let go with
+  the desk (`Addressables.Release`).
+- **The screen** is the rectangle of the canvas under the terminal's `LYNX_Screensaver_Locked` (54 x 30 cm in the
+  prefab, which has it), or the measured one if a prefab has none. The terminal's mesh (104 vertices) has one flat
+  front face exactly in that canvas' plane; the frame with the set-in look is the desk's own part
+  `SM_Hab_Interior_Desk_Screen` round it. The contract lies 1 mm before that face: at 3 mm it seemed to float (Raik's
+  first test), 7 mm behind it it was inside the model and invisible (his second). The UI texture is drawn 10 mm
+  behind, as on the Hab's monitors, where the depth does not hide it. The screen counts as 1 cm higher (Raik).
+- **The contract** goes onto it by moving its parent `UI` each frame (turn, scale to fit, place), so what the game's
+  views do with the canvas itself stays; `PRF_ApartmentComputer` is hidden meanwhile. All of it is put back when the
+  desk goes.
+- **The onboarding's screens** lie on the same screen: `VrUi` takes `VrContractDesk.TryGetScreen` as it takes a
+  monitor of the Hab (monitor look included), only while `PRF_OnboardingScene` is on, so the UI texture cannot cover
+  the contract before.
+- **The picture** stands straight behind the desk: ahead of the head as far as the game has it from its camera
+  (7.7 m), its middle at the head's height, 100 degrees wide from there; placed again with the desk. First it was only
+  stretched where the game has it (120 degrees): askew behind a desk that goes where the head looks, and too large.
+- **Depth on the canvas**: the contract's window, the mail and the news lie before the canvas by centimeters, in
+  meters whatever the canvas' scale. One camera never saw that; in VR the contract's window floated before the glass
+  (Raik's picture, 2026-11-24). The parent's depth scale is pressed to 2 %, which leaves their order and takes the
+  floating.
+- **Coming into the room** (Raik, 2026-11-24: "a blue background when you come into the room, it stays too long"): a
+  dark rectangle with the apartment around it, on the menu canvas fixed in the room. Two of the scene's canvases can
+  be it: the intro text's `Image - Background` and the scene's `Fade Screen` (fade from black, not in
+  `VrCanvases.FadeNames` before, so drawn as a rectangle). The background is switched off while the desk is shown;
+  `Fade Screen` is now a fade (whole view darkened, never a rectangle), and its fade from black is let run out
+  without darkening once the desk is there (at most 8 s). The log says which of the two was dark as the desk came.
+- **The halt as the name is confirmed** (Raik, 2026-11-24, 768 ms in one frame): the new profile's save is there at
+  that moment, and `VrRadio` read the radio's model and its 2.7 MB texture ahead then, meant for a loading screen.
+  It now waits while a career starts (`VrContractDesk.CareerStarting`: apartment or flight video), for the loading
+  screen after the video; the log gives how long the reading takes ("Radio: read ahead in …").
+  Raik's next test: the halt was still there (706 ms), with no radio read in it. It is the game's own work in
+  `ContractToggleCheck.SubmitContract`: writing its options (`LynxUserOptions.HotWriteAndReload`), making, loading
+  and saving the profile and the meta progress, and the next page's event, all in that one frame. That cannot be made
+  shorter from the mod. A first try hid it in a short dark; Raik (2026-11-26): make the profile when the desk is
+  left, before the intro video, so the form runs through smoothly. What the game needs when (from its code and the
+  front end's data):
+  - the footer's Next is one button for every page, `SubmitContract` is on it from page 2 on; its first press makes
+    the profile and sends `m_FinishCreatingProfile` (page 3); every later press only runs `ApplyOptions` (voice, meal,
+    orientation into the profile, options written);
+  - page 5's fingerprint (long press) runs `TrySkipTutorialOnProfile`; the contract's end ("Listen for
+    ContractComplete") turns `3D Scene` off and fades `Fade Screen` to black; the flight video follows, and only when
+    it is over is `PRF_OnboardingScene` switched on;
+  - the onboarding's fees screen reads the profile's difficulty and books the starting debt into it
+    (`FeesScreenController.Initialize`, `IncrementTotal`), its end marks the profile done and saves it
+    (`FinalizePlayerProfile`) and loads the level.
+  So in VR at the desk (`VrContractSubmit`): the name page's Next only sends the page event (the name checked as the
+  game checks it); later Nexts do nothing; the fingerprint's skip is kept. Once `3D Scene` is off and the fade is
+  95 % dark (at most 1.5 s), the profile is made as `TryCreateProfile` would, then `ApplyOptions`, a save, and the
+  tutorial skip. The fees screen and the onboarding's end make it first if it still waits. The log: "Contract
+  submit: the profile … made in … ms (…)". Raik's test (2026-11-26): no judder any more; made in 39 ms.
+- **The contract during the flight video** (Raik 2026-11-26: the character creation's menu seen in the background
+  of the intro video, on the left eye): the game leaves `PRF_ContractScreen_WorldSpace` on until the onboarding
+  comes; flat nothing draws it then. In VR its canvas stood back at the game's camera, in the room around the video.
+  While the apartment is off, `UI` is shrunk to nothing (`VrContractDesk.Away`), and set back once the game turns
+  the contract off or the apartment comes again.
+- **Picture and video placed** (Raik 2026-11-26): the apartment's picture 10% smaller (`PictureSize`) and 2° lower
+  as seen from the head (`PictureLower`); the flight video, on the menu canvas (`VrUi`), 5° lower about the eyes at the
+  same distance (`VideoLower`) and 15% wider (`VideoSize`).
+- **Sitting higher, keys lower** (Raik 2026-11-26): the desk with its chair placed 25 cm lower under the head (first 15, then 10 more)
+  (`SitHigher`), as if the camera were 15 cm higher (one seemed too small and looked at the screen at an awkward
+  angle); the typing keyboard 7 cm lower, just above the desk's own keys (`VrDeskKeyboard.Lift` 3 cm -> -1 cm -> -4 cm).
+- **The contract as sharp as the Hab's screens** (Raik 2026-11-26: the Hab's screens are readable and smooth, the
+  campaign's screen flickers at its edges): the contract's canvas was drawn by the headset's camera straight into the
+  room. Now (`VrContractPicture`) it is moved onto the pass layer (29, which the headset's camera leaves out), an
+  orthographic camera of its own (no XR, no post-processing, cleared to clear) draws that layer into a texture as the
+  UI texture at a Hab screen is made (MonitorSchaerfe times the window's width, at most 4096, mip levels, trilinear,
+  aniso 8, mip bias -0.8), and a world-space canvas on the contract's layer shows it where the contract lies. The
+  canvas stays in place for the keyboard; its parts go back to their layers when the desk goes.
+  Raik's first test: the terminal stayed empty, and no click sounds either. The camera drew through
+  `SetTargetBuffers`, which HDRP does not take (it renders to `targetTexture`). Now `targetTexture`, and the contract
+  leaves the headset's view only once the camera has rendered (`RenderPipelineManager.endCameraRendering`) and a read of
+  the texture's small mip levels 1.5 s later finds something drawn (up to 3 looks); else the contract is drawn as
+  before ("the contract's picture stayed empty"). The missing sounds are not explained yet; to be checked with the
+  picture working.
+- **Clicking through** (`VrContractDesk.Advance`): a toggle of the contract that was just ticked, or a button of it
+  that was just clicked, hands the selection on 0.15 s later to what lies below it (else to its right), past the
+  other choices of the same toggle group, if the game left the selection where it was. So A alone goes through the
+  form (Raik, 2026-11-23).
+- **The account name** (`VrDeskKeyboard`, a stopgap, Raik's word): while the contract's name field
+  (`ContractToggleCheck.m_RequiredInputField`, a `TMP_InputField`) is selected, a board of keys lies below the screen
+  (54 x 21.5 cm, sloping 25 degrees), and each controller shows as a bar with a beam along its aim pose. The key a
+  beam meets lights up, that hand's trigger types it (a capital at the start and after a space), OK ends it and
+  selects what is below the field. Board, bars and beams are world-space canvases of plain images on the contract's
+  layer 10, with the field's font: the path the contract itself is drawn by, so no shader or model of the mod's own.
+  `VrMenuInput` leaves the triggers out of the menu meanwhile. Not seen in the headset when this was written.
+- First test (Raik, 2026-11-23): the keys load (8 parts of desk and terminal, the chair), the contract works on the
+  screen, "fits quite well already". Not seen yet: the onboarding's screens on the terminal and whether the apartment
+  stays on through them. The log tells each step (`Contract desk: ...`).
+- Tutorial step "roll" (Raik 2026-11-26: it never completed in VR): its objective (`ControlActionObjective`, checked in
+  `UpdateControlActionObjectiveProgressSystem.OnUpdate`) waits for the game's roll actions held (RollBodyLeft/Right; on
+  a gamepad the sticks pressed in), but the mod rolls the body itself. `VrTutorialRoll` redirects that check's reads of
+  the actions (IsPressed, Value, WasPressed, WasReleased): while VTOL or Shooter rolls left, the left roll actions count
+  as held at full value (right for right, ModifiedRoll for either), going down and up with the roll
+  (`VrControls.Rolling`, `RolledBefore`). Nowhere else, so the game does not roll a second time. The hint on the HUD
+  still names the gamepad's sticks; a small picture of the controllers for VTOL was Raik's idea for it.
+- Tutorial step "thrust left, right, forward, back" (Raik 2026-11-26, as with rolling): the same objective waits for
+  ThrustMoveForward/Backward/Left/Right/Up/Down held, while the mod's thrust goes into the game's thrust axes
+  (`ThrustAxisPatch`). `VrTutorialRoll` became `VrTutorialControls`: in that check an action also counts as held while
+  the controllers thrust along its axis by at least 0.3 of full (`ThrustShare`, the objectives' own least axis value),
+  in the body's axes (`VrControls.TryGetThrust`). Log: "Tutorial controls: ...".
+- The tutorial's tips show the controllers (Raik 2026-11-26), `VrTutorialPrompts`: the pictures of the tips
+  (`ContextualButtonPrompt` in the `PRF_A1_TUT_..._Tip` popups; the words beside them are separate texts and stay)
+  are set again after the game's `ChangeControlType` while VR runs with VTOL or Shooter: roll = trigger + left stick
+  (Shooter) or trigger + an arc bowing down, heads up left and up right (VTOL); thrust (all six) = left stick (Shooter)
+  or trigger + a cross of four arrows (VTOL); brake = Y, the gamepad's second brake picture left out (ignored by the
+  layout); look around = right stick. Under the roll tip's last line a copy of it, its prompt and localization taken
+  out: the left stick pressed in, "Gerade ausrichten" / "Straighten up". The game's glyphs come from its own table
+  (`ControlSpriteListAsset.XboxOne_ControlSprites`), the mod's from `Icons/*.png` (trigger, roll, thrust, plus; drawn
+  for the mod, 256 px shown at 64 units like the game's). VR or the controllers' flying off: the added parts go and
+  the game's picture comes back (`ChangeControlType` once more). Log: "Tutorial prompts: ...".
+- The tutorial hands out the flight step by step (Raik 2026-11-26: "thrust is locked at first and given free piece by
+  piece"), by blocking the game's actions (`ActionBlockerService`). The controllers fly past the game's input, so they
+  ask the same now (`VrControls.Allowed`): `TryGetThrust` leaves out a direction whose action (or its axis) is blocked,
+  a blocked roll left or right gives no roll, Y brakes only while a brake action is free. Log "Controls: the game holds
+  ... back now". And the brake objective (both ThrustBrakeLeft and ThrustBrakeRight held) counts Y braking
+  (`VrTutorialControls`).
+- Thrust in the tutorial's tips with VTOL (Raik 2026-11-26: the same controller and cross six times "looks silly";
+  "an arrow only one way, really flat forward, back, up, down, a bit in 3D"): trigger + plus + an arrow of its own
+  for each direction (`Icons/thrust_<direction>.png`), a thick flat arrow in perspective from a little above and to
+  the right, one scale for all: forward and back lie flat into the depth, left and right lie flat across, up and down
+  stand. Drawn by `tools/draw-arrows.py` (the trigger and roll pictures by `tools/draw-icons.py`).
+- The tutorial's tool steps (Raik 2026-11-27: "I use the grapple, but it waits for other input"): the objectives that
+  want a game action (from the game data: `CA_TUT_01_07_GrappleIntro_GrapplePush` = Throw, `..._GrappleReel` =
+  GrappleFire + RetractionModifier, `CA_TUT_01_08/06_02_Scanner` = ActivateScanner, `CA_TUT_01_10_RadialMenu` =
+  ToolMenu, `CA_TUT_04_05_CancelTethers` = RecallTethers) read the actions themselves, while the tools get the
+  controllers' presses through `VrToolInput`'s redirect. `VrTutorialControls` now counts those too
+  (`VrToolInput.Presses`, either hand); drawing any tool counts as the tool wheel. The cutter's steps (CutPoints,
+  Vapourize, SplitSaw, CutAngle, CutAluminum) are PAT objectives on what the game does, not on presses. Tethers are
+  bought in the HAB's upgrades first (`PAT_OBJ_TUT_04_03_TethersPurchased`).
+- The grapple's tether mode only once the game has unlocked the tethers (Raik 2026-11-27: "as long as I have not
+  unlocked the tethers, the grapple has to stay in the grapple mode"): `VrTetherMode.On` also asks
+  `TetherController.TetherUnlocked` (set by the game's `UnlockAbilityEvent`, in the tutorial with the upgrade
+  purchase); B on the grapple does not switch before. Log "Grapple mode: the tethers are not unlocked yet ...".
+- The waypoints tip showed braking as "Y or Y" (Raik 2026-11-27: "only the Y button and done", VTOL and Shooter): its
+  "Brakes Container" has the single key ("Button - Not Simul - Brake") and the pair held together ("Simul - Brake
+  Left", "Simul - Brake Right KEYBOARD") with a word between. `VrTutorialPrompts`: a pair prompt beside a "Not Simul"
+  one is taken out of the layout and drawn at no size, with the short texts (up to 4 letters) beside it; back when VR
+  or the controllers' flying is off.
+- The cutter's tip with the tool menu (Raik 2026-11-27: "controller prompts are nonsense in VR; write Scalpel right
+  shoulder, Grapple right hip; leave the tool menu out"): in the tutorial's tips the ToolMenu prompt's line is taken
+  out of the layout, and the SelectCutter / SelectGrapple lines show no picture but "Skalp-L: rechte Schulter" /
+  "Wurfhaken: rechte Hüfte" ("Stinger: right shoulder" / "Grapple: right hip"; the game's own names; left for the
+  left-handed). Untested: the tip's layout was not found offline, it is guessed from the other tips.
+- The tools' tips with the controllers' buttons (Raik 2026-11-27, the cutter's tips: "you know how the game runs"),
+  as `VrToolInput` has them: CutterFire, GrappleFire and DemoChargeFire show the mod's trigger picture, CutterAltFire
+  (cut angle) and Throw (grapple push) A, ToolMode (Stinger/Splitsaw) and RetractionModifier (reel) B; push and reel
+  with trigger + plus before them unless their line already shows the trigger's prompt; X and Y for the
+  left-handed. ActivateScanner's lines say "Scanner: rechte Helmseite". Untested in the headset.
+- The tutorial tips' controller pictogram (Icons/trigger.png, tools/draw-icons.py): its button no longer the curved
+  trigger but a short straight bar on the grip's front edge halfway down, half in front of it, a third of the first
+  try's length, with the press marks in front (Raik 2026-11-27, at the
+  grapple's tip about holding on).
+- Tutorial tips: the second pictures for choosing a tool with the tool menu open (the game's second binding, the
+  mouse's; "equip ... (with the tool menu open)") go away altogether (Raik 2026-11-27). Every tutorial prompt is logged
+  once ("Tutorial prompts: '<path>' <set> <action>, line '...'") to find any still left.
