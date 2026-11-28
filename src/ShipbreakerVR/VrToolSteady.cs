@@ -100,7 +100,7 @@ namespace ShipbreakerVR
             return part * part;
         }
 
-        // The light smoothing of every hand (VrInput, Experimente/HandGlaettung): how much of the way to the controller
+        // The light smoothing of every hand (VrInput, Anzeige/HandGlaettung): how much of the way to the controller
         // a pose that is that far behind it (a length or an angle) goes in a frame of dt seconds. Within the tremor it
         // follows slowly, the slower the less it is behind (as Share); beyond it the faster the further behind, so a
         // real movement is followed at once: moved at a steady speed the pose stays the root of speed x lag x tremor

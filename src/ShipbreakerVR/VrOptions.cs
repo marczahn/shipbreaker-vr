@@ -130,6 +130,7 @@ namespace ShipbreakerVR
                 new SliderRow { Label = L("World scale", "Weltmaßstab"), Entry = VrSettings.WorldScale, Format = "0.00" },
                 EnumRow(L("Helmet", "Helm"), VrSettings.Helmet),
                 EnumRow(L("Immersive computer screens", "Immersive Computerscreens"), VrSettings.ImmersiveScreens),
+                new SliderRow { Label = L("Hand smoothing", "Handglättung"), Entry = VrSettings.HandSmoothing, Format = "0.0", Step = 0.5f },
                 new BoolRow { Label = L("HUD and menus in world", "HUD und Menüs im Raum"), Entry = VrSettings.UiInVr },
                 EnumRow(L("Visor steadying", "Visierberuhigung"), VrSettings.HudSteadying),
                 new SliderRow { Label = L("Visor size", "Visiergröße"), Entry = VrSettings.HudScale, Format = "0.00" },

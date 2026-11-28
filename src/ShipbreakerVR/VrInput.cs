@@ -140,11 +140,10 @@ namespace ShipbreakerVR
             private const float SteadyLag = 0.05f;
             // Raik (2026-11-23, for the trailer's videos: "the hands tremble in front of the face, that can hardly be
             // avoided; a slight, really slight smoothing"): every controller's pose is smoothed a little
-            // (Experimente/HandGlaettung, 1 by default, 0 for none): the tremor within SmoothWithin and SmoothAngle
+            // (comfort option Anzeige/HandGlaettung, 0 = off by default since 0.33.0): the tremor within SmoothWithin and SmoothAngle
             // times that setting is followed slowly, a real movement the faster the further the pose is behind
             // (VrToolSteady.Follow), so a hand moved at 1 m/s lags under a centimeter. The same filter and the same
             // rigid step for every pose read as for the charges, whose stronger steadying goes first.
-            // NOTE (Raik): made for the videos; it may be taken out again before 0.33.0 is released. Ask him.
             private const float SmoothWithin = 0.002f;
             private const float SmoothAngle = 0.8f;
             private const float SmoothLag = 0.04f;
