@@ -133,7 +133,13 @@ interacting, the grapple and the "entity of interest".
   (the right one by default; on the left X stands for A and Y for B), the right stick stays with turning. Trigger =
   `GrappleFire`/`CutterFire`/`DemoChargeFire`; A = `Interact`, or `Throw` if the trigger was held when A went down (the
   grapple charges while `Throw` is held and throws on release); B with the trigger held = `RetractionModifier` (reel in;
-  the game only knows reeling in at a fixed speed, there is no reeling out); B tap = `ToolMode` (sent on release); B
+  the game only knows reeling in at a fixed speed, there is no reeling out; the rope pulls only while B is held: Raik, 2026-11-27, grappled
+  to the station's wall he went on speeding up with B let go, and at times pressed long for nothing. The game shortens
+  `LaserRope.mTotalLength` by its retract speed while reeling and pulls with a spring whenever the ends are farther apart
+  (`GetPositionForceInfo`); reeled faster than one moves, the length runs ahead, so after letting go it pulls on, and
+  pressed again nothing pulls until the length is below how far one is. `VrToolInput.ReelLength` sets the length to the
+  ends' distance when reeling stops (if shorter) and starts (if longer, at least 0.5 m); `ReelStart` reels while B is
+  held with the rope fixed, as the game reads the press only as an edge after the rope is fixed); B tap = `ToolMode` (sent on release); B
   held 0.4 s = `PlaceTether` held until B is released (the tether runs from where the hand points at the start to where
   it points at the release), or one `RecallTethers` press if the hand points at nothing. On the grapple B tap switches
   the mod's own tether mode instead (`VrTetherMode`, Marc's wish, like the cutter's mode switch): there the trigger
@@ -380,10 +386,22 @@ interacting, the grapple and the "entity of interest".
   left longer stayed bent where the real one was straight. Each frame both arms go back to the bone lengths of
   `geo_arms`'s bind pose (upper 0.325 m, lower 0.222 m), before anything poses them. The posed arm's elbow points
   down, 0.4 out and 0.3 back in the body's axes (`VrHands.Elbow`, the pole of `VrToolModels.Bend`), not into the
-  animation's plane, which turned it inwards while drawing a tool.
+  animation's plane, which turned it inwards while drawing a tool. That is with the hand thumb up; since 2026-11-26
+  (Raik: right hand palm down and drawn in, the elbow goes out to the right, turned back it comes down, palm up it
+  stays down and a little in) the elbow turns about shoulder to wrist by half the hand's turn from thumb up
+  (`Pronation`: palm down +90°, palm up -90°), at most 70° out and 35° in, at 400°/s. The forearm itself turns only
+  some 50 to 80° either way and the shoulder takes the rest (a study with splinted forearms: the shoulder made up
+  the turn). The forearm's twist bone (`rig_*_lowerarm_twist`, `VrHands.Twist`) takes half the wrist's turn about
+  the forearm from the bind pose, so the skin turns along instead of twisting at the wrist.
 
-- A hand flat on a large fixed surface slides along it when the body turns on with the controls (`VrClimb.Slide`): past 100° of the body's facing since taking hold (a roll about it does not count), the hold moves to under the hand (its position onto the surface's plane, found on the collider by a ray) over 0.35 s, eased, and the hand turns over to its new flat pose over as long (`VrHands`, `GripSlides`). The count starts again from there.
-- A hand flat on a surface while the body rolls turns along on the spot (`VrHands.Grip`, `RollAlong`): past 45° between its turn and the flat pose the controller would give it now, it turns over to that over 0.35 s.
+- A hand flat on a large fixed surface slides along it when the body turns on with the controls (`VrClimb.Slide`): past 100° of the body's facing since taking hold (a roll about it does not count), the hold moves to under the hand (its position onto the surface's plane, found on the collider by a ray) over 0.35 s, eased. The count starts again from there.
+- A hand flat on a surface, an edge or a handle turns with its controller (`VrHands.Grip`, `HoldFrame`; Raik 2026-11-26: the hand's turn depended much on where the body was, "I cannot turn my hand much otherwise"): the palm stays on the surface, the knuckles go where the controller points, eased with a time constant of 0.15 s and at most 240° a second, so it trails the controller a little as if rubbing on the wall (Raik, after 0.08 s unlimited: "a little slower … as if there were friction"); on an edge or bar (`VrClimb.TryGetEdge`) the face under the palm is turned round the edge's line to where the controller's palm faces, up to 90° from the face held. Before, the hand stayed as it took hold until 45° off and then turned over in 0.35 s (`RollAlong`). Taking hold, the face the palm turns to counts over the nearest point's (`VrClimb.SurfaceNormal`, `PalmPrefer` 10°); before, the nearest was taken up to 60° off the palm, and on an edge that depended on where the controller was beside it. Letting go, the log gives how far the hand was off its controller ("Hands: … hand held … off its controller by … on average").
+  Raik's first test the same day: holding a terminal's edge thumb up and pushing past it, the hand turned over as if the controller had been turned 180°. The knuckles went where the controller's aim lay on the surface, and with the aim nearly into it a little turn of the wrist sent them the other way. Now the hand starts from its turn as it took hold (`GripStart`) and turns on by as much as the controller turned since, in the rig's axes (`GripController`), so a body turned by the controls does not turn it either. Only past 100° off where the controller lays it now (`TurnOver`), and not while the controller's aim is within 45° of the surface's normal, does it start from the controller anew.
+- Handles (Raik 2026-11-26: the handles beside the door switches, `SM_HandGrab_02_2`, were held flat on whichever face was nearest; reaching a little deep that was the back against the wall and the hand went into it). A first try held them as a fist round their line; Raik: the open hand with its fingers over the bar looked better, the hand should rather be drawn to the normal grip. Now a fixed collider thin both ways and long (`VrClimb.HandleLine`) named `HandGrab` or no thicker than 6 cm (`GrabHandle`) is held on its front (`HandleFront`): its wall is what a ray from its middle meets nearest across it (within 25 cm), a hold on the wall's side is moved round to the front at the same place along it, and the palm goes on the front unless it faces the bar's top or bottom (within 60°). Reaching past it to the wall, the wall is the nearest and is held.
+- Wall or handle, not both (Raik 2026-11-26: holding the wall just below such a handle and turning the hand a little, it jumped onto the handle and back, 17.8 cm each way). `VrHands.OutOfSurface` cast its rays from 20 cm out along the palm's way and pushed the hand out by the deepest hit; with the fingers under the handle the ray met the handle in front of them. It now counts only the held collider (`VrClimb.HeldCollider`); what lies beside is left to `HeldOut`, which pushes the shortest way out. Log: "not pushed … cm out onto '…' beside it".
+- A palm turned more than 100° away from the surface it holds is not turned over onto it (`VrHands.HoldFrame`, `PalmAway`): on an airlock's plate the hand had turned by up to 180°. The hand then stays as the controller holds it.
+- The elbow with the hand turned past palm down to thumb down (Raik's picture: right hand palm out, thumb down before a wall, the elbow went down): about 180° the turn's sign flipped and it counted as palm up. A forearm turns palm up only so far, so past 120° that way it counts as turned in (`SupinationMost`); out at most 90° now.
+- The right arm's forearm twist bone: the search took the left arm's bone by its name first and stopped; it now goes on to the bone on its own arm.
 - The arms' helper bones (`rig_*_lowerarm_twist`, `rig_*_shoulder_twist1`, `rig_*_elbow_stretchtracker`: names with twist or stretch under the collarbone) go back to their bind-pose places on their parents each frame with the arm's length (`VrHands.KeepLength`, `FindHelpers`): with the main bones right, a helper the cutter's draw animation moved still made the forearm look long (Raik). Logged once per bone with how far it was off.
 - Using things needs a hand on them (`VrInteractHeld`, a postfix on `InteractionController.UpdateClosestInteractable`): while aiming with the hand and with `Steuerung/Festhalten` on, the game's pick of the closest interactable along the view (`mClosestInteractable`) becomes the interactable on what the hand that took hold last holds (`VrClimb.HeldInteractable`), or none; its hit info is cleared for a thing the game did not find itself. So a door switch, a console or a thing to collect shows its prompt only once grabbed (Raik).
 
@@ -1520,3 +1538,359 @@ their numbers said (the "3 s" for a device took 1.5 s, the log said 3.0); `VrDev
 second pass, next to nothing, and missed blows. Both step once a frame now (`steppedFrame`), and the pull times are
 halved in the code so they stay what was felt and approved in the headset: 1 s for a thing on a wall, 0.5 s for a
 poster, 1.5 to 2 s for a demo charge, 1.5 s for a device.
+
+## The empty hand's fist follows the grip (0.33.0)
+Raik, 2026-11-23: the fist of an empty hand that holds nothing closes as far as the grip's button is pressed, no longer
+all at once (`VrHands.Curl`, the hand that is `free`; `VrInput.Squeezed`, from 3 % to 90 % of the travel). It is one
+pose all the way from the loose hand (`IdleBend`) to the fist (`ToolBend`): before, the fist came on at the grip's
+press point and ran from the animation's pose, which is not the loose hand. `Grip.Down` (0.5) still decides holding
+on, drawing tools and the fist's blows.
+- Closed up to a quarter the fingers are still kept out of things as the loose hand's (`KeepOut`), fading out up to
+  half; closed further they are not, as the fist never was, and what held the hand back for them goes back to nothing.
+- Lying flat on a surface and right at a button win over the grip's travel, also while the hand comes off them, so
+  letting go of a hold opens the hand as it did.
+
+**Taken out again, for the next release** (Raik after three headset tests on 2026-11-23: "not working optimally yet,
+we take the finger gestures out again for now; the dynamic closing stays"): fingers that follow the controller's
+touch sensors (index finger out off the trigger, thumb out and thumbs up off the buttons, the stick and the thumb
+rest) and the stiff index finger that pushes buttons and pushes the body off a wall. The whole state is the branch
+`idea/finger-gestures` (56e4dbc), with a local trace of the sensors on `idea/finger-gestures-test`. What was learned:
+- Virtual Desktop sets the touch usages of the trigger, A/X, B/Y and the stick. The thumb rest's
+  (`/input/thumbrest/touch`) is named by Unity's Oculus Touch profile (OpenXR plugin 1.2.8) but not bound; an action
+  added to the profile's map in a prefix on `OpenXRInput.SendToOpenXR` brings it, and Virtual Desktop sets it too.
+- Raik's wish: a finger is out only when it is clearly and on purpose out of the sensor's field; with half signals it
+  stays laid on, and nothing may wobble with a loosely held controller. A thumb on the thumb rest is down.
+- His right controller's stick sensor told of a touch for 41 s on end, through clear lifts of the thumb; the left
+  one's let go within 0.15 s. Leaving out a stick that still tells of a touch after the thumb lay on the thumb rest
+  for 0.75 s made the lifts count in the trace, but it was still not good enough in the headset.
+- The stiff finger did push the body off (176 N with the controller 7 cm further in, of 250 N at most).
+
+## A light smoothing of the hands (0.33.0, for the trailer)
+Raik, 2026-11-23, for the trailer's videos: hands held in front of the face tremble, and it shows. Every controller
+pose read through `VrInput` is smoothed a little (`Experimente/HandGlaettung`, 1 by default, 0 for none, up to 3):
+within 2 mm and 0.8 degrees (times the setting) the pose follows slowly, beyond that the faster the further it is
+behind (`VrToolSteady.Follow`), so a hand moved at 1 m/s lags under a centimeter and a tremor of 1 mm at 10 Hz shows
+less than half. It is the filter that steadies a hand with a demo charge, with the same rigid step for the grip and
+the aim pose, so hand, tool and beam stay together; the charges' stronger steadying goes first.
+**It may be taken out again** before 0.33.0 is released: it was made for the videos, and it puts a little lag on
+aiming and climbing for everyone. Ask Raik before the release.
+
+- **Hold A to skip** (Raik 2026-11-26): the text before the campaign's desk is skipped by holding Space through `HotkeyHandler` (Assembly-CSharp), which reads the keyboard itself (`Input.GetKey`), not InControl, so A (Confirm) never reached it. `VrHotkeySkip` replaces its `Update` for Space while VR runs: Space or the right A held (outside gameplay), same down / held / up events. Log: "Skip: A held as Space on ...".
+
+- **Thumb over edges** (Raik 2026-11-26, a picture of the thumb flat in the air past an edge): `VrHands.ThumbOverEdge` finds the thumb's first bone whose end has no surface under it (as `OverEdges` for the fingers) and bends its joints from there towards the palm over 0.15 s: CMC 10°, MCP 40°, IP 55° (about two thirds of the measured ranges, MCP 55–60°, IP 80–90°), as far as it stays out of the surface (`ClawPress`). Log: "thumb's '…' reaches over an edge".
+
+- **Placing the tools on the body** (Raik 2026-11-26): `VrToolPlace`, switch Justierung/WerkzeugPositionAnpassen in the VR options right under "Werkzeuge justieren". On, the grip at the grapple (right hip) or the detonator (left hip), in their zones, takes the hanging tool itself instead of drawing it; it moves rigidly with the controller and stays where the grip lets go, stored as GreifhakenPlatz / ZuenderPlatz ("x y z / pitch yaw roll", body-local as `VrBeltGrapple.BodyAt` / `DetonatorAt`, turn against the heading; mirrored for the left-handed). The grapple's grip ball (`VrToolBelt.GripAt`) moves and turns with it, the detonator's box moves by as much (`DetonatorShift`). The dragging hand is blocked from climbing and handing over (`VrToolFit.Blocks`). Log "Tool place: ...".
+- **The wall before the tools** (Raik 2026-11-26): a hand in a body zone (grapple, detonator, charges, cutter) with something fixed within `VrClimb.Reach` (`VrClimb.WallNear`: no rigidbody or a kinematic one, not the player's, not a tool afloat) is in no zone, so the grip holds the wall; to draw a tool, turn a little away. Log "Tool belt: ... the wall comes first".
+
+- **Loading screens as sharp as the Hab's screens** (Raik 2026-11-26: their edges look restless): while `SceneLoader.LoadScreenVisible`, the UI texture is drawn as at a Hab screen (`VrUi`: Anzeige/MonitorSchaerfe times the window, at most 4096 wide, mip levels, trilinear, anisotropic, `MonitorMipBias`). To be brought to other screens step by step where needed. Log: "UI texture ... created" as it changes.
+
+- **No detonator before the charges are unlocked** (Raik 2026-11-26): the game keeps the charges in the loadout but blocks `SelectDemoCharge` (`DemoChargeController.Start`, until `UnlockAbilityEvent` DemoCharge or unlimited charges). While that is blocked, `VrBeltGrapple.HangDetonator` hangs nothing at the hip. Log: "the demo charges are locked / unlocked".
+- Skipping (Raik 2026-11-26: "all video sequences with one press of A", station dialogues with Y "one line or one
+  speaker after the other"), `VrSkip`: A stops any `LynxVideoPlayer` video (its `StopVideo`, whether or not the game
+  lets the gamepad skip it); in the onboarding A does in PlayVideo and Extracting what the game's B/Start skip does
+  (to Cloning, the state set before the video stops, else `OnVideoStopped` advances once more; the popups keep A as
+  Confirm); the text before the desk (`InputHandlerFrontEnd` "Action - Skip On Confirm") takes A directly. The
+  earlier `VrHotkeySkip` (A held as Space for `HotkeyHandler`) is gone: no bundle uses that component. In the Hab, Y
+  (not with B held, the diagnostics' chord) stops the line playing now with a `LynxSpeechCancelEvent` for that
+  speaker only, so a sequence of lines goes on with its next by itself; in a scene after a shift that is a timeline,
+  the timeline jumps to the next clip on a `TriggerableSpeechAssetTrack` and `Hab3DController.mWaitTimeForFade` by
+  as much; after the last line (and in a plain speech scene) the clock goes to the scene's length, so it ends as it
+  would have. The log tells each skip ("Skip: ...").
+- The onboarding's list of the debts (`FeesScreenController`, Raik 2026-11-26: "sped up, so everything stands there at
+  once and one only confirms with the thumbprint"): A while it counts up gives it one line a frame (its own way, with
+  its sounds), then the total at its end; that last step waits until A is let go, so the press does not also confirm
+  the thumbprint, which the game selects as the total ends (`VrSkipDebtList`).
+- Tools held back in the tutorial (Raik 2026-11-26: after Weaver says to take the grapple it could not be taken in VR,
+  with F3 it could): the hand asked `EquipmentController.IsEquipmentBlocked`, which also counts the tool wheel
+  (ToolMenu) blocked, and the tutorial keeps the wheel blocked while it hands out the tools one by one. The game's
+  select keys only ask about the tool's own action (SelectGrapple, SelectCutter, SelectDemoCharge, ActivateScanner),
+  and so does the hand now (`VrToolInput.Blocked`, log "the game holds the ... back now").
+- The HUD in a shift is drawn sharper too (Raik 2026-11-26, after the loading screens: "much better; the same for the
+  HUD in the mission"): `VrUi` takes the larger, mipmapped UI texture (`Anzeige/MonitorSchaerfe`) in gameplay outside
+  the menus as well. Costs the UI camera's drawing at that size every frame of a shift.
+- Bars on the HUD's brackets (Raik 2026-11-26: the scales left and right "are used for nothing"), `VrHudBars`, while
+  VR runs: on the left bracket's ticks (the speed under it) a yellow bar of the thrust the game gives now
+  (`ThrustController`: `mPrevThrustMagnitude` while Draining with a push this frame and not braking, so keys and
+  gamepad count too), 0 to full, 30 % see-through; on the right bracket's ticks (the room's state under it) the air
+  pressure where the player is (ECS `AirPressure` on the `SingletonLocalPlayer`, 0..1), full atmosphere at 75 % of the
+  scale, its thirds red, yellow, green, 25 % see-through. Children of the brackets (`Bracket_Left_Container`,
+  `Bracket_Right_Container`, found from `VelocityUIController` and `RoomInfoUIController`), 9 wide, 3 off the line,
+  as tall as the ticks; made on the first `VelocityUIController.Update` in VR. Log "HUD bars: ...".
+- Extended body physics, a new option (`Steuerung/ErweiterteKoerperphysik`, off by default; Raik 2026-11-26: "when we
+  throw something, be it a tool or an object in the hand, that gives the body an impulse too ... and when the grapple
+  falls into its line, that should even out"). `VrRecoil.Throw`: what is thrown pushes the body back by its mass times
+  its speed against the body over the body's mass (`VrClimb.BodyWeight`, 50 kg, 100 kg with extended world physics,
+  the same the tool's line pulls with, so the line catching a thrown tool about cancels it). At the three throws: a
+  firmly held part (`VrClimb.Throw`), a tool let go (`VrLooseTools`, its 5 kg or the detonator's 1.5 kg), a demo
+  charge let go by hand (`VrChargeByHand.ThrowFrom`, 1.6 kg). While a hand holds on to something the hold takes it.
+  Log "Recoil: ...".
+- Body weight, an option of its own under the body physics (`Steuerung/Koerpergewicht`, 100 kg, 50–150; Raik
+  2026-11-27: "the body weight as its own option, so that throwing always acts on a 100 kg body"). With extended
+  world or body physics the body weighs that everywhere the mod pushes or pulls it (`VrClimb.BodyMass`: throwing,
+  the tool's line, climbing, pushing parts); without either the game's 50 kg. Before, body physics alone left the
+  game's 50 kg, so a throw pushed twice as hard as with world physics.
+- Body weight back to two steps (Raik 2026-11-27: "extended body physics on: 100 kg, off: 50; 150 is not needed"):
+  no slider; `VrClimb.BodyMass` is 100 kg with extended body physics, otherwise the game's 50 kg, also with extended
+  world physics (before, world physics gave the 100 kg). Throwing, the tool's line, pushing parts and the climbing
+  momentum go by it; the arm and catch forces of climbing keep their own 100 kg (`ClimbContact`).
+- The local mirror washed out light red (Raik's screenshot 2026-11-27): it copies a loaded HDRP/Unlit material, and
+  that time it was the additive glow `M_FX_Glow_Red_01`; with its keywords gone its blend states stayed, so the
+  mirror's picture was added onto the bay. `Mirror.Look` now prefers an opaque one and makes the copy opaque
+  (surface type, blend, depth write, queue Geometry). Log "Local suit: mirror ... made opaque".
+- Tool places as Raik fitted them, the standard (2026-11-27, "a little more comfortable for the hands"):
+  `SprengsatzHaltung` "-15.6 -2.5 2.9 / -21.8 -142.2 -10.4" (before empty), `ZuenderHaltung` "-2.7 -9.8 -3.3 / 18.1
+  -8.9 6.0" (before "-1.8 -13.0 -3.3 / 15.7 -20.5 -5.5"), `GreifhakenPlatz` "33.0 -72.2 -10.4 / 58.8 11.0 28.2" and
+  `ZuenderPlatz` "-27.1 -76.1 3.4 / 44.2 41.4 17.5" (before empty, the mod's own places). Cutter and grapple in the
+  hand were already his. Stored entries stay as they are; deleting one gives the new standard.
+- The cutter with the second hand on it, steadied for real (Raik 2026-11-27: "it moves just as without the hand"):
+  before only its turn, within 1.5° and with 0.1 s lag, little more than with one hand (0.5°, 0.04 s), and its place
+  not at all. Now (`VrToolSteady`) the turn within 3° and with 0.3 s lag, and the place too (`Place`, within 2 cm,
+  0.25 s lag, before the tool's weight and collision), so it moves clearly slower and a precise cut keeps its line.
+  Still only with extended tool physics (the second hand takes hold of the tool only then). Log "Tool steady: ...".
+- After a shift (the tutorial's too) the game puts one at 'Entry For After Shift_Virtual_Camera', at the other end of
+  the room, not on the bed; walking only began from the bed, so there one hopped between spots as in the flat game, and
+  that spot (1.50 m) counted as sitting and stayed low (Raik 2026-11-27). Now with Station/FreiGehen one walks from
+  there at once, from where the spot is in the room (VrHabWalk.StartAt, log "Hab: after the shift ..."), to the terminal
+  and the rest as before; and a spot counts as sitting only below 1.4 m (the bed's view is at 1.28 m).
+- Under the subtitles in the station a small line '[Y] Skip' / '[Y] Überspringen' (VrSkipHint, Raik 2026-11-27): the
+  mod's own, under the lowest subtitle showing, in its font at 0.6 of its size; only in the Hab, not paused, with VR.
+- The hand goes along with the tool's recoil (Raik 2026-11-27: on the grapple's push and the cutter's cuts, the wide
+  split saw too, the tool moved through the hand). From the game's data: the cutter's Animator (Anim_CuttingTool,
+  state Anim_CuttingTool_Recoil, 1.5 s) moves and turns its own transform, the grapple's (AC_GrappleTool_01, states
+  Recoil 0.5 s, Push 1, Push 2, Impact) its bone SK_GrappleTool_Root with the pieces on it; resting states
+  Anim_CuttingTool_Idle, Idle, Idle2. `VrToolRecoil` (LateUpdate, before the hands) compares that part's pose against
+  the tool's point with its pose at rest and moves and turns the tool hand, and a second hand on the tool, by just as
+  much about the grip (in tracking space, before the arm's bend), so the grip stays in the hand and the arm follows.
+  The tool is placed as before. Not for a second tool (VrDualTools). Log "Tool recoil: ..." (which part, how far).
+  Untested in the headset.
+- The left HUD bar shows the speed, no longer the thrust (Raik 2026-11-27): the player's speed as the game's number
+  under it, full for the fastest the jetpack gets fully upgraded (BUFF_Thruster_Speed: 3.5 m/s free; the thrusters' own
+  top if higher), yellow; red from the lowest speed at which a crash hurts, read from the player's
+  ImpactDamageRangeAsset (8.51 m/s against parts from 100 kg, 10 m/s from 7.5 kg). Log "HUD bars: speed ... (red from ...)".
+- Walking in the station after the tutorial, the call could not be answered (Raik 2026-11-27): after a shift with a
+  call waiting the game keeps only the entry spot, waits for one to go to the comms speaker by the workbench (its light
+  blinking) and keeps the exit and the terminal shut (IsCameraBlocked while mCurrentAfterShiftData is set). Now within
+  2 m of that light (VrHabStations.CallReach, wherever one looks) '[A] Answer the call' starts the scene as the flat
+  game's way there does (Hab3DController.TryStartAfterShiftSequence; log "Hab: answering the call ..."), and '[X] Exit'
+  shows only while the game lets the exit open.
+- The '[Y] Skip' hint under the subtitles was there but too small to see (Raik 2026-11-27, at the call after the
+  tutorial; log: font size 8): the subtitle's text sits under scaled parents of its own, so its font size is now taken
+  as seen (times its scale against the hint's parent) before the hint's 0.6 of it.
+- After the call the night did not come (Raik 2026-11-27): started straight away (TryStartAfterShiftSequence) the call
+  played, but the game's flow waits on the event its "Answer intercom" way sends (NavigationOption.GoTo); after the
+  call the screen went black, input stayed blocked (no pause menu) and one stayed standing. A now takes that way from
+  the entry (the button the game labels for the call, else its way up), as the flat game does; straight away only
+  without it. And walking ends when the game wakes one in the bed (Entry_Virtual_Camera, WakeUpMonitor_Virtual_Camera),
+  so the morning goes on from the bed.
+- The call took three presses of A (Raik 2026-11-27; log: entry to HabitationTurned, to Bed, then straight away), each
+  with the game's sound of moving on: the game's way to the call goes over several places. One A now goes all of it,
+  a step each time the game's camera has arrived (no blend, 0.3 s), by the labelled way, else the one to the Comms
+  place, else up, never back to a place passed, at most 5 steps; then the call starts (log "Hab: the call starts at
+  ... ways there: ..."). The prompt shows only once nobody speaks in the station (the line saying a call waits, played
+  or skipped). The intercom's green waypoint (PRF_Waypoint_Intercom, switched by the game's scene scripting) stayed on
+  after the night; it goes off as soon as the call is answered and stays off until the call is over, and the way ends
+  at the Comms place (it went on to the window) (log "Hab: the call is answered, the intercom's waypoint
+  goes off").
+- A skipped line in the station still held up what came after it as long as the line would have lasted (Raik
+  2026-11-27): the game's timelines place lines as clips of their length. Now when Y ends a line, each timeline playing a
+  speech clip runs at 25 times its speed to that clip's end (VrSkipTimelines, not a jump, so its signals and
+  activations in between still happen); the after-shift scene's own timeline still moves on to its next line as before.
+- While anyone speaks in the station the intercom's light is on in the game's Conversation state (Raik 2026-11-27,  flavor: the talk comes in over it), without the waypoint; only from Off, and back to Off when the talk ends unless the  game set another state meanwhile (VrHabStations.SpeakerLight, its own step in VrFrame so it works in bed and sitting
+  too, checked every 0.2 s; log "Hab: someone speaks ...").
+- Comfort option Anzeige/ImmersiveComputerscreens (Raik 2026-11-27, 'Immersive Computerscreens' in the comfort tab):  Ein = the station's screens on their monitors as before; Gross = each screen as large as the menus (MenuWidth for  MenuDistance, the same angle, measured from the resting head), just in front of the monitor's glass and parallel to
+  it, fixed in the room (facing the tracked head it turned with it), without the screen look; the head  stays where it is at that monitor (VrHab.LargeScreen).
+- Menu prompts in VR showed the keyboard's keys (Raik 2026-11-27, main menu): ContextualButtonPrompt picks its picture  by LynxControls.LastInputType, and a key pressed last (F3, F4) or none yet left it on the keyboard's. While VR runs a  prompt that went to the keyboard is switched to Xbox One right after (VrMenuPrompts, a postfix on ChangeControlType;  the controllers are an Xbox-style gamepad to the game, VrMenuInput); VR starting or stopping refreshes the prompts  showing (log "Menu prompts: ...").
+
+## A light part lies fast in the hand (0.33.0)
+Raik (2026-11-28): the hand turning on large things and surfaces with the controller (`VrHands.Grip`, `GripFollow`, `TurnOver`) is fine, but a small thing such as the radio must lie fast in the hand. A part larger than `VrClimb.SmallMost` counts as held flat (`HoldsFlat`), so a light one carried along (`Firm`) had its hand turning on it with the controller while the part itself also followed the controller. Now `VrClimb.HeldRigid` (a `Firm` or `Follower` hand on a part up to `RigidMass` = 10 kg) leaves the hand at the turn it took hold with on the part, so hand and part move as one. Heavier carried parts (up to `FirmMass`) and fixed surfaces keep the turning hand. Log "Hands: ... flat on it, one with the light part".
+
+## The suit shut down: only the head moves (0.33.0)
+In the industrial action (act 3) the campaign shuts the suit down: `PATTriggerListener` "Turn Suit Off" calls `HUDRebootController.ShutDownSuit` on `PAT_CMP_A3_SC07_Suit_Off` ("Turn Suit On" calls `RebootSuit`, and "Start/Stop Suit Shutdown Cycling" cycle it at random). Its `HUDRebootEvent` Off sets `mRebootShutdown` on `OrientationController` (the roll keys stop) and `ThrustController` (no thrust), until On. The mod's own turning (`VrControls`: right stick, Shooter's roll on the left stick, VTOL's roll by the hand's tilt) and straightening up (`VrFlightComfort`) went on (Raik, 2026-11-28). `VrSuitPower` (a postfix on `OrientationController.OnHUDReboot`, reading its `mRebootShutdown`) tells the mod; while it is set, none of those turn, straightening up under way stops and a new one is refused (a weak buzz). Log "Suit power: ...".
+
+## The radio's malfunction: knock by hand (0.33.0)
+Raik (2026-11-28). The game's PlayerFX ElectricalDamage, ExplosionDamage and ImpactDamageAudio_9pip (vfx bundle, `PlayerFXActionAudio`, cooldown 20 s) post `mus_fastTakeover_start` (Wwise 4110815201, "hillbilly takeover": radio noise loop and interference on the helmet radio; its own stop is delayed inside the event). `GrabController.OnSFXPlayed` sees it as a `MasterSFXEvent`, shows the HUD's RADIO MALFUNCTION (`HelmetMalfunctionUIController`, `PRF_Radio_Malfunction_Controller`) and after `m_HelmetKnockDelayTime` = 21 s `TryHelmetKnock` plays the left hand's react animation 5 (the knock on the helmet), turning the warning off 21 s later. In VR with both controllers (`VrHelmetKnock`): `TryHelmetKnock` does only its end (no animation, warning off); either hand coming into 0.22 m of the head (tracking space) towards it at 0.2 m/s or more is a knock, heard as the game's animation plays it (`sfx_helmet_radio_knock`, 0.32 s, on the game's master SFX object) with a buzz; the second knock (Raik 2026-11-28: two blows, both heard; at least 0.15 s apart) ends it: `ExecuteActionOnEvent` Stop on the start event (300 ms fade), `mus_fastTakeover_stop` and `mix_music_sendToHelmet_andRestartTimeline` posted, warning off. The start event is posted on an emitter of the mod's under the game's master SFX object, at 1.5 times the output bus volume (a prefix on `AkSoundEngine.PostEvent`). Until `Hinweise/FunkKlopfenGelernt` is true (set by the first knock by hand), a line under the warning comes 4 s on, with a knocking figure drawn at runtime. With VR off all is the game's. Log "Helmet knock: ...". Untested in the headset: whether the stop cuts the hiss and the music comes back cleanly.
+
+## Hand smoothing is a comfort option (0.33.0)
+Raik (2026-11-28): the light smoothing made for the trailer (`VrInput.Steady`) stays, as a comfort option off by default: `Anzeige/HandGlaettung`, 0 to 3, a slider in the comfort rows after the immersive screens. The key moved from `Experimente/HandGlaettung` (1 by default), so a config that had the experiment starts at 0.
+
+## A new career starts at a desk (0.33.0)
+Raik, 2026-11-23: at the start of a new career the contract was a tiny terminal somewhere in the room. What the game
+has there (read from the front end's scene `master_frontend` and its prefab `PRF_ContractScene`):
+- `PRF_IntroCanvas`: the intro's lines of text ("Humankind has industrialized ..."), a screen-space canvas.
+- `3D Scene` (off until the apartment shows): the apartment's picture `Background_Main`, a sprite 7.7 m from the front
+  end's `Main Camera` (at 0 0 -4, 25 degrees); the model `PRF_ApartmentComputer` 0.47 m in front of that camera; two
+  lights and a volume.
+- `UI/PRF_ContractScreen_WorldSpace`: the contract (mail, news, the contract app and its pop-up) as a **world-space
+  canvas**, 1156 x 716 at a scale of 0.00019, so 22 cm wide, on layer 10, which the main camera draws itself. Flat,
+  25 degrees make it fill the screen. In VR the rig stands at that camera and the canvas was a 22 cm terminal.
+- `PRF_OnboardingScene` (`OnboardingSceneController`: video, pop-ups, extraction, cloning, the fees with the thumb
+  print) and `PRF_CinematicIntroCanvas` (the flight's video): screen-space canvases, which the mod draws through its
+  UI texture as every menu.
+
+`VrContractDesk` puts a copy of the Hab's desk in front of the player while `3D Scene` is on and the flight's video is
+not up: on the playspace's floor, the terminal's screen 72 cm ahead of the head, facing the player; ahead is where the
+head looks, level. Once the head has moved 20 cm from where the desk was placed for and has come to rest for 0.6 s,
+the desk is placed again (Raik's first test, 2026-11-23: placed by where the playspace faces and only once, the
+terminal was off to the left after he sat down again, and 60 cm was a little too near).
+- **The models** come from the game at run time, nothing of them is in the mod: `Addressables.LoadAssetAsync` of
+  `.../Hab/Prefabs/PRF_Hab_Rev_03.prefab` (the Hab's interior: of it the group `GRP_Hab_Interior_Desk` within 2.6 m of
+  the screen and `PRF_Computer_Terminal_Hab`, the message terminal on the desk) and `.../Hab/Models/PRF_Props_Hab_Chair.prefab`.
+  The keys are the paths in the game's catalog; that they load was not tried when this was written. The prefabs are
+  only read: each mesh becomes a plain object with the mesh and its materials (the finest level of detail only), so
+  none of the game's components runs. The chair is placed as it stands in `Decoupled_Hab` against `PRF_Hab_Rev_03`
+  (-7.74 -0.01 -32.49, turned -90 degrees). The whole interior's assets are in memory for that time and let go with
+  the desk (`Addressables.Release`).
+- **The screen** is the rectangle of the canvas under the terminal's `LYNX_Screensaver_Locked` (54 x 30 cm in the
+  prefab, which has it), or the measured one if a prefab has none. The terminal's mesh (104 vertices) has one flat
+  front face exactly in that canvas' plane; the frame with the set-in look is the desk's own part
+  `SM_Hab_Interior_Desk_Screen` round it. The contract lies 1 mm before that face: at 3 mm it seemed to float (Raik's
+  first test), 7 mm behind it it was inside the model and invisible (his second). The UI texture is drawn 10 mm
+  behind, as on the Hab's monitors, where the depth does not hide it. The screen counts as 1 cm higher (Raik).
+- **The contract** goes onto it by moving its parent `UI` each frame (turn, scale to fit, place), so what the game's
+  views do with the canvas itself stays; `PRF_ApartmentComputer` is hidden meanwhile. All of it is put back when the
+  desk goes.
+- **The onboarding's screens** lie on the same screen: `VrUi` takes `VrContractDesk.TryGetScreen` as it takes a
+  monitor of the Hab (monitor look included), only while `PRF_OnboardingScene` is on, so the UI texture cannot cover
+  the contract before.
+- **The picture** stands straight behind the desk: ahead of the head as far as the game has it from its camera
+  (7.7 m), its middle at the head's height, 100 degrees wide from there; placed again with the desk. First it was only
+  stretched where the game has it (120 degrees): askew behind a desk that goes where the head looks, and too large.
+- **Depth on the canvas**: the contract's window, the mail and the news lie before the canvas by centimeters, in
+  meters whatever the canvas' scale. One camera never saw that; in VR the contract's window floated before the glass
+  (Raik's picture, 2026-11-24). The parent's depth scale is pressed to 2 %, which leaves their order and takes the
+  floating.
+- **Coming into the room** (Raik, 2026-11-24: "a blue background when you come into the room, it stays too long"): a
+  dark rectangle with the apartment around it, on the menu canvas fixed in the room. Two of the scene's canvases can
+  be it: the intro text's `Image - Background` and the scene's `Fade Screen` (fade from black, not in
+  `VrCanvases.FadeNames` before, so drawn as a rectangle). The background is switched off while the desk is shown;
+  `Fade Screen` is now a fade (whole view darkened, never a rectangle), and its fade from black is let run out
+  without darkening once the desk is there (at most 8 s). The log says which of the two was dark as the desk came.
+- **The halt as the name is confirmed** (Raik, 2026-11-24, 768 ms in one frame): the new profile's save is there at
+  that moment, and `VrRadio` read the radio's model and its 2.7 MB texture ahead then, meant for a loading screen.
+  It now waits while a career starts (`VrContractDesk.CareerStarting`: apartment or flight video), for the loading
+  screen after the video; the log gives how long the reading takes ("Radio: read ahead in …").
+  Raik's next test: the halt was still there (706 ms), with no radio read in it. It is the game's own work in
+  `ContractToggleCheck.SubmitContract`: writing its options (`LynxUserOptions.HotWriteAndReload`), making, loading
+  and saving the profile and the meta progress, and the next page's event, all in that one frame. That cannot be made
+  shorter from the mod. A first try hid it in a short dark; Raik (2026-11-26): make the profile when the desk is
+  left, before the intro video, so the form runs through smoothly. What the game needs when (from its code and the
+  front end's data):
+  - the footer's Next is one button for every page, `SubmitContract` is on it from page 2 on; its first press makes
+    the profile and sends `m_FinishCreatingProfile` (page 3); every later press only runs `ApplyOptions` (voice, meal,
+    orientation into the profile, options written);
+  - page 5's fingerprint (long press) runs `TrySkipTutorialOnProfile`; the contract's end ("Listen for
+    ContractComplete") turns `3D Scene` off and fades `Fade Screen` to black; the flight video follows, and only when
+    it is over is `PRF_OnboardingScene` switched on;
+  - the onboarding's fees screen reads the profile's difficulty and books the starting debt into it
+    (`FeesScreenController.Initialize`, `IncrementTotal`), its end marks the profile done and saves it
+    (`FinalizePlayerProfile`) and loads the level.
+  So in VR at the desk (`VrContractSubmit`): the name page's Next only sends the page event (the name checked as the
+  game checks it); later Nexts do nothing; the fingerprint's skip is kept. Once `3D Scene` is off and the fade is
+  95 % dark (at most 1.5 s), the profile is made as `TryCreateProfile` would, then `ApplyOptions`, a save, and the
+  tutorial skip. The fees screen and the onboarding's end make it first if it still waits. The log: "Contract
+  submit: the profile … made in … ms (…)". Raik's test (2026-11-26): no judder any more; made in 39 ms.
+- **The contract during the flight video** (Raik 2026-11-26: the character creation's menu seen in the background
+  of the intro video, on the left eye): the game leaves `PRF_ContractScreen_WorldSpace` on until the onboarding
+  comes; flat nothing draws it then. In VR its canvas stood back at the game's camera, in the room around the video.
+  While the apartment is off, `UI` is shrunk to nothing (`VrContractDesk.Away`), and set back once the game turns
+  the contract off or the apartment comes again.
+- **Picture and video placed** (Raik 2026-11-26): the apartment's picture 10% smaller (`PictureSize`) and 2° lower
+  as seen from the head (`PictureLower`); the flight video, on the menu canvas (`VrUi`), 5° lower about the eyes at the
+  same distance (`VideoLower`) and 15% wider (`VideoSize`).
+- **Sitting higher, keys lower** (Raik 2026-11-26): the desk with its chair placed 25 cm lower under the head (first 15, then 10 more)
+  (`SitHigher`), as if the camera were 15 cm higher (one seemed too small and looked at the screen at an awkward
+  angle); the typing keyboard 7 cm lower, just above the desk's own keys (`VrDeskKeyboard.Lift` 3 cm -> -1 cm -> -4 cm).
+- **The contract as sharp as the Hab's screens** (Raik 2026-11-26: the Hab's screens are readable and smooth, the
+  campaign's screen flickers at its edges): the contract's canvas was drawn by the headset's camera straight into the
+  room. Now (`VrContractPicture`) it is moved onto the pass layer (29, which the headset's camera leaves out), an
+  orthographic camera of its own (no XR, no post-processing, cleared to clear) draws that layer into a texture as the
+  UI texture at a Hab screen is made (MonitorSchaerfe times the window's width, at most 4096, mip levels, trilinear,
+  aniso 8, mip bias -0.8), and a world-space canvas on the contract's layer shows it where the contract lies. The
+  canvas stays in place for the keyboard; its parts go back to their layers when the desk goes.
+  Raik's first test: the terminal stayed empty, and no click sounds either. The camera drew through
+  `SetTargetBuffers`, which HDRP does not take (it renders to `targetTexture`). Now `targetTexture`, and the contract
+  leaves the headset's view only once the camera has rendered (`RenderPipelineManager.endCameraRendering`) and a read of
+  the texture's small mip levels 1.5 s later finds something drawn (up to 3 looks); else the contract is drawn as
+  before ("the contract's picture stayed empty"). The missing sounds are not explained yet; to be checked with the
+  picture working.
+- **Clicking through** (`VrContractDesk.Advance`): a toggle of the contract that was just ticked, or a button of it
+  that was just clicked, hands the selection on 0.15 s later to what lies below it (else to its right), past the
+  other choices of the same toggle group, if the game left the selection where it was. So A alone goes through the
+  form (Raik, 2026-11-23).
+- **The account name** (`VrDeskKeyboard`, a stopgap, Raik's word): while the contract's name field
+  (`ContractToggleCheck.m_RequiredInputField`, a `TMP_InputField`) is selected, a board of keys lies below the screen
+  (54 x 21.5 cm, sloping 25 degrees), and each controller shows as a bar with a beam along its aim pose. The key a
+  beam meets lights up, that hand's trigger types it (a capital at the start and after a space), OK ends it and
+  selects what is below the field. Board, bars and beams are world-space canvases of plain images on the contract's
+  layer 10, with the field's font: the path the contract itself is drawn by, so no shader or model of the mod's own.
+  `VrMenuInput` leaves the triggers out of the menu meanwhile. Not seen in the headset when this was written.
+- First test (Raik, 2026-11-23): the keys load (8 parts of desk and terminal, the chair), the contract works on the
+  screen, "fits quite well already". Not seen yet: the onboarding's screens on the terminal and whether the apartment
+  stays on through them. The log tells each step (`Contract desk: ...`).
+- Tutorial step "roll" (Raik 2026-11-26: it never completed in VR): its objective (`ControlActionObjective`, checked in
+  `UpdateControlActionObjectiveProgressSystem.OnUpdate`) waits for the game's roll actions held (RollBodyLeft/Right; on
+  a gamepad the sticks pressed in), but the mod rolls the body itself. `VrTutorialRoll` redirects that check's reads of
+  the actions (IsPressed, Value, WasPressed, WasReleased): while VTOL or Shooter rolls left, the left roll actions count
+  as held at full value (right for right, ModifiedRoll for either), going down and up with the roll
+  (`VrControls.Rolling`, `RolledBefore`). Nowhere else, so the game does not roll a second time. The hint on the HUD
+  still names the gamepad's sticks; a small picture of the controllers for VTOL was Raik's idea for it.
+- Tutorial step "thrust left, right, forward, back" (Raik 2026-11-26, as with rolling): the same objective waits for
+  ThrustMoveForward/Backward/Left/Right/Up/Down held, while the mod's thrust goes into the game's thrust axes
+  (`ThrustAxisPatch`). `VrTutorialRoll` became `VrTutorialControls`: in that check an action also counts as held while
+  the controllers thrust along its axis by at least 0.3 of full (`ThrustShare`, the objectives' own least axis value),
+  in the body's axes (`VrControls.TryGetThrust`). Log: "Tutorial controls: ...".
+- The tutorial's tips show the controllers (Raik 2026-11-26), `VrTutorialPrompts`: the pictures of the tips
+  (`ContextualButtonPrompt` in the `PRF_A1_TUT_..._Tip` popups; the words beside them are separate texts and stay)
+  are set again after the game's `ChangeControlType` while VR runs with VTOL or Shooter: roll = trigger + left stick
+  (Shooter) or trigger + an arc bowing down, heads up left and up right (VTOL); thrust (all six) = left stick (Shooter)
+  or trigger + a cross of four arrows (VTOL); brake = Y, the gamepad's second brake picture left out (ignored by the
+  layout); look around = right stick. Under the roll tip's last line a copy of it, its prompt and localization taken
+  out: the left stick pressed in, "Gerade ausrichten" / "Straighten up". The game's glyphs come from its own table
+  (`ControlSpriteListAsset.XboxOne_ControlSprites`), the mod's from `Icons/*.png` (trigger, roll, thrust, plus; drawn
+  for the mod, 256 px shown at 64 units like the game's). VR or the controllers' flying off: the added parts go and
+  the game's picture comes back (`ChangeControlType` once more). Log: "Tutorial prompts: ...".
+- The tutorial hands out the flight step by step (Raik 2026-11-26: "thrust is locked at first and given free piece by
+  piece"), by blocking the game's actions (`ActionBlockerService`). The controllers fly past the game's input, so they
+  ask the same now (`VrControls.Allowed`): `TryGetThrust` leaves out a direction whose action (or its axis) is blocked,
+  a blocked roll left or right gives no roll, Y brakes only while a brake action is free. Log "Controls: the game holds
+  ... back now". And the brake objective (both ThrustBrakeLeft and ThrustBrakeRight held) counts Y braking
+  (`VrTutorialControls`).
+- Thrust in the tutorial's tips with VTOL (Raik 2026-11-26: the same controller and cross six times "looks silly";
+  "an arrow only one way, really flat forward, back, up, down, a bit in 3D"): trigger + plus + an arrow of its own
+  for each direction (`Icons/thrust_<direction>.png`), a thick flat arrow in perspective from a little above and to
+  the right, one scale for all: forward and back lie flat into the depth, left and right lie flat across, up and down
+  stand. Drawn by `tools/draw-arrows.py` (the trigger and roll pictures by `tools/draw-icons.py`).
+- The tutorial's tool steps (Raik 2026-11-27: "I use the grapple, but it waits for other input"): the objectives that
+  want a game action (from the game data: `CA_TUT_01_07_GrappleIntro_GrapplePush` = Throw, `..._GrappleReel` =
+  GrappleFire + RetractionModifier, `CA_TUT_01_08/06_02_Scanner` = ActivateScanner, `CA_TUT_01_10_RadialMenu` =
+  ToolMenu, `CA_TUT_04_05_CancelTethers` = RecallTethers) read the actions themselves, while the tools get the
+  controllers' presses through `VrToolInput`'s redirect. `VrTutorialControls` now counts those too
+  (`VrToolInput.Presses`, either hand); drawing any tool counts as the tool wheel. The cutter's steps (CutPoints,
+  Vapourize, SplitSaw, CutAngle, CutAluminum) are PAT objectives on what the game does, not on presses. Tethers are
+  bought in the HAB's upgrades first (`PAT_OBJ_TUT_04_03_TethersPurchased`).
+- The grapple's tether mode only once the game has unlocked the tethers (Raik 2026-11-27: "as long as I have not
+  unlocked the tethers, the grapple has to stay in the grapple mode"): `VrTetherMode.On` also asks
+  `TetherController.TetherUnlocked` (set by the game's `UnlockAbilityEvent`, in the tutorial with the upgrade
+  purchase); B on the grapple does not switch before. Log "Grapple mode: the tethers are not unlocked yet ...".
+- The waypoints tip showed braking as "Y or Y" (Raik 2026-11-27: "only the Y button and done", VTOL and Shooter): its
+  "Brakes Container" has the single key ("Button - Not Simul - Brake") and the pair held together ("Simul - Brake
+  Left", "Simul - Brake Right KEYBOARD") with a word between. `VrTutorialPrompts`: a pair prompt beside a "Not Simul"
+  one is taken out of the layout and drawn at no size, with the short texts (up to 4 letters) beside it; back when VR
+  or the controllers' flying is off.
+- The cutter's tip with the tool menu (Raik 2026-11-27: "controller prompts are nonsense in VR; write Scalpel right
+  shoulder, Grapple right hip; leave the tool menu out"): in the tutorial's tips the ToolMenu prompt's line is taken
+  out of the layout, and the SelectCutter / SelectGrapple lines show no picture but "Skalp-L: rechte Schulter" /
+  "Wurfhaken: rechte Hüfte" ("Stinger: right shoulder" / "Grapple: right hip"; the game's own names; left for the
+  left-handed). Untested: the tip's layout was not found offline, it is guessed from the other tips.
+- The tools' tips with the controllers' buttons (Raik 2026-11-27, the cutter's tips: "you know how the game runs"),
+  as `VrToolInput` has them: CutterFire, GrappleFire and DemoChargeFire show the mod's trigger picture, CutterAltFire
+  (cut angle) and Throw (grapple push) A, ToolMode (Stinger/Splitsaw) and RetractionModifier (reel) B; push and reel
+  with trigger + plus before them unless their line already shows the trigger's prompt; X and Y for the
+  left-handed. ActivateScanner's lines say "Scanner: rechte Helmseite". Untested in the headset.
+- The tutorial tips' controller pictogram (Icons/trigger.png, tools/draw-icons.py): its button no longer the curved
+  trigger but a short straight bar on the grip's front edge halfway down, half in front of it, a third of the first
+  try's length, with the press marks in front (Raik 2026-11-27, at the
+  grapple's tip about holding on).
+- Tutorial tips: the second pictures for choosing a tool with the tool menu open (the game's second binding, the
+  mouse's; "equip ... (with the tool menu open)") go away altogether (Raik 2026-11-27). Every tutorial prompt is logged
+  once ("Tutorial prompts: '<path>' <set> <action>, line '...'") to find any still left.

@@ -33,6 +33,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<float> MenuWidth;
         public static ConfigEntry<bool> FlipUi;
         public static ConfigEntry<bool> MonitorLook;
+        public static ConfigEntry<VrHab.Screens> ImmersiveScreens;
         public static ConfigEntry<VrFlightComfort.Thrust> ThrustMode;
         public static ConfigEntry<VrClimb.Turning> ClimbTurning;
         public static ConfigEntry<float> ClimbTurnDeadzone;
@@ -41,6 +42,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<float> CatchForce;
         public static ConfigEntry<bool> BracedPush;
         public static ConfigEntry<bool> ToolPhysics;
+        public static ConfigEntry<bool> BodyPhysics;
         public static ConfigEntry<bool> FreeWalking;
         public static ConfigEntry<VrHelmet.Mode> Helmet;
         public static ConfigEntry<VrResolution.AntiAliasing> AntiAliasing;
@@ -59,6 +61,7 @@ namespace ShipbreakerVR
         public static ConfigEntry<float> ThrustDeadzone;
         public static ConfigEntry<float> ThrustFull;
         public static ConfigEntry<float> HandTilt;
+        public static ConfigEntry<float> HandSmoothing;
         public static ConfigEntry<float> ToolWeight;
         public static ConfigEntry<float> ToolLineLength;
         public static ConfigEntry<VrFlightGlobe.Mode> FlightGlobe;
@@ -217,6 +220,7 @@ namespace ShipbreakerVR
             MirrorCutter = Bind("Bild", "CutterSpiegeln", true,
                 "Copy the detailed left side of the cutter's model onto its plain right side, which the flat game never showed.");
             VrToolFit.Bind();
+            VrToolPlace.Bind();
 
             UiInVr = Bind("Anzeige", "UiImRaum", true,
                 ("Shows the HUD and the menus on a surface in the room instead of flat over the image. Leave it on; off is only for troubleshooting.",
@@ -226,8 +230,8 @@ namespace ShipbreakerVR
                     "Verschiebt die Visieranzeige vor den Augen nach oben (positiv) oder unten (negativ)."),
                 "In centimeters.", Between(-20f, 20f));
             MonitorSharpness = Bind("Anzeige", "MonitorSchaerfe", 1.5f,
-                ("How much sharper the station's screens are drawn while you use them. 1 is off, higher costs more at the screens only.",
-                    "Wie viel schärfer die Bildschirme der Station gezeichnet werden, während du sie benutzt. 1 ist aus, höher kostet nur an den Bildschirmen mehr Leistung."),
+                ("How much sharper the station's screens (while you use them), the loading screens and the HUD in a shift are drawn. 1 is off, higher costs more performance.",
+                    "Wie viel schärfer die Bildschirme der Station (während du sie benutzt), die Ladebildschirme und das HUD in der Schicht gezeichnet werden. 1 ist aus, höher kostet mehr Leistung."),
                 "Times the window's size, at most 4096 wide.", Between(1f, 2f));
             HudDistance = Bind("Anzeige", "HudAbstand", 1.5f,
                 ("How far in front of your eyes the visor display floats. Change it if reading the display or switching focus between it and the world is uncomfortable.",
@@ -283,16 +287,25 @@ namespace ShipbreakerVR
                 "In newtons.", Between(100f, 5000f));
             // Extended world physics (the key's old name kept, so the setting survives the rename).
             BracedPush = Bind("Steuerung", "SchwereTeileSchieben", false,
-                ("Extended world physics. On: holding on to something fixed, the other hand moves heavy parts up to 5 t with a limited force of 250 N, with each hand on a heavy part they push each other apart, and your body weighs 100 kg in these pulls and pushes. Off: the game's own physics, where such parts do not move.",
-                    "Erweiterte Weltphysik. An: Hältst du dich an etwas Festem, bewegt die andere Hand schwere Teile bis 5 t mit begrenzter Kraft von 250 N, mit je einer Hand an zwei schweren Teilen drückst du sie auseinander, und dein Körper wiegt dabei 100 kg. Aus: die Physik des Spiels, in der solche Teile sich nicht bewegen."));
+                ("Extended world physics. On: holding on to something fixed, the other hand moves heavy parts up to 5 t with a limited force of 250 N, with each hand on a heavy part they push each other apart, and your body weighs 100 kg in these pulls and pushes with extended body physics, otherwise 50 kg. Off: the game's own physics, where such parts do not move.",
+                    "Erweiterte Weltphysik. An: Hältst du dich an etwas Festem, bewegt die andere Hand schwere Teile bis 5 t mit begrenzter Kraft von 250 N, mit je einer Hand an zwei schweren Teilen drückst du sie auseinander, und dein Körper wiegt dabei mit erweiterter Körperphysik 100 kg, sonst 50 kg. Aus: die Physik des Spiels, in der solche Teile sich nicht bewegen."));
             ToolPhysics = Bind("Steuerung", "ErweiterteWerkzeugphysik", false,
                 ("Extended tool physics. On: the cutter and the grapple bump into things instead of going through them and have weight (Tool weight); let go away from their place on the body they float on a line to the hip, and a demo charge let go floats where it is, until you put them back by hand. Off: as in the game, and a tool or a demo charge let go is back at its place on the body.",
                     "Erweiterte Werkzeugphysik. An: Cutter und Grappler stoßen an, statt durch Dinge hindurchzugehen, und haben Gewicht (Werkzeuggewicht); abseits ihres Platzes am Körper losgelassen schweben sie an einer Leine zur Hüfte, und ein losgelassener Sprengsatz schwebt, wo er ist, bis du sie von Hand zurücksteckst. Aus: wie im Spiel, und ein losgelassenes Werkzeug oder ein losgelassener Sprengsatz ist wieder an seinem Platz am Körper."));
+            BodyPhysics = Bind("Steuerung", "ErweiterteKoerperphysik", false,
+                ("Extended body physics. On: what you throw pushes your body back as much as it takes along (your body weighs 100 kg, with suit, in everything that pushes or pulls it: throwing, the tool's line, climbing, pushing parts): a tool thrown forward pushes you gently back, and its line catching it pulls you forward again. While a hand holds on to something, the hold takes the push. Off: throwing does not move you, and your body weighs the game's 50 kg.",
+                    "Erweiterte Körperphysik. An: Was du wirfst, stößt deinen Körper so weit zurück, wie es Schwung mitnimmt (dein Körper wiegt mit Anzug 100 kg, überall, wo etwas ihn stößt oder zieht: beim Werfen, an der Werkzeugleine, beim Hangeln, beim Teileschieben): Ein nach vorn geworfenes Werkzeug schiebt dich leicht zurück, fängt die Leine es auf, zieht sie dich wieder nach vorn. Hält sich eine Hand irgendwo fest, nimmt der Halt den Stoß auf. Aus: Werfen bewegt dich nicht, und dein Körper wiegt die 50 kg des Spiels."));
             ToolWeight = Bind("Steuerung", "Werkzeuggewicht", 5f,
                 ("With extended tool physics, how heavy the cutter and the grapple are in your hand: moved fast they lag behind the controller and settle, and your hand stays on them. 0 for none.",
                     "Mit erweiterter Werkzeugphysik: wie schwer Cutter und Grappler in der Hand sind. Schnell bewegt hängen sie dem Controller nach und pendeln aus, deine Hand bleibt an ihnen. 0 für keins."),
                 "In kg.", Between(0f, 20f));
             // The key is where the line's experiment had it (0.31.0), so a length already set stays; its range was 1 to 15.
+            // Raik (2026-11-23): made for the trailer's videos. Raik (2026-11-28): a comfort option, off by default (a new
+            // key, so the experiment's 1 does not carry over).
+            HandSmoothing = Bind("Anzeige", "HandGlaettung", 0f,
+                ("Smooths the hands a little, so their natural tremor shows less, for instance with the hands close to your face or for videos. 0 for none (default), 1 light, up to 3 for more; a hand moved fast is followed at once either way.",
+                    "Glättet die Hände ein wenig, damit ihr natürliches Zittern weniger zu sehen ist, etwa mit den Händen nah vor dem Gesicht oder für Videos. 0 für keine (Standard), 1 leicht, bis 3 für mehr; eine schnell bewegte Hand folgt in jedem Fall sofort."),
+                "From 0 to 3.", Between(0f, 3f));
             ToolLineLength = Bind("Experimente", "LeinenLaenge", 5f,
                 ("With extended tool physics, how long the line is that keeps a tool you let go on your hip. A short line keeps the tool close, a long one lets it drift further before it holds.",
                     "Mit erweiterter Werkzeugphysik: wie lang die Leine ist, die ein losgelassenes Werkzeug an deiner Hüfte hält. Eine kurze Leine hält das Werkzeug nah, eine lange lässt es weiter treiben, bevor sie hält."),
@@ -301,6 +314,10 @@ namespace ShipbreakerVR
                 "Walk through the station instead of hopping between its spots. Replaces the spots: sitting on the bed A stands up, the left stick walks, the right stick turns in steps, the triggers change the poster you look at, and A uses the screen or door you stand at. Walking with a stick can make you feel sick.");
             MonitorLook = Bind("Anzeige", "MonitorEffekt", true,
                 "Screen look for the menus on the station's monitors: a little dimmer, fine scan lines, darker edges, a faint reflection on the glass and light on the frame. Tasten/MonitorEffektUmschalten (F7) switches it on and off.");
+            ImmersiveScreens = Bind("Anzeige", "ImmersiveComputerscreens", VrHab.Screens.Ein,
+                ("On: the station's computer screens show on their monitors in the room. Large screens: each screen shows as large as the menus, in front of you where the monitor is, so every detail is easy to read with any headset or glasses.",
+                    "Ein: die Computerscreens der Station erscheinen auf ihren Monitoren im Raum. Große Screens: jeder Screen erscheint so groß wie die Menüs vor dir, dort wo der Monitor ist, damit man alle Details mit jedem Headset und jeder Brille gut lesen kann."),
+                (new[] { "On", "Large screens" }, new[] { "Ein", "Große Screens" }));
             Helmet = Bind("Anzeige", "Helm", VrHelmet.Mode.Kopf,
                 ("Follows head: the helmet frame moves with the headset. Hidden: a clear view without the frame. Game default: the helmet stays on the body.",
                     "Folgt dem Kopf: der Helmrahmen bewegt sich mit dem Headset. Ausgeblendet: freie Sicht ohne Rahmen. Spielstandard: der Helm bleibt am Körper."),

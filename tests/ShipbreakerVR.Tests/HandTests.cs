@@ -21,6 +21,16 @@ namespace ShipbreakerVR.Tests
             VrHand.Apply(true, Equipment.None);
         }
 
+        // The empty hand's fist follows the grip's travel (0.33.0).
+        [Theory]
+        [InlineData(0f, 0f)]
+        [InlineData(0.03f, 0f)]
+        [InlineData(0.465f, 0.5f)]
+        [InlineData(0.9f, 1f)]
+        [InlineData(1f, 1f)]
+        public void TheGripClosesTheHandAsFarAsItIsPressed(float grip, float closed) =>
+            Assert.Equal(closed, VrInput.Squeezed(grip), 3);
+
         [Fact]
         public void GameToolGoesIntoTheToolHand()
         {

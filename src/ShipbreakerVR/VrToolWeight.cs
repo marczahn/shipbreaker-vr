@@ -80,6 +80,8 @@ namespace ShipbreakerVR
             if (state.Running && state.Frame < Time.frameCount - 1) state.Running = false;
             if (state.Running && state.Frame == Time.frameCount) return state.Rotation;
             state.Frame = Time.frameCount;
+            // The cutter steadied by the second hand: its weight follows the steadied place.
+            grip = VrToolSteady.Place(hand, tool, grip);
             if (!state.Running)
             {
                 state.Running = true;
@@ -125,7 +127,7 @@ namespace ShipbreakerVR
             if (tool != EquipmentController.Equipment.CuttingTool && tool != EquipmentController.Equipment.GrappleHook) return raw;
             // The turn moves the place: run it for this frame first (each step keeps its result for the frame).
             if (hand.TryGetAimRotation(out var aim)) VrToolSteady.Apply(hand, tool, aim);
-            return Spring(hand, tool, raw) + VrToolCollide.Back(hand);
+            return Spring(hand, tool, VrToolSteady.Place(hand, tool, raw)) + VrToolCollide.Back(hand);
         }
 
         // The tool's place on its spring alone, without what holds it back (for VrToolCollide); after Turn this frame.

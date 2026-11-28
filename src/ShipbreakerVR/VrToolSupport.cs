@@ -132,6 +132,15 @@ namespace ShipbreakerVR
         }
 
         // The tool's grip and turn this frame in tracking space, as the hand working it holds it.
+        // The frame of the tool held by the other hand than this one, as TryGetPose uses it, and that hand.
+        public static bool TryGetToolFrame(VrInput.Hand hand, out Vector3 grip, out Quaternion aim, out VrHand holder)
+        {
+            grip = default;
+            aim = default;
+            holder = toolHand;
+            return Supports(hand) && ToolFrame(toolHand, out grip, out aim);
+        }
+
         private static bool ToolFrame(VrHand hand, out Vector3 grip, out Quaternion aim)
         {
             grip = default;

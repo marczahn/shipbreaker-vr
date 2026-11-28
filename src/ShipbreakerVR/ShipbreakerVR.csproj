@@ -22,6 +22,8 @@
     <EmbeddedResource Include="Mails\*.txt" LogicalName="Mails/%(Filename)%(Extension)" />
     <!-- The radio of the collection campaign (VrRadioModel), Raik's own model -->
     <EmbeddedResource Include="Models\Radio.obj;Models\Radio.png" LogicalName="Models/%(Filename)%(Extension)" />
+    <!-- Pictograms for the tutorial's tips (VrTutorialPrompts), drawn for the mod -->
+    <EmbeddedResource Include="Icons\*.png" LogicalName="Icons/%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
@@ -62,6 +64,8 @@
     <Reference Include="Wwise.Unity" HintPath="$(ManagedDir)\Wwise.Unity.dll" Private="false" />
     <Reference Include="UnityEngine.SubsystemsModule" HintPath="$(ManagedDir)\UnityEngine.SubsystemsModule.dll" Private="false" />
     <Reference Include="UnityEngine.AnimationModule" HintPath="$(ManagedDir)\UnityEngine.AnimationModule.dll" Private="false" />
+    <Reference Include="UnityEngine.DirectorModule" HintPath="$(ManagedDir)\UnityEngine.DirectorModule.dll" Private="false" />
+    <Reference Include="Unity.Timeline" HintPath="$(ManagedDir)\Unity.Timeline.dll" Private="false" />
     <Reference Include="UnityEngine.ScreenCaptureModule" HintPath="$(ManagedDir)\UnityEngine.ScreenCaptureModule.dll" Private="false" />
     <Reference Include="UnityEngine.ImageConversionModule" HintPath="$(ManagedDir)\UnityEngine.ImageConversionModule.dll" Private="false" />
     <Reference Include="UnityEngine.JSONSerializeModule" HintPath="$(ManagedDir)\UnityEngine.JSONSerializeModule.dll" Private="false" />

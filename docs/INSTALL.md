@@ -146,6 +146,8 @@ in the VR options switches this off.
 On large things the hand lies on the surface, its fingers laid on and curling over edges; only small things and a
 lever's grip are held in a fist. At an air conditioner's button the fingers stay straight and press it in.
 
+An empty hand away from any surface closes into a fist as far as you squeeze the grip, and opens the same way.
+
 Taking hold faster than 2 m/s along a surface, the glove glides on and brakes evenly ("Glove brake", 215 N a hand);
 seams take some speed, a step up catches the hand, at a drop-off it lets go. With "Climbing" set to *Realistic* your
 body has inertia: your arms speed it up only with their force ("Arm force"), and taking hold, a hand held still stops

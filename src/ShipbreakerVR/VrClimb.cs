@@ -85,8 +85,10 @@ namespace ShipbreakerVR
         // player weighs 50 kg, light for a person in a suit; Raik wants 100 kg (modern materials). Only in these impulses:
         // the rigidbody keeps the game's mass, so thrust, braking and the speed of a push off stay as they were. Without
         // extended world physics the game's mass, as before.
+        // With extended body physics the body weighs 100 kg in everything that pushes or pulls it, otherwise the game's own
+        // 50 kg (Raik 2026-11-27: "two steps", the weight belongs to the body physics, not to the world's).
         private const float ExtendedBodyMass = 100f;
-        private static float BodyMass => VrSettings.BracedPush.Value ? ExtendedBodyMass : player.mass;
+        private static float BodyMass => VrRecoil.On ? ExtendedBodyMass : player.mass;
         // Raik, 0.30.1: with realistic climbing the body (ClimbContact.BrakeMass) has inertia (Pull). On a fixed hold each
         // arm speeds the body up with VrSettings.ArmPull and slows it down with VrSettings.CatchForce, both only as far as
         // the hand asks for it: a hand that takes hold and keeps moving back with the body (hand over hand) keeps the
@@ -322,6 +324,7 @@ namespace ShipbreakerVR
             middle = Vector3.ClampMagnitude(middle, allowed);
             body.velocity = player.velocity + middle;
             body.angularVelocity = spin;
+            VrRecoil.Throw(player, body.mass, middle, $"'{body.name}'");
             if (logs++ < 80)
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand throws '{body.name}' ({body.mass:0.0} kg) at {middle.magnitude:0.00} m/s, spinning {spin.magnitude * Mathf.Rad2Deg:0}°/s "
                     + $"(hand {speed.magnitude:0.00} m/s over {ThrowWindow * 1000f:0} ms, held {lever.magnitude:0.00} m from its middle, x{gain:0.00}; "
@@ -346,7 +349,7 @@ namespace ShipbreakerVR
         }
 
         // The body's mass as the pulls and pushes take it, for the tug of a tool's line (VrLooseTools).
-        internal static float BodyWeight => player != null ? BodyMass : ExtendedBodyMass;
+        internal static float BodyWeight => player != null ? BodyMass : VrRecoil.On ? ExtendedBodyMass : 50f;
 
         private const float ReleaseDrift = 0.05f;   // m/s
         private const float ReleaseTurn = 60f;      // °/s
@@ -483,8 +486,8 @@ namespace ShipbreakerVR
                 return;
             }
             var playspace = VrCamera.Instance.Playspace;
-            // Turning, not rolling: the way the body faces, which a roll about it keeps (VrHands turns the hand along on
-            // a roll, RollAlong).
+            // Turning, not rolling: the way the body faces, which a roll about it keeps (VrHands turns a flat hand with its
+            // controller).
             if (Vector3.Angle(playspace * Vector3.forward, hand.TurnAtHold * Vector3.forward) < SlideAfter) return;
             hand.TurnAtHold = playspace;
             // Where the hand is now, taken onto the surface's plane and found on the surface there.
@@ -692,9 +695,11 @@ namespace ShipbreakerVR
                 }
                 var hold = Hold(hand);
                 var shift = point - surface;
+                var barLine = hand.Bar != Vector3.zero ? hand.Anchor.TransformDirection(hand.Bar) : Vector3.zero;
                 hand.Collider = collider;
                 hand.Body = body;
                 hand.Anchor = body != null ? body.transform : collider.transform;
+                if (barLine != Vector3.zero) hand.Bar = hand.Anchor.InverseTransformDirection(barLine);
                 hand.Point = hand.Anchor.InverseTransformPoint(hold + shift);
                 hand.Surface = hand.Anchor.InverseTransformPoint(point);
                 if (hand.EdgeLine == Vector3.zero) hand.Normal = hand.Anchor.InverseTransformDirection(normal);
@@ -795,18 +800,8 @@ namespace ShipbreakerVR
 
         private static bool EdgeAt(Collider collider, Vector3 at, Vector3 surface, out Vector3 line)
         {
-            line = Vector3.zero;
+            if (HandleLine(collider, out line)) return true;
             var scale = VrCamera.WorldScale;
-            if (Extents(collider, out var size, out var axes))
-            {
-                var order = new[] { 0, 1, 2 };
-                System.Array.Sort(order, (a, b) => size[a].CompareTo(size[b]));
-                if (size[order[1]] <= HandleThick * scale && size[order[2]] >= 2f * size[order[1]])
-                {
-                    line = axes[order[2]];
-                    return true;
-                }
-            }
             var away = at - surface;
             var distance = away.magnitude;
             if (distance < 0.01f * scale) return false;
@@ -817,6 +812,76 @@ namespace ShipbreakerVR
             if (cross.sqrMagnitude < 1e-6f) return false;
             line = cross.normalized;
             return true;
+        }
+
+        // A handle: a collider thin both ways (HandleThick) and at least twice as long, its long axis.
+        private static bool HandleLine(Collider collider, out Vector3 line)
+        {
+            line = Vector3.zero;
+            if (!Extents(collider, out var size, out var axes)) return false;
+            var order = new[] { 0, 1, 2 };
+            System.Array.Sort(order, (a, b) => size[a].CompareTo(size[b]));
+            if (size[order[1]] > HandleThick * VrCamera.WorldScale || size[order[2]] < 2f * size[order[1]]) return false;
+            line = axes[order[2]];
+            return true;
+        }
+
+        // Raik (2026-11-26): the handles beside the door switches ('SM_HandGrab_02_2') were held on whichever face was
+        // nearest, and reaching a little deep that was the back against the wall: the hand went into the wall. A fist
+        // round them looked worse than the open hand with its fingers over the bar. So a fixed handle is held on its front:
+        // a hold on its wall's side or in it is drawn round to the front at the same place along it, the palm on that
+        // face (a "magnet" to the normal grip). Reaching past it to the wall itself, the wall is the nearest and is held.
+        // Handles: thin both ways and long (HandleLine), named as the game's grab handles are ('SM_HandGrab_…') or no
+        // thicker than BarThick both ways; their wall is what a ray from the middle meets nearest across them, within
+        // WallReach.
+        private const float BarThick = 0.06f;
+        // The palm on a handle stays on the face it turns to only within this many degrees of its front (its top or
+        // bottom, not its back).
+        private const float HandleSide = 60f;
+        private const float WallReach = 0.25f;
+        private static int handleLogs;
+
+        private static bool HandleFront(Collider collider, Hand hand, ref Vector3 at, ref Vector3 surface, out Vector3 front)
+        {
+            front = Vector3.zero;
+            if (!HandleLine(collider, out _) || !GrabHandle(collider) || !Extents(collider, out var size, out var axes)) return false;
+            var order = new[] { 0, 1, 2 };
+            System.Array.Sort(order, (a, b) => size[a].CompareTo(size[b]));
+            var middle = collider.bounds.center;
+            var reach = WallReach * VrCamera.WorldScale;
+            var nearest = float.MaxValue;
+            var wall = Vector3.zero;
+            for (var k = 0; k < 2; k++)
+                for (var sign = -1; sign <= 1; sign += 2)
+                {
+                    var way = axes[order[k]] * sign;
+                    foreach (var hit in Physics.RaycastAll(middle, way, reach, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                    {
+                        if (hit.collider == collider || (player != null && hit.rigidbody == player) || hit.distance >= nearest) continue;
+                        nearest = hit.distance;
+                        wall = way;
+                    }
+                }
+            if (wall == Vector3.zero) return false;
+            front = -wall;
+            var onFront = VrUtil.ClosestPoint(collider, surface + front * reach);
+            var moved = onFront - surface;
+            if (Vector3.Dot(moved, front) > 0.005f * VrCamera.WorldScale)
+            {
+                surface = onFront;
+                at += moved;
+                if (handleLogs++ < 20) Plugin.Log.LogInfo($"Climbing: {hand.Name} hand on the handle '{collider.name}' drawn {moved.magnitude * 100f:0.0} cm to its front, away from the wall");
+            }
+            return true;
+        }
+
+        private static bool GrabHandle(Collider collider)
+        {
+            if (collider.name.IndexOf("HandGrab", System.StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (!Extents(collider, out var size, out _)) return false;
+            var sorted = new[] { size.x, size.y, size.z };
+            System.Array.Sort(sorted);
+            return sorted[1] <= BarThick * VrCamera.WorldScale;
         }
 
         // A collider's size along its own three axes, in world meters, where it can be told.
@@ -902,7 +967,7 @@ namespace ShipbreakerVR
                 motion = player != null ? player.GetComponent<PlayerMotion>() : null;
                 rigPlaced = false;
                 if (player != null && logs++ < 80)
-                    Plugin.Log.LogInfo($"Climbing: player body '{player.name}', {player.mass:0.#} kg ({ExtendedBodyMass:0} kg in the pulls and pushes with extended world physics), interpolation {player.interpolation}");
+                    Plugin.Log.LogInfo($"Climbing: player body '{player.name}', {player.mass:0.#} kg ({ExtendedBodyMass:0} kg in the pulls and pushes with extended body physics), interpolation {player.interpolation}");
                 if (player != null) LogColliders();
             }
             return player != null && rigPlaced;
@@ -1079,12 +1144,14 @@ namespace ShipbreakerVR
             hand.Movable = moving && (!hand.Heavy || HeavyMoves(body));
             if (hand.Movable) Separate(body);
             hand.Anchor = body != null ? body.transform : best.transform;
+            var front = Vector3.zero;
+            var onHandle = control == null && shape == null && !hand.Movable && HandleFront(best, hand, ref at, ref surface, out front);
             hand.Point = hand.Anchor.InverseTransformPoint(at);
             hand.Surface = hand.Anchor.InverseTransformPoint(shape != null ? shapeSurface : surface);
             hand.Control = control != null;
-            hand.Normal = hand.Anchor.InverseTransformDirection(shape != null
-                ? SurfaceNormal(shape, at, shapeSurface, hand)
-                : SurfaceNormal(best, at, surface, hand));
+            var normal = shape != null ? SurfaceNormal(shape, at, shapeSurface, hand) : SurfaceNormal(best, at, surface, hand);
+            if (onHandle && Vector3.Angle(normal, front) > HandleSide) normal = front;
+            hand.Normal = hand.Anchor.InverseTransformDirection(normal);
             hand.Small = body != null && !body.isKinematic && Small(body);
             hand.HeldAt = Time.time;
             hand.TurnAtHold = VrCamera.Instance.Playspace;
@@ -1758,8 +1825,11 @@ namespace ShipbreakerVR
                 var toward = -away / distance;
                 var nearest = collider.Raycast(new Ray(at, toward), out var face, distance + 0.02f * scale) && Vector3.Dot(face.normal, away) > 0f
                     ? face.normal : away / distance;
-                if (!aimed || Vector3.Angle(nearest, -palm) <= PalmTurnedAway) return nearest;
-                if (!FacingPalm(collider, at, turn, palm, out var turned) || Vector3.Angle(turned, -palm) >= Vector3.Angle(nearest, -palm)) return nearest;
+                // Raik (2026-11-26: on an edge or a handle the hand turned with where the body was, not with the
+                // controller): the controller decides. The face the palm turns to, unless the nearest faces it nearly as
+                // well (within PalmPrefer); before, the nearest was taken up to 60 degrees off the palm.
+                if (!aimed) return nearest;
+                if (!FacingPalm(collider, at, turn, palm, out var turned) || Vector3.Angle(turned, -palm) + PalmPrefer >= Vector3.Angle(nearest, -palm)) return nearest;
                 LogFace(hand, "the nearest face turned away from the palm", Vector3.Angle(nearest, -palm), Vector3.Angle(turned, -palm));
                 return turned;
             }
@@ -1779,8 +1849,9 @@ namespace ShipbreakerVR
                 Plugin.Log.LogInfo($"Climbing: {hand.Name} hand takes the face its palm turns to ({why}{(nearest >= 0f ? $", nearest face {nearest:0}° off the palm" : "")}), {palm:0}° off the palm");
         }
 
-        // A face the nearest point's own is taken over the palm's only this far off facing the palm, in degrees.
-        private const float PalmTurnedAway = 60f;
+        // The face the palm turns to is taken over the nearest point's own when it faces the palm this much better, in
+        // degrees.
+        private const float PalmPrefer = 10f;
 
         // Of the faces rays from outside the hand along the palm, the aim and the controller's down meet, the one whose
         // outside faces the palm most; false without one.
@@ -2150,6 +2221,28 @@ namespace ShipbreakerVR
             return null;
         }
 
+        // Whether something fixed (no rigidbody or a kinematic one, not the player's own) is within Reach of that
+        // controller's hand: where it would take hold. Raik (2026-11-26): there the wall comes before the tools on the
+        // body (VrToolBelt).
+        public static bool WallNear(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input) continue;
+                var at = HandWorld(hand);
+                var count = Physics.OverlapSphereNonAlloc(at, Reach * VrCamera.WorldScale, Found, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+                for (var i = 0; i < count; i++)
+                {
+                    var collider = Found[i];
+                    if (Own(collider) || VrLooseTools.Owns(collider)) continue;
+                    var body = collider.attachedRigidbody;
+                    if (body == null || body.isKinematic) return true;
+                }
+                return false;
+            }
+            return false;
+        }
+
         // The collider that controller's hand holds, or null.
         public static Collider HeldCollider(VrInput.Hand input)
         {
@@ -2230,6 +2323,20 @@ namespace ShipbreakerVR
                 if (hand.Input == input && hand.Holding) return hand.FreeTurn;
             return false;
         }
+
+        // True while that controller's hand carries a light part that moves with it (Firm, or a second hand on it), up to
+        // RigidMass: the hand and the part are one there and the hand does not turn on the part (VrHands.Grip). Raik
+        // (2026-11-28): the hand turning on large things and surfaces is fine, but a small thing such as the radio must lie
+        // fast in the hand, moved without the hand turning on it.
+        public static bool HeldRigid(VrInput.Hand input)
+        {
+            foreach (var hand in Hands)
+                if (hand.Input == input && hand.Holding)
+                    return (hand.Firm || hand.Follower) && hand.Body != null && hand.Body.mass <= RigidMass;
+            return false;
+        }
+
+        public const float RigidMass = 10f;
 
         // The body of that controller's hand keeps to where its hold is now, on still, which does not move, while the hand
         // goes with its anchor (a lever the game turns back, VrLever); or, still null, it follows the hold again from where
@@ -2317,6 +2424,19 @@ namespace ShipbreakerVR
                 if (hand.Input != input || !hand.Holding || hand.Anchor == null || hand.Bar == Vector3.zero) continue;
                 axis = hand.Anchor.TransformDirection(hand.Bar).normalized;
                 return true;
+            }
+            return false;
+        }
+
+        // The line of the edge or bar that hand holds (EdgeLine), in the world; false when it holds no edge.
+        public static bool TryGetEdge(VrInput.Hand input, out Vector3 line)
+        {
+            line = Vector3.zero;
+            foreach (var hand in Hands)
+            {
+                if (hand.Input != input || !hand.Holding || hand.Anchor == null || hand.EdgeLine == Vector3.zero) continue;
+                line = hand.Anchor.TransformDirection(hand.EdgeLine).normalized;
+                return line.sqrMagnitude > 0.5f;
             }
             return false;
         }

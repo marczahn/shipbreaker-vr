@@ -33,8 +33,9 @@ namespace ShipbreakerVR
         // Both tools hang on the body, not on the head (Raik, 2026-11-18): the places stay written as from the head, for
         // the head as it was when they were found (VrToolBelt.HipRef, ShoulderRef), and are taken from the neck along the
         // heading the body keeps (VrToolBelt.BodyFrame), so the head looks around freely without moving them.
-        private static readonly Vector3 BodyAt = new Vector3(0.40f, -0.69f, -0.09f);
-        private const float MuzzleForward = 25f;
+        // Raik (2026-11-26): placed in the headset with VrToolPlace, which keeps these as the mod's places.
+        internal static readonly Vector3 BodyAt = new Vector3(0.40f, -0.69f, -0.09f);
+        internal const float MuzzleForward = 25f;
         // Where the cutter's grip hangs on the back, in the same axes, within the zone over the right shoulder it is drawn
         // from (VrToolBelt: above -0.12 m, behind -0.05 m), and how far its muzzle points towards the left, in degrees.
         private static readonly Vector3 CutterGripAt = new Vector3(0.15f, -0.08f, -0.22f);
@@ -49,7 +50,11 @@ namespace ShipbreakerVR
         // 10 cm further back than where he had seen it before. The zone went 10 cm forward (VrToolBelt), and the
         // detonator hangs near its middle again: 26 cm to the side, 10 cm in front of the neck's line (as far forward
         // as the grapple's body on the other side) and 55 cm below the neck. Then 7 cm further forward still (Raik).
-        private static readonly Vector3 DetonatorAt = new Vector3(-0.26f, -0.72f, 0.07f);
+        internal static readonly Vector3 DetonatorAt = new Vector3(-0.26f, -0.72f, 0.07f);
+
+        // For VrToolPlace: the grapple hangs on its rest point at the hip, the detonator's copy shows there.
+        internal static bool GrappleHanging { get; private set; }
+        internal static bool DetonatorHanging => detonatorPlaced && detonatorShown != null && detonatorShown.activeSelf;
         private static GameObject detonatorShown;
         // The middle of its parts, in its own axes; the prop's size, which the copy's own frame does not have.
         private static Vector3 detonatorMiddle;
@@ -57,6 +62,7 @@ namespace ShipbreakerVR
         private static bool detonatorPlaced;
         private static Transform detonatorOf;
         private static float nextDetonator;
+        private static bool detonatorUnlocked = true;
 
         // How fast the grapple glides onto its rest point, per second, as the game's spring may only run while it is held.
         private const float Glide = 10f;
@@ -110,9 +116,12 @@ namespace ShipbreakerVR
             // The grapple: muzzle down along the leg and a little forward, the grip to the back, hung by its body.
             var gunModel = Gun(gun);
             var rest = GunRest(gun);
-            var hanging = heading * Quaternion.Euler(-MuzzleForward, 0f, 0f) * Quaternion.LookRotation(Vector3.down, Vector3.forward);
+            // Where it hangs may be set in the headset (VrToolPlace); the mod's place is BodyAt, muzzle MuzzleForward.
+            VrToolPlace.Grapple(out var bodyAt, out var bodyTurn);
+            var hanging = heading * VrToolPlace.Sided(bodyTurn);
+            GrappleHanging = gunModel != null && rest != null && gunModel.parent == rest && !VrLooseTools.IsLoose(EquipmentController.Equipment.GrappleHook);
             if (gunModel != null && rest != null && !VrLooseTools.IsLoose(EquipmentController.Equipment.GrappleHook)
-                && VrToolModels.TrackingToWorld(neck + heading * (VrToolBelt.Sided(BodyAt) - VrToolBelt.HipRef), hanging, out var at, out var rotation))
+                && VrToolModels.TrackingToWorld(neck + heading * (VrToolBelt.Sided(bodyAt) - VrToolBelt.HipRef), hanging, out var at, out var rotation))
             {
                 var modelInGun = Quaternion.Inverse(gunModel.rotation) * model.rotation;
                 Hang(gunModel, rest, Shadow(gun), ShadowRest(gun), at, rotation * Quaternion.Inverse(modelInGun),
@@ -142,9 +151,19 @@ namespace ShipbreakerVR
             var wrist = Vector3.zero;
             var frame = Quaternion.identity;
             // Its place is kept also while it does not show (in a hand, afloat): where it is put back (DetonatorAtHip).
-            var placed = prop != null && equipment != null && equipment.CanEquip(EquipmentController.Equipment.DemoCharge)
+            VrToolPlace.Detonator(out var detonatorAt, out var detonatorTurn);
+            // Raik (2026-11-26): only once the charges are unlocked; until then the game has them in the loadout but
+            // blocks drawing them (ActionBlockerService, SelectDemoCharge), and the detonator is not on the belt.
+            var unlocked = ActionBlockerService.Instance == null
+                || !ActionBlockerService.Instance.IsActionBlocked(LynxControls.ActionSetAndId.FromEnum(GameplayActions.GameplayActionSet.SelectDemoCharge));
+            if (unlocked != detonatorUnlocked)
+            {
+                detonatorUnlocked = unlocked;
+                Plugin.Log.LogInfo($"Belt grapple: the demo charges are {(unlocked ? "unlocked, the detonator shows at the hip" : "locked, no detonator at the hip")}");
+            }
+            var placed = unlocked && prop != null && equipment != null && equipment.CanEquip(EquipmentController.Equipment.DemoCharge)
                 && VrHands.DetonatorRest(out inHandAt, out inHandTurn)
-                && VrToolModels.TrackingToWorld(neck + heading * (VrToolBelt.Sided(DetonatorAt) - VrToolBelt.ChargeRef), heading, out wrist, out frame);
+                && VrToolModels.TrackingToWorld(neck + heading * (VrToolBelt.Sided(detonatorAt) - VrToolBelt.ChargeRef), heading * VrToolPlace.Sided(detonatorTurn), out wrist, out frame);
             var shows = placed && !VrLooseTools.DetonatorShowsInHand && !VrLooseTools.DetonatorLoose;
             if (placed && (detonatorShown == null || detonatorOf != prop) && Time.unscaledTime >= nextDetonator)
             {
@@ -329,6 +348,7 @@ namespace ShipbreakerVR
         // longer runs.
         public static void Hide()
         {
+            GrappleHanging = false;
             if (detonatorShown != null && detonatorShown.activeSelf) detonatorShown.SetActive(false);
             detonatorPlaced = false;
             // A tool afloat keeps its rest points where it floats (VrLooseTools); they go back once it is on the body again.

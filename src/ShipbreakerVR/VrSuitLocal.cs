@@ -739,19 +739,29 @@ namespace ShipbreakerVR
             }
 
             // Unlit, the picture as it is: a loaded HDRP/Unlit material copied if there is one (its variant is in the
-            // build), else the shader itself, else UI/Default.
+            // build), else the shader itself, else UI/Default. An opaque one first; whatever it was, the copy is made
+            // opaque (Raik 2026-11-27: the mirror washed out light red; it had copied the additive glow
+            // M_FX_Glow_Red_01, whose blend states stayed with its keywords gone, so the picture was added onto the bay).
             private static Material Look(out string how)
             {
+                Material source = null;
                 foreach (var m in Resources.FindObjectsOfTypeAll<Material>())
                 {
                     if (m == null || m.shader == null || m.shader.name != "HDRP/Unlit") continue;
+                    if (source == null) source = m;
+                    if (m.renderQueue < 2500 && (!m.HasProperty("_SurfaceType") || m.GetFloat("_SurfaceType") == 0f)) { source = m; break; }
+                }
+                if (source != null)
+                {
+                    var m = source;
                     var copy = new Material(m) { name = "ShipbreakerVR local mirror", hideFlags = HideFlags.HideAndDontSave };
                     foreach (var k in copy.shaderKeywords) copy.DisableKeyword(k);
+                    Opaque(copy);
                     copy.SetTexture("_UnlitColorMap", picture);
                     copy.SetTextureScale("_UnlitColorMap", Vector2.one);
                     copy.SetTextureOffset("_UnlitColorMap", Vector2.zero);
                     copy.SetColor("_UnlitColor", Color.white);
-                    how = $"HDRP/Unlit from '{m.name}'";
+                    how = $"HDRP/Unlit from '{m.name}' (queue {m.renderQueue}), made opaque";
                     return copy;
                 }
                 var shader = Shader.Find("HDRP/Unlit");
@@ -760,12 +770,34 @@ namespace ShipbreakerVR
                     var made = new Material(shader) { name = "ShipbreakerVR local mirror", hideFlags = HideFlags.HideAndDontSave };
                     made.SetTexture("_UnlitColorMap", picture);
                     made.SetColor("_UnlitColor", Color.white);
+                    Opaque(made);
                     how = "HDRP/Unlit (no loaded material to copy)";
                     return made;
                 }
                 var ui = new Material(Shader.Find("UI/Default")) { name = "ShipbreakerVR local mirror", mainTexture = picture, hideFlags = HideFlags.HideAndDontSave };
                 how = "UI/Default (no HDRP/Unlit)";
                 return ui;
+            }
+
+            // An HDRP/Unlit material as an opaque surface: written over what is behind it, not blended with it.
+            private static void Opaque(Material material)
+            {
+                void Set(string name, float value) { if (material.HasProperty(name)) material.SetFloat(name, value); }
+                Set("_SurfaceType", 0f);
+                Set("_BlendMode", 0f);
+                Set("_SrcBlend", 1f);
+                Set("_DstBlend", 0f);
+                Set("_AlphaSrcBlend", 1f);
+                Set("_AlphaDstBlend", 0f);
+                Set("_ZWrite", 1f);
+                Set("_TransparentZWrite", 1f);
+                Set("_AlphaCutoffEnable", 0f);
+                Set("_EnableFogOnTransparent", 0f);
+                Set("_CullMode", 2f);
+                Set("_CullModeForward", 2f);
+                Set("_ZTestDepthEqualForOpaque", 4f);
+                material.SetOverrideTag("RenderType", "Opaque");
+                material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
             }
 
             public static void Update()

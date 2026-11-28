@@ -165,6 +165,33 @@ namespace ShipbreakerVR
             return Overhead(monitor) ? cameraPosition : center - forward * ViewDistance;
         }
 
+        // Raik (2026-11-27), a comfort option: with a weaker headset or poor glasses the screens on the monitors can be
+        // hopeless to read. Large screens: the screen shows as large as the menus (their width for their distance), in
+        // front of the monitor and facing the head, without the screen look; where one stands stays the same.
+        public enum Screens { Ein, Gross }
+
+        public static bool LargeScreens => VrSettings.ImmersiveScreens != null && VrSettings.ImmersiveScreens.Value == Screens.Gross;
+
+        public static void LargeScreen(RectTransform monitor, Vector3 head, float aspect, out Vector3 center, out Quaternion rotation, out Vector2 size)
+        {
+            MonitorScreen(monitor, out var glass, out var turned, out _);
+            LargeScreen(glass, turned, head, aspect, out center, out rotation, out size);
+        }
+
+        // The same for any screen in the room, given its middle and how it is turned (forward away from the viewer).
+        // Fixed in the room like the menus (Raik, 2026-11-27: turned towards the head it turned a little with each turn
+        // of it): parallel to the screen, just in front of it, its size from where one rests there (head: the resting
+        // head, VrCamera.RestingHead, not the tracked one), so it does not move when the head does.
+        public static void LargeScreen(Vector3 glass, Quaternion turned, Vector3 head, float aspect, out Vector3 center, out Quaternion rotation, out Vector2 size)
+        {
+            var forward = turned * Vector3.forward;
+            rotation = turned;
+            center = glass - forward * (0.03f * VrCamera.WorldScale);
+            var distance = Mathf.Max(0.2f * VrCamera.WorldScale, Vector3.Dot(center - head, forward));
+            var width = distance * VrSettings.MenuWidth.Value / Mathf.Max(0.1f, VrSettings.MenuDistance.Value);
+            size = new Vector2(width, width / aspect);
+        }
+
         private static bool Overhead(RectTransform monitor) => Mathf.Abs((monitor.rotation * Vector3.forward).y) > 0.7f;
 
         private static void HideMarkers(bool hide)
@@ -477,8 +504,9 @@ namespace ShipbreakerVR
         // Eye height over the Hab's floor while standing, in meters at world scale 1.
         public const float Height = 1.9f;
 
-        // A spot below this is one where one sits: the view of the room from the bed is at 1.28 m, the lowest one standing 1.81 m.
-        private const float SitBelow = 1.5f;
+        // A spot below this is one where one sits: the view of the room from the bed is at 1.28 m, the lowest one standing
+        // 1.50 m (the entry after a shift, Raik 2026-11-27: at 1.5 it counted as sitting and stayed low).
+        private const float SitBelow = 1.4f;
 
         public static bool Sits(float spot) => spot < SitBelow;
 

@@ -46,8 +46,29 @@ namespace ShipbreakerVR.Tests
         }
     }
 
-    public class ToolBeltTests
+    public class ToolBeltTests : System.IDisposable
     {
+        // The zones around the mod's own places of the tools: Raik's places, the standard since 2026-11-27, are left
+        // empty while these run (the settings bound once for all tests, SettingsTests).
+        private readonly System.Collections.Generic.List<(BepInEx.Configuration.ConfigEntry<string> Entry, string Value)> stored =
+            new System.Collections.Generic.List<(BepInEx.Configuration.ConfigEntry<string>, string)>();
+
+        public ToolBeltTests()
+        {
+            SettingsTests.Bind();
+            foreach (var entry in VrToolPlace.PlaceEntries)
+                if (entry != null)
+                {
+                    stored.Add((entry, entry.Value));
+                    entry.Value = "";
+                }
+        }
+
+        public void Dispose()
+        {
+            foreach (var (entry, value) in stored) entry.Value = value;
+        }
+
         [Theory]
         [InlineData(0f, 0f)]
         [InlineData(0.25f, 0.25f)]
@@ -55,6 +76,76 @@ namespace ShipbreakerVR.Tests
         [InlineData(10f, 1f)]
         public void TremorCountsLittle(float angle, float share) =>
             Assert.Equal(share, VrToolSteady.Share(angle, 0.5f), 3);
+
+        // The light smoothing of the hands: 2 mm of tremor, 0.04 s, at 90 frames a second.
+        private const float Tremor = 0.002f;
+        private const float Lag = 0.04f;
+        private const float Frame = 1f / 90f;
+
+        [Fact]
+        public void SmoothingFollowsTremorSlowlyAndARealMovementAtOnce()
+        {
+            var tremor = VrToolSteady.Follow(0.0005f, Tremor, Lag, Frame);
+            var edge = VrToolSteady.Follow(Tremor, Tremor, Lag, Frame);
+            var moved = VrToolSteady.Follow(0.05f, Tremor, Lag, Frame);
+            Assert.InRange(tremor, 0.001f, 0.03f);
+            Assert.InRange(edge, 0.2f, 0.3f);
+            Assert.True(moved > 0.99f);
+            Assert.True(tremor < edge && edge < moved);
+        }
+
+        [Theory]
+        [InlineData(0.05f)]
+        [InlineData(1f)]
+        [InlineData(90f)]
+        public void TheAngleBetweenTwoRotationsIsToldAlsoWhenTiny(float degrees)
+        {
+            var a = About(0f, 1f, 30f);
+            var b = a * About(1f, 0f, degrees);
+            Assert.Equal(degrees, VrToolSteady.Angle(a, b), 2);
+        }
+
+        // A turn about the x or the y axis, without the engine.
+        private static UnityEngine.Quaternion About(float x, float y, float degrees)
+        {
+            var half = degrees * UnityEngine.Mathf.Deg2Rad * 0.5f;
+            var sine = UnityEngine.Mathf.Sin(half);
+            return new UnityEngine.Quaternion(x * sine, y * sine, 0f, UnityEngine.Mathf.Cos(half));
+        }
+
+        [Fact]
+        public void SmoothingOffFollowsAtOnce()
+        {
+            Assert.Equal(1f, VrToolSteady.Follow(0.001f, 0f, Lag, Frame));
+            Assert.Equal(0f, VrToolSteady.Follow(0f, Tremor, Lag, Frame));
+        }
+
+        // A hand moved at a steady 1 m/s stays under a centimeter behind its controller.
+        [Fact]
+        public void SmoothedHandStaysCloseBehindAMovingController()
+        {
+            float controller = 0f, hand = 0f;
+            for (var i = 0; i < 180; i++)
+            {
+                controller += 1f * Frame;
+                hand += (controller - hand) * VrToolSteady.Follow(controller - hand, Tremor, Lag, Frame);
+            }
+            Assert.InRange(controller - hand, 0.002f, 0.01f);
+        }
+
+        // A hand trembling 1 mm to either side ten times a second shows less than half of it.
+        [Fact]
+        public void SmoothingTakesOutMostOfATremor()
+        {
+            float hand = 0f, most = 0f;
+            for (var i = 0; i < 270; i++)
+            {
+                var controller = 0.001f * UnityEngine.Mathf.Sin(2f * UnityEngine.Mathf.PI * 10f * i * Frame);
+                hand += (controller - hand) * VrToolSteady.Follow(UnityEngine.Mathf.Abs(controller - hand), Tremor, Lag, Frame);
+                if (i >= 90) most = UnityEngine.Mathf.Max(most, UnityEngine.Mathf.Abs(hand));
+            }
+            Assert.True(most < 0.0005f, $"{most * 1000f:0.00} mm");
+        }
 
         [Theory]
         [InlineData(0.1f, 0f, 0.1f)]

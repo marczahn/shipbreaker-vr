@@ -12,7 +12,8 @@ namespace ShipbreakerVR
     // that changed later in the same frame (the aim still on the old hand for a frame after the other hand took the tool).
     //   1. VrInput      the controllers' buttons, triggers, grips and sticks
     //   2. VrToolInput  what the hands do (VrHand, brought up to date with the game first): drawing, holding and putting
-    //                   away tools, the tool hand, the buttons' actions (and VrDualTools.Check)
+    //                   away tools, the tool hand, the buttons' actions (and VrDualTools.Check); then the grapple's rope
+    //                   length (ReelLength), also with VR off
     //   3. VrAim        the aim camera on the tool hand that step 2 settled
     //   4. VrDualTools  the second tool's aim camera
     //   5. VrControls   flying, braking and turning, which rest while the left hand holds a tool or holds on
@@ -20,7 +21,7 @@ namespace ShipbreakerVR
     // own as here, so the whole order is in this file:
     //   Update        frame statistics, load trace, F8 (diagnostics only)
     //   FixedUpdate   VrClimb: holding on, each physics step; the physics step count (frame statistics)
-    //   LateUpdate    after the game's animation: VrToolModels puts stretched arms back to their length, VrTorso turns the model upright, VrBackpack puts the backpack on its chest, VrToolModels bends the arm for the demo charge, VrHands poses the
+    //   LateUpdate    after the game's animation: VrToolModels puts stretched arms back to their length, VrTorso turns the model upright, VrBackpack puts the backpack on its chest, VrToolModels bends the arm for the demo charge, VrToolRecoil measures the tool's recoil, VrHands poses the
     //                 suit's hands, VrCrosshair hides the crosshair; then the rig itself (VrCamera)
     //   before render the rig is placed on the game camera (VrCamera.FollowGameCamera, also in LateUpdate); then VrClimb
     //                 measures the hands on it and VrToolModels puts the tool models into the hands at the latest pose
@@ -32,6 +33,7 @@ namespace ShipbreakerVR
         {
             ("input", VrInput.Update),
             ("tool input", VrToolInput.Update),
+            ("grapple reel", VrToolInput.ReelLength),
             ("loose tools", VrLooseTools.Track),
             ("cutter idle", VrCutterIdle.Update),
             ("tool support", VrToolSupport.Update),
@@ -55,10 +57,15 @@ namespace ShipbreakerVR
             ("charge count", VrChargeCount.Update),
             ("ai node", VrAiNode.Update),
             ("radio", VrRadio.Update),
+            ("contract desk", VrContractDesk.Update),
             ("stow prompt", VrStowPrompt.Update),
             ("radio music", VrRadioMusic.Update),
             ("pickup layer", VrPickupLayer.Update),
             ("thumb skin", VrThumbSkin.Update),
+            ("grapple holes", VrGrappleHoles.Update),
+            ("skipped lines", VrSkipTimelines.Update),
+            ("menu prompts", VrMenuPrompts.Update),
+            ("intercom light", VrHabStations.SpeakerLight),
             ("vr options entry", VrOptionsMenu.Update),
             ("vr options tab", VrOptionsTab.Update),
         };
@@ -80,6 +87,7 @@ namespace ShipbreakerVR
             ("demo charge arm", VrToolModels.PoseArm),
             ("buttons", VrButtons.LateUpdate),
             ("levers", VrLever.LateUpdate),
+            ("tool recoil", VrToolRecoil.Update),
             ("nacelle switches", VrNacelle.LateUpdate),
             ("hands", VrHands.LateUpdate),
             ("arm push", VrArmPush.LateUpdate),
@@ -92,6 +100,7 @@ namespace ShipbreakerVR
             ("climbing", VrClimb.RigPlaced),
             ("pull off", VrPullOff.Update),
             ("device punch", VrDevicePunch.Update),
+            ("helmet knock", VrHelmetKnock.Update),
             ("touch sound", VrTouchSound.Update),
             ("tool models", VrToolModels.Place),
             ("loose tools", VrLooseTools.Place),

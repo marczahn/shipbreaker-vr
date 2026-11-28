@@ -152,6 +152,7 @@ menus still work with the controllers.
 | Work an airlock console or a switch | Look at it and press A or X. The grip only holds on, also there: your hand lies on it as on a wall, and closes as a fist only round a lever's grip. |
 | End the shift or use the kiosk | Look at the exit door or the kiosk on the MasterJack and press A or X, with its prompt, as in the flat game. |
 | Press an air conditioner's button | Push it in with your hand: right at the button your fingers stay straight and press it, broken or working. |
+| Make a fist | Squeeze the grip of an empty hand away from any surface: it closes into a fist as far as you press the grip, and opens the same way. |
 | Use a tool with the left hand | Take it with the left hand. X and Y then do what A and B do, and flying pauses until you let go. With a demo charge or the detonator Y brakes instead. |
 | Feel what I do | The controllers vibrate: the cutter's hand while it cuts, the grapple's hand while it holds a part (stronger the closer the part comes to slipping away), and a short buzz for each tether end. |
 

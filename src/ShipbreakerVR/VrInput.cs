@@ -19,6 +19,13 @@ namespace ShipbreakerVR
         // The aim pose points where the controller points; the device (grip) pose runs along the handle, tilted upward.
         public static readonly InputFeatureUsage<Vector3> PointerPosition = new InputFeatureUsage<Vector3>("PointerPosition");
         public static readonly InputFeatureUsage<Quaternion> PointerRotation = new InputFeatureUsage<Quaternion>("PointerRotation");
+        // The grip's button closes the empty hand (VrHands.Curl) from SqueezeFrom of its travel (a finger resting on it)
+        // to SqueezeFull.
+        private const float SqueezeFrom = 0.03f;
+        private const float SqueezeFull = 0.9f;
+
+        // How far the grip's button closes the empty hand (0 to 1).
+        internal static float Squeezed(float grip) => Mathf.InverseLerp(SqueezeFrom, SqueezeFull, grip);
 
         // The wrist relative to the grip pose (which runs along the handle): an estimate, about 8 cm behind the grip.
         public static readonly Vector3 WristBehindGrip = new Vector3(0f, 0f, -0.08f);
@@ -131,6 +138,15 @@ namespace ShipbreakerVR
             private const float SteadyWithin = 0.004f;
             private const float SteadyAngle = 1.2f;
             private const float SteadyLag = 0.05f;
+            // Raik (2026-11-23, for the trailer's videos: "the hands tremble in front of the face, that can hardly be
+            // avoided; a slight, really slight smoothing"): every controller's pose is smoothed a little
+            // (comfort option Anzeige/HandGlaettung, 0 = off by default since 0.33.0): the tremor within SmoothWithin and SmoothAngle
+            // times that setting is followed slowly, a real movement the faster the further the pose is behind
+            // (VrToolSteady.Follow), so a hand moved at 1 m/s lags under a centimeter. The same filter and the same
+            // rigid step for every pose read as for the charges, whose stronger steadying goes first.
+            private const float SmoothWithin = 0.002f;
+            private const float SmoothAngle = 0.8f;
+            private const float SmoothLag = 0.04f;
             private int steadyFrame = -1;
             private bool steadied;
             private Vector3 steadyRaw, steadyAt;
@@ -149,7 +165,9 @@ namespace ShipbreakerVR
                     steadyFrame = Time.frameCount;
                     var at = Vector3.zero;
                     var turn = Quaternion.identity;
-                    var wanted = VrXr.IsRunning && VrChargeByHand.Steadies(this)
+                    var charge = VrXr.IsRunning && VrChargeByHand.Steadies(this);
+                    var smooth = VrXr.IsRunning && VrSettings.HandSmoothing != null ? VrSettings.HandSmoothing.Value : 0f;
+                    var wanted = (charge || smooth > 0f)
                         && Device.TryGetFeatureValue(CommonUsages.devicePosition, out at) && Device.TryGetFeatureValue(CommonUsages.deviceRotation, out turn);
                     if (!wanted) steadied = false;
                     else
@@ -159,11 +177,17 @@ namespace ShipbreakerVR
                             steadyAt = at;
                             steadyTurn = turn;
                         }
-                        else
+                        else if (charge)
                         {
                             var follow = 1f - Mathf.Exp(-Time.unscaledDeltaTime / SteadyLag);
                             steadyAt = Vector3.Lerp(steadyAt, at, VrToolSteady.Share((at - steadyAt).magnitude, SteadyWithin) * follow);
                             steadyTurn = Quaternion.Slerp(steadyTurn, turn, VrToolSteady.Share(Quaternion.Angle(steadyTurn, turn), SteadyAngle) * follow);
+                        }
+                        else
+                        {
+                            var dt = Time.unscaledDeltaTime;
+                            steadyAt = Vector3.Lerp(steadyAt, at, VrToolSteady.Follow((at - steadyAt).magnitude, SmoothWithin * smooth, SmoothLag, dt));
+                            steadyTurn = Quaternion.Slerp(steadyTurn, turn, VrToolSteady.Follow(VrToolSteady.Angle(steadyTurn, turn), SmoothAngle * smooth, SmoothLag, dt));
                         }
                         steadied = true;
                         steadyRaw = at;

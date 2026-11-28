@@ -265,6 +265,7 @@ namespace ShipbreakerVR
         private static void ReelWatch()
         {
             var hook = GameRefs.Grapple;
+            if (hook != null && !hook.IsRetracting) ReelStart(hook);
             if (hook == null || !hook.IsRetracting)
             {
                 reelLooseSince = -1f;
@@ -290,6 +291,62 @@ namespace ShipbreakerVR
             if (reelLogs++ < 20)
                 Plugin.Log.LogWarning($"Tool control: the grapple went on reeling in with its button released, stopped (grapple {(second ? "as the second tool" : "as the game's tool")} in the {(hand != null ? hand.Name : "no")} hand, "
                     + $"left hand {VrHand.Left.State}, right hand {VrHand.Right.State}, B {(hand != null && hand.Input.Secondary.Down ? "down" : "up")}, trigger {(hand != null && hand.Trigger ? "down" : "up")})");
+        }
+
+        // The other way round: a press the game did not get (it reads the edge only once the rope is fixed, so B pressed
+        // as the rope still flew was lost, and B did nothing until pressed again; Raik, 2026-11-27): while the hand that
+        // works the grapple holds its reel and the rope is fixed, the game reels.
+        private static void ReelStart(GrapplingHook hook)
+        {
+            var rope = RopeOf(hook);
+            if (rope == null || !rope.IsInitialized || rope.IsTraveling) return;
+            var second = VrDualTools.Second == EquipmentController.Equipment.GrappleHook;
+            var hand = Of(second ? VrHand.SecondHand : VrHand.GameToolHand);
+            if (hand == null || !hand.Now[(int)Action.Retract]) return;
+            Reeling(hook) = true;
+            if (reelLogs++ < 20) Plugin.Log.LogInfo("Tool control: the grapple's reel held but not reeling (its press came before the rope was fixed), reeling now");
+        }
+
+        // The rope pulls as long as the reel is held, no longer (Raik, 2026-11-27: grappled to the station's wall, he
+        // went on speeding up with the button let go, and at times pressed long for nothing). The game shortens the
+        // rope's length while reeling (LaserRope.HandleRopeRetraction) and pulls with a spring whenever the ends are
+        // farther apart than that (GetPositionForceInfo), by the whole way to the end: reeled faster than one moves, the
+        // length runs ahead, and after letting go one is pulled on until within it again; pressed again, nothing pulls
+        // until the length has come down below how far one is. So here the length is set to how far apart the ends are
+        // when reeling stops (if shorter) and when it starts (if longer); what speed one has stays.
+        // Also in the flat game, while the mod is loaded (Raik, 2026-11-27: VR off with F3, the fix stays): its own step
+        // in VrFrame, which runs with VR off as well, and a key or gamepad that holds the reel starts it there too.
+        private static readonly AccessTools.FieldRef<GrapplingHook, LaserRope> RopeOf = AccessTools.FieldRefAccess<GrapplingHook, LaserRope>("m_GrapplingRope");
+        private static readonly AccessTools.FieldRef<LaserRope, float> RopeLength = AccessTools.FieldRefAccess<LaserRope, float>("mTotalLength");
+        private const float ShortestRope = 0.5f;
+        private static bool wasReeling;
+
+        public static void ReelLength()
+        {
+            var hook = GameRefs.Grapple;
+            var rope = hook != null ? RopeOf(hook) : null;
+            var fixedRope = rope != null && rope.IsInitialized && !rope.IsTraveling
+                && rope.StartAnchorData.Anchor != null && rope.EndAnchorData.Anchor != null;
+            if (fixedRope && !hook.IsRetracting && LynxControls.Instance != null
+                && LynxControls.Instance.GetInputIsPressed(GameplayActions.GameplayActionSet.RetractionModifier))
+            {
+                Reeling(hook) = true;
+                if (reelLogs++ < 40) Plugin.Log.LogInfo($"Tool control: the grapple's reel key held but not reeling (its press came before the rope was fixed), reeling now ({(VrXr.IsRunning ? "VR" : "flat")})");
+            }
+            var reeling = fixedRope && hook.IsRetracting;
+            if (fixedRope && reeling != wasReeling)
+            {
+                var apart = Vector3.Distance(rope.StartAnchorData.WorldAttachPoint, rope.EndAnchorData.WorldAttachPoint);
+                var length = RopeLength(rope);
+                var to = reeling ? Mathf.Min(length, Mathf.Max(ShortestRope, apart)) : Mathf.Max(length, apart);
+                if (Mathf.Abs(to - length) > 0.01f)
+                {
+                    RopeLength(rope) = to;
+                    if (reelLogs++ < 40)
+                        Plugin.Log.LogInfo($"Tool control: the grapple {(reeling ? "starts" : "stops")} reeling, its rope {length:0.00} m long for ends {apart:0.00} m apart, set to {to:0.00} m (mass ratio {hook.GrappledMassRatio:0.00}, {(VrXr.IsRunning ? "VR" : "flat")})");
+                }
+            }
+            wasReeling = reeling;
         }
 
         // The tool actions of one hand's buttons, for the tool it holds.
@@ -489,6 +546,31 @@ namespace ShipbreakerVR
         // (VrDualTools).
         // asTool: the demo charges as the game's tool, also with the charges put on by hand. False if the game does not let
         // the tool change now.
+        // Whether the game holds that tool back now. Its own EquipmentController.IsEquipmentBlocked also counts the tool
+        // wheel (ToolMenu) being blocked, and the tutorial keeps the wheel blocked while it hands out the tools one by one,
+        // but its select keys (EquipmentController.Update) only ask about the tool's own action. Raik (2026-11-26): after
+        // Weaver says to take the grapple it could not be taken in VR, with F3 (flat) it could. So the hand asks as the
+        // keys do.
+        private static bool Blocked(EquipmentController.Equipment tool)
+        {
+            var blocker = ActionBlockerService.Instance;
+            if (blocker == null) return false;
+            GameplayActions.GameplayActionSet action;
+            switch (tool)
+            {
+                case EquipmentController.Equipment.GrappleHook: action = GameplayActions.GameplayActionSet.SelectGrapple; break;
+                case EquipmentController.Equipment.CuttingTool: action = GameplayActions.GameplayActionSet.SelectCutter; break;
+                case EquipmentController.Equipment.DemoCharge: action = GameplayActions.GameplayActionSet.SelectDemoCharge; break;
+                case EquipmentController.Equipment.Scanner: action = GameplayActions.GameplayActionSet.ActivateScanner; break;
+                default: return false;
+            }
+            var blocked = blocker.IsActionBlocked(LynxControls.ActionSetAndId.FromEnum(action));
+            if (blocked && blockedLogs++ < 20) Plugin.Log.LogInfo($"Tool control: the game holds the {tool} back now ({action} blocked)");
+            return blocked;
+        }
+
+        private static int blockedLogs;
+
         private static bool Draw(Hand hand, VrToolBelt.Zone zone, bool asTool = false)
         {
             if (zone == VrToolBelt.Zone.Flashlight)
@@ -501,7 +583,7 @@ namespace ShipbreakerVR
                 : zone == VrToolBelt.Zone.Cutter ? EquipmentController.Equipment.CuttingTool
                 : zone == VrToolBelt.Zone.DemoCharge || zone == VrToolBelt.Zone.Detonator ? EquipmentController.Equipment.DemoCharge
                 : EquipmentController.Equipment.Scanner;
-            if (!equipment.CanEquip(tool) || equipment.IsEquipmentBlocked(tool)) return false;
+            if (!equipment.CanEquip(tool) || Blocked(tool)) return false;
             // With the charges put on by hand, one comes out from behind the back as a thing of its own (VrChargeByHand).
             if (zone == VrToolBelt.Zone.DemoCharge && !asTool && VrChargeByHand.TakesOut(hand.Input)) return true;
             if (HeldByOther(hand, zone, tool))
@@ -674,6 +756,18 @@ namespace ShipbreakerVR
             current = hand.Now;
             previous = hand.Before;
             return true;
+        }
+
+        // For VrTutorialControls: whether the controllers press that game action now, from either hand. The tutorial's
+        // objectives read the game's actions themselves, which the controllers never press. Drawing any tool counts as
+        // opening the tool wheel (ToolMenu), which VR does not have.
+        internal static bool Presses(GameplayActions.GameplayActionSet action)
+        {
+            if (action == GameplayActions.GameplayActionSet.ToolMenu)
+                return now[(int)Action.Grapple] || now[(int)Action.Cutter] || now[(int)Action.DemoCharge] || now[(int)Action.Scanner];
+            if (!Actions.TryGetValue(action, out var mapped)) return false;
+            var index = (int)mapped;
+            return mapped >= Action.Grapple ? now[index] : LeftHand.Now[index] || RightHand.Now[index];
         }
 
         public static bool GetInputWasPressed(LynxControls controls, LynxControls.ActionSetAndId actionSetAndId, int family) =>

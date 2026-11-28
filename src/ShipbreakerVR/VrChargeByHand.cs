@@ -70,6 +70,7 @@ namespace ShipbreakerVR
             AccessTools.FieldRefAccess<DemoChargeRetrievalController, bool>("mIsDeployed");
         // A charge afloat with what it hangs on weighs 1.6 kg; a part of the ship with a charge on it is not taken for one.
         private const float HeaviestCharge = 5f;
+        private const float ChargeMass = 1.6f;
 
         public enum Placing { Automatisch, Manuell }
 
@@ -302,7 +303,11 @@ namespace ShipbreakerVR
             var player = VrToolCollide.Player();
             launch = player != null ? player.velocity : Vector3.zero;
             if (VrClimb.LetGoMotion(VrHand.GameToolHand.Input, Drift * scale, TurnDrift, out var speed, out _))
-                launch += Vector3.ClampMagnitude(speed, MostThrow * scale);
+            {
+                var thrown = Vector3.ClampMagnitude(speed, MostThrow * scale);
+                launch += thrown;
+                VrRecoil.Throw(player, ChargeMass, thrown, "a demo charge");
+            }
             launchUntil = Time.unscaledTime + 2f;
             from = throwFrame;
             return true;
